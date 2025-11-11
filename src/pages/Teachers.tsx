@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, RefreshCw, FileDown, Printer } from "lucide-react";
@@ -32,6 +33,7 @@ type TeacherRow = {
 
 const Teachers = () => {
   const { t, isRTL } = useLanguage();
+  const { canAddTeachers } = useUserRole();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [teachers, setTeachers] = useState<TeacherRow[]>([]);
@@ -123,7 +125,7 @@ const Teachers = () => {
             <Printer className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
             <span className="text-xs md:text-sm">{isRTL ? "پرنٹ" : "Print"}</span>
           </Button>
-          <AddTeacherDialog onAdded={fetchTeachers} />
+          {canAddTeachers() && <AddTeacherDialog onAdded={fetchTeachers} />}
           <Button onClick={fetchTeachers} variant="outline" size="icon">
             <RefreshCw className="h-3 w-3 md:h-4 md:w-4" />
           </Button>

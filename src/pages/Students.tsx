@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Search, FileDown, Printer } from "lucide-react";
 import { generatePDF, printTable } from "@/lib/pdfUtils";
 import {
@@ -28,6 +29,7 @@ type StudentRow = {
 
 const Students = () => {
   const { t, isRTL } = useLanguage();
+  const { canAddStudents } = useUserRole();
   const [searchQuery, setSearchQuery] = useState("");
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -113,7 +115,7 @@ const Students = () => {
             <Printer className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
             <span className="text-xs md:text-sm">{isRTL ? "پرنٹ" : "Print"}</span>
           </Button>
-          <AddStudentDialog onAdded={fetchStudents} />
+          {canAddStudents() && <AddStudentDialog onAdded={fetchStudents} />}
           <Button variant="secondary" onClick={fetchStudents} disabled={loading} size="sm">
             {loading ? t("loading") : t("refresh")}
           </Button>
