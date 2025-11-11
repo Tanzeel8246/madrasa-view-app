@@ -200,6 +200,100 @@ export type Database = {
         }
         Relationships: []
       }
+      loans: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          loan_date: string
+          notes: string | null
+          paid_amount: number | null
+          return_date: string | null
+          status: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          loan_date?: string
+          notes?: string | null
+          paid_amount?: number | null
+          return_date?: string | null
+          status?: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          loan_date?: string
+          notes?: string | null
+          paid_amount?: number | null
+          return_date?: string | null
+          status?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loans_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      salaries: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          month: number
+          notes: string | null
+          payment_date: string | null
+          status: string
+          teacher_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          month: number
+          notes?: string | null
+          payment_date?: string | null
+          status?: string
+          teacher_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          month?: number
+          notes?: string | null
+          payment_date?: string | null
+          status?: string
+          teacher_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salaries_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
           address: string | null

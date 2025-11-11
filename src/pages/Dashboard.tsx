@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, UserCheck, DollarSign, Calendar } from "lucide-react";
+import { Users, UserCheck, DollarSign, Calendar, TrendingUp, TrendingDown, Wallet, HandCoins } from "lucide-react";
 import StatCard from "@/components/StatCard";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,11 @@ const Dashboard = () => {
     presentToday: 0,
     pendingFees: 0,
     monthlyRevenue: 0,
+    totalIncome: 0,
+    totalExpense: 0,
+    totalSalaries: 0,
+    totalLoans: 0,
+    netBalance: 0,
   });
   
   useEffect(() => {
@@ -45,11 +50,53 @@ const Dashboard = () => {
 
         const revenue = paidFees?.reduce((sum, fee) => sum + (Number(fee.paid_amount) || 0), 0) || 0;
 
+        // Get total income (this month)
+        const { data: incomeData } = await supabase
+          .from("income")
+          .select("amount")
+          .gte("date", firstDay.toISOString().split("T")[0]);
+        
+        const totalIncome = incomeData?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+        // Get total expenses (this month)
+        const { data: expenseData } = await supabase
+          .from("expense")
+          .select("amount")
+          .gte("date", firstDay.toISOString().split("T")[0]);
+        
+        const totalExpense = expenseData?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+        // Get total salaries (this month)
+        const currentMonth = new Date().getMonth() + 1;
+        const currentYear = new Date().getFullYear();
+        const { data: salariesData } = await supabase
+          .from("salaries")
+          .select("amount")
+          .eq("month", currentMonth)
+          .eq("year", currentYear)
+          .eq("status", "paid");
+        
+        const totalSalaries = salariesData?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+        // Get total loans (pending)
+        const { data: loansData } = await supabase
+          .from("loans")
+          .select("amount, paid_amount");
+        
+        const totalLoans = loansData?.reduce((sum, item) => sum + (Number(item.amount) - Number(item.paid_amount || 0)), 0) || 0;
+
+        const netBalance = revenue + totalIncome - totalExpense - totalSalaries;
+
         setStats({
           totalStudents: studentCount || 0,
           presentToday: presentCount || 0,
           pendingFees: pendingCount || 0,
           monthlyRevenue: revenue,
+          totalIncome,
+          totalExpense,
+          totalSalaries,
+          totalLoans,
+          netBalance,
         });
       } catch (error) {
         console.error("Error fetching stats:", error);
@@ -75,29 +122,58 @@ const Dashboard = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title={t("totalStudents")}
-          value={stats.totalStudents.toString()}
-          icon={Users}
-        />
-        <StatCard
-          title={t("presentToday")}
-          value={stats.presentToday.toString()}
-          icon={UserCheck}
-          subtitle={stats.totalStudents > 0 ? `${Math.round((stats.presentToday / stats.totalStudents) * 100)}%` : "0%"}
-        />
-        <StatCard
-          title={t("pendingFees")}
-          value={stats.pendingFees.toString()}
-          icon={DollarSign}
-          subtitle={t("students")}
-        />
-        <StatCard
-          title={t("monthlyRevenue")}
-          value={`PKR ${stats.monthlyRevenue.toLocaleString()}`}
-          icon={Calendar}
-        />
+      <div>
+        <h2 className="text-xl font-semibold text-foreground mb-4">{t("financialSummary")}</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            title={t("netBalance")}
+            value={`Rs. ${stats.netBalance.toLocaleString()}`}
+            icon={DollarSign}
+          />
+          <StatCard
+            title={t("totalIncome")}
+            value={`Rs. ${(stats.monthlyRevenue + stats.totalIncome).toLocaleString()}`}
+            icon={TrendingUp}
+          />
+          <StatCard
+            title={t("totalExpenditure")}
+            value={`Rs. ${(stats.totalExpense + stats.totalSalaries).toLocaleString()}`}
+            icon={TrendingDown}
+          />
+          <StatCard
+            title={t("pendingLoans")}
+            value={`Rs. ${stats.totalLoans.toLocaleString()}`}
+            icon={HandCoins}
+          />
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-xl font-semibold text-foreground mb-4">{t("dashboard")}</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            title={t("totalStudents")}
+            value={stats.totalStudents.toString()}
+            icon={Users}
+          />
+          <StatCard
+            title={t("presentToday")}
+            value={stats.presentToday.toString()}
+            icon={UserCheck}
+            subtitle={stats.totalStudents > 0 ? `${Math.round((stats.presentToday / stats.totalStudents) * 100)}%` : "0%"}
+          />
+          <StatCard
+            title={t("pendingFees")}
+            value={stats.pendingFees.toString()}
+            icon={DollarSign}
+            subtitle={t("students")}
+          />
+          <StatCard
+            title={t("monthlyRevenue")}
+            value={`Rs. ${stats.monthlyRevenue.toLocaleString()}`}
+            icon={Calendar}
+          />
+        </div>
       </div>
     </div>
   );

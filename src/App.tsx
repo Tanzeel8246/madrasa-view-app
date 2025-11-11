@@ -13,6 +13,8 @@ import Attendance from "./pages/Attendance";
 import Fees from "./pages/Fees";
 import Income from "./pages/Income";
 import Expense from "./pages/Expense";
+import Salaries from "./pages/Salaries";
+import Loans from "./pages/Loans";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -35,6 +37,8 @@ const App = () => (
             <Route path="/fees" element={<Layout><Fees /></Layout>} />
             <Route path="/income" element={<Layout><Income /></Layout>} />
             <Route path="/expense" element={<Layout><Expense /></Layout>} />
+            <Route path="/salaries" element={<Layout><Salaries /></Layout>} />
+            <Route path="/loans" element={<Layout><Loans /></Layout>} />
             <Route path="/reports" element={<Layout><Reports /></Layout>} />
             <Route path="/settings" element={<Layout><Settings /></Layout>} />
             <Route path="*" element={<NotFound />} />
