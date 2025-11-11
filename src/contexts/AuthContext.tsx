@@ -7,6 +7,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   madrasahId: string | null;
+  userRole: string | null;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, madrasahData: {
     name: string;
@@ -23,6 +24,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [madrasahId, setMadrasahId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -67,6 +69,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     if (data) {
       setMadrasahId(data.madrasah_id);
+      // Fetch user role
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("madrasah_id", data.madrasah_id)
+        .maybeSingle();
+      
+      setUserRole(roleData?.role || null);
     }
   };
 
@@ -119,6 +130,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
       if (profileError) return { error: profileError };
+
+      // Assign admin role to the user
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .insert({
+          user_id: authData.user.id,
+          madrasah_id: madrasah.id,
+          role: "admin",
+        });
+
+      if (roleError) return { error: roleError };
     }
 
     return { error: null };
@@ -127,6 +149,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     await supabase.auth.signOut();
     setMadrasahId(null);
+    setUserRole(null);
     navigate("/auth");
   };
 
@@ -136,6 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         session,
         madrasahId,
+        userRole,
         signIn,
         signUp,
         signOut,

@@ -1,6 +1,7 @@
-import { Home, Users, ClipboardList, DollarSign, FileText, Settings, GraduationCap, BookOpen, TrendingUp, TrendingDown, Wallet, HandCoins, BookMarked } from "lucide-react";
+import { Home, Users, ClipboardList, DollarSign, FileText, Settings, GraduationCap, BookOpen, TrendingUp, TrendingDown, Wallet, HandCoins, BookMarked, UserCog } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import {
   Sidebar as SidebarPrimitive,
@@ -17,6 +18,7 @@ import {
 const Sidebar = () => {
   const { t, isRTL } = useLanguage();
   const { setOpenMobile, isMobile } = useSidebar();
+  const { userRole } = useAuth();
   
   const menuItems = [
     { icon: Home, label: t("dashboard"), path: "/" },
@@ -31,6 +33,7 @@ const Sidebar = () => {
     { icon: HandCoins, label: t("loans"), path: "/loans" },
     { icon: BookMarked, label: t("learningReport"), path: "/learning-report" },
     { icon: FileText, label: t("reports"), path: "/reports" },
+    ...(userRole === "admin" ? [{ icon: UserCog, label: isRTL ? "یوزر مینجمنٹ" : "User Management", path: "/user-management" }] : []),
     { icon: Settings, label: t("settings"), path: "/settings" },
   ];
 
