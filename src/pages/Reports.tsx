@@ -248,28 +248,28 @@ const Reports = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">
           {t("detailedReports")}
         </h1>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={exportToPDF}>
-            <FileDown className="h-4 w-4 mr-2" />
-            {t("exportPDF")}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={exportToPDF} size="sm">
+            <FileDown className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">PDF</span>
           </Button>
-          <Button variant="outline" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-2" />
-            {language === "ur" ? "پرنٹ" : "Print"}
+          <Button variant="outline" onClick={handlePrint} size="sm">
+            <Printer className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">{language === "ur" ? "پرنٹ" : "Print"}</span>
           </Button>
-          <Button variant="outline" onClick={fetchReportData}>
-            <RefreshCw className="h-4 w-4" />
+          <Button variant="outline" onClick={fetchReportData} size="sm">
+            <RefreshCw className="h-3 w-3 md:h-4 md:w-4" />
           </Button>
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border p-6 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-card rounded-lg border p-3 sm:p-4 md:p-6 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           <div className="space-y-2">
             <Label>{t("selectCategory")}</Label>
             <Select value={reportType} onValueChange={(value: ReportType) => setReportType(value)}>
@@ -326,7 +326,7 @@ const Reports = () => {
         }
       />
 
-      <div className="bg-card rounded-lg border">
+      <div className="bg-card rounded-lg border overflow-x-auto">
         <Table id="reports-table">
           <TableHeader>
             <TableRow>

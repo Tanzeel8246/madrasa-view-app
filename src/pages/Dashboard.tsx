@@ -107,12 +107,12 @@ const Dashboard = () => {
   }, []);
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1 md:mb-2">
           {t("welcomeMessage")}
         </h1>
-        <p className="text-muted-foreground">
+        <p className="text-xs md:text-sm text-muted-foreground">
           {new Date().toLocaleDateString("ur-PK", { 
             weekday: "long", 
             year: "numeric", 
@@ -123,8 +123,8 @@ const Dashboard = () => {
       </div>
 
       <div>
-        <h2 className="text-xl font-semibold text-foreground mb-4">{t("financialSummary")}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <h2 className="text-lg md:text-xl font-semibold text-foreground mb-3 md:mb-4">{t("financialSummary")}</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 lg:gap-6">
           <StatCard
             title={t("netBalance")}
             value={`Rs. ${stats.netBalance.toLocaleString()}`}
@@ -149,8 +149,8 @@ const Dashboard = () => {
       </div>
 
       <div>
-        <h2 className="text-xl font-semibold text-foreground mb-4">{t("dashboard")}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <h2 className="text-lg md:text-xl font-semibold text-foreground mb-3 md:mb-4">{t("dashboard")}</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 lg:gap-6">
           <StatCard
             title={t("totalStudents")}
             value={stats.totalStudents.toString()}

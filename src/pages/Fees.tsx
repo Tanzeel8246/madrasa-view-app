@@ -174,25 +174,25 @@ const Fees = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">
           {t("feeManagement")}
         </h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleExportPDF} size="sm">
-            <FileDown className="h-4 w-4 mr-2" />
-            PDF
+            <FileDown className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">PDF</span>
           </Button>
           <Button variant="outline" onClick={handlePrint} size="sm">
-            <Printer className="h-4 w-4 mr-2" />
-            {isRTL ? "پرنٹ" : "Print"}
+            <Printer className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">{isRTL ? "پرنٹ" : "Print"}</span>
           </Button>
           <Dialog open={openAddDialog} onOpenChange={setOpenAddDialog}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                {t("addFee")}
+              <Button size="sm">
+                <Plus className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+                <span className="text-xs md:text-sm">{t("addFee")}</span>
               </Button>
             </DialogTrigger>
           <DialogContent dir={isRTL ? "rtl" : "ltr"}>
@@ -256,18 +256,18 @@ const Fees = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-card rounded-lg border p-6">
-          <p className="text-sm text-muted-foreground mb-2">{t("totalIncome")}</p>
-          <h3 className="text-3xl font-bold text-primary">PKR {stats.totalIncome.toLocaleString()}</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 lg:gap-6">
+        <div className="bg-card rounded-lg border p-3 sm:p-4 md:p-6">
+          <p className="text-xs md:text-sm text-muted-foreground mb-1 md:mb-2">{t("totalIncome")}</p>
+          <h3 className="text-2xl md:text-3xl font-bold text-primary">PKR {stats.totalIncome.toLocaleString()}</h3>
         </div>
-        <div className="bg-card rounded-lg border p-6">
-          <p className="text-sm text-muted-foreground mb-2">{t("pendingAmount")}</p>
-          <h3 className="text-3xl font-bold text-destructive">PKR {stats.pending.toLocaleString()}</h3>
+        <div className="bg-card rounded-lg border p-3 sm:p-4 md:p-6">
+          <p className="text-xs md:text-sm text-muted-foreground mb-1 md:mb-2">{t("pendingAmount")}</p>
+          <h3 className="text-2xl md:text-3xl font-bold text-destructive">PKR {stats.pending.toLocaleString()}</h3>
         </div>
-        <div className="bg-card rounded-lg border p-6">
-          <p className="text-sm text-muted-foreground mb-2">{t("expectedRevenue")}</p>
-          <h3 className="text-3xl font-bold text-accent">PKR {stats.expected.toLocaleString()}</h3>
+        <div className="bg-card rounded-lg border p-3 sm:p-4 md:p-6">
+          <p className="text-xs md:text-sm text-muted-foreground mb-1 md:mb-2">{t("expectedRevenue")}</p>
+          <h3 className="text-2xl md:text-3xl font-bold text-accent">PKR {stats.expected.toLocaleString()}</h3>
         </div>
       </div>
 
@@ -283,7 +283,7 @@ const Fees = () => {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border">
+      <div className="bg-card rounded-lg border overflow-x-auto">
         <Table id="fees-table">
           <TableHeader>
             <TableRow>

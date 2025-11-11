@@ -137,25 +137,25 @@ const Income = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">
           {t("incomeManagement")}
         </h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleExportPDF} size="sm">
-            <FileDown className="h-4 w-4 mr-2" />
-            PDF
+            <FileDown className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">PDF</span>
           </Button>
           <Button variant="outline" onClick={handlePrint} size="sm">
-            <Printer className="h-4 w-4 mr-2" />
-            {isRTL ? "پرنٹ" : "Print"}
+            <Printer className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">{isRTL ? "پرنٹ" : "Print"}</span>
           </Button>
           <Dialog open={openDialog} onOpenChange={setOpenDialog}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                {t("addIncome")}
+              <Button size="sm">
+                <Plus className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+                <span className="text-xs md:text-sm">{t("addIncome")}</span>
               </Button>
             </DialogTrigger>
             <DialogContent dir={isRTL ? "rtl" : "ltr"}>
@@ -209,9 +209,9 @@ const Income = () => {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border p-6">
-        <p className="text-sm text-muted-foreground mb-2">{t("totalIncome")}</p>
-        <h3 className="text-3xl font-bold text-primary">PKR {totalIncome.toLocaleString()}</h3>
+      <div className="bg-card rounded-lg border p-3 sm:p-4 md:p-6">
+        <p className="text-xs md:text-sm text-muted-foreground mb-1 md:mb-2">{t("totalIncome")}</p>
+        <h3 className="text-2xl md:text-3xl font-bold text-primary">PKR {totalIncome.toLocaleString()}</h3>
       </div>
 
       <div className="flex gap-4">
@@ -226,7 +226,7 @@ const Income = () => {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border">
+      <div className="bg-card rounded-lg border overflow-x-auto">
         <Table id="income-table">
           <TableHeader>
             <TableRow>

@@ -101,20 +101,20 @@ const Students = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t("studentsList")}</h1>
-        <div className="flex items-center gap-2">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">{t("studentsList")}</h1>
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={handleExportPDF} size="sm">
-            <FileDown className="h-4 w-4 mr-2" />
-            {isRTL ? "PDF" : "PDF"}
+            <FileDown className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">PDF</span>
           </Button>
           <Button variant="outline" onClick={handlePrint} size="sm">
-            <Printer className="h-4 w-4 mr-2" />
-            {isRTL ? "پرنٹ" : "Print"}
+            <Printer className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">{isRTL ? "پرنٹ" : "Print"}</span>
           </Button>
           <AddStudentDialog onAdded={fetchStudents} />
-          <Button variant="secondary" onClick={fetchStudents} disabled={loading}>
+          <Button variant="secondary" onClick={fetchStudents} disabled={loading} size="sm">
             {loading ? t("loading") : t("refresh")}
           </Button>
         </div>
@@ -137,7 +137,7 @@ const Students = () => {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border">
+      <div className="bg-card rounded-lg border overflow-x-auto">
         <Table id="students-table">
           <TableHeader>
             <TableRow>

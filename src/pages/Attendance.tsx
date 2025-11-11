@@ -125,14 +125,14 @@ const Attendance = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-foreground">
+    <div className="space-y-4 md:space-y-6">
+      <h1 className="text-2xl md:text-3xl font-bold text-foreground">
         {t("markAttendance")}
       </h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         <div className="lg:col-span-1">
-          <div className="bg-card rounded-lg border p-4">
+          <div className="bg-card rounded-lg border p-3 sm:p-4">
             <h2 className="text-lg font-semibold mb-4">{t("date")}</h2>
             <Calendar
               mode="single"
@@ -144,9 +144,9 @@ const Attendance = () => {
         </div>
 
         <div className="lg:col-span-2">
-          <div className="bg-card rounded-lg border p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">
+          <div className="bg-card rounded-lg border p-3 sm:p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
+              <h2 className="text-base md:text-lg font-semibold">
                 {date?.toLocaleDateString("ur-PK", {
                   weekday: "long",
                   year: "numeric",
@@ -161,13 +161,14 @@ const Attendance = () => {
             </div>
 
             {students.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-8 text-sm md:text-base text-muted-foreground">
                 {t("noRecordsFound")}
               </div>
             ) : (
               <>
-                <Table>
-                  <TableHeader>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
                     <TableRow>
                       <TableHead className={isRTL ? "text-right" : "text-left"}>
                         {t("rollNumber")}
@@ -207,11 +208,12 @@ const Attendance = () => {
                         </TableCell>
                       </TableRow>
                     ))}
-                  </TableBody>
-                </Table>
+                    </TableBody>
+                  </Table>
+                </div>
 
-                <div className="mt-6 flex justify-end">
-                  <Button onClick={handleSubmit} className="px-8" disabled={loading}>
+                <div className="mt-4 md:mt-6 flex justify-end">
+                  <Button onClick={handleSubmit} className="w-full sm:w-auto px-6 md:px-8" disabled={loading} size="sm">
                     {loading ? t("loading") : t("submit")}
                   </Button>
                 </div>

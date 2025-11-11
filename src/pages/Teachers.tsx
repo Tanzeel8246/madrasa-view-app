@@ -99,26 +99,26 @@ const Teachers = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t("teachersList")}</h1>
-        <div className="flex gap-2">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">{t("teachersList")}</h1>
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleExportPDF} size="sm">
-            <FileDown className="h-4 w-4 mr-2" />
-            PDF
+            <FileDown className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">PDF</span>
           </Button>
           <Button variant="outline" onClick={handlePrint} size="sm">
-            <Printer className="h-4 w-4 mr-2" />
-            {isRTL ? "پرنٹ" : "Print"}
+            <Printer className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">{isRTL ? "پرنٹ" : "Print"}</span>
           </Button>
           <AddTeacherDialog onAdded={fetchTeachers} />
           <Button onClick={fetchTeachers} variant="outline" size="icon">
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-3 w-3 md:h-4 md:w-4" />
           </Button>
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border p-6">
+      <div className="bg-card rounded-lg border p-3 sm:p-4 md:p-6">
         <div className="mb-4 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
@@ -138,8 +138,9 @@ const Teachers = () => {
             {t("noRecordsFound")}
           </div>
         ) : (
-          <Table id="teachers-table">
-            <TableHeader>
+          <div className="overflow-x-auto">
+            <Table id="teachers-table">
+              <TableHeader>
               <TableRow>
                 <TableHead className={isRTL ? "text-right" : "text-left"}>
                   {t("teacherName")}
@@ -180,6 +181,7 @@ const Teachers = () => {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </div>
     </div>

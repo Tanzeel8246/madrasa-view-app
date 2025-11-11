@@ -76,18 +76,18 @@ const Classes = () => {
   }, [classes, searchQuery]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t("classesList")}</h1>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">{t("classesList")}</h1>
         <div className="flex gap-2">
           <AddClassDialog onAdded={fetchClasses} />
           <Button onClick={fetchClasses} variant="outline" size="icon">
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-3 w-3 md:h-4 md:w-4" />
           </Button>
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border p-6">
+      <div className="bg-card rounded-lg border p-3 sm:p-4 md:p-6">
         <div className="mb-4 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
@@ -99,16 +99,17 @@ const Classes = () => {
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="text-center py-8 text-sm md:text-base text-muted-foreground">
             {t("loading")}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="text-center py-8 text-sm md:text-base text-muted-foreground">
             {t("noRecordsFound")}
           </div>
         ) : (
-          <Table>
-            <TableHeader>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
               <TableRow>
                 <TableHead className={isRTL ? "text-right" : "text-left"}>
                   {t("className")}
@@ -135,8 +136,9 @@ const Classes = () => {
                   </TableCell>
                 </TableRow>
               ))}
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
     </div>
