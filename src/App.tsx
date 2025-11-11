@@ -30,12 +30,16 @@ const queryClient = new QueryClient();
 const AppContent = () => {
   const { user, madrasahId, loading } = useAuth();
   const [showSetup, setShowSetup] = useState(false);
+  const location = window.location.pathname;
 
   useEffect(() => {
-    if (!loading && user && !madrasahId) {
+    // Only show dialog on protected routes, not on /auth
+    if (!loading && user && !madrasahId && location !== '/auth') {
       setShowSetup(true);
+    } else if (!user || madrasahId || location === '/auth') {
+      setShowSetup(false);
     }
-  }, [user, madrasahId, loading]);
+  }, [user, madrasahId, loading, location]);
 
   return (
     <>
