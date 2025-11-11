@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, FileDown, Printer } from "lucide-react";
+import { generatePDF, printTable } from "@/lib/pdfUtils";
 import {
   Table,
   TableBody,
@@ -135,19 +136,65 @@ const Fees = () => {
 
   const monthNames = Array.from({ length: 12 }, (_, i) => getMonthName(i));
 
+  const filteredRecords = feeRecords.filter((record) =>
+    record.students?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    record.students?.roll_number.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleExportPDF = () => {
+    const headers = [
+      t("rollNumber"),
+      t("studentName"),
+      t("month") + " / " + t("year"),
+      t("amount"),
+      t("paidAmount"),
+      t("pendingAmount"),
+      t("status"),
+    ];
+    const data = filteredRecords.map(r => [
+      r.students?.roll_number || "-",
+      r.students?.name || "-",
+      `${monthNames[r.month - 1]} ${r.year}`,
+      `PKR ${Number(r.amount).toLocaleString()}`,
+      `PKR ${(Number(r.paid_amount) || 0).toLocaleString()}`,
+      `PKR ${(Number(r.amount) - (Number(r.paid_amount) || 0)).toLocaleString()}`,
+      r.status === "paid" ? t("paid") : t("pending"),
+    ]);
+    generatePDF(
+      t("feeManagement"),
+      headers,
+      data,
+      "fees_list.pdf",
+      isRTL
+    );
+  };
+
+  const handlePrint = () => {
+    printTable("fees-table");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">
           {t("feeManagement")}
         </h1>
-        <Dialog open={openAddDialog} onOpenChange={setOpenAddDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              {t("addFee")}
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportPDF} size="sm">
+            <FileDown className="h-4 w-4 mr-2" />
+            PDF
+          </Button>
+          <Button variant="outline" onClick={handlePrint} size="sm">
+            <Printer className="h-4 w-4 mr-2" />
+            {isRTL ? "پرنٹ" : "Print"}
+          </Button>
+          <Dialog open={openAddDialog} onOpenChange={setOpenAddDialog}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                {t("addFee")}
+              </Button>
+            </DialogTrigger>
           <DialogContent dir={isRTL ? "rtl" : "ltr"}>
             <DialogHeader>
               <DialogTitle>{t("addFee")}</DialogTitle>
@@ -205,7 +252,8 @@ const Fees = () => {
               </div>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -236,7 +284,7 @@ const Fees = () => {
       </div>
 
       <div className="bg-card rounded-lg border">
-        <Table>
+        <Table id="fees-table">
           <TableHeader>
             <TableRow>
               <TableHead className={isRTL ? "text-right" : "text-left"}>
@@ -263,19 +311,14 @@ const Fees = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {feeRecords.length === 0 ? (
+            {filteredRecords.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground">
                   {t("noRecordsFound")}
                 </TableCell>
               </TableRow>
             ) : (
-              feeRecords
-                .filter((record) =>
-                  record.students?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  record.students?.roll_number.toLowerCase().includes(searchQuery.toLowerCase())
-                )
-                .map((record) => (
+              filteredRecords.map((record) => (
                   <TableRow key={record.id}>
                     <TableCell className={isRTL ? "text-right" : "text-left"}>
                       {record.students?.roll_number}

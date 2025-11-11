@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, RefreshCw } from "lucide-react";
+import { Search, RefreshCw, FileDown, Printer } from "lucide-react";
+import { generatePDF, printTable } from "@/lib/pdfUtils";
 import {
   Table,
   TableBody,
@@ -69,11 +70,47 @@ const Teachers = () => {
     );
   }, [teachers, searchQuery]);
 
+  const handleExportPDF = () => {
+    const headers = [
+      t("teacherName"),
+      t("subject"),
+      t("qualification"),
+      t("contact"),
+      t("email"),
+    ];
+    const data = filtered.map(t => [
+      t.name,
+      t.subject || "-",
+      t.qualification || "-",
+      t.contact || "-",
+      t.email || "-",
+    ]);
+    generatePDF(
+      isRTL ? "اساتذہ کی فہرست" : "Teachers List",
+      headers,
+      data,
+      "teachers_list.pdf",
+      isRTL
+    );
+  };
+
+  const handlePrint = () => {
+    printTable("teachers-table");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">{t("teachersList")}</h1>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportPDF} size="sm">
+            <FileDown className="h-4 w-4 mr-2" />
+            PDF
+          </Button>
+          <Button variant="outline" onClick={handlePrint} size="sm">
+            <Printer className="h-4 w-4 mr-2" />
+            {isRTL ? "پرنٹ" : "Print"}
+          </Button>
           <AddTeacherDialog onAdded={fetchTeachers} />
           <Button onClick={fetchTeachers} variant="outline" size="icon">
             <RefreshCw className="h-4 w-4" />
@@ -101,7 +138,7 @@ const Teachers = () => {
             {t("noRecordsFound")}
           </div>
         ) : (
-          <Table>
+          <Table id="teachers-table">
             <TableHeader>
               <TableRow>
                 <TableHead className={isRTL ? "text-right" : "text-left"}>

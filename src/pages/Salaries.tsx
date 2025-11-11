@@ -3,6 +3,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Plus, RefreshCw, Search, FileDown, Printer } from "lucide-react";
+import { generatePDF, printTable } from "@/lib/pdfUtils";
 import {
   Table,
   TableBody,
@@ -28,7 +30,6 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import StatCard from "@/components/StatCard";
 import { DollarSign } from "lucide-react";
@@ -187,6 +188,38 @@ const Salaries = () => {
     record.teacher_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleExportPDF = () => {
+    const headers = [
+      t("teacherName"),
+      t("month"),
+      t("year"),
+      t("amount"),
+      t("status"),
+      t("paymentDate"),
+      t("notes"),
+    ];
+    const data = filteredRecords.map(r => [
+      r.teacher_name,
+      months.find((m) => m.value === r.month)?.label || r.month,
+      r.year,
+      `Rs. ${r.amount.toLocaleString()}`,
+      r.status === "paid" ? t("paid") : t("pending"),
+      r.payment_date ? new Date(r.payment_date).toLocaleDateString() : "-",
+      r.notes || "-",
+    ]);
+    generatePDF(
+      t("salaryManagement"),
+      headers,
+      data,
+      "salaries_list.pdf",
+      language === "ur"
+    );
+  };
+
+  const handlePrint = () => {
+    printTable("salaries-table");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -194,6 +227,14 @@ const Salaries = () => {
           {t("salaryManagement")}
         </h1>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportPDF} size="sm">
+            <FileDown className="h-4 w-4 mr-2" />
+            PDF
+          </Button>
+          <Button variant="outline" onClick={handlePrint} size="sm">
+            <Printer className="h-4 w-4 mr-2" />
+            {language === "ur" ? "پرنٹ" : "Print"}
+          </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -347,7 +388,7 @@ const Salaries = () => {
       </div>
 
       <div className="bg-card rounded-lg border">
-        <Table>
+        <Table id="salaries-table">
           <TableHeader>
             <TableRow>
               <TableHead>{t("teacherName")}</TableHead>

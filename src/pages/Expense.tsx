@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, RefreshCw } from "lucide-react";
+import { Search, Plus, RefreshCw, FileDown, Printer } from "lucide-react";
+import { generatePDF, printTable } from "@/lib/pdfUtils";
 import {
   Table,
   TableBody,
@@ -115,6 +116,28 @@ const Expense = () => {
     record.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleExportPDF = () => {
+    const headers = [t("date"), t("title"), t("category"), t("amount"), t("description")];
+    const data = filteredRecords.map(r => [
+      new Date(r.date).toLocaleDateString(isRTL ? "ur-PK" : "en-US"),
+      r.title,
+      categories.find(c => c.value === r.category)?.label || r.category,
+      `PKR ${Number(r.amount).toLocaleString()}`,
+      r.description || "-",
+    ]);
+    generatePDF(
+      t("expenseManagement"),
+      headers,
+      data,
+      "expense_list.pdf",
+      isRTL
+    );
+  };
+
+  const handlePrint = () => {
+    printTable("expense-table");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -122,6 +145,14 @@ const Expense = () => {
           {t("expenseManagement")}
         </h1>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportPDF} size="sm">
+            <FileDown className="h-4 w-4 mr-2" />
+            PDF
+          </Button>
+          <Button variant="outline" onClick={handlePrint} size="sm">
+            <Printer className="h-4 w-4 mr-2" />
+            {isRTL ? "پرنٹ" : "Print"}
+          </Button>
           <Dialog open={openDialog} onOpenChange={setOpenDialog}>
             <DialogTrigger asChild>
               <Button>
@@ -198,7 +229,7 @@ const Expense = () => {
       </div>
 
       <div className="bg-card rounded-lg border">
-        <Table>
+        <Table id="expense-table">
           <TableHeader>
             <TableRow>
               <TableHead className={isRTL ? "text-right" : "text-left"}>{t("date")}</TableHead>

@@ -3,6 +3,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Plus, RefreshCw, Search, FileDown, Printer } from "lucide-react";
+import { generatePDF, printTable } from "@/lib/pdfUtils";
 import {
   Table,
   TableBody,
@@ -28,7 +30,6 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import StatCard from "@/components/StatCard";
 import { DollarSign } from "lucide-react";
@@ -168,6 +169,41 @@ const Loans = () => {
     record.teacher_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleExportPDF = () => {
+    const headers = [
+      t("teacherName"),
+      t("loanAmount"),
+      t("paidAmount"),
+      t("pendingAmount"),
+      t("loanDate"),
+      t("status"),
+      t("notes"),
+    ];
+    const data = filteredRecords.map(r => {
+      const pending = r.amount - r.paid_amount;
+      return [
+        r.teacher_name,
+        `Rs. ${r.amount.toLocaleString()}`,
+        `Rs. ${r.paid_amount.toLocaleString()}`,
+        `Rs. ${pending.toLocaleString()}`,
+        new Date(r.loan_date).toLocaleDateString(),
+        r.status === "paid" ? t("paid") : r.status === "partial" ? t("partial") : t("pending"),
+        r.notes || "-",
+      ];
+    });
+    generatePDF(
+      t("loanManagement"),
+      headers,
+      data,
+      "loans_list.pdf",
+      language === "ur"
+    );
+  };
+
+  const handlePrint = () => {
+    printTable("loans-table");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -175,6 +211,14 @@ const Loans = () => {
           {t("loanManagement")}
         </h1>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportPDF} size="sm">
+            <FileDown className="h-4 w-4 mr-2" />
+            PDF
+          </Button>
+          <Button variant="outline" onClick={handlePrint} size="sm">
+            <Printer className="h-4 w-4 mr-2" />
+            {language === "ur" ? "پرنٹ" : "Print"}
+          </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -317,7 +361,7 @@ const Loans = () => {
       </div>
 
       <div className="bg-card rounded-lg border">
-        <Table>
+        <Table id="loans-table">
           <TableHeader>
             <TableRow>
               <TableHead>{t("teacherName")}</TableHead>

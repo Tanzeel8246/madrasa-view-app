@@ -19,10 +19,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { FileDown, Filter, RefreshCw } from "lucide-react";
+import { FileDown, Filter, RefreshCw, Printer } from "lucide-react";
 import { toast } from "sonner";
 import StatCard from "@/components/StatCard";
 import { DollarSign, TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { generatePDF, printTable } from "@/lib/pdfUtils";
 
 type ReportType = "income" | "expense" | "salary" | "fee" | "loan";
 
@@ -136,24 +137,114 @@ const Reports = () => {
     }
   };
 
-  const exportToCSV = () => {
+  const exportToPDF = () => {
     if (reportData.length === 0) {
       toast.error(language === "ur" ? "کوئی ڈیٹا نہیں ہے" : "No data to export");
       return;
     }
 
-    const headers = Object.keys(reportData[0]).join(",");
-    const rows = reportData.map((row) => Object.values(row).join(","));
-    const csv = [headers, ...rows].join("\n");
+    let headers: string[] = [];
+    let data: any[][] = [];
 
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${reportType}_report_${fromDate}_to_${toDate}.csv`;
-    a.click();
+    switch (reportType) {
+      case "income":
+      case "expense":
+        headers = [
+          language === "ur" ? "عنوان" : "Title",
+          language === "ur" ? "زمرہ" : "Category",
+          language === "ur" ? "رقم" : "Amount",
+          language === "ur" ? "تاریخ" : "Date",
+          language === "ur" ? "تفصیل" : "Description",
+        ];
+        data = reportData.map((record: any) => [
+          record.title,
+          record.category,
+          `Rs. ${Number(record.amount).toLocaleString()}`,
+          new Date(record.date).toLocaleDateString(),
+          record.description || "-",
+        ]);
+        break;
+
+      case "salary":
+        headers = [
+          language === "ur" ? "استاد کا نام" : "Teacher Name",
+          language === "ur" ? "مہینہ" : "Month",
+          language === "ur" ? "سال" : "Year",
+          language === "ur" ? "رقم" : "Amount",
+          language === "ur" ? "حیثیت" : "Status",
+        ];
+        data = reportData.map((record: any) => [
+          record.teacher_name,
+          record.month,
+          record.year,
+          `Rs. ${Number(record.amount).toLocaleString()}`,
+          record.status === "paid" ? (language === "ur" ? "ادا شدہ" : "Paid") : (language === "ur" ? "باقی" : "Pending"),
+        ]);
+        break;
+
+      case "fee":
+        headers = [
+          language === "ur" ? "طالب علم کا نام" : "Student Name",
+          language === "ur" ? "رول نمبر" : "Roll Number",
+          language === "ur" ? "رقم" : "Amount",
+          language === "ur" ? "ادا شدہ رقم" : "Paid Amount",
+          language === "ur" ? "ادائیگی کی تاریخ" : "Payment Date",
+          language === "ur" ? "حیثیت" : "Status",
+        ];
+        data = reportData.map((record: any) => [
+          record.student_name,
+          record.students?.roll_number || "-",
+          `Rs. ${Number(record.amount).toLocaleString()}`,
+          `Rs. ${Number(record.paid_amount).toLocaleString()}`,
+          new Date(record.date).toLocaleDateString(),
+          record.status === "paid" ? (language === "ur" ? "ادا شدہ" : "Paid") : (language === "ur" ? "باقی" : "Pending"),
+        ]);
+        break;
+
+      case "loan":
+        headers = [
+          language === "ur" ? "استاد کا نام" : "Teacher Name",
+          language === "ur" ? "قرض کی رقم" : "Loan Amount",
+          language === "ur" ? "ادا شدہ رقم" : "Paid Amount",
+          language === "ur" ? "باقی رقم" : "Pending Amount",
+          language === "ur" ? "قرض کی تاریخ" : "Loan Date",
+          language === "ur" ? "حیثیت" : "Status",
+        ];
+        data = reportData.map((record: any) => [
+          record.teacher_name,
+          `Rs. ${Number(record.amount).toLocaleString()}`,
+          `Rs. ${Number(record.paid_amount || 0).toLocaleString()}`,
+          `Rs. ${(Number(record.amount) - Number(record.paid_amount || 0)).toLocaleString()}`,
+          new Date(record.date).toLocaleDateString(),
+          record.status === "paid" ? (language === "ur" ? "ادا شدہ" : "Paid") : (language === "ur" ? "باقی" : "Pending"),
+        ]);
+        break;
+    }
+
+    const title = 
+      reportType === "income" ? (language === "ur" ? "آمدنی کی رپورٹ" : "Income Report") :
+      reportType === "expense" ? (language === "ur" ? "اخراجات کی رپورٹ" : "Expense Report") :
+      reportType === "salary" ? (language === "ur" ? "تنخواہوں کی رپورٹ" : "Salary Report") :
+      reportType === "fee" ? (language === "ur" ? "فیس کی رپورٹ" : "Fee Report") :
+      (language === "ur" ? "قرضوں کی رپورٹ" : "Loan Report");
+
+    generatePDF(
+      title,
+      headers,
+      data,
+      `${reportType}_report_${fromDate}_to_${toDate}.pdf`,
+      language === "ur"
+    );
 
     toast.success(language === "ur" ? "رپورٹ ڈاؤن لوڈ ہو گئی" : "Report downloaded");
+  };
+
+  const handlePrint = () => {
+    if (reportData.length === 0) {
+      toast.error(language === "ur" ? "کوئی ڈیٹا نہیں ہے" : "No data to print");
+      return;
+    }
+    printTable("reports-table");
   };
 
   return (
@@ -163,9 +254,13 @@ const Reports = () => {
           {t("detailedReports")}
         </h1>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={exportToCSV}>
+          <Button variant="outline" onClick={exportToPDF}>
             <FileDown className="h-4 w-4 mr-2" />
             {t("exportPDF")}
+          </Button>
+          <Button variant="outline" onClick={handlePrint}>
+            <Printer className="h-4 w-4 mr-2" />
+            {language === "ur" ? "پرنٹ" : "Print"}
           </Button>
           <Button variant="outline" onClick={fetchReportData}>
             <RefreshCw className="h-4 w-4" />
@@ -232,7 +327,7 @@ const Reports = () => {
       />
 
       <div className="bg-card rounded-lg border">
-        <Table>
+        <Table id="reports-table">
           <TableHeader>
             <TableRow>
               {reportType === "income" && (

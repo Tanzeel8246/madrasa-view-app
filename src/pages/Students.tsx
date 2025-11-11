@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Search } from "lucide-react";
+import { Search, FileDown, Printer } from "lucide-react";
+import { generatePDF, printTable } from "@/lib/pdfUtils";
 import {
   Table,
   TableBody,
@@ -69,11 +70,49 @@ const Students = () => {
     );
   }, [searchQuery, students]);
 
+  const handleExportPDF = () => {
+    const headers = [
+      isRTL ? "رول نمبر" : "Roll Number",
+      isRTL ? "طالب علم کا نام" : "Student Name",
+      isRTL ? "والد کا نام" : "Father Name",
+      isRTL ? "کلاس" : "Class",
+      isRTL ? "رابطہ" : "Contact",
+      isRTL ? "پتہ" : "Address",
+    ];
+    const data = filtered.map(s => [
+      s.roll_number,
+      s.name,
+      s.father_name,
+      s.classes?.name || "-",
+      s.contact || "-",
+      s.address || "-",
+    ]);
+    generatePDF(
+      isRTL ? "طلباء کی فہرست" : "Students List",
+      headers,
+      data,
+      "students_list.pdf",
+      isRTL
+    );
+  };
+
+  const handlePrint = () => {
+    printTable("students-table");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">{t("studentsList")}</h1>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportPDF} size="sm">
+            <FileDown className="h-4 w-4 mr-2" />
+            {isRTL ? "PDF" : "PDF"}
+          </Button>
+          <Button variant="outline" onClick={handlePrint} size="sm">
+            <Printer className="h-4 w-4 mr-2" />
+            {isRTL ? "پرنٹ" : "Print"}
+          </Button>
           <AddStudentDialog onAdded={fetchStudents} />
           <Button variant="secondary" onClick={fetchStudents} disabled={loading}>
             {loading ? t("loading") : t("refresh")}
@@ -99,7 +138,7 @@ const Students = () => {
       </div>
 
       <div className="bg-card rounded-lg border">
-        <Table>
+        <Table id="students-table">
           <TableHeader>
             <TableRow>
               <TableHead className={isRTL ? "text-right" : "text-left"}>{t("rollNumber")}</TableHead>
