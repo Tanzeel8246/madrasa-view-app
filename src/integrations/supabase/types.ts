@@ -14,7 +14,130 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      attendance: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          notes: string | null
+          status: string
+          student_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          notes?: string | null
+          status: string
+          student_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fees: {
+        Row: {
+          amount: number
+          created_at: string | null
+          id: string
+          month: number
+          notes: string | null
+          paid_amount: number | null
+          payment_date: string | null
+          status: string
+          student_id: string
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          id?: string
+          month: number
+          notes?: string | null
+          paid_amount?: number | null
+          payment_date?: string | null
+          status: string
+          student_id: string
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          id?: string
+          month?: number
+          notes?: string | null
+          paid_amount?: number | null
+          payment_date?: string | null
+          status?: string
+          student_id?: string
+          updated_at?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fees_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      students: {
+        Row: {
+          address: string | null
+          class: string
+          contact: string | null
+          created_at: string | null
+          date_of_birth: string | null
+          father_name: string
+          id: string
+          name: string
+          roll_number: string
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          class: string
+          contact?: string | null
+          created_at?: string | null
+          date_of_birth?: string | null
+          father_name: string
+          id?: string
+          name: string
+          roll_number: string
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          class?: string
+          contact?: string | null
+          created_at?: string | null
+          date_of_birth?: string | null
+          father_name?: string
+          id?: string
+          name?: string
+          roll_number?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
