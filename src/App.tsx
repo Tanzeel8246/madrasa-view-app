@@ -7,6 +7,8 @@ import { LanguageProvider } from "./contexts/LanguageContext";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
+import Teachers from "./pages/Teachers";
+import Classes from "./pages/Classes";
 import Attendance from "./pages/Attendance";
 import Fees from "./pages/Fees";
 import Reports from "./pages/Reports";
@@ -25,6 +27,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Layout><Dashboard /></Layout>} />
             <Route path="/students" element={<Layout><Students /></Layout>} />
+            <Route path="/teachers" element={<Layout><Teachers /></Layout>} />
+            <Route path="/classes" element={<Layout><Classes /></Layout>} />
             <Route path="/attendance" element={<Layout><Attendance /></Layout>} />
             <Route path="/fees" element={<Layout><Fees /></Layout>} />
             <Route path="/reports" element={<Layout><Reports /></Layout>} />

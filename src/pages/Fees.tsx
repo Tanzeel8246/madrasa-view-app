@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -11,18 +11,123 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+
+type FeeRecord = {
+  id: string;
+  student_id: string;
+  amount: number;
+  paid_amount: number | null;
+  month: number;
+  year: number;
+  status: string;
+  students: {
+    name: string;
+    roll_number: string;
+  } | null;
+};
 
 const Fees = () => {
   const { t, isRTL } = useLanguage();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
+  const [feeRecords, setFeeRecords] = useState<FeeRecord[]>([]);
+  const [students, setStudents] = useState<{ id: string; name: string; roll_number: string }[]>([]);
+  const [stats, setStats] = useState({ totalIncome: 0, pending: 0, expected: 0 });
+  const [openAddDialog, setOpenAddDialog] = useState(false);
+  const { register, handleSubmit, reset, setValue } = useForm();
 
-  const feeRecords = [
-    { id: 1, name: "محمد احمد", rollNumber: "001", monthlyFee: 5000, paid: 5000, status: "paid", month: "نومبر ۲۰۲۵" },
-    { id: 2, name: "علی حسن", rollNumber: "002", monthlyFee: 5000, paid: 5000, status: "paid", month: "نومبر ۲۰۲۵" },
-    { id: 3, name: "فاطمہ زہرا", rollNumber: "003", monthlyFee: 5000, paid: 0, status: "pending", month: "نومبر ۲۰۲۵" },
-    { id: 4, name: "عائشہ صدیقہ", rollNumber: "004", monthlyFee: 4500, paid: 4500, status: "paid", month: "نومبر ۲۰۲۵" },
-    { id: 5, name: "عمر فاروق", rollNumber: "005", monthlyFee: 5000, paid: 2500, status: "partial", month: "نومبر ۲۰۲۵" },
+  useEffect(() => {
+    fetchFeeRecords();
+    fetchStudents();
+  }, []);
+
+  const fetchStudents = async () => {
+    const { data } = await supabase.from("students").select("id, name, roll_number").order("roll_number");
+    setStudents(data || []);
+  };
+
+  const fetchFeeRecords = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("fees")
+        .select(`
+          *,
+          students (
+            name,
+            roll_number
+          )
+        `)
+        .order("year", { ascending: false })
+        .order("month", { ascending: false });
+
+      if (error) throw error;
+
+      setFeeRecords(data || []);
+
+      // Calculate stats
+      const totalIncome = data?.reduce((sum, fee) => sum + (Number(fee.paid_amount) || 0), 0) || 0;
+      const expected = data?.reduce((sum, fee) => sum + Number(fee.amount), 0) || 0;
+      const pending = expected - totalIncome;
+
+      setStats({ totalIncome, pending, expected });
+    } catch (error) {
+      console.error("Error fetching fees:", error);
+    }
+  };
+
+  const handleAddFee = async (formData: any) => {
+    try {
+      const { error } = await supabase.from("fees").insert({
+        student_id: formData.student_id,
+        amount: Number(formData.amount),
+        paid_amount: Number(formData.paid_amount) || 0,
+        month: Number(formData.month),
+        year: Number(formData.year),
+        status: Number(formData.paid_amount) >= Number(formData.amount) ? "paid" : "pending",
+        payment_date: Number(formData.paid_amount) > 0 ? new Date().toISOString() : null,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: t("addedSuccessfully"),
+        description: "Fee record has been added successfully",
+      });
+
+      reset();
+      setOpenAddDialog(false);
+      fetchFeeRecords();
+    } catch (error: any) {
+      toast({
+        title: t("errorOccurred"),
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const monthNames = [
+    "جنوری", "فروری", "مارچ", "اپریل", "مئی", "جون",
+    "جولائی", "اگست", "ستمبر", "اکتوبر", "نومبر", "دسمبر"
   ];
 
   return (
@@ -31,20 +136,85 @@ const Fees = () => {
         <h1 className="text-3xl font-bold text-foreground">
           {t("feeManagement")}
         </h1>
+        <Dialog open={openAddDialog} onOpenChange={setOpenAddDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              {t("addFee")}
+            </Button>
+          </DialogTrigger>
+          <DialogContent dir={isRTL ? "rtl" : "ltr"}>
+            <DialogHeader>
+              <DialogTitle>{t("addFee")}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit(handleAddFee)} className="space-y-4">
+              <div>
+                <Label>{t("studentName")}</Label>
+                <Select onValueChange={(value) => setValue("student_id", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("studentName")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {students.map((student) => (
+                      <SelectItem key={student.id} value={student.id}>
+                        {student.roll_number} - {student.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>{t("month")}</Label>
+                  <Select onValueChange={(value) => setValue("month", value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("month")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {monthNames.map((month, idx) => (
+                        <SelectItem key={idx} value={(idx + 1).toString()}>
+                          {month}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{t("year")}</Label>
+                  <Input type="number" {...register("year")} defaultValue={new Date().getFullYear()} />
+                </div>
+              </div>
+              <div>
+                <Label>{t("amount")}</Label>
+                <Input type="number" {...register("amount")} />
+              </div>
+              <div>
+                <Label>{t("paidAmount")}</Label>
+                <Input type="number" {...register("paid_amount")} defaultValue="0" />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setOpenAddDialog(false)}>
+                  {t("cancel")}
+                </Button>
+                <Button type="submit">{t("save")}</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-card rounded-lg border p-6">
-          <p className="text-sm text-muted-foreground mb-2">کل آمدنی - {t("thisMonth")}</p>
-          <h3 className="text-3xl font-bold text-primary">PKR 22,000</h3>
+          <p className="text-sm text-muted-foreground mb-2">کل آمدنی</p>
+          <h3 className="text-3xl font-bold text-primary">PKR {stats.totalIncome.toLocaleString()}</h3>
         </div>
         <div className="bg-card rounded-lg border p-6">
-          <p className="text-sm text-muted-foreground mb-2">بقایا - {t("thisMonth")}</p>
-          <h3 className="text-3xl font-bold text-destructive">PKR 7,500</h3>
+          <p className="text-sm text-muted-foreground mb-2">بقایا</p>
+          <h3 className="text-3xl font-bold text-destructive">PKR {stats.pending.toLocaleString()}</h3>
         </div>
         <div className="bg-card rounded-lg border p-6">
           <p className="text-sm text-muted-foreground mb-2">مجموعی متوقع</p>
-          <h3 className="text-3xl font-bold text-accent">PKR 29,500</h3>
+          <h3 className="text-3xl font-bold text-accent">PKR {stats.expected.toLocaleString()}</h3>
         </div>
       </div>
 
@@ -71,10 +241,10 @@ const Fees = () => {
                 {t("studentName")}
               </TableHead>
               <TableHead className={isRTL ? "text-right" : "text-left"}>
-                مہینہ
+                مہینہ / سال
               </TableHead>
               <TableHead className={isRTL ? "text-right" : "text-left"}>
-                {t("monthlyFee")}
+                {t("amount")}
               </TableHead>
               <TableHead className={isRTL ? "text-right" : "text-left"}>
                 {t("paid")}
@@ -83,54 +253,57 @@ const Fees = () => {
                 {t("pending")}
               </TableHead>
               <TableHead className={isRTL ? "text-right" : "text-left"}>
-                حالت
-              </TableHead>
-              <TableHead className={isRTL ? "text-right" : "text-left"}>
-                {t("actions")}
+                {t("status")}
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {feeRecords.map((record) => (
-              <TableRow key={record.id}>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  {record.rollNumber}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right font-medium" : "text-left font-medium"}>
-                  {record.name}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  {record.month}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  PKR {record.monthlyFee.toLocaleString()}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  PKR {record.paid.toLocaleString()}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  PKR {(record.monthlyFee - record.paid).toLocaleString()}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  <Badge
-                    variant={
-                      record.status === "paid"
-                        ? "default"
-                        : record.status === "pending"
-                        ? "destructive"
-                        : "secondary"
-                    }
-                  >
-                    {record.status === "paid" ? "ادا شدہ" : record.status === "pending" ? "بقایا" : "جزوی"}
-                  </Badge>
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  <Button variant="outline" size="sm">
-                    ادائیگی
-                  </Button>
+            {feeRecords.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  {t("noRecordsFound")}
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              feeRecords
+                .filter((record) =>
+                  record.students?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  record.students?.roll_number.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+                .map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {record.students?.roll_number}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right font-medium" : "text-left font-medium"}>
+                      {record.students?.name}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {monthNames[record.month - 1]} {record.year}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      PKR {Number(record.amount).toLocaleString()}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      PKR {(Number(record.paid_amount) || 0).toLocaleString()}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      PKR {(Number(record.amount) - (Number(record.paid_amount) || 0)).toLocaleString()}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      <Badge
+                        variant={
+                          record.status === "paid"
+                            ? "default"
+                            : "destructive"
+                        }
+                      >
+                        {record.status === "paid" ? t("paid") : t("pending")}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))
+            )}
           </TableBody>
         </Table>
       </div>

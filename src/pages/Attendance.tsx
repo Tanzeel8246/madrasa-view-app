@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -11,29 +11,117 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+type Student = {
+  id: string;
+  name: string;
+  roll_number: string;
+  classes: { name: string } | null;
+};
 
 const Attendance = () => {
   const { t, isRTL } = useLanguage();
+  const { toast } = useToast();
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [attendance, setAttendance] = useState<Record<number, boolean>>({});
+  const [students, setStudents] = useState<Student[]>([]);
+  const [attendance, setAttendance] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(false);
 
-  const students = [
-    { id: 1, name: "محمد احمد", rollNumber: "001", class: "حفظ" },
-    { id: 2, name: "علی حسن", rollNumber: "002", class: "ناظرہ" },
-    { id: 3, name: "فاطمہ زہرا", rollNumber: "003", class: "حفظ" },
-    { id: 4, name: "عائشہ صدیقہ", rollNumber: "004", class: "قاعدہ" },
-    { id: 5, name: "عمر فاروق", rollNumber: "005", class: "ناظرہ" },
-  ];
+  useEffect(() => {
+    fetchStudents();
+  }, []);
 
-  const toggleAttendance = (studentId: number) => {
-    setAttendance(prev => ({
+  useEffect(() => {
+    if (date) {
+      fetchAttendanceForDate(date);
+    }
+  }, [date]);
+
+  const fetchStudents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("students")
+        .select(`
+          id,
+          name,
+          roll_number,
+          classes (
+            name
+          )
+        `)
+        .order("roll_number");
+
+      if (error) throw error;
+      setStudents(data || []);
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    }
+  };
+
+  const fetchAttendanceForDate = async (selectedDate: Date) => {
+    try {
+      const dateStr = selectedDate.toISOString().split("T")[0];
+      const { data, error } = await supabase
+        .from("attendance")
+        .select("student_id, status")
+        .eq("date", dateStr);
+
+      if (error) throw error;
+
+      const attendanceMap: Record<string, boolean> = {};
+      data?.forEach((record) => {
+        attendanceMap[record.student_id] = record.status === "present";
+      });
+      setAttendance(attendanceMap);
+    } catch (error) {
+      console.error("Error fetching attendance:", error);
+    }
+  };
+
+  const toggleAttendance = (studentId: string) => {
+    setAttendance((prev) => ({
       ...prev,
-      [studentId]: !prev[studentId]
+      [studentId]: !prev[studentId],
     }));
   };
 
-  const handleSubmit = () => {
-    console.log("Attendance submitted:", attendance);
+  const handleSubmit = async () => {
+    if (!date) return;
+
+    try {
+      setLoading(true);
+      const dateStr = date.toISOString().split("T")[0];
+
+      // Delete existing attendance for this date
+      await supabase.from("attendance").delete().eq("date", dateStr);
+
+      // Insert new attendance records
+      const records = students.map((student) => ({
+        student_id: student.id,
+        date: dateStr,
+        status: attendance[student.id] ? "present" : "absent",
+      }));
+
+      const { error } = await supabase.from("attendance").insert(records);
+
+      if (error) throw error;
+
+      toast({
+        title: t("addedSuccessfully"),
+        description: "Attendance has been saved successfully",
+      });
+    } catch (error) {
+      console.error("Error saving attendance:", error);
+      toast({
+        title: t("errorOccurred"),
+        description: "Failed to save attendance",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -67,55 +155,68 @@ const Attendance = () => {
                 })}
               </h2>
               <div className="text-sm text-muted-foreground">
-                {t("present")}: {Object.values(attendance).filter(Boolean).length} / {students.length}
+                {t("present")}: {Object.values(attendance).filter(Boolean).length} /{" "}
+                {students.length}
               </div>
             </div>
 
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className={isRTL ? "text-right" : "text-left"}>
-                    {t("rollNumber")}
-                  </TableHead>
-                  <TableHead className={isRTL ? "text-right" : "text-left"}>
-                    {t("studentName")}
-                  </TableHead>
-                  <TableHead className={isRTL ? "text-right" : "text-left"}>
-                    {t("class")}
-                  </TableHead>
-                  <TableHead className={isRTL ? "text-right" : "text-left"}>
-                    {t("present")}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {students.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell className={isRTL ? "text-right" : "text-left"}>
-                      {student.rollNumber}
-                    </TableCell>
-                    <TableCell className={isRTL ? "text-right font-medium" : "text-left font-medium"}>
-                      {student.name}
-                    </TableCell>
-                    <TableCell className={isRTL ? "text-right" : "text-left"}>
-                      {student.class}
-                    </TableCell>
-                    <TableCell className={isRTL ? "text-right" : "text-left"}>
-                      <Checkbox
-                        checked={attendance[student.id] || false}
-                        onCheckedChange={() => toggleAttendance(student.id)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {students.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {t("noRecordsFound")}
+              </div>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className={isRTL ? "text-right" : "text-left"}>
+                        {t("rollNumber")}
+                      </TableHead>
+                      <TableHead className={isRTL ? "text-right" : "text-left"}>
+                        {t("studentName")}
+                      </TableHead>
+                      <TableHead className={isRTL ? "text-right" : "text-left"}>
+                        {t("class")}
+                      </TableHead>
+                      <TableHead className={isRTL ? "text-right" : "text-left"}>
+                        {t("present")}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {students.map((student) => (
+                      <TableRow key={student.id}>
+                        <TableCell className={isRTL ? "text-right" : "text-left"}>
+                          {student.roll_number}
+                        </TableCell>
+                        <TableCell
+                          className={
+                            isRTL ? "text-right font-medium" : "text-left font-medium"
+                          }
+                        >
+                          {student.name}
+                        </TableCell>
+                        <TableCell className={isRTL ? "text-right" : "text-left"}>
+                          {student.classes?.name || "-"}
+                        </TableCell>
+                        <TableCell className={isRTL ? "text-right" : "text-left"}>
+                          <Checkbox
+                            checked={attendance[student.id] || false}
+                            onCheckedChange={() => toggleAttendance(student.id)}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
 
-            <div className="mt-6 flex justify-end">
-              <Button onClick={handleSubmit} className="px-8">
-                {t("submit")}
-              </Button>
-            </div>
+                <div className="mt-6 flex justify-end">
+                  <Button onClick={handleSubmit} className="px-8" disabled={loading}>
+                    {loading ? t("loading") : t("submit")}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

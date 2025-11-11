@@ -13,10 +13,17 @@ import {
 } from "@/components/ui/table";
 import AddStudentDialog from "@/components/students/AddStudentDialog";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 
-type StudentRow = Database["public"]["Tables"]["students"]["Row"];
+type StudentRow = {
+  id: string;
+  name: string;
+  father_name: string;
+  roll_number: string;
+  contact: string | null;
+  address: string | null;
+  classes: { name: string } | null;
+};
 
 const Students = () => {
   const { t, isRTL } = useLanguage();
@@ -32,7 +39,17 @@ const Students = () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("students")
-      .select("*")
+      .select(`
+        id,
+        name,
+        father_name,
+        roll_number,
+        contact,
+        address,
+        classes (
+          name
+        )
+      `)
       .order("roll_number", { ascending: true });
     if (!error && data) setStudents(data);
     setLoading(false);
@@ -46,7 +63,7 @@ const Students = () => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return students;
     return students.filter((s) =>
-      [s.name, s.father_name, s.roll_number, s.class, s.contact, s.address]
+      [s.name, s.father_name, s.roll_number, s.classes?.name, s.contact, s.address]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     );
@@ -59,7 +76,7 @@ const Students = () => {
         <div className="flex items-center gap-2">
           <AddStudentDialog onAdded={fetchStudents} />
           <Button variant="secondary" onClick={fetchStudents} disabled={loading}>
-            {loading ? (isRTL ? "لوڈ ہو رہا ہے" : "Loading...") : (isRTL ? "تازہ کریں" : "Refresh")}
+            {loading ? t("loading") : t("refresh")}
           </Button>
         </div>
       </div>
@@ -91,7 +108,6 @@ const Students = () => {
               <TableHead className={isRTL ? "text-right" : "text-left"}>{t("class")}</TableHead>
               <TableHead className={isRTL ? "text-right" : "text-left"}>{t("contact")}</TableHead>
               <TableHead className={isRTL ? "text-right" : "text-left"}>{t("address")}</TableHead>
-              <TableHead className={isRTL ? "text-right" : "text-left"}>{t("actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -100,21 +116,15 @@ const Students = () => {
                 <TableCell className={isRTL ? "text-right" : "text-left"}>{student.roll_number}</TableCell>
                 <TableCell className={cn(isRTL ? "text-right" : "text-left", "font-medium")}>{student.name}</TableCell>
                 <TableCell className={isRTL ? "text-right" : "text-left"}>{student.father_name}</TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.class}</TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.contact}</TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.address}</TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  <div className={cn("flex gap-2", isRTL && "justify-end")}> 
-                    <Button variant="outline" size="sm">{t("view")}</Button>
-                    <Button variant="outline" size="sm">{t("edit")}</Button>
-                  </div>
-                </TableCell>
+                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.classes?.name || "-"}</TableCell>
+                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.contact || "-"}</TableCell>
+                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.address || "-"}</TableCell>
               </TableRow>
             ))}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
-                  {isRTL ? "کوئی ریکارڈ نہیں ملا" : "No records found"}
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  {t("noRecordsFound")}
                 </TableCell>
               </TableRow>
             )}
