@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Upload, Save, LogOut } from "lucide-react";
+import { Upload, Save, LogOut, Download, FileUp } from "lucide-react";
 
 interface MadrasahSettings {
   id: string;
@@ -26,6 +26,8 @@ const Settings = () => {
   const { user, signOut, madrasahId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
   const [settings, setSettings] = useState<MadrasahSettings | null>(null);
 
   useEffect(() => {
@@ -114,6 +116,199 @@ const Settings = () => {
     }
 
     setLoading(false);
+  };
+
+  const handleBackup = async () => {
+    if (!madrasahId) return;
+
+    setBackupLoading(true);
+    try {
+      // Fetch all data from all tables
+      const [
+        studentsData,
+        teachersData,
+        classesData,
+        attendanceData,
+        feesData,
+        incomeData,
+        expenseData,
+        salariesData,
+        loansData,
+      ] = await Promise.all([
+        supabase.from("students").select("*").eq("madrasah_id", madrasahId),
+        supabase.from("teachers").select("*").eq("madrasah_id", madrasahId),
+        supabase.from("classes").select("*").eq("madrasah_id", madrasahId),
+        supabase.from("attendance").select("*").eq("madrasah_id", madrasahId),
+        supabase.from("fees").select("*").eq("madrasah_id", madrasahId),
+        supabase.from("income").select("*").eq("madrasah_id", madrasahId),
+        supabase.from("expense").select("*").eq("madrasah_id", madrasahId),
+        supabase.from("salaries").select("*").eq("madrasah_id", madrasahId),
+        supabase.from("loans").select("*").eq("madrasah_id", madrasahId),
+      ]);
+
+      const backupData = {
+        version: "1.0",
+        exportDate: new Date().toISOString(),
+        madrasah: settings,
+        students: studentsData.data || [],
+        teachers: teachersData.data || [],
+        classes: classesData.data || [],
+        attendance: attendanceData.data || [],
+        fees: feesData.data || [],
+        income: incomeData.data || [],
+        expense: expenseData.data || [],
+        salaries: salariesData.data || [],
+        loans: loansData.data || [],
+      };
+
+      // Create and download JSON file
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `madrasah_backup_${settings.madrasah_id}_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(language === "ur" ? "بیک اپ کامیابی سے ڈاؤن لوڈ ہو گیا" : "Backup downloaded successfully");
+    } catch (error: any) {
+      toast.error(language === "ur" ? "بیک اپ میں خرابی" : "Backup failed");
+      console.error(error);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !madrasahId) return;
+
+    setRestoreLoading(true);
+    try {
+      const fileContent = await file.text();
+      const backupData = JSON.parse(fileContent);
+
+      // Validate backup data
+      if (!backupData.version || !backupData.madrasah) {
+        throw new Error("Invalid backup file");
+      }
+
+      // Confirm with user
+      const confirmed = window.confirm(
+        language === "ur"
+          ? "کیا آپ واقعی موجودہ ڈیٹا کو نئے ڈیٹا سے تبدیل کرنا چاہتے ہیں؟ یہ عمل واپس نہیں ہو سکتا۔"
+          : "Are you sure you want to restore this backup? This will replace your current data and cannot be undone."
+      );
+
+      if (!confirmed) {
+        setRestoreLoading(false);
+        return;
+      }
+
+      // Delete existing data
+      await Promise.all([
+        supabase.from("attendance").delete().eq("madrasah_id", madrasahId),
+        supabase.from("fees").delete().eq("madrasah_id", madrasahId),
+        supabase.from("salaries").delete().eq("madrasah_id", madrasahId),
+        supabase.from("loans").delete().eq("madrasah_id", madrasahId),
+        supabase.from("income").delete().eq("madrasah_id", madrasahId),
+        supabase.from("expense").delete().eq("madrasah_id", madrasahId),
+        supabase.from("students").delete().eq("madrasah_id", madrasahId),
+        supabase.from("classes").delete().eq("madrasah_id", madrasahId),
+        supabase.from("teachers").delete().eq("madrasah_id", madrasahId),
+      ]);
+
+      // Insert restored data with current madrasah_id
+      const insertPromises = [];
+
+      if (backupData.teachers?.length) {
+        const teachers = backupData.teachers.map((t: any) => ({
+          ...t,
+          madrasah_id: madrasahId,
+        }));
+        insertPromises.push(supabase.from("teachers").insert(teachers));
+      }
+
+      if (backupData.classes?.length) {
+        const classes = backupData.classes.map((c: any) => ({
+          ...c,
+          madrasah_id: madrasahId,
+        }));
+        insertPromises.push(supabase.from("classes").insert(classes));
+      }
+
+      if (backupData.students?.length) {
+        const students = backupData.students.map((s: any) => ({
+          ...s,
+          madrasah_id: madrasahId,
+        }));
+        insertPromises.push(supabase.from("students").insert(students));
+      }
+
+      if (backupData.attendance?.length) {
+        const attendance = backupData.attendance.map((a: any) => ({
+          ...a,
+          madrasah_id: madrasahId,
+        }));
+        insertPromises.push(supabase.from("attendance").insert(attendance));
+      }
+
+      if (backupData.fees?.length) {
+        const fees = backupData.fees.map((f: any) => ({
+          ...f,
+          madrasah_id: madrasahId,
+        }));
+        insertPromises.push(supabase.from("fees").insert(fees));
+      }
+
+      if (backupData.income?.length) {
+        const income = backupData.income.map((i: any) => ({
+          ...i,
+          madrasah_id: madrasahId,
+        }));
+        insertPromises.push(supabase.from("income").insert(income));
+      }
+
+      if (backupData.expense?.length) {
+        const expense = backupData.expense.map((e: any) => ({
+          ...e,
+          madrasah_id: madrasahId,
+        }));
+        insertPromises.push(supabase.from("expense").insert(expense));
+      }
+
+      if (backupData.salaries?.length) {
+        const salaries = backupData.salaries.map((s: any) => ({
+          ...s,
+          madrasah_id: madrasahId,
+        }));
+        insertPromises.push(supabase.from("salaries").insert(salaries));
+      }
+
+      if (backupData.loans?.length) {
+        const loans = backupData.loans.map((l: any) => ({
+          ...l,
+          madrasah_id: madrasahId,
+        }));
+        insertPromises.push(supabase.from("loans").insert(loans));
+      }
+
+      await Promise.all(insertPromises);
+
+      toast.success(language === "ur" ? "ڈیٹا کامیابی سے بحال ہو گیا" : "Data restored successfully");
+      
+      // Reset file input
+      event.target.value = "";
+    } catch (error: any) {
+      toast.error(language === "ur" ? "ری سٹور میں خرابی" : "Restore failed");
+      console.error(error);
+    } finally {
+      setRestoreLoading(false);
+    }
   };
 
   if (!settings) {
@@ -262,6 +457,71 @@ const Settings = () => {
               <Save className="h-4 w-4 mr-2" />
               {loading ? (language === "ur" ? "محفوظ ہو رہا ہے..." : "Saving...") : (language === "ur" ? "محفوظ کریں" : "Save Changes")}
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Backup & Restore Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{language === "ur" ? "ڈیٹا بیک اپ اور ری سٹور" : "Data Backup & Restore"}</CardTitle>
+          <CardDescription>
+            {language === "ur" 
+              ? "اپنے مدرسہ کا ڈیٹا محفوظ کریں یا پرانا ڈیٹا بحال کریں" 
+              : "Backup your madrasa data or restore from a previous backup"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Backup Section */}
+          <div className="space-y-2">
+            <Label>{language === "ur" ? "ڈیٹا بیک اپ" : "Backup Data"}</Label>
+            <p className="text-xs md:text-sm text-muted-foreground mb-2">
+              {language === "ur"
+                ? "تمام طلباء، اساتذہ، کلاسز، حاضری، فیسیں اور دیگر ڈیٹا کو JSON فائل میں ڈاؤن لوڈ کریں"
+                : "Download all students, teachers, classes, attendance, fees and other data as JSON file"}
+            </p>
+            <Button 
+              onClick={handleBackup} 
+              disabled={backupLoading}
+              className="w-full sm:w-auto"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {backupLoading 
+                ? (language === "ur" ? "ڈاؤن لوڈ ہو رہا ہے..." : "Downloading...") 
+                : (language === "ur" ? "بیک اپ ڈاؤن لوڈ کریں" : "Download Backup")}
+            </Button>
+          </div>
+
+          <Separator />
+
+          {/* Restore Section */}
+          <div className="space-y-2">
+            <Label htmlFor="restore-file">{language === "ur" ? "ڈیٹا ری سٹور" : "Restore Data"}</Label>
+            <p className="text-xs md:text-sm text-muted-foreground mb-2">
+              {language === "ur"
+                ? "پرانا بیک اپ اپ لوڈ کریں۔ نوٹ: یہ موجودہ ڈیٹا کو تبدیل کر دے گا"
+                : "Upload a previous backup. Note: This will replace your current data"}
+            </p>
+            <div className="flex gap-2">
+              <Input
+                id="restore-file"
+                type="file"
+                accept=".json"
+                onChange={handleRestore}
+                disabled={restoreLoading}
+                className="flex-1"
+              />
+              {restoreLoading && (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-destructive">
+              {language === "ur"
+                ? "⚠️ خبردار: ری سٹور کرنے سے تمام موجودہ ڈیٹا حذف ہو جائے گا"
+                : "⚠️ Warning: Restoring will delete all current data"}
+            </p>
           </div>
         </CardContent>
       </Card>
