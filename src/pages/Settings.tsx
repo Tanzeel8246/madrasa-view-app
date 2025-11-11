@@ -43,14 +43,16 @@ const Settings = () => {
       .from("madrasah")
       .select("*")
       .eq("id", madrasahId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       toast.error(language === "ur" ? "ڈیٹا لوڈ میں خرابی" : "Error loading data");
       return;
     }
 
-    setSettings(data);
+    if (data) {
+      setSettings(data);
+    }
   };
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

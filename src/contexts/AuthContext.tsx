@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .from("profiles")
       .select("madrasah_id")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
     
     if (data) {
       setMadrasahId(data.madrasah_id);
@@ -104,9 +104,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           madrasah_id: madrasahData.madrasahId,
         })
         .select()
-        .single();
+        .maybeSingle();
 
-      if (madrasahError) return { error: madrasahError };
+      if (madrasahError || !madrasah) return { error: madrasahError || new Error("Failed to create madrasah") };
 
       // Create profile
       const { error: profileError } = await supabase
