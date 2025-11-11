@@ -22,6 +22,9 @@ interface Student {
   name: string;
   father_name: string;
   class: string;
+  classes?: {
+    name: string;
+  };
 }
 
 const LearningReport = () => {
@@ -61,7 +64,7 @@ const LearningReport = () => {
 
     const { data, error } = await supabase
       .from("students")
-      .select("id, name, father_name, class")
+      .select("id, name, father_name, class, classes(name)")
       .eq("madrasah_id", madrasahId)
       .order("name");
 
@@ -82,7 +85,7 @@ const LearningReport = () => {
       setSelectedStudent(student);
       
       // Auto-detect class type based on class name
-      const className = student.class.toLowerCase();
+      const className = (student.classes?.name || student.class || "").toLowerCase();
       if (className.includes("حفظ") || className.includes("hifz")) {
         setClassType("quran_hifz");
       } else if (className.includes("ناظرہ") || className.includes("nazira")) {
@@ -230,7 +233,7 @@ const LearningReport = () => {
               <div className="space-y-2">
                 <Label>{t("class")}</Label>
                 <Input
-                  value={selectedStudent?.class || ""}
+                  value={selectedStudent?.classes?.name || selectedStudent?.class || ""}
                   disabled
                   className="bg-muted"
                 />
