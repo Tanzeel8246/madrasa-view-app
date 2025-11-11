@@ -23,6 +23,7 @@ export type Database = {
           notes: string | null
           status: string
           student_id: string
+          time_slot: string | null
         }
         Insert: {
           created_at?: string | null
@@ -32,6 +33,7 @@ export type Database = {
           notes?: string | null
           status: string
           student_id: string
+          time_slot?: string | null
         }
         Update: {
           created_at?: string | null
@@ -41,6 +43,7 @@ export type Database = {
           notes?: string | null
           status?: string
           student_id?: string
+          time_slot?: string | null
         }
         Relationships: [
           {
