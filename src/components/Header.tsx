@@ -36,16 +36,43 @@ const Header = ({ children }: HeaderProps = {}) => {
   const navigate = useNavigate();
   const [madrasahInfo, setMadrasahInfo] = useState<MadrasahInfo | null>(null);
   const [profileInfo, setProfileInfo] = useState<ProfileInfo | null>(null);
-  const [notificationCount, setNotificationCount] = useState(3);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     if (madrasahId) {
       fetchMadrasahInfo();
+      fetchNotifications();
     }
     if (user) {
       fetchProfileInfo();
     }
   }, [madrasahId, user]);
+
+  // Setup realtime subscription for notifications
+  useEffect(() => {
+    if (!madrasahId) return;
+
+    const channel = supabase
+      .channel("notifications-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `madrasah_id=eq.${madrasahId}`,
+        },
+        () => {
+          fetchNotifications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [madrasahId]);
 
   const fetchMadrasahInfo = async () => {
     const { data } = await supabase
@@ -63,6 +90,39 @@ const Header = ({ children }: HeaderProps = {}) => {
       .eq("user_id", user?.id)
       .maybeSingle();
     if (data) setProfileInfo(data);
+  };
+
+  const fetchNotifications = async () => {
+    const { data } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("is_read", false)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (data) {
+      setNotifications(data);
+      setNotificationCount(data.length);
+    }
+  };
+
+  const markAsRead = async (notificationId: string) => {
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("id", notificationId);
+
+    fetchNotifications();
+  };
+
+  const markAllAsRead = async () => {
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("madrasah_id", madrasahId)
+      .eq("is_read", false);
+
+    fetchNotifications();
   };
 
   const toggleLanguage = () => {
@@ -144,19 +204,59 @@ const Header = ({ children }: HeaderProps = {}) => {
                     variant="destructive"
                     className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]"
                   >
-                    {notificationCount}
+                    {notificationCount > 9 ? "9+" : notificationCount}
                   </Badge>
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel className={isRTL ? "text-right" : ""}>
-                {isRTL ? "اطلاعات" : "Notifications"}
+            <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
+              <DropdownMenuLabel className={`flex items-center justify-between ${isRTL ? "text-right flex-row-reverse" : ""}`}>
+                <span>{isRTL ? "اطلاعات" : "Notifications"}</span>
+                {notificationCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={markAllAsRead}
+                    className="h-6 text-xs"
+                  >
+                    {isRTL ? "سب پڑھیں" : "Mark all read"}
+                  </Button>
+                )}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                {isRTL ? "کوئی نئی اطلاع نہیں" : "No new notifications"}
-              </div>
+              {notifications.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  {isRTL ? "کوئی نئی اطلاع نہیں" : "No new notifications"}
+                </div>
+              ) : (
+                <div className="space-y-1 p-2">
+                  {notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors"
+                      onClick={() => markAsRead(notification.id)}
+                    >
+                      <div className={`flex items-start gap-2 ${isRTL ? "flex-row-reverse" : ""}`}>
+                        <div className={`flex-1 ${isRTL ? "text-right" : "text-left"}`}>
+                          <p className="font-medium text-sm">{notification.title}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {notification.message}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            {new Date(notification.created_at).toLocaleDateString("ur-PK", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
