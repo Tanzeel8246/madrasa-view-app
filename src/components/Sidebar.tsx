@@ -43,7 +43,10 @@ const Sidebar = () => {
   return (
     <SidebarPrimitive side={isRTL ? "right" : "left"} collapsible="offcanvas">
       <SidebarHeader className="border-b border-sidebar-border">
-        <h1 className="text-xl font-bold text-sidebar-foreground text-center py-4">
+        <h1 className={cn(
+          "text-xl font-bold text-sidebar-foreground text-center py-4",
+          isRTL && "font-urdu"
+        )}>
           {isRTL ? "مدرسہ" : "Madrasa"}
         </h1>
       </SidebarHeader>
@@ -58,13 +61,13 @@ const Sidebar = () => {
                       to={item.path}
                       className={cn(
                         "flex items-center gap-3",
-                        isRTL && "flex-row-reverse"
+                        isRTL && "flex-row-reverse font-urdu"
                       )}
                       activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
                       onClick={handleLinkClick}
                     >
-                      <item.icon className="w-5 h-5" />
-                      <span>{item.label}</span>
+                      <item.icon className="w-5 h-5 flex-shrink-0" />
+                      <span className="text-sm md:text-base">{item.label}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
