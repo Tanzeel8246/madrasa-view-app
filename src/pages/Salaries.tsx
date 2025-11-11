@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, RefreshCw, Search, FileDown, Printer } from "lucide-react";
 import { generatePDF, printTable } from "@/lib/pdfUtils";
+import { getMadrasahId } from "@/lib/madrasahUtils";
 import {
   Table,
   TableBody,
@@ -154,6 +155,7 @@ const Salaries = () => {
   const handleAddSalary = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const madrasahId = await getMadrasahId();
     const { error } = await supabase.from("salaries").insert([
       {
         teacher_id: formData.teacher_id,
@@ -163,6 +165,7 @@ const Salaries = () => {
         status: formData.status,
         payment_date: formData.status === "paid" ? new Date().toISOString() : null,
         notes: formData.notes || null,
+        madrasah_id: madrasahId,
       },
     ]);
 

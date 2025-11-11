@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
+import { getMadrasahId } from "@/lib/madrasahUtils";
 
 type FeeRecord = {
   id: string;
@@ -97,6 +98,7 @@ const Fees = () => {
 
   const handleAddFee = async (formData: any) => {
     try {
+      const madrasahId = await getMadrasahId();
       const { error } = await supabase.from("fees").insert({
         student_id: formData.student_id,
         amount: Number(formData.amount),
@@ -105,6 +107,7 @@ const Fees = () => {
         year: Number(formData.year),
         status: Number(formData.paid_amount) >= Number(formData.amount) ? "paid" : "pending",
         payment_date: Number(formData.paid_amount) > 0 ? new Date().toISOString() : null,
+        madrasah_id: madrasahId,
       });
 
       if (error) throw error;

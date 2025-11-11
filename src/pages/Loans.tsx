@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, RefreshCw, Search, FileDown, Printer } from "lucide-react";
 import { generatePDF, printTable } from "@/lib/pdfUtils";
+import { getMadrasahId } from "@/lib/madrasahUtils";
 import {
   Table,
   TableBody,
@@ -136,6 +137,7 @@ const Loans = () => {
   const handleAddLoan = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const madrasahId = await getMadrasahId();
     const { error } = await supabase.from("loans").insert([
       {
         teacher_id: formData.teacher_id,
@@ -144,6 +146,7 @@ const Loans = () => {
         status: formData.status,
         paid_amount: parseFloat(formData.paid_amount),
         notes: formData.notes || null,
+        madrasah_id: madrasahId,
       },
     ]);
 
