@@ -1,4 +1,4 @@
-import { Home, Users, ClipboardList, DollarSign, FileText, Settings, GraduationCap, BookOpen, TrendingUp, TrendingDown, Wallet, HandCoins } from "lucide-react";
+import { Home, Users, ClipboardList, DollarSign, FileText, Settings, GraduationCap, BookOpen, TrendingUp, TrendingDown, Wallet, HandCoins, BookMarked } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ const Sidebar = () => {
     { icon: TrendingDown, label: t("expense"), path: "/expense" },
     { icon: Wallet, label: t("salaries"), path: "/salaries" },
     { icon: HandCoins, label: t("loans"), path: "/loans" },
+    { icon: BookMarked, label: t("learningReport"), path: "/learning-report" },
     { icon: FileText, label: t("reports"), path: "/reports" },
     { icon: Settings, label: t("settings"), path: "/settings" },
   ];

@@ -21,6 +21,7 @@ import Salaries from "./pages/Salaries";
 import Loans from "./pages/Loans";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import LearningReport from "./pages/LearningReport";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { useState, useEffect } from "react";
@@ -55,6 +56,7 @@ const AppContent = () => {
         <Route path="/expense" element={<ProtectedRoute><Layout><Expense /></Layout></ProtectedRoute>} />
         <Route path="/salaries" element={<ProtectedRoute><Layout><Salaries /></Layout></ProtectedRoute>} />
         <Route path="/loans" element={<ProtectedRoute><Layout><Loans /></Layout></ProtectedRoute>} />
+        <Route path="/learning-report" element={<ProtectedRoute><Layout><LearningReport /></Layout></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute><Layout><Reports /></Layout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />

@@ -252,6 +252,78 @@ export type Database = {
           },
         ]
       }
+      learning_reports: {
+        Row: {
+          class_type: string
+          created_at: string
+          date: string
+          id: string
+          madrasah_id: string
+          manzil_amount: string | null
+          manzil_paras: string | null
+          notes: string | null
+          period_1: string | null
+          period_2: string | null
+          period_3: string | null
+          period_4: string | null
+          period_5: string | null
+          period_6: string | null
+          sabaq_amount: string | null
+          sabaq_lines_pages: string | null
+          sabaq_para_number: number | null
+          sabqi_amount: string | null
+          sabqi_para: number | null
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          class_type: string
+          created_at?: string
+          date?: string
+          id?: string
+          madrasah_id: string
+          manzil_amount?: string | null
+          manzil_paras?: string | null
+          notes?: string | null
+          period_1?: string | null
+          period_2?: string | null
+          period_3?: string | null
+          period_4?: string | null
+          period_5?: string | null
+          period_6?: string | null
+          sabaq_amount?: string | null
+          sabaq_lines_pages?: string | null
+          sabaq_para_number?: number | null
+          sabqi_amount?: string | null
+          sabqi_para?: number | null
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          class_type?: string
+          created_at?: string
+          date?: string
+          id?: string
+          madrasah_id?: string
+          manzil_amount?: string | null
+          manzil_paras?: string | null
+          notes?: string | null
+          period_1?: string | null
+          period_2?: string | null
+          period_3?: string | null
+          period_4?: string | null
+          period_5?: string | null
+          period_6?: string | null
+          sabaq_amount?: string | null
+          sabaq_lines_pages?: string | null
+          sabaq_para_number?: number | null
+          sabqi_amount?: string | null
+          sabqi_para?: number | null
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       loans: {
         Row: {
           amount: number
