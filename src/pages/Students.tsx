@@ -97,7 +97,7 @@ const Students = () => {
   };
 
   const handlePrint = () => {
-    printTable("students-table");
+    printTable("students-table", isRTL ? "طلباء کی فہرست" : "Students List", isRTL);
   };
 
   return (

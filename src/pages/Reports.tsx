@@ -244,7 +244,15 @@ const Reports = () => {
       toast.error(language === "ur" ? "کوئی ڈیٹا نہیں ہے" : "No data to print");
       return;
     }
-    printTable("reports-table");
+    
+    const title = 
+      reportType === "income" ? (language === "ur" ? "آمدنی کی رپورٹ" : "Income Report") :
+      reportType === "expense" ? (language === "ur" ? "اخراجات کی رپورٹ" : "Expense Report") :
+      reportType === "salary" ? (language === "ur" ? "تنخواہوں کی رپورٹ" : "Salary Report") :
+      reportType === "fee" ? (language === "ur" ? "فیس کی رپورٹ" : "Fee Report") :
+      (language === "ur" ? "قرضوں کی رپورٹ" : "Loan Report");
+    
+    printTable("reports-table", title, language === "ur");
   };
 
   return (
