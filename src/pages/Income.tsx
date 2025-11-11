@@ -51,8 +51,16 @@ const Income = () => {
   const { register, handleSubmit, reset, setValue } = useForm();
 
   const categories = [
-    { value: "feeIncome", label: t("feeIncome") },
-    { value: "donations", label: t("donations") },
+    { value: "zakat", label: isRTL ? "زکوۃ" : "Zakat" },
+    { value: "sadqah", label: isRTL ? "صدقہ" : "Sadqah" },
+    { value: "donation", label: isRTL ? "عطیہ" : "Donation" },
+    { value: "qurbaniSkin", label: isRTL ? "کھال قربانی" : "Qurbani Skin" },
+    { value: "fitrana", label: isRTL ? "فطرانہ" : "Fitrana" },
+    { value: "ushr", label: isRTL ? "عشر" : "Ushr" },
+    { value: "monthly", label: isRTL ? "ماہانہ" : "Monthly" },
+    { value: "annual", label: isRTL ? "سالانہ" : "Annual" },
+    { value: "quarterly", label: isRTL ? "سہ ماہی" : "Quarterly" },
+    { value: "biannual", label: isRTL ? "شش ماہی" : "Bi-Annual" },
     { value: "other", label: t("other") },
   ];
 
@@ -180,8 +188,8 @@ const Income = () => {
               </DialogHeader>
               <form onSubmit={handleSubmit(handleAddIncome)} className="space-y-4">
                 <div>
-                  <Label>{t("title")}</Label>
-                  <Input {...register("title")} placeholder={t("enterTitle")} />
+                  <Label>{isRTL ? "نام" : "Name"}</Label>
+                  <Input {...register("title")} placeholder={isRTL ? "نام درج کریں" : "Enter Name"} />
                 </div>
                 <div>
                   <Label>{t("category")}</Label>

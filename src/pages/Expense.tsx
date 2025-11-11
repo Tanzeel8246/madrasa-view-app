@@ -51,10 +51,29 @@ const Expense = () => {
   const { register, handleSubmit, reset, setValue } = useForm();
 
   const categories = [
-    { value: "salaries", label: t("salaries") },
-    { value: "utilities", label: t("utilities") },
-    { value: "maintenance", label: t("maintenance") },
-    { value: "supplies", label: t("supplies") },
+    { value: "construction", label: isRTL ? "تعمیرات" : "Construction" },
+    { value: "medical", label: isRTL ? "علاج" : "Medical" },
+    { value: "repair", label: isRTL ? "مرمت" : "Repair" },
+    { value: "vegetables", label: isRTL ? "سبزی" : "Vegetables" },
+    { value: "groceries", label: isRTL ? "راشن" : "Groceries" },
+    { value: "clothes", label: isRTL ? "کپڑے" : "Clothes" },
+    { value: "shoes", label: isRTL ? "جوتے" : "Shoes" },
+    { value: "uniforms", label: isRTL ? "وردیاں" : "Uniforms" },
+    { value: "fruits", label: isRTL ? "پھل" : "Fruits" },
+    { value: "electricBill", label: isRTL ? "بل بجلی" : "Electric Bill" },
+    { value: "gasBill", label: isRTL ? "بل گیس" : "Gas Bill" },
+    { value: "meat", label: isRTL ? "گوشت" : "Meat" },
+    { value: "awards", label: isRTL ? "انعامات" : "Awards" },
+    { value: "teacherService", label: isRTL ? "خدمت اساتذہ" : "Teacher Service" },
+    { value: "transport", label: isRTL ? "ٹرانسپورٹ" : "Transport" },
+    { value: "stationery", label: isRTL ? "اسٹیشنری" : "Stationery" },
+    { value: "books", label: isRTL ? "کتب" : "Books" },
+    { value: "furniture", label: isRTL ? "فرنیچر" : "Furniture" },
+    { value: "cleaning", label: isRTL ? "صفائی" : "Cleaning" },
+    { value: "security", label: isRTL ? "سیکیورٹی" : "Security" },
+    { value: "waterBill", label: isRTL ? "بل پانی" : "Water Bill" },
+    { value: "internet", label: isRTL ? "انٹرنیٹ" : "Internet" },
+    { value: "phone", label: isRTL ? "ٹیلیفون" : "Telephone" },
     { value: "other", label: t("other") },
   ];
 
@@ -182,8 +201,8 @@ const Expense = () => {
               </DialogHeader>
               <form onSubmit={handleSubmit(handleAddExpense)} className="space-y-4">
                 <div>
-                  <Label>{t("title")}</Label>
-                  <Input {...register("title")} placeholder={t("enterTitle")} />
+                  <Label>{isRTL ? "تفصیل خرچ" : "Expense Detail"}</Label>
+                  <Input {...register("title")} placeholder={isRTL ? "تفصیل خرچ درج کریں" : "Enter Expense Detail"} />
                 </div>
                 <div>
                   <Label>{t("category")}</Label>
