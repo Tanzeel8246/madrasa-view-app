@@ -3,6 +3,7 @@ import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,15 +13,19 @@ const Layout = ({ children }: LayoutProps) => {
   const { isRTL } = useLanguage();
   
   return (
-    <div className={cn("flex min-h-screen bg-background", isRTL && "flex-row-reverse")}>
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
-        <Header />
-        <main className="flex-1 p-6">
-          {children}
-        </main>
+    <SidebarProvider defaultOpen={true}>
+      <div className={cn("flex min-h-screen w-full bg-background", isRTL && "flex-row-reverse")}>
+        <Sidebar />
+        <SidebarInset>
+          <Header>
+            <SidebarTrigger className="ml-2" />
+          </Header>
+          <main className="flex-1 p-4 md:p-6">
+            {children}
+          </main>
+        </SidebarInset>
       </div>
-    </div>
+    </SidebarProvider>
   );
 };
 

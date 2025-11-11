@@ -2,9 +2,21 @@ import { Home, Users, ClipboardList, DollarSign, FileText, Settings, GraduationC
 import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import {
+  Sidebar as SidebarPrimitive,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  useSidebar,
+} from "@/components/ui/sidebar";
 
 const Sidebar = () => {
   const { t, isRTL } = useLanguage();
+  const { setOpenMobile, isMobile } = useSidebar();
   
   const menuItems = [
     { icon: Home, label: t("dashboard"), path: "/" },
@@ -17,33 +29,46 @@ const Sidebar = () => {
     { icon: Settings, label: t("settings"), path: "/settings" },
   ];
 
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
   return (
-    <aside className={cn(
-      "w-64 bg-sidebar h-screen sticky top-0",
-      isRTL ? "border-l border-sidebar-border" : "border-r border-sidebar-border"
-    )}>
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-sidebar-foreground mb-8 text-center">
+    <SidebarPrimitive side={isRTL ? "right" : "left"} collapsible="offcanvas">
+      <SidebarHeader className="border-b border-sidebar-border">
+        <h1 className="text-xl font-bold text-sidebar-foreground text-center py-4">
           {isRTL ? "مدرسہ" : "Madrasa"}
         </h1>
-        <nav className="space-y-2">
-          {menuItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors",
-                isRTL && "flex-row-reverse"
-              )}
-              activeClassName="bg-sidebar-accent text-sidebar-foreground font-semibold"
-            >
-              <item.icon className="w-5 h-5" />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-      </div>
-    </aside>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {menuItems.map((item) => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to={item.path}
+                      className={cn(
+                        "flex items-center gap-3",
+                        isRTL && "flex-row-reverse"
+                      )}
+                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
+                      onClick={handleLinkClick}
+                    >
+                      <item.icon className="w-5 h-5" />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </SidebarPrimitive>
   );
 };
 

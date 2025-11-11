@@ -44,14 +44,14 @@ const AddTeacherDialog = ({ onAdded }: AddTeacherDialogProps) => {
 
   const onSubmit = async (data: TeacherForm) => {
     try {
-      const { error } = await supabase.from("teachers").insert({
+      const { error } = await supabase.from("teachers").insert([{
         name: data.name,
         contact: data.contact || null,
         email: data.email || null,
         subject: data.subject || null,
         qualification: data.qualification || null,
         address: data.address || null,
-      });
+      }]);
 
       if (error) throw error;
 

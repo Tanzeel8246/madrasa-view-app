@@ -1,8 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Languages } from "lucide-react";
+import { ReactNode } from "react";
 
-const Header = () => {
+interface HeaderProps {
+  children?: ReactNode;
+}
+
+const Header = ({ children }: HeaderProps = {}) => {
   const { language, setLanguage, isRTL } = useLanguage();
 
   const toggleLanguage = () => {
@@ -11,9 +16,10 @@ const Header = () => {
 
   return (
     <header className="h-16 bg-gradient-to-r from-primary to-primary/90 shadow-md sticky top-0 z-10">
-      <div className="h-full px-6 flex items-center justify-between">
-        <div className="text-primary-foreground">
-          <p className="text-sm opacity-90">
+      <div className="h-full px-4 md:px-6 flex items-center justify-between">
+        <div className="flex items-center gap-2 md:gap-4 text-primary-foreground">
+          {children}
+          <p className="text-xs md:text-sm opacity-90">
             {isRTL ? "السلام علیکم" : "As-Salaam-Alaikum"}
           </p>
         </div>

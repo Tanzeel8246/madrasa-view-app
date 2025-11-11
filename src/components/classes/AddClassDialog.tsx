@@ -57,11 +57,11 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
 
   const onSubmit = async (data: ClassForm) => {
     try {
-      const { error } = await supabase.from("classes").insert({
+      const { error } = await supabase.from("classes").insert([{
         name: data.name,
         description: data.description || null,
         teacher_id: data.teacher_id || null,
-      });
+      }]);
 
       if (error) throw error;
 
