@@ -36,24 +36,24 @@ const MadrasahSetupDialog = ({ open, onComplete }: MadrasahSetupDialogProps) => 
     setLoading(true);
 
     try {
-      // Create madrasah
-      const { data: madrasah, error: madrasahError } = await supabase
+      // Create madrasah without returning representation to avoid RLS SELECT on insert
+      const newMadrasahUuid = crypto.randomUUID();
+      const { error: madrasahError } = await supabase
         .from("madrasah")
         .insert({
+          id: newMadrasahUuid,
           name: formData.madrasahName,
           madrasah_id: formData.madrasahId,
-        })
-        .select()
-        .maybeSingle();
+        });
 
-      if (madrasahError || !madrasah) throw madrasahError || new Error("Failed to create madrasah");
+      if (madrasahError) throw madrasahError;
 
       // Create profile
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
           user_id: user.id,
-          madrasah_id: madrasah.id,
+          madrasah_id: newMadrasahUuid,
           full_name: formData.fullName,
           role: "admin",
         });
