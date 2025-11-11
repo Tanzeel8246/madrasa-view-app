@@ -27,9 +27,15 @@ interface Student {
   };
 }
 
+interface Teacher {
+  id: string;
+  name: string;
+}
+
 const LearningReport = () => {
   const { t, isRTL } = useLanguage();
   const [students, setStudents] = useState<Student[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [classType, setClassType] = useState<string>("");
@@ -42,9 +48,13 @@ const LearningReport = () => {
   const [sabqiPara, setSabqiPara] = useState("");
   const [sabqiAmount, setSabqiAmount] = useState("");
   const [sabqiListenerName, setSabqiListenerName] = useState("");
+  const [sabqiListenerType, setSabqiListenerType] = useState<"teacher" | "other">("teacher");
+  const [sabqiCustomListenerName, setSabqiCustomListenerName] = useState("");
   const [manzilAmount, setManzilAmount] = useState("");
   const [manzilParas, setManzilParas] = useState("");
   const [manzilListenerName, setManzilListenerName] = useState("");
+  const [manzilListenerType, setManzilListenerType] = useState<"teacher" | "other">("teacher");
+  const [manzilCustomListenerName, setManzilCustomListenerName] = useState("");
   const [manzilSelectedParas, setManzilSelectedParas] = useState<number[]>([]);
 
   // Dars Nizami & Modern Education fields
@@ -59,6 +69,7 @@ const LearningReport = () => {
 
   useEffect(() => {
     fetchStudents();
+    fetchTeachers();
   }, []);
 
   const fetchStudents = async () => {
@@ -79,6 +90,23 @@ const LearningReport = () => {
       });
     } else {
       setStudents(data || []);
+    }
+  };
+
+  const fetchTeachers = async () => {
+    const madrasahId = await getMadrasahId();
+    if (!madrasahId) return;
+
+    const { data, error } = await supabase
+      .from("teachers")
+      .select("id, name")
+      .eq("madrasah_id", madrasahId)
+      .order("name");
+
+    if (error) {
+      console.error("Error fetching teachers:", error);
+    } else {
+      setTeachers(data || []);
     }
   };
 
@@ -108,9 +136,13 @@ const LearningReport = () => {
     setSabqiPara("");
     setSabqiAmount("");
     setSabqiListenerName("");
+    setSabqiListenerType("teacher");
+    setSabqiCustomListenerName("");
     setManzilAmount("");
     setManzilParas("");
     setManzilListenerName("");
+    setManzilListenerType("teacher");
+    setManzilCustomListenerName("");
     setManzilSelectedParas([]);
     setPeriod1("");
     setPeriod2("");
@@ -135,12 +167,17 @@ const LearningReport = () => {
     setLoading(true);
     const madrasahId = await getMadrasahId();
 
+    // Check if any learning data is entered
+    const hasLearningData = (classType === "quran_hifz" || classType === "quran_nazira") 
+      ? (sabaqAmount || sabaqPara || sabqiAmount || sabqiPara || manzilAmount)
+      : (period1 || period2 || period3 || period4 || period5 || period6);
+
     const reportData: any = {
       madrasah_id: madrasahId,
       student_id: selectedStudent.id,
       date,
       class_type: classType,
-      notes,
+      notes: hasLearningData ? notes : (isRTL ? "غیر حاضر" : "Absent"),
     };
 
     // Add fields based on class type
@@ -150,10 +187,10 @@ const LearningReport = () => {
       reportData.sabaq_lines_pages = sabaqLinesPages;
       reportData.sabqi_para = sabqiPara ? parseInt(sabqiPara) : null;
       reportData.sabqi_amount = sabqiAmount;
-      reportData.sabqi_listener_name = sabqiListenerName;
+      reportData.sabqi_listener_name = sabqiListenerType === "other" ? sabqiCustomListenerName : sabqiListenerName;
       reportData.manzil_amount = manzilAmount;
       reportData.manzil_paras = manzilParas;
-      reportData.manzil_listener_name = manzilListenerName;
+      reportData.manzil_listener_name = manzilListenerType === "other" ? manzilCustomListenerName : manzilListenerName;
       reportData.manzil_selected_paras = manzilSelectedParas;
     } else if (classType === "quran_nazira") {
       reportData.sabaq_amount = sabaqAmount;
@@ -161,7 +198,7 @@ const LearningReport = () => {
       reportData.sabaq_lines_pages = sabaqLinesPages;
       reportData.manzil_amount = manzilAmount;
       reportData.manzil_paras = manzilParas;
-      reportData.manzil_listener_name = manzilListenerName;
+      reportData.manzil_listener_name = manzilListenerType === "other" ? manzilCustomListenerName : manzilListenerName;
       reportData.manzil_selected_paras = manzilSelectedParas;
     } else if (classType === "dars_nizami" || classType === "modern_education") {
       reportData.period_1 = period1;
@@ -301,7 +338,13 @@ const LearningReport = () => {
                       <Input
                         value={sabaqAmount}
                         onChange={(e) => setSabaqAmount(e.target.value)}
-                        placeholder={isRTL ? "مثلاً: 5 سطریں" : "e.g., 5 lines"}
+                        placeholder={
+                          sabaqLinesPages === "lines" 
+                            ? (isRTL ? "مثلاً: 5 سطریں" : "e.g., 5 lines")
+                            : sabaqLinesPages === "pages"
+                            ? (isRTL ? "مثلاً: 2 صفحات" : "e.g., 2 pages")
+                            : (isRTL ? "مقدار درج کریں" : "Enter amount")
+                        }
                       />
                     </div>
                   </div>
@@ -343,11 +386,38 @@ const LearningReport = () => {
                     </div>
                     <div className="space-y-2">
                       <Label>{isRTL ? "سننے والے کا نام" : "Listener Name"}</Label>
-                      <Input
-                        value={sabqiListenerName}
-                        onChange={(e) => setSabqiListenerName(e.target.value)}
-                        placeholder={isRTL ? "نام درج کریں" : "Enter name"}
-                      />
+                      <Select 
+                        value={sabqiListenerType === "teacher" ? sabqiListenerName : "other"} 
+                        onValueChange={(value) => {
+                          if (value === "other") {
+                            setSabqiListenerType("other");
+                            setSabqiListenerName("");
+                          } else {
+                            setSabqiListenerType("teacher");
+                            setSabqiListenerName(value);
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={isRTL ? "منتخب کریں" : "Select"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teachers.map((teacher) => (
+                            <SelectItem key={teacher.id} value={teacher.name}>
+                              {teacher.name}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="other">{isRTL ? "دیگر" : "Other"}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {sabqiListenerType === "other" && (
+                        <Input
+                          value={sabqiCustomListenerName}
+                          onChange={(e) => setSabqiCustomListenerName(e.target.value)}
+                          placeholder={isRTL ? "نام درج کریں" : "Enter name"}
+                          className="mt-2"
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -374,33 +444,68 @@ const LearningReport = () => {
                     </div>
                     <div className="space-y-2">
                       <Label>{isRTL ? "سننے والے کا نام" : "Listener Name"}</Label>
-                      <Input
-                        value={manzilListenerName}
-                        onChange={(e) => setManzilListenerName(e.target.value)}
-                        placeholder={isRTL ? "نام درج کریں" : "Enter name"}
-                      />
+                      <Select 
+                        value={manzilListenerType === "teacher" ? manzilListenerName : "other"} 
+                        onValueChange={(value) => {
+                          if (value === "other") {
+                            setManzilListenerType("other");
+                            setManzilListenerName("");
+                          } else {
+                            setManzilListenerType("teacher");
+                            setManzilListenerName(value);
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={isRTL ? "منتخب کریں" : "Select"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teachers.map((teacher) => (
+                            <SelectItem key={teacher.id} value={teacher.name}>
+                              {teacher.name}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="other">{isRTL ? "دیگر" : "Other"}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {manzilListenerType === "other" && (
+                        <Input
+                          value={manzilCustomListenerName}
+                          onChange={(e) => setManzilCustomListenerName(e.target.value)}
+                          placeholder={isRTL ? "نام درج کریں" : "Enter name"}
+                          className="mt-2"
+                        />
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>{isRTL ? "پارے منتخب کریں" : "Select Paras"}</Label>
                     <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-                      {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => (
-                        <label key={num} className="flex items-center space-x-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={manzilSelectedParas.includes(num)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setManzilSelectedParas([...manzilSelectedParas, num]);
-                              } else {
-                                setManzilSelectedParas(manzilSelectedParas.filter(p => p !== num));
-                              }
-                            }}
-                            className="rounded border-gray-300"
-                          />
-                          <span className="text-sm">{num}</span>
-                        </label>
-                      ))}
+                      {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => {
+                        const maxParas = manzilAmount ? parseInt(manzilAmount) : 30;
+                        const isDisabled = !manzilSelectedParas.includes(num) && manzilSelectedParas.length >= maxParas;
+                        
+                        return (
+                          <label key={num} className={`flex items-center space-x-2 ${isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                            <input
+                              type="checkbox"
+                              checked={manzilSelectedParas.includes(num)}
+                              disabled={isDisabled}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  if (manzilSelectedParas.length < maxParas) {
+                                    setManzilSelectedParas([...manzilSelectedParas, num]);
+                                  }
+                                } else {
+                                  setManzilSelectedParas(manzilSelectedParas.filter(p => p !== num));
+                                }
+                              }}
+                              className="rounded border-gray-300"
+                            />
+                            <span className="text-sm">{num}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -447,7 +552,13 @@ const LearningReport = () => {
                       <Input
                         value={sabaqAmount}
                         onChange={(e) => setSabaqAmount(e.target.value)}
-                        placeholder={isRTL ? "مثلاً: 5 سطریں" : "e.g., 5 lines"}
+                        placeholder={
+                          sabaqLinesPages === "lines" 
+                            ? (isRTL ? "مثلاً: 5 سطریں" : "e.g., 5 lines")
+                            : sabaqLinesPages === "pages"
+                            ? (isRTL ? "مثلاً: 2 صفحات" : "e.g., 2 pages")
+                            : (isRTL ? "مقدار درج کریں" : "Enter amount")
+                        }
                       />
                     </div>
                   </div>
@@ -475,33 +586,68 @@ const LearningReport = () => {
                     </div>
                     <div className="space-y-2">
                       <Label>{isRTL ? "سننے والے کا نام" : "Listener Name"}</Label>
-                      <Input
-                        value={manzilListenerName}
-                        onChange={(e) => setManzilListenerName(e.target.value)}
-                        placeholder={isRTL ? "نام درج کریں" : "Enter name"}
-                      />
+                      <Select 
+                        value={manzilListenerType === "teacher" ? manzilListenerName : "other"} 
+                        onValueChange={(value) => {
+                          if (value === "other") {
+                            setManzilListenerType("other");
+                            setManzilListenerName("");
+                          } else {
+                            setManzilListenerType("teacher");
+                            setManzilListenerName(value);
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={isRTL ? "منتخب کریں" : "Select"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teachers.map((teacher) => (
+                            <SelectItem key={teacher.id} value={teacher.name}>
+                              {teacher.name}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="other">{isRTL ? "دیگر" : "Other"}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {manzilListenerType === "other" && (
+                        <Input
+                          value={manzilCustomListenerName}
+                          onChange={(e) => setManzilCustomListenerName(e.target.value)}
+                          placeholder={isRTL ? "نام درج کریں" : "Enter name"}
+                          className="mt-2"
+                        />
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>{isRTL ? "پارے منتخب کریں" : "Select Paras"}</Label>
                     <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-                      {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => (
-                        <label key={num} className="flex items-center space-x-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={manzilSelectedParas.includes(num)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setManzilSelectedParas([...manzilSelectedParas, num]);
-                              } else {
-                                setManzilSelectedParas(manzilSelectedParas.filter(p => p !== num));
-                              }
-                            }}
-                            className="rounded border-gray-300"
-                          />
-                          <span className="text-sm">{num}</span>
-                        </label>
-                      ))}
+                      {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => {
+                        const maxParas = manzilAmount ? parseInt(manzilAmount) : 30;
+                        const isDisabled = !manzilSelectedParas.includes(num) && manzilSelectedParas.length >= maxParas;
+                        
+                        return (
+                          <label key={num} className={`flex items-center space-x-2 ${isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                            <input
+                              type="checkbox"
+                              checked={manzilSelectedParas.includes(num)}
+                              disabled={isDisabled}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  if (manzilSelectedParas.length < maxParas) {
+                                    setManzilSelectedParas([...manzilSelectedParas, num]);
+                                  }
+                                } else {
+                                  setManzilSelectedParas(manzilSelectedParas.filter(p => p !== num));
+                                }
+                              }}
+                              className="rounded border-gray-300"
+                            />
+                            <span className="text-sm">{num}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
