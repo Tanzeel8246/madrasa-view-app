@@ -101,4 +101,14 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Apply Urdu font to elements with dir="rtl" */
+  [dir="rtl"] {
+    font-family: 'Noto Nastaliq Urdu', serif;
+  }
+
+  /* Keep Latin text in default font */
+  [dir="ltr"] {
+    font-family: system-ui, -apple-system, sans-serif;
+  }
 }
