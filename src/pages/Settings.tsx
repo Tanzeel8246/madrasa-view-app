@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Upload, Save, LogOut, Download, FileUp } from "lucide-react";
+import { Upload, Save, LogOut, Download, FileUp, RefreshCw, X } from "lucide-react";
 
 interface MadrasahSettings {
   id: string;
@@ -29,12 +29,32 @@ const Settings = () => {
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [settings, setSettings] = useState<MadrasahSettings | null>(null);
+  const [backups, setBackups] = useState<any[]>([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
 
   useEffect(() => {
     if (madrasahId) {
       fetchSettings();
+      fetchBackups();
     }
   }, [madrasahId]);
+
+  const fetchBackups = async () => {
+    if (!madrasahId) return;
+
+    setBackupsLoading(true);
+    const { data, error } = await supabase
+      .from("backups")
+      .select("id, backup_date, backup_type, notes")
+      .eq("madrasah_id", madrasahId)
+      .order("backup_date", { ascending: false })
+      .limit(10);
+
+    if (!error && data) {
+      setBackups(data);
+    }
+    setBackupsLoading(false);
+  };
 
   const fetchSettings = async () => {
     if (!madrasahId) return;
@@ -125,58 +145,23 @@ const Settings = () => {
 
     setBackupLoading(true);
     try {
-      // Fetch all data from all tables
-      const [
-        studentsData,
-        teachersData,
-        classesData,
-        attendanceData,
-        feesData,
-        incomeData,
-        expenseData,
-        salariesData,
-        loansData,
-      ] = await Promise.all([
-        supabase.from("students").select("*").eq("madrasah_id", madrasahId),
-        supabase.from("teachers").select("*").eq("madrasah_id", madrasahId),
-        supabase.from("classes").select("*").eq("madrasah_id", madrasahId),
-        supabase.from("attendance").select("*").eq("madrasah_id", madrasahId),
-        supabase.from("fees").select("*").eq("madrasah_id", madrasahId),
-        supabase.from("income").select("*").eq("madrasah_id", madrasahId),
-        supabase.from("expense").select("*").eq("madrasah_id", madrasahId),
-        supabase.from("salaries").select("*").eq("madrasah_id", madrasahId),
-        supabase.from("loans").select("*").eq("madrasah_id", madrasahId),
-      ]);
-
-      const backupData = {
-        version: "1.0",
-        exportDate: new Date().toISOString(),
-        madrasah: settings,
-        students: studentsData.data || [],
-        teachers: teachersData.data || [],
-        classes: classesData.data || [],
-        attendance: attendanceData.data || [],
-        fees: feesData.data || [],
-        income: incomeData.data || [],
-        expense: expenseData.data || [],
-        salaries: salariesData.data || [],
-        loans: loansData.data || [],
-      };
-
-      // Create and download JSON file
-      const blob = new Blob([JSON.stringify(backupData, null, 2)], {
-        type: "application/json",
+      const { data, error } = await supabase.functions.invoke('backup-data', {
+        body: {
+          madrasahId,
+          backupType: 'manual',
+          notes: 'Manual backup created from settings',
+        },
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `madrasah_backup_${settings.madrasah_id}_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
 
-      toast.success(language === "ur" ? "بیک اپ کامیابی سے ڈاؤن لوڈ ہو گیا" : "Backup downloaded successfully");
+      if (error) throw error;
+
+      toast.success(
+        language === "ur" 
+          ? "بیک اپ کامیابی سے محفوظ ہو گیا" 
+          : "Backup saved successfully"
+      );
+      
+      fetchBackups();
     } catch (error: any) {
       toast.error(language === "ur" ? "بیک اپ میں خرابی" : "Backup failed");
       console.error(error);
@@ -185,131 +170,65 @@ const Settings = () => {
     }
   };
 
-  const handleRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !madrasahId) return;
+  const handleRestore = async (backupId: string) => {
+    if (!madrasahId) return;
+
+    const confirmed = window.confirm(
+      language === "ur"
+        ? "کیا آپ واقعی یہ بیک اپ بحال کرنا چاہتے ہیں؟ موجودہ ڈیٹا کا بیک اپ خودکار طور پر لے لیا جائے گا۔"
+        : "Are you sure you want to restore this backup? Your current data will be backed up automatically before restoration."
+    );
+
+    if (!confirmed) return;
 
     setRestoreLoading(true);
     try {
-      const fileContent = await file.text();
-      const backupData = JSON.parse(fileContent);
+      const { data, error } = await supabase.functions.invoke('restore-data', {
+        body: {
+          madrasahId,
+          backupId,
+        },
+      });
 
-      // Validate backup data
-      if (!backupData.version || !backupData.madrasah) {
-        throw new Error("Invalid backup file");
-      }
+      if (error) throw error;
 
-      // Confirm with user
-      const confirmed = window.confirm(
-        language === "ur"
-          ? "کیا آپ واقعی موجودہ ڈیٹا کو نئے ڈیٹا سے تبدیل کرنا چاہتے ہیں؟ یہ عمل واپس نہیں ہو سکتا۔"
-          : "Are you sure you want to restore this backup? This will replace your current data and cannot be undone."
+      toast.success(
+        language === "ur" 
+          ? `ڈیٹا کامیابی سے بحال ہو گیا۔ ${data.recordsRestored} ریکارڈز بحال ہوئے۔` 
+          : `Data restored successfully. ${data.recordsRestored} records restored.`
       );
-
-      if (!confirmed) {
-        setRestoreLoading(false);
-        return;
-      }
-
-      // Delete existing data
-      await Promise.all([
-        supabase.from("attendance").delete().eq("madrasah_id", madrasahId),
-        supabase.from("fees").delete().eq("madrasah_id", madrasahId),
-        supabase.from("salaries").delete().eq("madrasah_id", madrasahId),
-        supabase.from("loans").delete().eq("madrasah_id", madrasahId),
-        supabase.from("income").delete().eq("madrasah_id", madrasahId),
-        supabase.from("expense").delete().eq("madrasah_id", madrasahId),
-        supabase.from("students").delete().eq("madrasah_id", madrasahId),
-        supabase.from("classes").delete().eq("madrasah_id", madrasahId),
-        supabase.from("teachers").delete().eq("madrasah_id", madrasahId),
-      ]);
-
-      // Insert restored data with current madrasah_id
-      const insertPromises = [];
-
-      if (backupData.teachers?.length) {
-        const teachers = backupData.teachers.map((t: any) => ({
-          ...t,
-          madrasah_id: madrasahId,
-        }));
-        insertPromises.push(supabase.from("teachers").insert(teachers));
-      }
-
-      if (backupData.classes?.length) {
-        const classes = backupData.classes.map((c: any) => ({
-          ...c,
-          madrasah_id: madrasahId,
-        }));
-        insertPromises.push(supabase.from("classes").insert(classes));
-      }
-
-      if (backupData.students?.length) {
-        const students = backupData.students.map((s: any) => ({
-          ...s,
-          madrasah_id: madrasahId,
-        }));
-        insertPromises.push(supabase.from("students").insert(students));
-      }
-
-      if (backupData.attendance?.length) {
-        const attendance = backupData.attendance.map((a: any) => ({
-          ...a,
-          madrasah_id: madrasahId,
-        }));
-        insertPromises.push(supabase.from("attendance").insert(attendance));
-      }
-
-      if (backupData.fees?.length) {
-        const fees = backupData.fees.map((f: any) => ({
-          ...f,
-          madrasah_id: madrasahId,
-        }));
-        insertPromises.push(supabase.from("fees").insert(fees));
-      }
-
-      if (backupData.income?.length) {
-        const income = backupData.income.map((i: any) => ({
-          ...i,
-          madrasah_id: madrasahId,
-        }));
-        insertPromises.push(supabase.from("income").insert(income));
-      }
-
-      if (backupData.expense?.length) {
-        const expense = backupData.expense.map((e: any) => ({
-          ...e,
-          madrasah_id: madrasahId,
-        }));
-        insertPromises.push(supabase.from("expense").insert(expense));
-      }
-
-      if (backupData.salaries?.length) {
-        const salaries = backupData.salaries.map((s: any) => ({
-          ...s,
-          madrasah_id: madrasahId,
-        }));
-        insertPromises.push(supabase.from("salaries").insert(salaries));
-      }
-
-      if (backupData.loans?.length) {
-        const loans = backupData.loans.map((l: any) => ({
-          ...l,
-          madrasah_id: madrasahId,
-        }));
-        insertPromises.push(supabase.from("loans").insert(loans));
-      }
-
-      await Promise.all(insertPromises);
-
-      toast.success(language === "ur" ? "ڈیٹا کامیابی سے بحال ہو گیا" : "Data restored successfully");
       
-      // Reset file input
-      event.target.value = "";
+      fetchBackups();
+      
+      // Reload page to reflect new data
+      setTimeout(() => window.location.reload(), 1500);
     } catch (error: any) {
       toast.error(language === "ur" ? "ری سٹور میں خرابی" : "Restore failed");
       console.error(error);
     } finally {
       setRestoreLoading(false);
+    }
+  };
+
+  const handleDeleteBackup = async (backupId: string) => {
+    const confirmed = window.confirm(
+      language === "ur"
+        ? "کیا آپ واقعی یہ بیک اپ حذف کرنا چاہتے ہیں؟"
+        : "Are you sure you want to delete this backup?"
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("backups")
+      .delete()
+      .eq("id", backupId);
+
+    if (error) {
+      toast.error(language === "ur" ? "حذف کرنے میں خرابی" : "Delete failed");
+    } else {
+      toast.success(language === "ur" ? "بیک اپ حذف ہو گیا" : "Backup deleted");
+      fetchBackups();
     }
   };
 
@@ -469,61 +388,125 @@ const Settings = () => {
           <CardTitle>{language === "ur" ? "ڈیٹا بیک اپ اور ری سٹور" : "Data Backup & Restore"}</CardTitle>
           <CardDescription>
             {language === "ur" 
-              ? "اپنے مدرسہ کا ڈیٹا محفوظ کریں یا پرانا ڈیٹا بحال کریں" 
-              : "Backup your madrasa data or restore from a previous backup"}
+              ? "خودکار روزانہ بیک اپ فعال ہے۔ اپنا ڈیٹا محفوظ کریں یا پرانا بحال کریں" 
+              : "Auto daily backup enabled. Backup your data or restore from previous versions"}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Backup Section */}
+        <CardContent className="space-y-6">
+          {/* Auto Backup Info */}
+          <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">
+                  {language === "ur" ? "خودکار بیک اپ فعال" : "Automatic Backup Active"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {language === "ur" 
+                    ? "آپ کا ڈیٹا ہر روز خودکار طور پر محفوظ ہوتا ہے۔ ری سٹور کرنے سے پہلے موجودہ ڈیٹا کا بیک اپ خودکار لے لیا جائے گا۔" 
+                    : "Your data is automatically backed up daily. Before restoring, your current data will be backed up automatically."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Manual Backup Button */}
           <div className="space-y-2">
-            <Label>{language === "ur" ? "ڈیٹا بیک اپ" : "Backup Data"}</Label>
-            <p className="text-xs md:text-sm text-muted-foreground mb-2">
-              {language === "ur"
-                ? "تمام طلباء، اساتذہ، کلاسز، حاضری، فیسیں اور دیگر ڈیٹا کو JSON فائل میں ڈاؤن لوڈ کریں"
-                : "Download all students, teachers, classes, attendance, fees and other data as JSON file"}
-            </p>
+            <Label>{language === "ur" ? "دستی بیک اپ بنائیں" : "Create Manual Backup"}</Label>
             <Button 
               onClick={handleBackup} 
               disabled={backupLoading}
               className="w-full sm:w-auto"
             >
-              <Download className="h-4 w-4 mr-2" />
+              <Save className="h-4 w-4 mr-2" />
               {backupLoading 
-                ? (language === "ur" ? "ڈاؤن لوڈ ہو رہا ہے..." : "Downloading...") 
-                : (language === "ur" ? "بیک اپ ڈاؤن لوڈ کریں" : "Download Backup")}
+                ? (language === "ur" ? "محفوظ ہو رہا ہے..." : "Saving...") 
+                : (language === "ur" ? "نیا بیک اپ بنائیں" : "Create Backup")}
             </Button>
           </div>
 
           <Separator />
 
-          {/* Restore Section */}
-          <div className="space-y-2">
-            <Label htmlFor="restore-file">{language === "ur" ? "ڈیٹا ری سٹور" : "Restore Data"}</Label>
-            <p className="text-xs md:text-sm text-muted-foreground mb-2">
-              {language === "ur"
-                ? "پرانا بیک اپ اپ لوڈ کریں۔ نوٹ: یہ موجودہ ڈیٹا کو تبدیل کر دے گا"
-                : "Upload a previous backup. Note: This will replace your current data"}
-            </p>
-            <div className="flex gap-2">
-              <Input
-                id="restore-file"
-                type="file"
-                accept=".json"
-                onChange={handleRestore}
-                disabled={restoreLoading}
-                className="flex-1"
-              />
-              {restoreLoading && (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-                </div>
-              )}
+          {/* Backup History */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>{language === "ur" ? "بیک اپ کی سرگزشت" : "Backup History"}</Label>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={fetchBackups}
+                disabled={backupsLoading}
+              >
+                {backupsLoading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </Button>
             </div>
-            <p className="text-xs text-destructive">
-              {language === "ur"
-                ? "⚠️ خبردار: ری سٹور کرنے سے تمام موجودہ ڈیٹا حذف ہو جائے گا"
-                : "⚠️ Warning: Restoring will delete all current data"}
-            </p>
+            
+            {backups.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {language === "ur" ? "کوئی بیک اپ موجود نہیں" : "No backups found"}
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {backups.map((backup) => (
+                  <div 
+                    key={backup.id} 
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {new Date(backup.backup_date).toLocaleString(language === "ur" ? "ur-PK" : "en-US")}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          backup.backup_type === 'auto' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : backup.backup_type === 'pre_restore'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}>
+                          {backup.backup_type === 'auto' 
+                            ? (language === "ur" ? "خودکار" : "Auto")
+                            : backup.backup_type === 'pre_restore'
+                            ? (language === "ur" ? "ری سٹور سے پہلے" : "Pre-restore")
+                            : (language === "ur" ? "دستی" : "Manual")}
+                        </span>
+                        {backup.notes && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            {backup.notes}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRestore(backup.id)}
+                        disabled={restoreLoading}
+                      >
+                        <Upload className="h-3 w-3 mr-1" />
+                        {language === "ur" ? "بحال کریں" : "Restore"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteBackup(backup.id)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

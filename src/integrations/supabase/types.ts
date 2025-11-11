@@ -62,6 +62,36 @@ export type Database = {
           },
         ]
       }
+      backups: {
+        Row: {
+          backup_data: Json
+          backup_date: string
+          backup_type: string
+          created_at: string
+          id: string
+          madrasah_id: string
+          notes: string | null
+        }
+        Insert: {
+          backup_data: Json
+          backup_date?: string
+          backup_type: string
+          created_at?: string
+          id?: string
+          madrasah_id: string
+          notes?: string | null
+        }
+        Update: {
+          backup_data?: Json
+          backup_date?: string
+          backup_type?: string
+          created_at?: string
+          id?: string
+          madrasah_id?: string
+          notes?: string | null
+        }
+        Relationships: []
+      }
       class_teachers: {
         Row: {
           class_id: string
