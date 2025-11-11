@@ -19,6 +19,7 @@ export type Database = {
           created_at: string | null
           date: string
           id: string
+          madrasah_id: string | null
           notes: string | null
           status: string
           student_id: string
@@ -27,6 +28,7 @@ export type Database = {
           created_at?: string | null
           date: string
           id?: string
+          madrasah_id?: string | null
           notes?: string | null
           status: string
           student_id: string
@@ -35,11 +37,19 @@ export type Database = {
           created_at?: string | null
           date?: string
           id?: string
+          madrasah_id?: string | null
           notes?: string | null
           status?: string
           student_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "attendance_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "attendance_student_id_fkey"
             columns: ["student_id"]
@@ -54,6 +64,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          madrasah_id: string | null
           name: string
           teacher_id: string | null
           updated_at: string | null
@@ -62,6 +73,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          madrasah_id?: string | null
           name: string
           teacher_id?: string | null
           updated_at?: string | null
@@ -70,11 +82,19 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          madrasah_id?: string | null
           name?: string
           teacher_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "classes_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "classes_teacher_id_fkey"
             columns: ["teacher_id"]
@@ -92,6 +112,7 @@ export type Database = {
           date: string
           description: string | null
           id: string
+          madrasah_id: string | null
           title: string
           updated_at: string | null
         }
@@ -102,6 +123,7 @@ export type Database = {
           date?: string
           description?: string | null
           id?: string
+          madrasah_id?: string | null
           title: string
           updated_at?: string | null
         }
@@ -112,16 +134,26 @@ export type Database = {
           date?: string
           description?: string | null
           id?: string
+          madrasah_id?: string | null
           title?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expense_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fees: {
         Row: {
           amount: number
           created_at: string | null
           id: string
+          madrasah_id: string | null
           month: number
           notes: string | null
           paid_amount: number | null
@@ -135,6 +167,7 @@ export type Database = {
           amount: number
           created_at?: string | null
           id?: string
+          madrasah_id?: string | null
           month: number
           notes?: string | null
           paid_amount?: number | null
@@ -148,6 +181,7 @@ export type Database = {
           amount?: number
           created_at?: string | null
           id?: string
+          madrasah_id?: string | null
           month?: number
           notes?: string | null
           paid_amount?: number | null
@@ -158,6 +192,13 @@ export type Database = {
           year?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "fees_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fees_student_id_fkey"
             columns: ["student_id"]
@@ -175,6 +216,7 @@ export type Database = {
           date: string
           description: string | null
           id: string
+          madrasah_id: string | null
           title: string
           updated_at: string | null
         }
@@ -185,6 +227,7 @@ export type Database = {
           date?: string
           description?: string | null
           id?: string
+          madrasah_id?: string | null
           title: string
           updated_at?: string | null
         }
@@ -195,10 +238,19 @@ export type Database = {
           date?: string
           description?: string | null
           id?: string
+          madrasah_id?: string | null
           title?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "income_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       loans: {
         Row: {
@@ -206,6 +258,7 @@ export type Database = {
           created_at: string
           id: string
           loan_date: string
+          madrasah_id: string | null
           notes: string | null
           paid_amount: number | null
           return_date: string | null
@@ -218,6 +271,7 @@ export type Database = {
           created_at?: string
           id?: string
           loan_date?: string
+          madrasah_id?: string | null
           notes?: string | null
           paid_amount?: number | null
           return_date?: string | null
@@ -230,6 +284,7 @@ export type Database = {
           created_at?: string
           id?: string
           loan_date?: string
+          madrasah_id?: string | null
           notes?: string | null
           paid_amount?: number | null
           return_date?: string | null
@@ -239,10 +294,91 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "loans_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "loans_teacher_id_fkey"
             columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      madrasah: {
+        Row: {
+          address: string | null
+          contact: string | null
+          created_at: string
+          email: string | null
+          id: string
+          logo_url: string | null
+          madrasah_id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          contact?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          madrasah_id: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          contact?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          madrasah_id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          madrasah_id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          madrasah_id: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          madrasah_id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
             referencedColumns: ["id"]
           },
         ]
@@ -252,6 +388,7 @@ export type Database = {
           amount: number
           created_at: string
           id: string
+          madrasah_id: string | null
           month: number
           notes: string | null
           payment_date: string | null
@@ -264,6 +401,7 @@ export type Database = {
           amount: number
           created_at?: string
           id?: string
+          madrasah_id?: string | null
           month: number
           notes?: string | null
           payment_date?: string | null
@@ -276,6 +414,7 @@ export type Database = {
           amount?: number
           created_at?: string
           id?: string
+          madrasah_id?: string | null
           month?: number
           notes?: string | null
           payment_date?: string | null
@@ -285,6 +424,13 @@ export type Database = {
           year?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "salaries_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "salaries_teacher_id_fkey"
             columns: ["teacher_id"]
@@ -304,6 +450,7 @@ export type Database = {
           date_of_birth: string | null
           father_name: string
           id: string
+          madrasah_id: string | null
           name: string
           roll_number: string
           updated_at: string | null
@@ -317,6 +464,7 @@ export type Database = {
           date_of_birth?: string | null
           father_name: string
           id?: string
+          madrasah_id?: string | null
           name: string
           roll_number: string
           updated_at?: string | null
@@ -330,6 +478,7 @@ export type Database = {
           date_of_birth?: string | null
           father_name?: string
           id?: string
+          madrasah_id?: string | null
           name?: string
           roll_number?: string
           updated_at?: string | null
@@ -342,6 +491,13 @@ export type Database = {
             referencedRelation: "classes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "students_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
         ]
       }
       teachers: {
@@ -351,6 +507,7 @@ export type Database = {
           created_at: string | null
           email: string | null
           id: string
+          madrasah_id: string | null
           name: string
           qualification: string | null
           subject: string | null
@@ -362,6 +519,7 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          madrasah_id?: string | null
           name: string
           qualification?: string | null
           subject?: string | null
@@ -373,19 +531,28 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          madrasah_id?: string | null
           name?: string
           qualification?: string | null
           subject?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "teachers_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_madrasah_id: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never

@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Languages } from "lucide-react";
 import { ReactNode } from "react";
 
@@ -9,6 +10,7 @@ interface HeaderProps {
 
 const Header = ({ children }: HeaderProps = {}) => {
   const { language, setLanguage, isRTL } = useLanguage();
+  const { user } = useAuth();
 
   const toggleLanguage = () => {
     setLanguage(language === "ur" ? "en" : "ur");
@@ -22,6 +24,11 @@ const Header = ({ children }: HeaderProps = {}) => {
           <p className="hidden sm:block text-xs md:text-sm opacity-90">
             {isRTL ? "السلام علیکم" : "As-Salaam-Alaikum"}
           </p>
+          {user && (
+            <span className="hidden md:inline text-xs opacity-75">
+              {user.email}
+            </span>
+          )}
         </div>
         <Button
           variant="outline"
