@@ -335,7 +335,9 @@ export type Database = {
           id: string
           madrasah_id: string
           manzil_amount: string | null
+          manzil_listener_name: string | null
           manzil_paras: string | null
+          manzil_selected_paras: string[] | null
           notes: string | null
           period_1: string | null
           period_2: string | null
@@ -347,6 +349,7 @@ export type Database = {
           sabaq_lines_pages: string | null
           sabaq_para_number: number | null
           sabqi_amount: string | null
+          sabqi_listener_name: string | null
           sabqi_para: number | null
           student_id: string
           updated_at: string
@@ -358,7 +361,9 @@ export type Database = {
           id?: string
           madrasah_id: string
           manzil_amount?: string | null
+          manzil_listener_name?: string | null
           manzil_paras?: string | null
+          manzil_selected_paras?: string[] | null
           notes?: string | null
           period_1?: string | null
           period_2?: string | null
@@ -370,6 +375,7 @@ export type Database = {
           sabaq_lines_pages?: string | null
           sabaq_para_number?: number | null
           sabqi_amount?: string | null
+          sabqi_listener_name?: string | null
           sabqi_para?: number | null
           student_id: string
           updated_at?: string
@@ -381,7 +387,9 @@ export type Database = {
           id?: string
           madrasah_id?: string
           manzil_amount?: string | null
+          manzil_listener_name?: string | null
           manzil_paras?: string | null
+          manzil_selected_paras?: string[] | null
           notes?: string | null
           period_1?: string | null
           period_2?: string | null
@@ -393,6 +401,7 @@ export type Database = {
           sabaq_lines_pages?: string | null
           sabaq_para_number?: number | null
           sabqi_amount?: string | null
+          sabqi_listener_name?: string | null
           sabqi_para?: number | null
           student_id?: string
           updated_at?: string

@@ -41,8 +41,11 @@ const LearningReport = () => {
   const [sabaqLinesPages, setSabaqLinesPages] = useState("");
   const [sabqiPara, setSabqiPara] = useState("");
   const [sabqiAmount, setSabqiAmount] = useState("");
+  const [sabqiListenerName, setSabqiListenerName] = useState("");
   const [manzilAmount, setManzilAmount] = useState("");
   const [manzilParas, setManzilParas] = useState("");
+  const [manzilListenerName, setManzilListenerName] = useState("");
+  const [manzilSelectedParas, setManzilSelectedParas] = useState<number[]>([]);
 
   // Dars Nizami & Modern Education fields
   const [period1, setPeriod1] = useState("");
@@ -104,8 +107,11 @@ const LearningReport = () => {
     setSabaqLinesPages("");
     setSabqiPara("");
     setSabqiAmount("");
+    setSabqiListenerName("");
     setManzilAmount("");
     setManzilParas("");
+    setManzilListenerName("");
+    setManzilSelectedParas([]);
     setPeriod1("");
     setPeriod2("");
     setPeriod3("");
@@ -144,14 +150,19 @@ const LearningReport = () => {
       reportData.sabaq_lines_pages = sabaqLinesPages;
       reportData.sabqi_para = sabqiPara ? parseInt(sabqiPara) : null;
       reportData.sabqi_amount = sabqiAmount;
+      reportData.sabqi_listener_name = sabqiListenerName;
       reportData.manzil_amount = manzilAmount;
       reportData.manzil_paras = manzilParas;
+      reportData.manzil_listener_name = manzilListenerName;
+      reportData.manzil_selected_paras = manzilSelectedParas;
     } else if (classType === "quran_nazira") {
       reportData.sabaq_amount = sabaqAmount;
       reportData.sabaq_para_number = sabaqPara ? parseInt(sabaqPara) : null;
       reportData.sabaq_lines_pages = sabaqLinesPages;
       reportData.manzil_amount = manzilAmount;
       reportData.manzil_paras = manzilParas;
+      reportData.manzil_listener_name = manzilListenerName;
+      reportData.manzil_selected_paras = manzilSelectedParas;
     } else if (classType === "dars_nizami" || classType === "modern_education") {
       reportData.period_1 = period1;
       reportData.period_2 = period2;
@@ -259,14 +270,6 @@ const LearningReport = () => {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label>{isRTL ? "سبق کی مقدار" : "Sabaq Amount"}</Label>
-                      <Input
-                        value={sabaqAmount}
-                        onChange={(e) => setSabaqAmount(e.target.value)}
-                        placeholder={isRTL ? "مثلاً: 5 سطریں" : "e.g., 5 lines"}
-                      />
-                    </div>
-                    <div className="space-y-2">
                       <Label>{isRTL ? "پارہ نمبر" : "Para Number"}</Label>
                       <Select value={sabaqPara} onValueChange={setSabaqPara}>
                         <SelectTrigger>
@@ -293,6 +296,14 @@ const LearningReport = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "سبق کی مقدار" : "Sabaq Amount"}</Label>
+                      <Input
+                        value={sabaqAmount}
+                        onChange={(e) => setSabaqAmount(e.target.value)}
+                        placeholder={isRTL ? "مثلاً: 5 سطریں" : "e.g., 5 lines"}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -300,7 +311,7 @@ const LearningReport = () => {
                   <h3 className="text-lg font-semibold mb-4">
                     {isRTL ? "سبقی" : "Sabqi (Revision)"}
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>{isRTL ? "سبقی پارہ" : "Sabqi Para"}</Label>
                       <Select value={sabqiPara} onValueChange={setSabqiPara}>
@@ -330,6 +341,14 @@ const LearningReport = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "سننے والے کا نام" : "Listener Name"}</Label>
+                      <Input
+                        value={sabqiListenerName}
+                        onChange={(e) => setSabqiListenerName(e.target.value)}
+                        placeholder={isRTL ? "نام درج کریں" : "Enter name"}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -337,7 +356,7 @@ const LearningReport = () => {
                   <h3 className="text-lg font-semibold mb-4">
                     {isRTL ? "منزل" : "Manzil"}
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div className="space-y-2">
                       <Label>{isRTL ? "منزل کی مقدار" : "Manzil Amount"}</Label>
                       <Select value={manzilAmount} onValueChange={setManzilAmount}>
@@ -354,12 +373,34 @@ const LearningReport = () => {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>{isRTL ? "متعلقہ پارے" : "Related Paras"}</Label>
+                      <Label>{isRTL ? "سننے والے کا نام" : "Listener Name"}</Label>
                       <Input
-                        value={manzilParas}
-                        onChange={(e) => setManzilParas(e.target.value)}
-                        placeholder={isRTL ? "مثلاً: 1-5" : "e.g., 1-5"}
+                        value={manzilListenerName}
+                        onChange={(e) => setManzilListenerName(e.target.value)}
+                        placeholder={isRTL ? "نام درج کریں" : "Enter name"}
                       />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "پارے منتخب کریں" : "Select Paras"}</Label>
+                    <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+                      {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => (
+                        <label key={num} className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={manzilSelectedParas.includes(num)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setManzilSelectedParas([...manzilSelectedParas, num]);
+                              } else {
+                                setManzilSelectedParas(manzilSelectedParas.filter(p => p !== num));
+                              }
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <span className="text-sm">{num}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -374,14 +415,6 @@ const LearningReport = () => {
                     {isRTL ? "سبق" : "Sabaq (Lesson)"}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>{isRTL ? "سبق کی مقدار" : "Sabaq Amount"}</Label>
-                      <Input
-                        value={sabaqAmount}
-                        onChange={(e) => setSabaqAmount(e.target.value)}
-                        placeholder={isRTL ? "مثلاً: 5 سطریں" : "e.g., 5 lines"}
-                      />
-                    </div>
                     <div className="space-y-2">
                       <Label>{isRTL ? "پارہ نمبر" : "Para Number"}</Label>
                       <Select value={sabaqPara} onValueChange={setSabaqPara}>
@@ -409,6 +442,14 @@ const LearningReport = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "سبق کی مقدار" : "Sabaq Amount"}</Label>
+                      <Input
+                        value={sabaqAmount}
+                        onChange={(e) => setSabaqAmount(e.target.value)}
+                        placeholder={isRTL ? "مثلاً: 5 سطریں" : "e.g., 5 lines"}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -416,7 +457,7 @@ const LearningReport = () => {
                   <h3 className="text-lg font-semibold mb-4">
                     {isRTL ? "منزل" : "Manzil"}
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div className="space-y-2">
                       <Label>{isRTL ? "منزل کی مقدار" : "Manzil Amount"}</Label>
                       <Select value={manzilAmount} onValueChange={setManzilAmount}>
@@ -433,12 +474,34 @@ const LearningReport = () => {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>{isRTL ? "متعلقہ پارے" : "Related Paras"}</Label>
+                      <Label>{isRTL ? "سننے والے کا نام" : "Listener Name"}</Label>
                       <Input
-                        value={manzilParas}
-                        onChange={(e) => setManzilParas(e.target.value)}
-                        placeholder={isRTL ? "مثلاً: 1-5" : "e.g., 1-5"}
+                        value={manzilListenerName}
+                        onChange={(e) => setManzilListenerName(e.target.value)}
+                        placeholder={isRTL ? "نام درج کریں" : "Enter name"}
                       />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "پارے منتخب کریں" : "Select Paras"}</Label>
+                    <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+                      {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => (
+                        <label key={num} className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={manzilSelectedParas.includes(num)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setManzilSelectedParas([...manzilSelectedParas, num]);
+                              } else {
+                                setManzilSelectedParas(manzilSelectedParas.filter(p => p !== num));
+                              }
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <span className="text-sm">{num}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
                 </div>

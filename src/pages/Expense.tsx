@@ -85,12 +85,28 @@ const Expense = () => {
 
   const handleAddExpense = async (formData: any) => {
     try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("madrasah_id")
+        .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
+        .single();
+
+      if (!profile?.madrasah_id) {
+        toast({
+          title: t("errorOccurred"),
+          description: "Madrasah ID not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { error } = await supabase.from("expense").insert([{
         title: formData.title,
         amount: Number(formData.amount),
         category: formData.category,
         date: formData.date || new Date().toISOString().split("T")[0],
         description: formData.description || null,
+        madrasah_id: profile.madrasah_id,
       }]);
 
       if (error) throw error;
