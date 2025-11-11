@@ -48,7 +48,7 @@ const Sidebar = () => {
       <SidebarHeader className="border-b border-sidebar-border">
         <h1 className={cn(
           "text-xl font-bold text-sidebar-foreground text-center py-4",
-          isRTL && "font-urdu"
+          isRTL && "font-urdu text-2xl"
         )}>
           {isRTL ? "مدرسہ" : "Madrasa"}
         </h1>
@@ -70,7 +70,10 @@ const Sidebar = () => {
                       onClick={handleLinkClick}
                     >
                       <item.icon className="w-5 h-5 flex-shrink-0" />
-                      <span className="text-sm md:text-base">{item.label}</span>
+                      <span className={cn(
+                        "text-sm md:text-base",
+                        isRTL && "font-urdu text-base md:text-lg"
+                      )}>{item.label}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
