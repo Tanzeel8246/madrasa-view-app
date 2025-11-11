@@ -23,6 +23,11 @@ type TeacherRow = {
   email: string | null;
   subject: string | null;
   qualification: string | null;
+  class_teachers?: Array<{
+    classes: {
+      name: string;
+    };
+  }>;
 };
 
 const Teachers = () => {
@@ -41,7 +46,14 @@ const Teachers = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from("teachers")
-        .select("*")
+        .select(`
+          *,
+          class_teachers (
+            classes (
+              name
+            )
+          )
+        `)
         .order("name");
 
       if (error) throw error;
@@ -149,6 +161,9 @@ const Teachers = () => {
                   {t("subject")}
                 </TableHead>
                 <TableHead className={isRTL ? "text-right" : "text-left"}>
+                  {isRTL ? "کلاسز" : "Classes"}
+                </TableHead>
+                <TableHead className={isRTL ? "text-right" : "text-left"}>
                   {t("qualification")}
                 </TableHead>
                 <TableHead className={isRTL ? "text-right" : "text-left"}>
@@ -160,25 +175,39 @@ const Teachers = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((teacher) => (
-                <TableRow key={teacher.id}>
-                  <TableCell className={isRTL ? "text-right font-medium" : "text-left font-medium"}>
-                    {teacher.name}
-                  </TableCell>
-                  <TableCell className={isRTL ? "text-right" : "text-left"}>
-                    {teacher.subject || "-"}
-                  </TableCell>
-                  <TableCell className={isRTL ? "text-right" : "text-left"}>
-                    {teacher.qualification || "-"}
-                  </TableCell>
-                  <TableCell className={isRTL ? "text-right" : "text-left"}>
-                    {teacher.contact || "-"}
-                  </TableCell>
-                  <TableCell className={isRTL ? "text-right" : "text-left"}>
-                    {teacher.email || "-"}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filtered.map((teacher) => {
+                const classNames = teacher.class_teachers?.map(ct => ct.classes.name) || [];
+                return (
+                  <TableRow key={teacher.id}>
+                    <TableCell className={isRTL ? "text-right font-medium" : "text-left font-medium"}>
+                      {teacher.name}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {teacher.subject || "-"}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {classNames.length > 0 ? (
+                        <div className="space-y-1">
+                          {classNames.map((name, idx) => (
+                            <div key={idx} className="text-xs">
+                              {name}
+                            </div>
+                          ))}
+                        </div>
+                      ) : "-"}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {teacher.qualification || "-"}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {teacher.contact || "-"}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {teacher.email || "-"}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           </div>

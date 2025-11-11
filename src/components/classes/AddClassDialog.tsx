@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -47,7 +48,6 @@ const classSchema = z.object({
   category: z.string().min(1, "Category is required"),
   subCategory: z.string().min(1, "Sub-category is required"),
   description: z.string().optional(),
-  teacher_id: z.string().optional(),
 });
 
 type ClassForm = z.infer<typeof classSchema>;
@@ -63,6 +63,7 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
   const [open, setOpen] = useState(false);
   const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<ClassForm>({
     resolver: zodResolver(classSchema),
@@ -76,6 +77,14 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
     fetchTeachers();
   }, []);
 
+  const toggleTeacher = (teacherId: string) => {
+    setSelectedTeachers(prev =>
+      prev.includes(teacherId)
+        ? prev.filter(id => id !== teacherId)
+        : [...prev, teacherId]
+    );
+  };
+
   const onSubmit = async (data: ClassForm) => {
     try {
       if (!madrasahId) {
@@ -88,14 +97,35 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
       }
 
       const className = `${data.category} - ${data.subCategory}`;
-      const { error } = await supabase.from("classes").insert([{
-        name: className,
-        description: data.description || null,
-        teacher_id: data.teacher_id || null,
-        madrasah_id: madrasahId,
-      }]);
+      
+      // Insert class first
+      const { data: classData, error: classError } = await supabase
+        .from("classes")
+        .insert([{
+          name: className,
+          description: data.description || null,
+          teacher_id: selectedTeachers[0] || null, // Keep for backward compatibility
+          madrasah_id: madrasahId,
+        }])
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (classError) throw classError;
+
+      // Insert class-teacher relationships
+      if (selectedTeachers.length > 0) {
+        const classTeacherRecords = selectedTeachers.map(teacherId => ({
+          class_id: classData.id,
+          teacher_id: teacherId,
+          madrasah_id: madrasahId,
+        }));
+
+        const { error: relationError } = await supabase
+          .from("class_teachers")
+          .insert(classTeacherRecords);
+
+        if (relationError) throw relationError;
+      }
 
       toast({
         title: t("addedSuccessfully"),
@@ -104,6 +134,7 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
 
       reset();
       setSelectedCategory("");
+      setSelectedTeachers([]);
       setOpen(false);
       onAdded?.();
     } catch (error) {
@@ -178,19 +209,37 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
           )}
 
           <div>
-            <Label htmlFor="teacher_id">{t("teacher")}</Label>
-            <Select onValueChange={(value) => setValue("teacher_id", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder={t("selectTeacher")} />
-              </SelectTrigger>
-              <SelectContent>
-                {teachers.map((teacher) => (
-                  <SelectItem key={teacher.id} value={teacher.id}>
-                    {teacher.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>{isRTL ? "اساتذہ منتخب کریں" : "Select Teachers"}</Label>
+            <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+              {teachers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {isRTL ? "کوئی استاد موجود نہیں" : "No teachers available"}
+                </p>
+              ) : (
+                teachers.map((teacher) => (
+                  <div key={teacher.id} className="flex items-center space-x-2 space-x-reverse">
+                    <Checkbox
+                      id={teacher.id}
+                      checked={selectedTeachers.includes(teacher.id)}
+                      onCheckedChange={() => toggleTeacher(teacher.id)}
+                    />
+                    <label
+                      htmlFor={teacher.id}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {teacher.name}
+                    </label>
+                  </div>
+                ))
+              )}
+            </div>
+            {selectedTeachers.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {isRTL 
+                  ? `${selectedTeachers.length} اساتذہ منتخب ہیں` 
+                  : `${selectedTeachers.length} teacher(s) selected`}
+              </p>
+            )}
           </div>
 
           <div>

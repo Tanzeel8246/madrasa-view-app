@@ -22,9 +22,11 @@ type ClassRow = {
   name: string;
   description: string | null;
   teacher_id: string | null;
-  teachers?: {
-    name: string;
-  } | null;
+  class_teachers?: Array<{
+    teachers: {
+      name: string;
+    };
+  }>;
 };
 
 const Classes = () => {
@@ -45,8 +47,10 @@ const Classes = () => {
         .from("classes")
         .select(`
           *,
-          teachers (
-            name
+          class_teachers (
+            teachers (
+              name
+            )
           )
         `)
         .order("name");
@@ -71,10 +75,13 @@ const Classes = () => {
 
   const filtered = useMemo(() => {
     if (!searchQuery) return classes;
-    return classes.filter((cls) =>
-      cls.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      cls.teachers?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    return classes.filter((cls) => {
+      const teacherNames = cls.class_teachers?.map(ct => ct.teachers.name.toLowerCase()) || [];
+      return (
+        cls.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        teacherNames.some(name => name.includes(searchQuery.toLowerCase()))
+      );
+    });
   }, [classes, searchQuery]);
 
   const handlePrint = () => {
@@ -87,11 +94,14 @@ const Classes = () => {
       t("teacher"),
       t("description"),
     ];
-    const data = filtered.map(cls => [
-      cls.name,
-      cls.teachers?.name || "-",
-      cls.description || "-",
-    ]);
+    const data = filtered.map(cls => {
+      const teacherNames = cls.class_teachers?.map(ct => ct.teachers.name).join(", ") || "-";
+      return [
+        cls.name,
+        teacherNames,
+        cls.description || "-",
+      ];
+    });
     generatePDF(
       isRTL ? "کلاسز کی فہرست" : "Classes List",
       headers,
@@ -157,19 +167,30 @@ const Classes = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((cls) => (
-                <TableRow key={cls.id}>
-                  <TableCell className={isRTL ? "text-right font-medium" : "text-left font-medium"}>
-                    {cls.name}
-                  </TableCell>
-                  <TableCell className={isRTL ? "text-right" : "text-left"}>
-                    {cls.teachers?.name || "-"}
-                  </TableCell>
-                  <TableCell className={isRTL ? "text-right" : "text-left"}>
-                    {cls.description || "-"}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filtered.map((cls) => {
+                const teacherNames = cls.class_teachers?.map(ct => ct.teachers.name) || [];
+                return (
+                  <TableRow key={cls.id}>
+                    <TableCell className={isRTL ? "text-right font-medium" : "text-left font-medium"}>
+                      {cls.name}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {teacherNames.length > 0 ? (
+                        <div className="space-y-1">
+                          {teacherNames.map((name, idx) => (
+                            <div key={idx} className="text-sm">
+                              {name}
+                            </div>
+                          ))}
+                        </div>
+                      ) : "-"}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {cls.description || "-"}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               </TableBody>
             </Table>
           </div>
