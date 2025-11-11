@@ -49,7 +49,7 @@ const Teachers = () => {
       console.error("Error fetching teachers:", error);
       toast({
         title: t("errorOccurred"),
-        description: "Failed to fetch teachers",
+        description: t("errorOccurred"),
         variant: "destructive",
       });
     } finally {

@@ -67,7 +67,7 @@ const AddTeacherDialog = ({ onAdded }: AddTeacherDialogProps) => {
       console.error("Error adding teacher:", error);
       toast({
         title: t("errorOccurred"),
-        description: "Failed to add teacher",
+        description: t("errorOccurred"),
         variant: "destructive",
       });
     }

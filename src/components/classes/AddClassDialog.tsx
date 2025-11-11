@@ -77,7 +77,7 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
       console.error("Error adding class:", error);
       toast({
         title: t("errorOccurred"),
-        description: "Failed to add class",
+        description: t("errorOccurred"),
         variant: "destructive",
       });
     }

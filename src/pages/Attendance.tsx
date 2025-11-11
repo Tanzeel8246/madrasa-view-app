@@ -109,14 +109,14 @@ const Attendance = () => {
       if (error) throw error;
 
       toast({
-        title: t("addedSuccessfully"),
-        description: "Attendance has been saved successfully",
+        title: t("attendanceMarked"),
+        description: t("attendanceMarked"),
       });
     } catch (error) {
       console.error("Error saving attendance:", error);
       toast({
         title: t("errorOccurred"),
-        description: "Failed to save attendance",
+        description: t("errorOccurred"),
         variant: "destructive",
       });
     } finally {

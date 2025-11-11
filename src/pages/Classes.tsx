@@ -55,7 +55,7 @@ const Classes = () => {
       console.error("Error fetching classes:", error);
       toast({
         title: t("errorOccurred"),
-        description: "Failed to fetch classes",
+        description: t("errorOccurred"),
         variant: "destructive",
       });
     } finally {
