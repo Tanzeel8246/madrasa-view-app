@@ -25,8 +25,26 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
 
+const CLASS_CATEGORIES = {
+  "قرآن کریم": ["حفظ", "ناظرہ", "گردان", "تجوید و قراءت"],
+  "درس نظامی": [
+    "درجہ اولیٰ",
+    "اولیٰ نہم",
+    "اولیٰ دہم",
+    "ثانویہ",
+    "ثالثہ",
+    "رابعہ",
+    "خامسہ",
+    "سادسہ",
+    "موقوف علیہ",
+    "دورہ حدیث شریف",
+  ],
+  "عصری علوم": ["کلاس ہشتم", "کلاس نہم", "کلاس دہم"],
+};
+
 const classSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  category: z.string().min(1, "Category is required"),
+  subCategory: z.string().min(1, "Sub-category is required"),
   description: z.string().optional(),
   teacher_id: z.string().optional(),
 });
@@ -42,6 +60,7 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<ClassForm>({
     resolver: zodResolver(classSchema),
@@ -57,8 +76,9 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
 
   const onSubmit = async (data: ClassForm) => {
     try {
+      const className = `${data.category} - ${data.subCategory}`;
       const { error } = await supabase.from("classes").insert([{
-        name: data.name,
+        name: className,
         description: data.description || null,
         teacher_id: data.teacher_id || null,
       }]);
@@ -67,10 +87,11 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
 
       toast({
         title: t("addedSuccessfully"),
-        description: `${data.name} ${t("addedSuccessfully")}`,
+        description: `${className} ${t("addedSuccessfully")}`,
       });
 
       reset();
+      setSelectedCategory("");
       setOpen(false);
       onAdded?.();
     } catch (error) {
@@ -97,10 +118,52 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <Label htmlFor="name">{t("className")}</Label>
-            <Input id="name" {...register("name")} />
-            {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
+            <Label htmlFor="category">زمرہ منتخب کریں</Label>
+            <Select
+              onValueChange={(value) => {
+                setSelectedCategory(value);
+                setValue("category", value);
+                setValue("subCategory", "");
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="زمرہ منتخب کریں" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.keys(CLASS_CATEGORIES).map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.category && (
+              <p className="text-sm text-destructive mt-1">{errors.category.message}</p>
+            )}
           </div>
+
+          {selectedCategory && (
+            <div>
+              <Label htmlFor="subCategory">کلاس منتخب کریں</Label>
+              <Select onValueChange={(value) => setValue("subCategory", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="کلاس منتخب کریں" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CLASS_CATEGORIES[selectedCategory as keyof typeof CLASS_CATEGORIES].map(
+                    (subCategory) => (
+                      <SelectItem key={subCategory} value={subCategory}>
+                        {subCategory}
+                      </SelectItem>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
+              {errors.subCategory && (
+                <p className="text-sm text-destructive mt-1">{errors.subCategory.message}</p>
+              )}
+            </div>
+          )}
 
           <div>
             <Label htmlFor="teacher_id">{t("teacher")}</Label>
