@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
@@ -57,6 +58,7 @@ interface AddClassDialogProps {
 
 const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
   const { t, isRTL } = useLanguage();
+  const { madrasahId } = useAuth();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
@@ -76,11 +78,21 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
 
   const onSubmit = async (data: ClassForm) => {
     try {
+      if (!madrasahId) {
+        toast({
+          title: t("errorOccurred"),
+          description: "Madrasah ID not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const className = `${data.category} - ${data.subCategory}`;
       const { error } = await supabase.from("classes").insert([{
         name: className,
         description: data.description || null,
         teacher_id: data.teacher_id || null,
+        madrasah_id: madrasahId,
       }]);
 
       if (error) throw error;

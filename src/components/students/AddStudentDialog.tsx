@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -36,6 +37,7 @@ interface AddStudentDialogProps {
 
 const AddStudentDialog = ({ onAdded }: AddStudentDialogProps) => {
   const { t, isRTL } = useLanguage();
+  const { madrasahId } = useAuth();
   const [open, setOpen] = useState(false);
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
 
@@ -61,6 +63,11 @@ const AddStudentDialog = ({ onAdded }: AddStudentDialogProps) => {
 
   const onSubmit = async (values: StudentForm) => {
     try {
+      if (!madrasahId) {
+        toast({ title: t("errorOccurred"), description: "Madrasah ID not found", variant: "destructive" });
+        return;
+      }
+
       const payload: Database["public"]["Tables"]["students"]["Insert"] = {
         name: values.name,
         father_name: values.father_name,
@@ -69,6 +76,7 @@ const AddStudentDialog = ({ onAdded }: AddStudentDialogProps) => {
         roll_number: values.roll_number,
         contact: values.contact || null,
         address: values.address || null,
+        madrasah_id: madrasahId,
       };
       const { error } = await supabase.from("students").insert([payload]);
       if (error) throw error;
