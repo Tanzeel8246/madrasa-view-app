@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Search, Plus } from "lucide-react";
+import { Search } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -11,39 +11,72 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import AddStudentDialog from "@/components/students/AddStudentDialog";
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+import { cn } from "@/lib/utils";
+
+type StudentRow = Database["public"]["Tables"]["students"]["Row"];
 
 const Students = () => {
   const { t, isRTL } = useLanguage();
   const [searchQuery, setSearchQuery] = useState("");
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const students = [
-    { id: 1, name: "محمد احمد", fatherName: "احمد علی", class: "حفظ", rollNumber: "001", contact: "0300-1234567" },
-    { id: 2, name: "علی حسن", fatherName: "حسن محمد", class: "ناظرہ", rollNumber: "002", contact: "0301-2345678" },
-    { id: 3, name: "فاطمہ زہرا", fatherName: "محمد یوسف", class: "حفظ", rollNumber: "003", contact: "0302-3456789" },
-    { id: 4, name: "عائشہ صدیقہ", fatherName: "عبداللہ خان", class: "قاعدہ", rollNumber: "004", contact: "0303-4567890" },
-    { id: 5, name: "عمر فاروق", fatherName: "فاروق عمر", class: "ناظرہ", rollNumber: "005", contact: "0304-5678901" },
-  ];
+  useEffect(() => {
+    document.title = isRTL ? "طلباء کی فہرست - مدرسہ" : "Students - Madrasa";
+  }, [isRTL]);
+
+  const fetchStudents = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("students")
+      .select("*")
+      .order("roll_number", { ascending: true });
+    if (!error && data) setStudents(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter((s) =>
+      [s.name, s.father_name, s.roll_number, s.class, s.contact, s.address]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [searchQuery, students]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">
-          {t("studentsList")}
-        </h1>
-        <Button className="gap-2">
-          <Plus className="w-4 h-4" />
-          {t("addStudent")}
-        </Button>
+        <h1 className="text-3xl font-bold text-foreground">{t("studentsList")}</h1>
+        <div className="flex items-center gap-2">
+          <AddStudentDialog onAdded={fetchStudents} />
+          <Button variant="secondary" onClick={fetchStudents} disabled={loading}>
+            {loading ? (isRTL ? "لوڈ ہو رہا ہے" : "Loading...") : (isRTL ? "تازہ کریں" : "Refresh")}
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Search
+            className={cn(
+              "absolute top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4",
+              isRTL ? "right-3" : "left-3",
+            )}
+          />
           <Input
             placeholder={t("search")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className={cn(isRTL ? "pr-10" : "pl-10")}
           />
         </div>
       </div>
@@ -52,56 +85,39 @@ const Students = () => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className={isRTL ? "text-right" : "text-left"}>
-                {t("rollNumber")}
-              </TableHead>
-              <TableHead className={isRTL ? "text-right" : "text-left"}>
-                {t("studentName")}
-              </TableHead>
-              <TableHead className={isRTL ? "text-right" : "text-left"}>
-                {t("fatherName")}
-              </TableHead>
-              <TableHead className={isRTL ? "text-right" : "text-left"}>
-                {t("class")}
-              </TableHead>
-              <TableHead className={isRTL ? "text-right" : "text-left"}>
-                {t("contact")}
-              </TableHead>
-              <TableHead className={isRTL ? "text-right" : "text-left"}>
-                {t("actions")}
-              </TableHead>
+              <TableHead className={isRTL ? "text-right" : "text-left"}>{t("rollNumber")}</TableHead>
+              <TableHead className={isRTL ? "text-right" : "text-left"}>{t("studentName")}</TableHead>
+              <TableHead className={isRTL ? "text-right" : "text-left"}>{t("fatherName")}</TableHead>
+              <TableHead className={isRTL ? "text-right" : "text-left"}>{t("class")}</TableHead>
+              <TableHead className={isRTL ? "text-right" : "text-left"}>{t("contact")}</TableHead>
+              <TableHead className={isRTL ? "text-right" : "text-left"}>{t("address")}</TableHead>
+              <TableHead className={isRTL ? "text-right" : "text-left"}>{t("actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {students.map((student) => (
+            {filtered.map((student) => (
               <TableRow key={student.id}>
+                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.roll_number}</TableCell>
+                <TableCell className={cn(isRTL ? "text-right" : "text-left", "font-medium")}>{student.name}</TableCell>
+                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.father_name}</TableCell>
+                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.class}</TableCell>
+                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.contact}</TableCell>
+                <TableCell className={isRTL ? "text-right" : "text-left"}>{student.address}</TableCell>
                 <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  {student.rollNumber}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right font-medium" : "text-left font-medium"}>
-                  {student.name}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  {student.fatherName}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  {student.class}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  {student.contact}
-                </TableCell>
-                <TableCell className={isRTL ? "text-right" : "text-left"}>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      {t("view")}
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      {t("edit")}
-                    </Button>
+                  <div className={cn("flex gap-2", isRTL && "justify-end")}> 
+                    <Button variant="outline" size="sm">{t("view")}</Button>
+                    <Button variant="outline" size="sm">{t("edit")}</Button>
                   </div>
                 </TableCell>
               </TableRow>
             ))}
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  {isRTL ? "کوئی ریکارڈ نہیں ملا" : "No records found"}
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>
