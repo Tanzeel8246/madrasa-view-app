@@ -49,6 +49,41 @@ export type Database = {
           },
         ]
       }
+      classes: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          teacher_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          teacher_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          teacher_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classes_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fees: {
         Row: {
           amount: number
@@ -103,6 +138,7 @@ export type Database = {
         Row: {
           address: string | null
           class: string
+          class_id: string | null
           contact: string | null
           created_at: string | null
           date_of_birth: string | null
@@ -115,6 +151,7 @@ export type Database = {
         Insert: {
           address?: string | null
           class: string
+          class_id?: string | null
           contact?: string | null
           created_at?: string | null
           date_of_birth?: string | null
@@ -127,6 +164,7 @@ export type Database = {
         Update: {
           address?: string | null
           class?: string
+          class_id?: string | null
           contact?: string | null
           created_at?: string | null
           date_of_birth?: string | null
@@ -134,6 +172,50 @@ export type Database = {
           id?: string
           name?: string
           roll_number?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "students_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teachers: {
+        Row: {
+          address: string | null
+          contact: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string
+          qualification: string | null
+          subject: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          contact?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          qualification?: string | null
+          subject?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          contact?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          qualification?: string | null
+          subject?: string | null
           updated_at?: string | null
         }
         Relationships: []
