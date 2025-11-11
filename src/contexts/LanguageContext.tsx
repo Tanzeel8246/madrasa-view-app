@@ -18,6 +18,8 @@ const translations = {
     classes: "کلاسز",
     attendance: "حاضری",
     fees: "فیس",
+    income: "آمدن",
+    expense: "اخراجات",
     reports: "رپورٹس",
     settings: "ترتیبات",
     
@@ -97,6 +99,27 @@ const translations = {
     enterAmount: "رقم درج کریں",
     selectStatus: "حالت منتخب کریں",
     
+    // Income & Expense
+    incomeManagement: "آمدن کا انتظام",
+    expenseManagement: "اخراجات کا انتظام",
+    addIncome: "آمدن شامل کریں",
+    addExpense: "اخراجات شامل کریں",
+    title: "عنوان",
+    category: "زمرہ",
+    totalExpense: "کل اخراجات",
+    balance: "بیلنس",
+    profit: "منافع",
+    loss: "نقصان",
+    selectCategory: "زمرہ منتخب کریں",
+    enterTitle: "عنوان درج کریں",
+    salaries: "تنخواہیں",
+    utilities: "افادی خدمات",
+    maintenance: "دیکھ بھال",
+    supplies: "سامان",
+    donations: "عطیات",
+    feeIncome: "فیس آمدن",
+    other: "دیگر",
+    
     // Months
     january: "جنوری",
     february: "فروری",
@@ -143,6 +166,8 @@ const translations = {
     classes: "Classes",
     attendance: "Attendance",
     fees: "Fees",
+    income: "Income",
+    expense: "Expense",
     reports: "Reports",
     settings: "Settings",
     
@@ -221,6 +246,27 @@ const translations = {
     selectYear: "Select Year",
     enterAmount: "Enter Amount",
     selectStatus: "Select Status",
+    
+    // Income & Expense
+    incomeManagement: "Income Management",
+    expenseManagement: "Expense Management",
+    addIncome: "Add Income",
+    addExpense: "Add Expense",
+    title: "Title",
+    category: "Category",
+    totalExpense: "Total Expense",
+    balance: "Balance",
+    profit: "Profit",
+    loss: "Loss",
+    selectCategory: "Select Category",
+    enterTitle: "Enter Title",
+    salaries: "Salaries",
+    utilities: "Utilities",
+    maintenance: "Maintenance",
+    supplies: "Supplies",
+    donations: "Donations",
+    feeIncome: "Fee Income",
+    other: "Other",
     
     // Months
     january: "January",

@@ -1,4 +1,4 @@
-import { Home, Users, ClipboardList, DollarSign, FileText, Settings, GraduationCap, BookOpen } from "lucide-react";
+import { Home, Users, ClipboardList, DollarSign, FileText, Settings, GraduationCap, BookOpen, TrendingUp, TrendingDown } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,8 @@ const Sidebar = () => {
     { icon: BookOpen, label: t("classes"), path: "/classes" },
     { icon: ClipboardList, label: t("attendance"), path: "/attendance" },
     { icon: DollarSign, label: t("fees"), path: "/fees" },
+    { icon: TrendingUp, label: t("income"), path: "/income" },
+    { icon: TrendingDown, label: t("expense"), path: "/expense" },
     { icon: FileText, label: t("reports"), path: "/reports" },
     { icon: Settings, label: t("settings"), path: "/settings" },
   ];
