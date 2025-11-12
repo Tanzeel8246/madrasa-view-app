@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, FileDown, Printer } from "lucide-react";
+import { Search, Plus, FileDown, Printer, Upload, Eye } from "lucide-react";
 import { generatePDF, printTable } from "@/lib/pdfUtils";
 import {
   Table,
@@ -41,6 +41,7 @@ type FeeRecord = {
   month: number;
   year: number;
   status: string;
+  receipt_url: string | null;
   students: {
     name: string;
     roll_number: string;
@@ -55,7 +56,10 @@ const Fees = () => {
   const [students, setStudents] = useState<{ id: string; name: string; roll_number: string }[]>([]);
   const [stats, setStats] = useState({ totalIncome: 0, pending: 0, expected: 0 });
   const [openAddDialog, setOpenAddDialog] = useState(false);
-  const { register, handleSubmit, reset, setValue } = useForm();
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<File | null>(null);
+  const { register, handleSubmit, reset, setValue, watch } = useForm();
+  const selectedMonth = watch("month");
 
   useEffect(() => {
     fetchFeeRecords();
@@ -98,7 +102,37 @@ const Fees = () => {
 
   const handleAddFee = async (formData: any) => {
     try {
+      if (!formData.month) {
+        toast({
+          title: t("errorOccurred"),
+          description: isRTL ? "برائے مہربانی مہینہ منتخب کریں" : "Please select a month",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const madrasahId = await getMadrasahId();
+      let receiptUrl = null;
+
+      // Upload receipt if selected
+      if (selectedReceipt) {
+        setUploadingReceipt(true);
+        const fileExt = selectedReceipt.name.split(".").pop();
+        const fileName = `${madrasahId}_${Date.now()}.${fileExt}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("fee-receipts")
+          .upload(fileName, selectedReceipt);
+
+        if (uploadError) throw uploadError;
+        
+        const { data: publicUrlData } = supabase.storage
+          .from("fee-receipts")
+          .getPublicUrl(fileName);
+        
+        receiptUrl = publicUrlData.publicUrl;
+        setUploadingReceipt(false);
+      }
+
       const { error } = await supabase.from("fees").insert({
         student_id: formData.student_id,
         amount: Number(formData.amount),
@@ -107,6 +141,7 @@ const Fees = () => {
         year: Number(formData.year),
         status: Number(formData.paid_amount) >= Number(formData.amount) ? "paid" : "pending",
         payment_date: Number(formData.paid_amount) > 0 ? new Date().toISOString() : null,
+        receipt_url: receiptUrl,
         madrasah_id: madrasahId,
       });
 
@@ -118,6 +153,7 @@ const Fees = () => {
       });
 
       reset();
+      setSelectedReceipt(null);
       setOpenAddDialog(false);
       fetchFeeRecords();
     } catch (error: any) {
@@ -126,6 +162,7 @@ const Fees = () => {
         description: error.message,
         variant: "destructive",
       });
+      setUploadingReceipt(false);
     }
   };
 
@@ -247,11 +284,32 @@ const Fees = () => {
                 <Label>{t("paidAmount")}</Label>
                 <Input type="number" {...register("paid_amount")} defaultValue="0" />
               </div>
+              <div>
+                <Label>{isRTL ? "رسید اپ لوڈ کریں" : "Upload Receipt"}</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setSelectedReceipt(e.target.files?.[0] || null)}
+                    className="flex-1"
+                  />
+                  {selectedReceipt && (
+                    <Button type="button" size="sm" variant="outline" onClick={() => setSelectedReceipt(null)}>
+                      {isRTL ? "حذف" : "Remove"}
+                    </Button>
+                  )}
+                </div>
+              </div>
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setOpenAddDialog(false)}>
+                <Button type="button" variant="outline" onClick={() => {
+                  setOpenAddDialog(false);
+                  setSelectedReceipt(null);
+                }}>
                   {t("cancel")}
                 </Button>
-                <Button type="submit">{t("save")}</Button>
+                <Button type="submit" disabled={uploadingReceipt || !selectedMonth}>
+                  {uploadingReceipt ? (isRTL ? "اپ لوڈ ہو رہی ہے..." : "Uploading...") : t("save")}
+                </Button>
               </div>
             </form>
           </DialogContent>
@@ -311,6 +369,9 @@ const Fees = () => {
               <TableHead className={isRTL ? "text-right" : "text-left"}>
                 {t("status")}
               </TableHead>
+              <TableHead className={isRTL ? "text-right" : "text-left"}>
+                {isRTL ? "رسید" : "Receipt"}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -351,6 +412,19 @@ const Fees = () => {
                       >
                         {record.status === "paid" ? t("paid") : t("pending")}
                       </Badge>
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      {record.receipt_url ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(record.receipt_url!, "_blank")}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

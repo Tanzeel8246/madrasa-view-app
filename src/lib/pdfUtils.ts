@@ -55,9 +55,6 @@ export const generatePDF = (
 };
 
 export const printTable = (tableId: string, title?: string, isRTL: boolean = true) => {
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) return;
-
   const table = document.querySelector(`#${tableId}`);
   if (!table) return;
 
@@ -66,6 +63,23 @@ export const printTable = (tableId: string, title?: string, isRTL: boolean = tru
     month: "long",
     day: "numeric",
   });
+
+  // Create hidden iframe for reliable printing
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.top = "-10000px";
+  iframe.style.left = "-10000px";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "none";
+  
+  document.body.appendChild(iframe);
+
+  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!iframeDoc) {
+    document.body.removeChild(iframe);
+    return;
+  }
 
   const html = `
     <!DOCTYPE html>
@@ -109,7 +123,6 @@ export const printTable = (tableId: string, title?: string, isRTL: boolean = tru
             width: 100%; 
             border-collapse: collapse; 
             margin: 20px 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
           }
           
           th, td { 
@@ -130,10 +143,6 @@ export const printTable = (tableId: string, title?: string, isRTL: boolean = tru
             background-color: #f8fafc; 
           }
           
-          tbody tr:hover { 
-            background-color: #e0f2fe; 
-          }
-          
           .print-footer {
             margin-top: 40px;
             padding-top: 15px;
@@ -148,24 +157,9 @@ export const printTable = (tableId: string, title?: string, isRTL: boolean = tru
               padding: 0;
             }
             
-            table {
-              box-shadow: none;
-            }
-            
-            tbody tr:hover {
-              background-color: transparent;
-            }
-            
             @page { 
               margin: 15mm;
               size: A4;
-            }
-          }
-          
-          @media screen {
-            body {
-              max-width: 1200px;
-              margin: 0 auto;
             }
           }
         </style>
@@ -181,21 +175,29 @@ export const printTable = (tableId: string, title?: string, isRTL: boolean = tru
         <div class="print-footer">
           Madrasah Management System - Printed on ${currentDate}
         </div>
-        <script>
-          window.onload = function() {
-            setTimeout(() => {
-              window.print();
-            }, 250);
-          };
-          
-          window.onafterprint = function() {
-            window.close();
-          };
-        </script>
       </body>
     </html>
   `;
 
-  printWindow.document.write(html);
-  printWindow.document.close();
+  iframeDoc.open();
+  iframeDoc.write(html);
+  iframeDoc.close();
+
+  // Wait for iframe to load content
+  iframe.onload = () => {
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        
+        // Cleanup after print or user cancel
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 1000);
+      } catch (error) {
+        console.error("Print error:", error);
+        document.body.removeChild(iframe);
+      }
+    }, 250);
+  };
 };

@@ -85,60 +85,50 @@ const UserManagement = () => {
 
     setAddingUser(true);
 
-    // Note: Admin API is not available in client-side code
-    // In a real application, you would need to create an edge function to handle this
-    // For now, we'll inform the user that the email must be for an existing account
-    
-    toast.info(isRTL 
-      ? "براہ کرم یقینی بنائیں کہ یہ ای میل پہلے سے رجسٹرڈ اکاؤنٹ کی ہے" 
-      : "Please ensure this email belongs to an already registered account");
+    try {
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(newUserEmail)) {
+        toast.error(isRTL 
+          ? "براہ کرم صحیح یوزر ID (UUID) درج کریں" 
+          : "Please enter a valid User ID (UUID)");
+        setAddingUser(false);
+        return;
+      }
 
-    // Try to find user in profiles table
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("user_id")
-      .eq("user_id", newUserEmail) // This won't work directly, need edge function
-      .maybeSingle();
+      // Check if user already has a role in this madrasah
+      const { data: existingRole } = await supabase
+        .from("user_roles")
+        .select("*")
+        .eq("user_id", newUserEmail)
+        .eq("madrasah_id", madrasahId)
+        .maybeSingle();
 
-    // For now, we'll just try to insert and let it fail if user doesn't exist
-    const existingUser = { id: newUserEmail }; // Placeholder
+      if (existingRole) {
+        toast.error(isRTL ? "یہ یوزر پہلے سے موجود ہے" : "This user already exists");
+        setAddingUser(false);
+        return;
+      }
 
-    if (!existingUser) {
-      toast.error(isRTL ? "اس ای میل کا کوئی یوزر موجود نہیں" : "No user found with this email");
-      setAddingUser(false);
-      return;
-    }
+      // Add user role
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .insert([{
+          user_id: newUserEmail,
+          madrasah_id: madrasahId,
+          role: newUserRole,
+        }]);
 
-    // Check if user already has a role in this madrasah
-    const { data: existingRole } = await supabase
-      .from("user_roles")
-      .select("*")
-      .eq("user_id", existingUser.id)
-      .eq("madrasah_id", madrasahId)
-      .single();
+      if (roleError) throw roleError;
 
-    if (existingRole) {
-      toast.error(isRTL ? "یہ یوزر پہلے سے موجود ہے" : "This user already exists");
-      setAddingUser(false);
-      return;
-    }
-
-    // Add user role
-    const { error: roleError } = await supabase
-      .from("user_roles")
-      .insert([{
-        user_id: existingUser.id,
-        madrasah_id: madrasahId,
-        role: newUserRole,
-      }]);
-
-    if (roleError) {
-      toast.error(isRTL ? "یوزر شامل کرنے میں خرابی" : "Error adding user");
-    } else {
       toast.success(isRTL ? "یوزر کامیابی سے شامل ہو گیا" : "User added successfully");
       setNewUserEmail("");
       setNewUserRole("user");
       fetchUsers();
+    } catch (error: any) {
+      toast.error(isRTL 
+        ? `یوزر شامل کرنے میں خرابی: ${error.message}` 
+        : `Error adding user: ${error.message}`);
     }
 
     setAddingUser(false);
@@ -189,14 +179,20 @@ const UserManagement = () => {
               <div className="space-y-4">
                 <div>
                   <Label className={isRTL ? "font-urdu" : ""}>
-                    {isRTL ? "ای میل" : "Email"}
+                    {isRTL ? "یوزر ID (UUID)" : "User ID (UUID)"}
                   </Label>
                   <Input
-                    type="email"
+                    type="text"
                     value={newUserEmail}
                     onChange={(e) => setNewUserEmail(e.target.value)}
-                    placeholder={isRTL ? "یوزر کی ای میل" : "User's email"}
+                    placeholder={isRTL ? "یوزر کا UUID" : "User's UUID"}
+                    className="font-mono text-sm"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {isRTL 
+                      ? "UUID فارمیٹ: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" 
+                      : "UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
+                  </p>
                 </div>
                 <div>
                   <Label className={isRTL ? "font-urdu" : ""}>
