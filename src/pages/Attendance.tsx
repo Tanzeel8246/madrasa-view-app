@@ -23,6 +23,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getMadrasahId } from "@/lib/madrasahUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileDown, Printer } from "lucide-react";
+import { generatePDF, printTable } from "@/lib/pdfUtils";
 
 type Student = {
   id: string;
@@ -199,11 +201,48 @@ const Attendance = () => {
     return labels[status];
   };
 
+  const handleExportPDF = () => {
+    const headers = [
+      t("rollNumber"),
+      t("studentName"),
+      t("class"),
+      t("status"),
+    ];
+    const data = students
+      .filter((student) => attendance[student.id])
+      .map((student) => [
+        student.roll_number,
+        student.name,
+        student.classes?.name || "-",
+        getStatusLabel(attendance[student.id]),
+      ]);
+    
+    const title = `${t("markAttendance")} - ${date?.toLocaleDateString(isRTL ? "ur-PK" : "en-US")} - ${getTimeSlotLabel(timeSlot)}`;
+    generatePDF(title, headers, data, "attendance_report.pdf", isRTL);
+  };
+
+  const handlePrint = () => {
+    const title = `${t("markAttendance")} - ${date?.toLocaleDateString(isRTL ? "ur-PK" : "en-US")} - ${getTimeSlotLabel(timeSlot)}`;
+    printTable("attendance-table", title, isRTL);
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
-      <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-        {t("markAttendance")}
-      </h1>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+          {t("markAttendance")}
+        </h1>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={handleExportPDF} size="sm">
+            <FileDown className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">PDF</span>
+          </Button>
+          <Button variant="outline" onClick={handlePrint} size="sm">
+            <Printer className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="text-xs md:text-sm">{isRTL ? "پرنٹ" : "Print"}</span>
+          </Button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         <div className="lg:col-span-1 space-y-4">
@@ -271,7 +310,7 @@ const Attendance = () => {
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table id="attendance-table">
                       <TableHeader>
                         <TableRow>
                           <TableHead className={isRTL ? "text-right" : "text-left"}>
