@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,22 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 
 const Auth = () => {
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, signUpWithInvite, user } = useAuth();
   const navigate = useNavigate();
   const { language } = useLanguage();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteData, setInviteData] = useState<any>(null);
+
+  // Check for invite token in URL
+  useEffect(() => {
+    const token = searchParams.get('invite');
+    if (token) {
+      setInviteToken(token);
+      validateInviteToken(token);
+    }
+  }, [searchParams]);
 
   // Redirect authenticated users to dashboard
   useEffect(() => {
@@ -22,6 +34,27 @@ const Auth = () => {
       navigate("/", { replace: true });
     }
   }, [user, navigate]);
+
+  const validateInviteToken = async (token: string) => {
+    const { data, error } = await supabase
+      .from('invites' as any)
+      .select('*, madrasah:madrasah_id(*)')
+      .eq('token', token)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error || !data) {
+      toast.error(language === "ur" ? "غلط یا ختم شدہ دعوت نامہ" : "Invalid or expired invite");
+      setInviteToken(null);
+    } else {
+      setInviteData(data);
+      toast.success(
+        language === "ur" 
+          ? `${(data as any).madrasah?.name} میں شامل ہونے کی دعوت` 
+          : `Invited to join ${(data as any).madrasah?.name}`
+      );
+    }
+  };
 
   const [loginData, setLoginData] = useState({
     email: "",
@@ -70,15 +103,30 @@ const Auth = () => {
 
     setLoading(true);
 
-    const { error } = await signUp(
-      signupData.email,
-      signupData.password,
-      {
-        name: signupData.madrasahName,
-        madrasahId: signupData.madrasahId,
-        fullName: signupData.fullName,
-      }
-    );
+    let error;
+
+    // If invite token exists, use invite signup
+    if (inviteToken && inviteData) {
+      const result = await signUpWithInvite(
+        signupData.email,
+        signupData.password,
+        inviteToken,
+        signupData.fullName
+      );
+      error = result.error;
+    } else {
+      // Regular signup creating new madrasah
+      const result = await signUp(
+        signupData.email,
+        signupData.password,
+        {
+          name: signupData.madrasahName,
+          madrasahId: signupData.madrasahId,
+          fullName: signupData.fullName,
+        }
+      );
+      error = result.error;
+    }
 
     if (error) {
       toast.error(language === "ur" ? "رجسٹریشن میں خرابی" : "Signup failed", {
@@ -121,7 +169,13 @@ const Auth = () => {
             {language === "ur" ? "مدرسہ مینجمنٹ" : "Madrasa Management"}
           </CardTitle>
           <CardDescription>
-            {language === "ur" ? "اپنے اکاؤنٹ میں لاگ ان کریں یا نیا اکاؤنٹ بنائیں" : "Login to your account or create a new one"}
+            {inviteData ? (
+              language === "ur" 
+                ? `${inviteData.madrasah?.name} میں شامل ہوں` 
+                : `Join ${inviteData.madrasah?.name}`
+            ) : (
+              language === "ur" ? "اپنے اکاؤنٹ میں لاگ ان کریں یا نیا اکاؤنٹ بنائیں" : "Login to your account or create a new one"
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -211,27 +265,42 @@ const Auth = () => {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="madrasahName">{language === "ur" ? "مدرسہ کا نام" : "Madrasa Name"}</Label>
-                  <Input
-                    id="madrasahName"
-                    type="text"
-                    value={signupData.madrasahName}
-                    onChange={(e) => setSignupData({ ...signupData, madrasahName: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="madrasahId">{language === "ur" ? "مدرسہ آئی ڈی" : "Madrasa ID"}</Label>
-                  <Input
-                    id="madrasahId"
-                    type="text"
-                    placeholder="unique-id"
-                    value={signupData.madrasahId}
-                    onChange={(e) => setSignupData({ ...signupData, madrasahId: e.target.value })}
-                    required
-                  />
-                </div>
+                
+                {!inviteToken && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="madrasahName">{language === "ur" ? "مدرسہ کا نام" : "Madrasa Name"}</Label>
+                      <Input
+                        id="madrasahName"
+                        type="text"
+                        value={signupData.madrasahName}
+                        onChange={(e) => setSignupData({ ...signupData, madrasahName: e.target.value })}
+                        required={!inviteToken}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="madrasahId">{language === "ur" ? "مدرسہ آئی ڈی" : "Madrasa ID"}</Label>
+                      <Input
+                        id="madrasahId"
+                        type="text"
+                        placeholder="unique-id"
+                        value={signupData.madrasahId}
+                        onChange={(e) => setSignupData({ ...signupData, madrasahId: e.target.value })}
+                        required={!inviteToken}
+                      />
+                    </div>
+                  </>
+                )}
+                
+                {inviteData && (
+                  <div className="bg-primary/10 p-3 rounded-md">
+                    <p className="text-sm text-center">
+                      {language === "ur" 
+                        ? `آپ ${inviteData.madrasah?.name} میں ${inviteData.role} کے طور پر شامل ہو رہے ہیں` 
+                        : `Joining ${inviteData.madrasah?.name} as ${inviteData.role}`}
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">{language === "ur" ? "ای میل" : "Email"}</Label>
                   <Input

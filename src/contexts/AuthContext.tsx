@@ -14,6 +14,7 @@ interface AuthContextType {
     madrasahId: string;
     fullName: string;
   }) => Promise<{ error: any }>;
+  signUpWithInvite: (email: string, password: string, inviteToken: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   loading: boolean;
 }
@@ -146,6 +147,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error: null };
   };
 
+  const signUpWithInvite = async (
+    email: string,
+    password: string,
+    inviteToken: string,
+    fullName: string
+  ) => {
+    // First validate the invite
+    const { data: invite, error: inviteError } = await supabase
+      .from('invites' as any)
+      .select('*')
+      .eq('token', inviteToken)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (inviteError || !invite) {
+      return { error: new Error("Invalid or expired invite") };
+    }
+
+    const redirectUrl = `${window.location.origin}/`;
+    
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+      },
+    });
+
+    if (authError) return { error: authError };
+
+    if (authData.user) {
+      // Create profile with invited madrasah
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert({
+          user_id: authData.user.id,
+          madrasah_id: (invite as any).madrasah_id,
+          full_name: fullName,
+          role: (invite as any).role,
+        });
+
+      if (profileError) return { error: profileError };
+
+      // Assign role from invite
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .insert({
+          user_id: authData.user.id,
+          madrasah_id: (invite as any).madrasah_id,
+          role: (invite as any).role,
+        });
+
+      if (roleError) return { error: roleError };
+
+      // Increment used count
+      await supabase
+        .from('invites' as any)
+        .update({ used_count: (invite as any).used_count + 1 })
+        .eq('id', (invite as any).id);
+    }
+
+    return { error: null };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setMadrasahId(null);
@@ -162,6 +227,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         userRole,
         signIn,
         signUp,
+        signUpWithInvite,
         signOut,
         loading,
       }}

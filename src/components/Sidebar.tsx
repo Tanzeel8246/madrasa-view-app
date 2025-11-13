@@ -1,4 +1,4 @@
-import { Home, Users, ClipboardList, DollarSign, FileText, Settings, GraduationCap, BookOpen, TrendingUp, TrendingDown, Wallet, HandCoins, BookMarked, UserCog } from "lucide-react";
+import { Home, Users, ClipboardList, DollarSign, FileText, Settings, GraduationCap, BookOpen, TrendingUp, TrendingDown, Wallet, HandCoins, BookMarked, UserCog, Mail } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,7 +33,10 @@ const Sidebar = () => {
     { icon: HandCoins, label: t("loans"), path: "/loans" },
     { icon: BookMarked, label: t("learningReport"), path: "/learning-report" },
     { icon: FileText, label: t("reports"), path: "/reports" },
-    ...(userRole === "admin" ? [{ icon: UserCog, label: isRTL ? "یوزر مینجمنٹ" : "User Management", path: "/user-management" }] : []),
+    ...(userRole === "admin" ? [
+      { icon: UserCog, label: isRTL ? "یوزر مینجمنٹ" : "User Management", path: "/user-management" },
+      { icon: Mail, label: isRTL ? "دعوت نامے" : "Invites", path: "/invite-management" }
+    ] : []),
     { icon: Settings, label: t("settings"), path: "/settings" },
   ];
 
