@@ -25,6 +25,7 @@ import EmailVerification from "./pages/EmailVerification";
 import NotFound from "./pages/NotFound";
 import UserManagement from "./pages/UserManagement";
 import InviteManagement from "./pages/InviteManagement";
+import AcceptInvite from "./pages/AcceptInvite";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ const AppContent = () => {
     <Routes>
       <Route path="/auth" element={<Auth />} />
       <Route path="/verify-email" element={<EmailVerification />} />
+      <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
       <Route path="/students" element={<ProtectedRoute><Layout><Students /></Layout></ProtectedRoute>} />
       <Route path="/teachers" element={<ProtectedRoute><Layout><Teachers /></Layout></ProtectedRoute>} />

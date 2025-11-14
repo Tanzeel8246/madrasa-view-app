@@ -177,7 +177,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          role: "admin",
+          role: (invite as any).role,
           full_name: fullName,
         },
       },
@@ -186,25 +186,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (authError) return { error: authError };
 
     if (authData.user) {
-      // Create profile with admin role (always admin on signup)
+      // Create profile with the invite's assigned role
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
           user_id: authData.user.id,
           madrasah_id: (invite as any).madrasah_id,
           full_name: fullName,
-          role: "admin",
+          role: (invite as any).role,
         });
 
       if (profileError) return { error: profileError };
 
-      // Assign admin role to the user (always admin on signup)
+      // Assign the invite's role to the user
       const { error: roleError } = await supabase
         .from("user_roles")
         .insert({
           user_id: authData.user.id,
           madrasah_id: (invite as any).madrasah_id,
-          role: "admin",
+          role: (invite as any).role,
         });
 
       if (roleError) return { error: roleError };

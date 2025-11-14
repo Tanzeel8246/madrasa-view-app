@@ -81,6 +81,17 @@ const InviteManagement = () => {
     toast.success(language === "ur" ? "لنک کاپی ہو گیا" : "Link copied to clipboard");
   };
 
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, { ur: string; en: string }> = {
+      admin: { ur: "ایڈمن", en: "Admin" },
+      teacher: { ur: "استاد", en: "Teacher" },
+      manager: { ur: "منیجر", en: "Manager" },
+      parent: { ur: "والدین", en: "Parent" },
+      user: { ur: "یوزر", en: "User" },
+    };
+    return language === "ur" ? labels[role]?.ur || role : labels[role]?.en || role;
+  };
+
   const handleDeleteInvite = async (id: string) => {
     const { error } = await supabase
       .from("invites" as any)
@@ -169,6 +180,7 @@ const InviteManagement = () => {
                       <SelectItem value="teacher">{language === "ur" ? "استاد" : "Teacher"}</SelectItem>
                       <SelectItem value="manager">{language === "ur" ? "منیجر" : "Manager"}</SelectItem>
                       <SelectItem value="parent">{language === "ur" ? "والدین" : "Parent"}</SelectItem>
+                      <SelectItem value="user">{language === "ur" ? "یوزر" : "User"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -212,12 +224,7 @@ const InviteManagement = () => {
                   {invites.map((invite) => (
                     <TableRow key={invite.id}>
                       <TableCell className="font-medium">
-                        {language === "ur" 
-                          ? invite.role === "admin" ? "ایڈمن" 
-                            : invite.role === "teacher" ? "استاد"
-                            : invite.role === "manager" ? "منیجر"
-                            : "والدین"
-                          : invite.role}
+                        {getRoleLabel(invite.role)}
                       </TableCell>
                       <TableCell>{invite.used_count}</TableCell>
                       <TableCell>

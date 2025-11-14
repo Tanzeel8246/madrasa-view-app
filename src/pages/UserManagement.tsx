@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+import Layout from "@/components/Layout";
+
 const UserManagement = () => {
   const { madrasahId } = useAuth();
   const { isAdmin } = useUserRole();
@@ -21,6 +23,17 @@ const UserManagement = () => {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserRole, setNewUserRole] = useState<"admin" | "teacher" | "manager" | "parent" | "user">("user");
   const [addingUser, setAddingUser] = useState(false);
+
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, { ur: string; en: string }> = {
+      admin: { ur: "ایڈمن", en: "Admin" },
+      teacher: { ur: "استاد", en: "Teacher" },
+      manager: { ur: "منیجر", en: "Manager" },
+      parent: { ur: "والدین", en: "Parent" },
+      user: { ur: "یوزر", en: "User" },
+    };
+    return isRTL ? labels[role]?.ur || role : labels[role]?.en || role;
+  };
 
   useEffect(() => {
     if (madrasahId) {
@@ -136,28 +149,33 @@ const UserManagement = () => {
 
   if (!isAdmin()) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card>
-          <CardContent className="p-6">
-            <p className={isRTL ? "font-urdu" : ""}>
-              {isRTL ? "آپ کو اس صفحے تک رسائی کی اجازت نہیں" : "You don't have permission to access this page"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <Card>
+            <CardContent className="p-6">
+              <p className={isRTL ? "font-urdu" : ""}>
+                {isRTL ? "آپ کو اس صفحے تک رسائی کی اجازت نہیں" : "You don't have permission to access this page"}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
     );
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin" />
-      </div>
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <Layout>
+      <div className="container mx-auto p-4 space-y-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className={isRTL ? "font-urdu" : ""}>
@@ -203,11 +221,11 @@ const UserManagement = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">{isRTL ? "ایڈمن" : "Admin"}</SelectItem>
-                      <SelectItem value="teacher">{isRTL ? "استاذ" : "Teacher"}</SelectItem>
-                      <SelectItem value="manager">{isRTL ? "ناظم" : "Manager"}</SelectItem>
-                      <SelectItem value="parent">{isRTL ? "والدین" : "Parent"}</SelectItem>
-                      <SelectItem value="user">{isRTL ? "یوزر" : "User"}</SelectItem>
+                      <SelectItem value="admin">{getRoleLabel("admin")}</SelectItem>
+                      <SelectItem value="teacher">{getRoleLabel("teacher")}</SelectItem>
+                      <SelectItem value="manager">{getRoleLabel("manager")}</SelectItem>
+                      <SelectItem value="parent">{getRoleLabel("parent")}</SelectItem>
+                      <SelectItem value="user">{getRoleLabel("user")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -242,11 +260,11 @@ const UserManagement = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="admin">{isRTL ? "ایڈمن" : "Admin"}</SelectItem>
-                    <SelectItem value="teacher">{isRTL ? "استاذ" : "Teacher"}</SelectItem>
-                    <SelectItem value="manager">{isRTL ? "ناظم" : "Manager"}</SelectItem>
-                    <SelectItem value="parent">{isRTL ? "والدین" : "Parent"}</SelectItem>
-                    <SelectItem value="user">{isRTL ? "یوزر" : "User"}</SelectItem>
+                    <SelectItem value="admin">{getRoleLabel("admin")}</SelectItem>
+                    <SelectItem value="teacher">{getRoleLabel("teacher")}</SelectItem>
+                    <SelectItem value="manager">{getRoleLabel("manager")}</SelectItem>
+                    <SelectItem value="parent">{getRoleLabel("parent")}</SelectItem>
+                    <SelectItem value="user">{getRoleLabel("user")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -255,6 +273,7 @@ const UserManagement = () => {
         </CardContent>
       </Card>
     </div>
+    </Layout>
   );
 };
 

@@ -28,12 +28,17 @@ const Auth = () => {
     }
   }, [searchParams]);
 
-  // Redirect authenticated users to dashboard
+  // Redirect authenticated users
   useEffect(() => {
     if (user) {
-      navigate("/", { replace: true });
+      // If there's an invite token and user is logged in, redirect to accept page
+      if (inviteToken) {
+        navigate(`/accept-invite?invite=${inviteToken}`, { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     }
-  }, [user, navigate]);
+  }, [user, navigate, inviteToken]);
 
   const validateInviteToken = async (token: string) => {
     const { data, error } = await supabase
