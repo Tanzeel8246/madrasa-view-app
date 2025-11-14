@@ -102,6 +102,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       password,
       options: {
         emailRedirectTo: redirectUrl,
+        data: {
+          role: "admin",
+          full_name: madrasahData.fullName,
+        },
       },
     });
 
@@ -120,7 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (madrasahError || !madrasah) return { error: madrasahError || new Error("Failed to create madrasah") };
 
-      // Create profile
+      // Create profile with admin role
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
@@ -172,31 +176,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       password,
       options: {
         emailRedirectTo: redirectUrl,
+        data: {
+          role: "admin",
+          full_name: fullName,
+        },
       },
     });
 
     if (authError) return { error: authError };
 
     if (authData.user) {
-      // Create profile with invited madrasah
+      // Create profile with admin role (always admin on signup)
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
           user_id: authData.user.id,
           madrasah_id: (invite as any).madrasah_id,
           full_name: fullName,
-          role: (invite as any).role,
+          role: "admin",
         });
 
       if (profileError) return { error: profileError };
 
-      // Assign role from invite
+      // Assign admin role to the user (always admin on signup)
       const { error: roleError } = await supabase
         .from("user_roles")
         .insert({
           user_id: authData.user.id,
           madrasah_id: (invite as any).madrasah_id,
-          role: (invite as any).role,
+          role: "admin",
         });
 
       if (roleError) return { error: roleError };

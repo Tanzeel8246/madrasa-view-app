@@ -16,11 +16,11 @@ const Layout = ({ children }: LayoutProps) => {
     <SidebarProvider defaultOpen={true}>
       <div className={cn("flex min-h-screen w-full bg-background", isRTL && "flex-row-reverse")}>
         <Sidebar />
-        <SidebarInset>
+        <SidebarInset className={cn("flex-1", isRTL ? "mr-0" : "ml-0")}>
           <Header>
-            <SidebarTrigger className="ml-2" />
+            <SidebarTrigger className={cn(isRTL ? "mr-2" : "ml-2")} />
           </Header>
-          <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8">
+          <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 w-full">
             {children}
           </main>
         </SidebarInset>
