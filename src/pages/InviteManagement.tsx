@@ -78,7 +78,7 @@ const InviteManagement = () => {
   const handleCopyInviteLink = (token: string) => {
     const inviteUrl = `${window.location.origin}/auth?invite=${token}`;
     navigator.clipboard.writeText(inviteUrl);
-    toast.success(language === "ur" ? "لنک کاپی ہو گیا" : "Link copied to clipboard");
+    toast.success(language === "ur" ? "دعوت نامہ لنک کاپی ہو گیا - اسے شیئر کریں" : "Invite link copied - Share it with users");
   };
 
   const getRoleLabel = (role: string) => {

@@ -330,6 +330,50 @@ export type Database = {
           },
         ]
       }
+      invites: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          is_active: boolean
+          madrasah_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          token: string
+          updated_at: string
+          used_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          is_active?: boolean
+          madrasah_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          token: string
+          updated_at?: string
+          used_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_active?: boolean
+          madrasah_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          token?: string
+          updated_at?: string
+          used_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invites_madrasah_id_fkey"
+            columns: ["madrasah_id"]
+            isOneToOne: false
+            referencedRelation: "madrasah"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       learning_reports: {
         Row: {
           class_type: string

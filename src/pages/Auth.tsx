@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,31 +15,41 @@ const Auth = () => {
   const { language } = useLanguage();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [isLogin, setIsLogin] = useState(true);
+  
+  // Invite-related state
+  const inviteToken = searchParams.get('invite');
   const [inviteData, setInviteData] = useState<any>(null);
+  const [loadingInvite, setLoadingInvite] = useState(false);
 
-  // Check for invite token in URL
-  useEffect(() => {
-    const token = searchParams.get('invite');
-    if (token) {
-      setInviteToken(token);
-      validateInviteToken(token);
-    }
-  }, [searchParams]);
+  // Form state
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [madrasahName, setMadrasahName] = useState("");
+  const [madrasahId, setMadrasahId] = useState("");
 
   // Redirect authenticated users
   useEffect(() => {
     if (user) {
-      // If there's an invite token and user is logged in, redirect to accept page
       if (inviteToken) {
-        navigate(`/accept-invite?invite=${inviteToken}`, { replace: true });
+        navigate(`/accept-invite?invite=${inviteToken}`);
       } else {
-        navigate("/", { replace: true });
+        navigate("/");
       }
     }
   }, [user, navigate, inviteToken]);
 
-  const validateInviteToken = async (token: string) => {
+  // Validate invite token
+  useEffect(() => {
+    if (inviteToken) {
+      validateInvite(inviteToken);
+    }
+  }, [inviteToken]);
+
+  const validateInvite = async (token: string) => {
+    setLoadingInvite(true);
     const { data, error } = await supabase
       .from('invites' as any)
       .select('*, madrasah:madrasah_id(*)')
@@ -50,36 +59,18 @@ const Auth = () => {
 
     if (error || !data) {
       toast.error(language === "ur" ? "غلط یا ختم شدہ دعوت نامہ" : "Invalid or expired invite");
-      setInviteToken(null);
+      navigate("/auth");
     } else {
       setInviteData(data);
-      toast.success(
-        language === "ur" 
-          ? `${(data as any).madrasah?.name} میں شامل ہونے کی دعوت` 
-          : `Invited to join ${(data as any).madrasah?.name}`
-      );
     }
+    setLoadingInvite(false);
   };
-
-  const [loginData, setLoginData] = useState({
-    email: "",
-    password: "",
-  });
-
-  const [signupData, setSignupData] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-    fullName: "",
-    madrasahName: "",
-    madrasahId: "",
-  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const { error } = await signIn(loginData.email, loginData.password);
+    const { error } = await signIn(email, password);
 
     if (error) {
       toast.error(language === "ur" ? "لاگ ان میں خرابی" : "Login failed", {
@@ -93,295 +84,235 @@ const Auth = () => {
     setLoading(false);
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (signupData.password !== signupData.confirmPassword) {
+    if (password !== confirmPassword) {
       toast.error(language === "ur" ? "پاس ورڈ مماثل نہیں" : "Passwords do not match");
       return;
     }
 
-    if (signupData.password.length < 6) {
+    if (password.length < 6) {
       toast.error(language === "ur" ? "پاس ورڈ کم از کم 6 حروف ہونا چاہیے" : "Password must be at least 6 characters");
       return;
     }
 
     setLoading(true);
 
-    let error;
-
-    // If invite token exists, use invite signup
     if (inviteToken && inviteData) {
-      const result = await signUpWithInvite(
-        signupData.email,
-        signupData.password,
-        inviteToken,
-        signupData.fullName
-      );
-      error = result.error;
+      // Invite signup - simplified registration
+      const { error } = await signUpWithInvite(email, password, inviteToken, fullName);
+      if (error) {
+        toast.error(language === "ur" ? "خرابی" : "Error", {
+          description: error.message,
+        });
+      } else {
+        toast.success(
+          language === "ur"
+            ? "اکاؤنٹ کامیابی سے بنایا گیا! براہ کرم اپنی ای میل چیک کریں"
+            : "Account created successfully! Please check your email to verify"
+        );
+        navigate("/verify-email");
+      }
     } else {
-      // Regular signup creating new madrasah
-      const result = await signUp(
-        signupData.email,
-        signupData.password,
-        {
-          name: signupData.madrasahName,
-          madrasahId: signupData.madrasahId,
-          fullName: signupData.fullName,
-        }
-      );
-      error = result.error;
-    }
+      // Admin signup - creates new madrasah
+      if (!madrasahName || !madrasahId) {
+        toast.error(language === "ur" ? "تمام فیلڈز بھریں" : "Please fill all fields");
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
-      toast.error(language === "ur" ? "رجسٹریشن میں خرابی" : "Signup failed", {
-        description: error.message,
+      const { error } = await signUp(email, password, {
+        name: madrasahName,
+        madrasahId: madrasahId,
+        fullName: fullName,
       });
-    } else {
-      toast.success(language === "ur" ? "کامیابی سے رجسٹر ہو گئے" : "Signed up successfully");
-      navigate("/");
+
+      if (error) {
+        toast.error(language === "ur" ? "خرابی" : "Error", {
+          description: error.message,
+        });
+      } else {
+        toast.success(
+          language === "ur"
+            ? "اکاؤنٹ کامیابی سے بنایا گیا! براہ کرم اپنی ای میل چیک کریں"
+            : "Account created successfully! Please check your email to verify"
+        );
+        navigate("/verify-email");
+      }
     }
 
     setLoading(false);
   };
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
-    });
-
-    if (error) {
-      toast.error(language === "ur" ? "Google سائن ان میں خرابی" : "Google sign in failed", {
-        description: error.message,
-      });
-      setLoading(false);
-    }
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, { ur: string; en: string }> = {
+      admin: { ur: "ایڈمن", en: "Admin" },
+      teacher: { ur: "استاد", en: "Teacher" },
+      manager: { ur: "منیجر", en: "Manager" },
+      parent: { ur: "والدین", en: "Parent" },
+      user: { ur: "یوزر", en: "User" },
+    };
+    return language === "ur" ? labels[role]?.ur || role : labels[role]?.en || role;
   };
 
+  if (loadingInvite) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">
+            {language === "ur" ? "لوڈ ہو رہا ہے..." : "Loading..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">
+        <CardHeader className="space-y-1 text-center">
+          <CardTitle className="text-2xl font-bold">
             {language === "ur" ? "مدرسہ مینجمنٹ" : "Madrasa Management"}
           </CardTitle>
           <CardDescription>
-            {inviteData ? (
-              language === "ur" 
-                ? `${inviteData.madrasah?.name} میں شامل ہوں` 
-                : `Join ${inviteData.madrasah?.name}`
-            ) : (
-              language === "ur" ? "اپنے اکاؤنٹ میں لاگ ان کریں یا نیا اکاؤنٹ بنائیں" : "Login to your account or create a new one"
-            )}
+            {inviteToken && inviteData
+              ? language === "ur"
+                ? `${inviteData.madrasah?.name} میں ${getRoleLabel(inviteData.role)} کے طور پر شامل ہوں`
+                : `Join ${inviteData.madrasah?.name} as ${getRoleLabel(inviteData.role)}`
+              : isLogin
+                ? language === "ur"
+                  ? "اپنے اکاؤنٹ میں لاگ ان کریں"
+                  : "Sign in to your account"
+                : language === "ur"
+                  ? "نیا مدرسہ بنائیں (صرف ایڈمن)"
+                  : "Create New Madrasa (Admin Only)"}
           </CardDescription>
         </CardHeader>
+
         <CardContent>
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">{language === "ur" ? "لاگ ان" : "Login"}</TabsTrigger>
-              <TabsTrigger value="signup">{language === "ur" ? "رجسٹر" : "Signup"}</TabsTrigger>
-            </TabsList>
+          <form onSubmit={isLogin ? handleLogin : handleSignUp} className="space-y-4">
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="fullName">
+                  {language === "ur" ? "مکمل نام" : "Full Name"}
+                </Label>
+                <Input
+                  id="fullName"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  placeholder={language === "ur" ? "اپنا نام درج کریں" : "Enter your name"}
+                />
+              </div>
+            )}
 
-            <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">
+                {language === "ur" ? "ای میل" : "Email"}
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder={language === "ur" ? "ای میل درج کریں" : "Enter email"}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">
+                {language === "ur" ? "پاس ورڈ" : "Password"}
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder={language === "ur" ? "پاس ورڈ درج کریں" : "Enter password"}
+              />
+            </div>
+
+            {!isLogin && (
+              <>
                 <div className="space-y-2">
-                  <Label htmlFor="login-email">{language === "ur" ? "ای میل" : "Email"}</Label>
+                  <Label htmlFor="confirmPassword">
+                    {language === "ur" ? "پاس ورڈ کی تصدیق" : "Confirm Password"}
+                  </Label>
                   <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="example@email.com"
-                    value={loginData.email}
-                    onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">{language === "ur" ? "پاس ورڈ" : "Password"}</Label>
-                  <Input
-                    id="login-password"
+                    id="confirmPassword"
                     type="password"
-                    value={loginData.password}
-                    onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                     required
+                    placeholder={language === "ur" ? "پاس ورڈ دوبارہ درج کریں" : "Re-enter password"}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? (language === "ur" ? "براہ کرم انتظار کریں..." : "Please wait...") : (language === "ur" ? "لاگ ان" : "Login")}
-                </Button>
-                
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
-                      {language === "ur" ? "یا" : "Or"}
-                    </span>
-                  </div>
-                </div>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleGoogleSignIn}
-                  disabled={loading}
-                >
-                  <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                    <path
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      fill="#4285F4"
-                    />
-                    <path
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      fill="#34A853"
-                    />
-                    <path
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      fill="#FBBC05"
-                    />
-                    <path
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      fill="#EA4335"
-                    />
-                  </svg>
-                  {language === "ur" ? "Google سے سائن ان کریں" : "Sign in with Google"}
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">{language === "ur" ? "مکمل نام" : "Full Name"}</Label>
-                  <Input
-                    id="fullName"
-                    type="text"
-                    value={signupData.fullName}
-                    onChange={(e) => setSignupData({ ...signupData, fullName: e.target.value })}
-                    required
-                  />
-                </div>
-                
                 {!inviteToken && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="madrasahName">{language === "ur" ? "مدرسہ کا نام" : "Madrasa Name"}</Label>
+                      <Label htmlFor="madrasahName">
+                        {language === "ur" ? "مدرسہ کا نام" : "Madrasa Name"}
+                      </Label>
                       <Input
                         id="madrasahName"
-                        type="text"
-                        value={signupData.madrasahName}
-                        onChange={(e) => setSignupData({ ...signupData, madrasahName: e.target.value })}
-                        required={!inviteToken}
+                        value={madrasahName}
+                        onChange={(e) => setMadrasahName(e.target.value)}
+                        required
+                        placeholder={language === "ur" ? "مدرسہ کا نام درج کریں" : "Enter madrasa name"}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="madrasahId">{language === "ur" ? "مدرسہ آئی ڈی" : "Madrasa ID"}</Label>
+                      <Label htmlFor="madrasahId">
+                        {language === "ur" ? "مدرسہ آئی ڈی" : "Madrasa ID"}
+                      </Label>
                       <Input
                         id="madrasahId"
-                        type="text"
-                        placeholder="unique-id"
-                        value={signupData.madrasahId}
-                        onChange={(e) => setSignupData({ ...signupData, madrasahId: e.target.value })}
-                        required={!inviteToken}
+                        value={madrasahId}
+                        onChange={(e) => setMadrasahId(e.target.value)}
+                        required
+                        placeholder={language === "ur" ? "یونیک آئی ڈی درج کریں" : "Enter unique ID"}
                       />
                     </div>
                   </>
                 )}
-                
-                {inviteData && (
-                  <div className="bg-primary/10 p-3 rounded-md">
-                    <p className="text-sm text-center">
-                      {language === "ur" 
-                        ? `آپ ${inviteData.madrasah?.name} میں ${inviteData.role} کے طور پر شامل ہو رہے ہیں` 
-                        : `Joining ${inviteData.madrasah?.name} as ${inviteData.role}`}
-                    </p>
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">{language === "ur" ? "ای میل" : "Email"}</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="example@email.com"
-                    value={signupData.email}
-                    onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">{language === "ur" ? "پاس ورڈ" : "Password"}</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={signupData.password}
-                    onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">{language === "ur" ? "پاس ورڈ کی تصدیق" : "Confirm Password"}</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    value={signupData.confirmPassword}
-                    onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? (language === "ur" ? "براہ کرم انتظار کریں..." : "Please wait...") : (language === "ur" ? "رجسٹر کریں" : "Sign Up")}
-                </Button>
-                
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
-                      {language === "ur" ? "یا" : "Or"}
-                    </span>
-                  </div>
-                </div>
+              </>
+            )}
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleGoogleSignIn}
-                  disabled={loading}
-                >
-                  <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                    <path
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      fill="#4285F4"
-                    />
-                    <path
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      fill="#34A853"
-                    />
-                    <path
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      fill="#FBBC05"
-                    />
-                    <path
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      fill="#EA4335"
-                    />
-                  </svg>
-                  {language === "ur" ? "Google سے رجسٹر کریں" : "Sign up with Google"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? (
+                language === "ur" ? "براہ کرم انتظار کریں..." : "Please wait..."
+              ) : inviteToken && inviteData ? (
+                language === "ur" ? `${getRoleLabel(inviteData.role)} کے طور پر رجسٹر کریں` : `Register as ${getRoleLabel(inviteData.role)}`
+              ) : isLogin ? (
+                language === "ur" ? "لاگ ان" : "Sign In"
+              ) : (
+                language === "ur" ? "نیا مدرسہ بنائیں (ایڈمن)" : "Create Madrasa (Admin)"
+              )}
+            </Button>
+          </form>
+
+          {!inviteToken && (
+            <div className="text-center text-sm mt-4">
+              <button
+                type="button"
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-primary hover:underline"
+              >
+                {isLogin
+                  ? language === "ur"
+                    ? "نیا مدرسہ بنانا چاہتے ہیں؟ یہاں کلک کریں"
+                    : "Want to create a new madrasa? Click here"
+                  : language === "ur"
+                    ? "پہلے سے اکاؤنٹ ہے؟ لاگ ان کریں"
+                    : "Already have an account? Sign in"}
+              </button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
