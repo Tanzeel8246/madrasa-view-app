@@ -28,21 +28,35 @@ const InviteManagement = () => {
 
   useEffect(() => {
     if (madrasahId) {
+      console.log('Fetching invites for madrasah:', madrasahId);
       fetchInvites();
+    } else {
+      console.log('No madrasahId available yet');
     }
   }, [madrasahId]);
 
   const fetchInvites = async () => {
+    if (!madrasahId) {
+      console.error('Cannot fetch invites: madrasahId is missing');
+      return;
+    }
+    
     setLoading(true);
+    console.log('Querying invites with madrasah_id:', madrasahId);
+    
     const { data, error } = await supabase
       .from("invites" as any)
       .select("*")
       .eq("madrasah_id", madrasahId)
       .order("created_at", { ascending: false });
 
+    console.log('Invites query result:', { data, error });
+
     if (error) {
+      console.error('Error fetching invites:', error);
       toast.error(language === "ur" ? "ڈیٹا لوڈ کرنے میں خرابی" : "Error loading data");
     } else {
+      console.log('Fetched invites:', data);
       setInvites(data || []);
     }
     setLoading(false);
@@ -53,20 +67,37 @@ const InviteManagement = () => {
   };
 
   const handleCreateInvite = async () => {
-    if (!madrasahId) return;
+    if (!madrasahId) {
+      toast.error(language === "ur" ? "مدرسہ کی معلومات دستیاب نہیں" : "Madrasa information not available");
+      return;
+    }
 
     const token = generateToken();
+    const user = (await supabase.auth.getUser()).data.user;
+    
+    if (!user) {
+      toast.error(language === "ur" ? "آپ لاگ ان نہیں ہیں" : "You are not logged in");
+      return;
+    }
+
+    console.log('Creating invite with:', { madrasah_id: madrasahId, role: newInvite.role, token, created_by: user.id });
+
     const { error } = await supabase
       .from("invites" as any)
       .insert({
         madrasah_id: madrasahId,
         role: newInvite.role,
         token,
-        created_by: (await supabase.auth.getUser()).data.user?.id,
+        created_by: user.id,
       });
 
+    console.log('Create invite result:', { error });
+
     if (error) {
-      toast.error(language === "ur" ? "دعوت نامہ بنانے میں خرابی" : "Error creating invite");
+      console.error('Error creating invite:', error);
+      toast.error(language === "ur" ? "دعوت نامہ بنانے میں خرابی" : "Error creating invite", {
+        description: error.message
+      });
     } else {
       toast.success(language === "ur" ? "دعوت نامہ کامیابی سے بنایا گیا" : "Invite created successfully");
       setDialogOpen(false);
@@ -119,6 +150,23 @@ const InviteManagement = () => {
       fetchInvites();
     }
   };
+
+  if (!madrasahId) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Card className="w-full max-w-md">
+            <CardContent className="pt-6 text-center space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+              <p className="text-muted-foreground">
+                {language === "ur" ? "لوڈ ہو رہا ہے..." : "Loading..."}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
 
   if (!isAdmin()) {
     return (
