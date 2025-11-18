@@ -90,13 +90,15 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
       if (!madrasahId) {
         toast({
           title: t("errorOccurred"),
-          description: "Madrasah ID not found",
+          description: "Madrasah ID not found. Please refresh the page.",
           variant: "destructive",
         });
         return;
       }
 
       const className = `${data.category} - ${data.subCategory}`;
+      
+      console.log('Submitting class with madrasahId:', madrasahId);
       
       // Insert class first
       const { data: classData, error: classError } = await supabase
@@ -110,7 +112,12 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
         .select()
         .single();
 
-      if (classError) throw classError;
+      if (classError) {
+        console.error("Error inserting class:", classError);
+        throw classError;
+      }
+
+      console.log("Class added successfully:", classData);
 
       // Insert class-teacher relationships
       if (selectedTeachers.length > 0) {
@@ -120,11 +127,16 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
           madrasah_id: madrasahId,
         }));
 
+        console.log("Inserting class-teacher relationships:", classTeacherRecords);
+        
         const { error: relationError } = await supabase
           .from("class_teachers")
           .insert(classTeacherRecords);
 
-        if (relationError) throw relationError;
+        if (relationError) {
+          console.error("Error inserting class-teacher relations:", relationError);
+          throw relationError;
+        }
       }
 
       toast({
@@ -137,11 +149,11 @@ const AddClassDialog = ({ onAdded }: AddClassDialogProps) => {
       setSelectedTeachers([]);
       setOpen(false);
       onAdded?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding class:", error);
       toast({
         title: t("errorOccurred"),
-        description: t("errorOccurred"),
+        description: error.message || t("errorOccurred"),
         variant: "destructive",
       });
     }

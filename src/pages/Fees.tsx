@@ -112,6 +112,18 @@ const Fees = () => {
       }
 
       const madrasahId = await getMadrasahId();
+      
+      if (!madrasahId) {
+        toast({
+          title: t("errorOccurred"),
+          description: "Madrasah ID not found. Please refresh the page.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      console.log("Submitting fee with madrasah_id:", madrasahId);
+      
       let receiptUrl = null;
 
       // Upload receipt if selected
@@ -123,7 +135,10 @@ const Fees = () => {
           .from("fee-receipts")
           .upload(fileName, selectedReceipt);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error("Error uploading receipt:", uploadError);
+          throw uploadError;
+        }
         
         const { data: publicUrlData } = supabase.storage
           .from("fee-receipts")
@@ -133,7 +148,7 @@ const Fees = () => {
         setUploadingReceipt(false);
       }
 
-      const { error } = await supabase.from("fees").insert({
+      const { data: insertedData, error } = await supabase.from("fees").insert({
         student_id: formData.student_id,
         amount: Number(formData.amount),
         paid_amount: Number(formData.paid_amount) || 0,
@@ -143,9 +158,14 @@ const Fees = () => {
         payment_date: Number(formData.paid_amount) > 0 ? new Date().toISOString() : null,
         receipt_url: receiptUrl,
         madrasah_id: madrasahId,
-      });
+      }).select();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error inserting fee:", error);
+        throw error;
+      }
+
+      console.log("Fee added successfully:", insertedData);
 
       toast({
         title: t("addedSuccessfully"),

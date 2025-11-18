@@ -137,35 +137,51 @@ const Loans = () => {
   const handleAddLoan = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const madrasahId = await getMadrasahId();
-    const { error } = await supabase.from("loans").insert([
-      {
-        teacher_id: formData.teacher_id,
-        amount: parseFloat(formData.amount),
-        loan_date: formData.loan_date,
-        status: formData.status,
-        paid_amount: parseFloat(formData.paid_amount),
-        notes: formData.notes || null,
-        madrasah_id: madrasahId,
-      },
-    ]);
+    try {
+      const madrasahId = await getMadrasahId();
+      
+      if (!madrasahId) {
+        toast.error(language === "ur" ? "مدرسہ کی معلومات دستیاب نہیں" : "Madrasah information not available");
+        return;
+      }
+      
+      console.log("Submitting loan with madrasah_id:", madrasahId);
+      
+      const { data: insertedData, error } = await supabase.from("loans").insert([
+        {
+          teacher_id: formData.teacher_id,
+          amount: parseFloat(formData.amount),
+          loan_date: formData.loan_date,
+          status: formData.status,
+          paid_amount: parseFloat(formData.paid_amount),
+          notes: formData.notes || null,
+          madrasah_id: madrasahId,
+        },
+      ]).select();
 
-    if (error) {
+      if (error) {
+        console.error("Error inserting loan:", error);
+        toast.error(language === "ur" ? "ڈیٹا محفوظ کرنے میں خرابی" : "Error saving data");
+        return;
+      }
+
+      console.log("Loan added successfully:", insertedData);
+
+      toast.success(language === "ur" ? "قرضہ شامل کر دیا گیا" : "Loan added successfully");
+      setIsDialogOpen(false);
+      setFormData({
+        teacher_id: "",
+        amount: "",
+        loan_date: new Date().toISOString().split("T")[0],
+        status: "pending",
+        paid_amount: "0",
+        notes: "",
+      });
+      fetchLoans();
+    } catch (error) {
+      console.error("Error in handleAddLoan:", error);
       toast.error(language === "ur" ? "ڈیٹا محفوظ کرنے میں خرابی" : "Error saving data");
-      return;
     }
-
-    toast.success(language === "ur" ? "قرضہ شامل کر دیا گیا" : "Loan added successfully");
-    setIsDialogOpen(false);
-    setFormData({
-      teacher_id: "",
-      amount: "",
-      loan_date: new Date().toISOString().split("T")[0],
-      status: "pending",
-      paid_amount: "0",
-      notes: "",
-    });
-    fetchLoans();
   };
 
   const filteredRecords = loanRecords.filter((record) =>

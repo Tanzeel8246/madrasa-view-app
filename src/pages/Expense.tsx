@@ -104,31 +104,54 @@ const Expense = () => {
 
   const handleAddExpense = async (formData: any) => {
     try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("madrasah_id")
-        .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
-        .single();
-
-      if (!profile?.madrasah_id) {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
         toast({
           title: t("errorOccurred"),
-          description: "Madrasah ID not found",
+          description: "User not found. Please login again.",
           variant: "destructive",
         });
         return;
       }
 
-      const { error } = await supabase.from("expense").insert([{
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("madrasah_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error("Error fetching profile:", profileError);
+        throw profileError;
+      }
+
+      if (!profile?.madrasah_id) {
+        toast({
+          title: t("errorOccurred"),
+          description: "Madrasah ID not found. Please refresh the page.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log("Submitting expense with madrasah_id:", profile.madrasah_id);
+
+      const { data: insertedData, error } = await supabase.from("expense").insert([{
         title: formData.title,
         amount: Number(formData.amount),
         category: formData.category,
         date: formData.date || new Date().toISOString().split("T")[0],
         description: formData.description || null,
         madrasah_id: profile.madrasah_id,
-      }]);
+      }]).select();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error inserting expense:", error);
+        throw error;
+      }
+
+      console.log("Expense added successfully:", insertedData);
 
       toast({
         title: t("addedSuccessfully"),
