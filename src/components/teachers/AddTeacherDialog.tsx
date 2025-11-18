@@ -49,13 +49,15 @@ const AddTeacherDialog = ({ onAdded }: AddTeacherDialogProps) => {
       if (!madrasahId) {
         toast({
           title: t("errorOccurred"),
-          description: "Madrasah ID not found",
+          description: "Madrasah ID not found. Please refresh the page.",
           variant: "destructive",
         });
         return;
       }
 
-      const { error } = await supabase.from("teachers").insert([{
+      console.log('Submitting teacher with madrasahId:', madrasahId);
+      
+      const { data: insertedData, error } = await supabase.from("teachers").insert([{
         name: data.name,
         contact: data.contact || null,
         email: data.email || null,
@@ -63,10 +65,15 @@ const AddTeacherDialog = ({ onAdded }: AddTeacherDialogProps) => {
         qualification: data.qualification || null,
         address: data.address || null,
         madrasah_id: madrasahId,
-      }]);
+      }]).select();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error inserting teacher:", error);
+        throw error;
+      }
 
+      console.log("Teacher added successfully:", insertedData);
+      
       toast({
         title: t("addedSuccessfully"),
         description: `${data.name} ${t("addedSuccessfully")}`,
@@ -75,11 +82,11 @@ const AddTeacherDialog = ({ onAdded }: AddTeacherDialogProps) => {
       reset();
       setOpen(false);
       onAdded?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding teacher:", error);
       toast({
         title: t("errorOccurred"),
-        description: t("errorOccurred"),
+        description: error.message || t("errorOccurred"),
         variant: "destructive",
       });
     }

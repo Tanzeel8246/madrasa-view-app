@@ -64,27 +64,40 @@ const AddStudentDialog = ({ onAdded }: AddStudentDialogProps) => {
   const onSubmit = async (values: StudentForm) => {
     try {
       if (!madrasahId) {
-        toast({ title: t("errorOccurred"), description: "Madrasah ID not found", variant: "destructive" });
+        toast({ 
+          title: t("errorOccurred"), 
+          description: "Madrasah ID not found. Please refresh the page.", 
+          variant: "destructive" 
+        });
         return;
       }
 
       const payload: Database["public"]["Tables"]["students"]["Insert"] = {
         name: values.name,
         father_name: values.father_name,
-        class: "", // Keep for backward compatibility
+        class: values.class_id ? "" : values.name, // Keep for backward compatibility
         class_id: values.class_id || null,
         roll_number: values.roll_number,
         contact: values.contact || null,
         address: values.address || null,
         madrasah_id: madrasahId,
       };
-      const { error } = await supabase.from("students").insert([payload]);
-      if (error) throw error;
+      
+      console.log('Submitting student:', payload);
+      const { data, error } = await supabase.from("students").insert([payload]).select();
+      
+      if (error) {
+        console.error('Error inserting student:', error);
+        throw error;
+      }
+      
+      console.log('Student added successfully:', data);
       toast({ title: t("addedSuccessfully"), description: `${values.name} ${t("addedSuccessfully")}` });
       setOpen(false);
       form.reset();
       onAdded?.();
     } catch (err: any) {
+      console.error('Submit error:', err);
       toast({ title: t("errorOccurred"), description: err.message, variant: "destructive" });
     }
   };

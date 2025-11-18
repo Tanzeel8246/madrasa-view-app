@@ -155,36 +155,52 @@ const Salaries = () => {
   const handleAddSalary = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const madrasahId = await getMadrasahId();
-    const { error } = await supabase.from("salaries").insert([
-      {
-        teacher_id: formData.teacher_id,
-        amount: parseFloat(formData.amount),
-        month: formData.month,
-        year: formData.year,
-        status: formData.status,
-        payment_date: formData.status === "paid" ? new Date().toISOString() : null,
-        notes: formData.notes || null,
-        madrasah_id: madrasahId,
-      },
-    ]);
+    try {
+      const madrasahId = await getMadrasahId();
+      
+      if (!madrasahId) {
+        toast.error(language === "ur" ? "مدرسہ کی معلومات دستیاب نہیں" : "Madrasah information not available");
+        return;
+      }
+      
+      console.log("Submitting salary with madrasah_id:", madrasahId);
+      
+      const { data: insertedData, error } = await supabase.from("salaries").insert([
+        {
+          teacher_id: formData.teacher_id,
+          amount: parseFloat(formData.amount),
+          month: formData.month,
+          year: formData.year,
+          status: formData.status,
+          payment_date: formData.status === "paid" ? new Date().toISOString() : null,
+          notes: formData.notes || null,
+          madrasah_id: madrasahId,
+        },
+      ]).select();
 
-    if (error) {
+      if (error) {
+        console.error("Error inserting salary:", error);
+        toast.error(language === "ur" ? "ڈیٹا محفوظ کرنے میں خرابی" : "Error saving data");
+        return;
+      }
+
+      console.log("Salary added successfully:", insertedData);
+
+      toast.success(language === "ur" ? "تنخواہ شامل کر دی گئی" : "Salary added successfully");
+      setIsDialogOpen(false);
+      setFormData({
+        teacher_id: "",
+        amount: "",
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear(),
+        status: "pending",
+        notes: "",
+      });
+      fetchSalaries();
+    } catch (error) {
+      console.error("Error in handleAddSalary:", error);
       toast.error(language === "ur" ? "ڈیٹا محفوظ کرنے میں خرابی" : "Error saving data");
-      return;
     }
-
-    toast.success(language === "ur" ? "تنخواہ شامل کر دی گئی" : "Salary added successfully");
-    setIsDialogOpen(false);
-    setFormData({
-      teacher_id: "",
-      amount: "",
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear(),
-      status: "pending",
-      notes: "",
-    });
-    fetchSalaries();
   };
 
   const filteredRecords = salaryRecords.filter((record) =>
