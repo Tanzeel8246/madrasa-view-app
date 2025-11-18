@@ -100,28 +100,31 @@ const Auth = () => {
     setLoading(true);
 
     if (inviteToken && inviteData) {
-      // Invite signup - simplified registration
+      // Invite signup - joining existing madrasah (NOT creating new account)
+      console.log("Joining madrasah via invite:", inviteData.madrasah?.name);
       const { error } = await signUpWithInvite(email, password, inviteToken, fullName);
       if (error) {
         toast.error(language === "ur" ? "خرابی" : "Error", {
           description: error.message,
         });
       } else {
+        const madrasahName = inviteData.madrasah?.name || "";
         toast.success(
           language === "ur"
-            ? "اکاؤنٹ کامیابی سے بنایا گیا! براہ کرم اپنی ای میل چیک کریں"
-            : "Account created successfully! Please check your email to verify"
+            ? `${madrasahName} میں شامل ہو گئے! براہ کرم اپنی ای میل چیک کریں`
+            : `Successfully joined ${madrasahName}! Please check your email to verify`
         );
         navigate("/verify-email");
       }
     } else {
-      // Admin signup - creates new madrasah
+      // Admin signup - creates new madrasah (only for first admin)
       if (!madrasahName || !madrasahId) {
         toast.error(language === "ur" ? "تمام فیلڈز بھریں" : "Please fill all fields");
         setLoading(false);
         return;
       }
 
+      console.log("Creating new madrasah:", madrasahName);
       const { error } = await signUp(email, password, {
         name: madrasahName,
         madrasahId: madrasahId,
@@ -135,8 +138,8 @@ const Auth = () => {
       } else {
         toast.success(
           language === "ur"
-            ? "اکاؤنٹ کامیابی سے بنایا گیا! براہ کرم اپنی ای میل چیک کریں"
-            : "Account created successfully! Please check your email to verify"
+            ? "نیا مدرسہ کامیابی سے بنایا گیا! براہ کرم اپنی ای میل چیک کریں"
+            : "New madrasa created successfully! Please check your email to verify"
         );
         navigate("/verify-email");
       }

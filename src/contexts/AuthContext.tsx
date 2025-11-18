@@ -160,14 +160,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // First validate the invite
     const { data: invite, error: inviteError } = await supabase
       .from('invites' as any)
-      .select('*')
+      .select('*, madrasah:madrasah_id(*)')
       .eq('token', inviteToken)
       .eq('is_active', true)
       .maybeSingle();
 
     if (inviteError || !invite) {
+      console.error("Invite validation failed:", inviteError);
       return { error: new Error("Invalid or expired invite") };
     }
+
+    console.log("Valid invite found for madrasah:", (invite as any).madrasah?.name);
 
     const redirectUrl = `${window.location.origin}/`;
     
@@ -183,31 +186,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       },
     });
 
-    if (authError) return { error: authError };
+    if (authError) {
+      console.error("Auth signup failed:", authError);
+      return { error: authError };
+    }
 
     if (authData.user) {
-      // Create profile with the invite's assigned role
+      console.log("User created, joining madrasah:", (invite as any).madrasah_id);
+      
+      // Create profile with the invite's madrasah (NOT creating new madrasah)
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
           user_id: authData.user.id,
-          madrasah_id: (invite as any).madrasah_id,
+          madrasah_id: (invite as any).madrasah_id, // Using existing madrasah from invite
           full_name: fullName,
           role: (invite as any).role,
         });
 
-      if (profileError) return { error: profileError };
+      if (profileError) {
+        console.error("Profile creation failed:", profileError);
+        return { error: profileError };
+      }
 
       // Assign the invite's role to the user
       const { error: roleError } = await supabase
         .from("user_roles")
         .insert({
           user_id: authData.user.id,
-          madrasah_id: (invite as any).madrasah_id,
+          madrasah_id: (invite as any).madrasah_id, // Using existing madrasah from invite
           role: (invite as any).role,
         });
 
-      if (roleError) return { error: roleError };
+      if (roleError) {
+        console.error("Role assignment failed:", roleError);
+        return { error: roleError };
+      }
+
+      console.log("User successfully joined madrasah:", (invite as any).madrasah?.name);
 
       // Increment used count
       await supabase
