@@ -9,7 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Upload, Save, LogOut, Download, FileUp, RefreshCw, X } from "lucide-react";
+import { Upload, Save, LogOut, Download, FileUp, RefreshCw, X, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useNavigate } from "react-router-dom";
 
 interface MadrasahSettings {
   id: string;
@@ -24,10 +27,13 @@ interface MadrasahSettings {
 const Settings = () => {
   const { t, language } = useLanguage();
   const { user, signOut, madrasahId } = useAuth();
+  const { isAdmin } = useUserRole();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [settings, setSettings] = useState<MadrasahSettings | null>(null);
   const [backups, setBackups] = useState<any[]>([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
@@ -229,6 +235,54 @@ const Settings = () => {
     } else {
       toast.success(language === "ur" ? "بیک اپ حذف ہو گیا" : "Backup deleted");
       fetchBackups();
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!madrasahId) {
+      toast.error(language === "ur" ? "مدرسہ ID نہیں ملا" : "Madrasah ID not found");
+      return;
+    }
+
+    setDeleteLoading(true);
+
+    try {
+      // Call the database function to delete all data
+      const { error } = await supabase.rpc('delete_madrasah_permanently', {
+        _madrasah_id: madrasahId
+      });
+
+      if (error) {
+        console.error('Delete error:', error);
+        toast.error(
+          language === "ur" 
+            ? "اکاؤنٹ ڈیلیٹ کرنے میں خرابی: " + error.message
+            : "Failed to delete account: " + error.message
+        );
+        return;
+      }
+
+      toast.success(
+        language === "ur" 
+          ? "اکاؤنٹ مکمل طور پر ڈیلیٹ ہو گیا"
+          : "Account deleted permanently"
+      );
+
+      // Sign out and redirect to auth page
+      setTimeout(async () => {
+        await signOut();
+        navigate("/auth");
+      }, 1500);
+
+    } catch (error: any) {
+      console.error('Delete account error:', error);
+      toast.error(
+        language === "ur" 
+          ? "اکاؤنٹ ڈیلیٹ کرنے میں خرابی"
+          : "Failed to delete account"
+      );
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -510,6 +564,95 @@ const Settings = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Account Section - Only for Admins */}
+      {isAdmin() && (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              {language === "ur" ? "اکاؤنٹ مستقل طور پر ڈیلیٹ کریں" : "Delete Account Permanently"}
+            </CardTitle>
+            <CardDescription>
+              {language === "ur" 
+                ? "انتباہ: یہ عمل مکمل اکاؤنٹ اور تمام ڈیٹا کو ہمیشہ کے لیے ڈیلیٹ کر دے گا۔ اس عمل کو واپس نہیں کیا جا سکتا۔"
+                : "Warning: This will permanently delete the entire account and all data. This action cannot be undone."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4">
+              <div className="flex gap-3">
+                <div className="flex-shrink-0">
+                  <svg className="w-5 h-5 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-destructive">
+                    {language === "ur" ? "مستقل ڈیلیشن" : "Permanent Deletion"}
+                  </p>
+                  <ul className="text-xs text-muted-foreground mt-2 space-y-1 list-disc list-inside">
+                    <li>{language === "ur" ? "تمام طلباء کا ڈیٹا" : "All students data"}</li>
+                    <li>{language === "ur" ? "تمام اساتذہ کا ڈیٹا" : "All teachers data"}</li>
+                    <li>{language === "ur" ? "تمام کلاسز کا ڈیٹا" : "All classes data"}</li>
+                    <li>{language === "ur" ? "تمام حاضری ریکارڈ" : "All attendance records"}</li>
+                    <li>{language === "ur" ? "تمام فیسوں کا ریکارڈ" : "All fee records"}</li>
+                    <li>{language === "ur" ? "تمام مالیاتی ریکارڈز" : "All financial records"}</li>
+                    <li>{language === "ur" ? "تمام بیک اپس" : "All backups"}</li>
+                    <li>{language === "ur" ? "تمام یوزرز اور ان کے رولز" : "All users and their roles"}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="destructive" 
+                  className="w-full"
+                  disabled={deleteLoading}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {language === "ur" ? "اکاؤنٹ مستقل طور پر ڈیلیٹ کریں" : "Delete Account Permanently"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-destructive">
+                    {language === "ur" ? "کیا آپ واقعی یہ اکاؤنٹ ڈیلیٹ کرنا چاہتے ہیں؟" : "Are you sure you want to delete this account?"}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="space-y-2">
+                    <p>
+                      {language === "ur" 
+                        ? "یہ عمل مکمل اکاؤنٹ اور تمام ڈیٹا کو ہمیشہ کے لیے ڈیلیٹ کر دے گا۔"
+                        : "This will permanently delete the entire account and all data."}
+                    </p>
+                    <p className="font-semibold text-destructive">
+                      {language === "ur" 
+                        ? "اس عمل کو واپس نہیں کیا جا سکتا!"
+                        : "This action cannot be undone!"}
+                    </p>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={deleteLoading}>
+                    {language === "ur" ? "منسوخ کریں" : "Cancel"}
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteAccount}
+                    className="bg-destructive hover:bg-destructive/90"
+                    disabled={deleteLoading}
+                  >
+                    {deleteLoading 
+                      ? (language === "ur" ? "ڈیلیٹ ہو رہا ہے..." : "Deleting...") 
+                      : (language === "ur" ? "ہاں، ڈیلیٹ کریں" : "Yes, Delete")}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
