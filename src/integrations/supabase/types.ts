@@ -822,6 +822,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      delete_madrasah_permanently: {
+        Args: { _madrasah_id: string }
+        Returns: undefined
+      }
       get_user_madrasah_id: { Args: never; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
