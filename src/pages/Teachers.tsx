@@ -16,6 +16,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import AddTeacherDialog from "@/components/teachers/AddTeacherDialog";
+import EditTeacherDialog from "@/components/teachers/EditTeacherDialog";
+import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 
 type TeacherRow = {
   id: string;
@@ -24,6 +26,7 @@ type TeacherRow = {
   email: string | null;
   subject: string | null;
   qualification: string | null;
+  address: string | null;
   class_teachers?: Array<{
     classes: {
       name: string;
@@ -33,7 +36,7 @@ type TeacherRow = {
 
 const Teachers = () => {
   const { t, isRTL } = useLanguage();
-  const { canAddTeachers } = useUserRole();
+  const { canAddTeachers, canDeleteData } = useUserRole();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [teachers, setTeachers] = useState<TeacherRow[]>([]);
@@ -112,6 +115,25 @@ const Teachers = () => {
     printTable("teachers-table", isRTL ? "اساتذہ کی فہرست" : "Teachers List", isRTL);
   };
 
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase.from("teachers").delete().eq("id", id);
+      if (error) throw error;
+      
+      toast({
+        title: t("deletedSuccessfully"),
+        description: isRTL ? "استاد کامیابی سے حذف ہو گیا" : "Teacher deleted successfully",
+      });
+      fetchTeachers();
+    } catch (error: any) {
+      toast({
+        title: t("errorOccurred"),
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -174,6 +196,9 @@ const Teachers = () => {
                 <TableHead className={isRTL ? "text-right" : "text-left"}>
                   {t("email")}
                 </TableHead>
+                <TableHead className={isRTL ? "text-right" : "text-left"}>
+                  {isRTL ? "عمل" : "Actions"}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -206,6 +231,16 @@ const Teachers = () => {
                     </TableCell>
                     <TableCell className={isRTL ? "text-right" : "text-left"}>
                       {teacher.email || "-"}
+                    </TableCell>
+                    <TableCell className={isRTL ? "text-right" : "text-left"}>
+                      <div className="flex gap-1">
+                        {canAddTeachers() && (
+                          <EditTeacherDialog teacher={teacher} onUpdated={fetchTeachers} />
+                        )}
+                        {canDeleteData() && (
+                          <DeleteConfirmDialog onConfirm={() => handleDelete(teacher.id)} />
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
