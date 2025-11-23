@@ -14,8 +14,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import AddStudentDialog from "@/components/students/AddStudentDialog";
+import EditStudentDialog from "@/components/students/EditStudentDialog";
+import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 type StudentRow = {
   id: string;
@@ -24,12 +27,14 @@ type StudentRow = {
   roll_number: string;
   contact: string | null;
   address: string | null;
+  class_id: string | null;
   classes: { name: string } | null;
 };
 
 const Students = () => {
   const { t, isRTL } = useLanguage();
-  const { canAddStudents } = useUserRole();
+  const { canEditStudents, canDeleteData } = useUserRole();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +54,7 @@ const Students = () => {
         roll_number,
         contact,
         address,
+        class_id,
         classes (
           name
         )
@@ -56,6 +62,25 @@ const Students = () => {
       .order("roll_number", { ascending: true });
     if (!error && data) setStudents(data);
     setLoading(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase.from("students").delete().eq("id", id);
+      if (error) throw error;
+      
+      toast({
+        title: t("deletedSuccessfully"),
+        description: isRTL ? "طالب علم کامیابی سے حذف ہو گیا" : "Student deleted successfully",
+      });
+      fetchStudents();
+    } catch (error: any) {
+      toast({
+        title: t("errorOccurred"),
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   useEffect(() => {
@@ -115,7 +140,7 @@ const Students = () => {
             <Printer className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
             <span className="text-xs md:text-sm">{isRTL ? "پرنٹ" : "Print"}</span>
           </Button>
-          {canAddStudents() && <AddStudentDialog onAdded={fetchStudents} />}
+          <AddStudentDialog onAdded={fetchStudents} />
           <Button variant="secondary" onClick={fetchStudents} disabled={loading} size="sm">
             {loading ? t("loading") : t("refresh")}
           </Button>
@@ -149,6 +174,7 @@ const Students = () => {
               <TableHead className={isRTL ? "text-right" : "text-left"}>{t("class")}</TableHead>
               <TableHead className={isRTL ? "text-right" : "text-left"}>{t("contact")}</TableHead>
               <TableHead className={isRTL ? "text-right" : "text-left"}>{t("address")}</TableHead>
+              <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "عمل" : "Actions"}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -160,11 +186,21 @@ const Students = () => {
                 <TableCell className={isRTL ? "text-right" : "text-left"}>{student.classes?.name || "-"}</TableCell>
                 <TableCell className={isRTL ? "text-right" : "text-left"}>{student.contact || "-"}</TableCell>
                 <TableCell className={isRTL ? "text-right" : "text-left"}>{student.address || "-"}</TableCell>
+                <TableCell className={isRTL ? "text-right" : "text-left"}>
+                  <div className="flex gap-1">
+                    {canEditStudents() && (
+                      <EditStudentDialog student={student} onUpdated={fetchStudents} />
+                    )}
+                    {canDeleteData() && (
+                      <DeleteConfirmDialog onConfirm={() => handleDelete(student.id)} />
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
                   {t("noRecordsFound")}
                 </TableCell>
               </TableRow>
