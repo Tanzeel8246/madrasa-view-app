@@ -5,7 +5,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const [madrasahName, setMadrasahName] = useState<string>("");
   const [stats, setStats] = useState({
     totalStudents: 0,
     presentToday: 0,
@@ -19,6 +20,33 @@ const Dashboard = () => {
   });
   
   useEffect(() => {
+    const fetchMadrasahName = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("madrasah_id")
+          .eq("user_id", user.id)
+          .single();
+
+        if (profile?.madrasah_id) {
+          const { data: madrasah } = await supabase
+            .from("madrasah")
+            .select("name")
+            .eq("id", profile.madrasah_id)
+            .single();
+
+          if (madrasah?.name) {
+            setMadrasahName(madrasah.name);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching madrasah name:", error);
+      }
+    };
+
     const fetchStats = async () => {
       try {
         // Get total students
@@ -103,6 +131,7 @@ const Dashboard = () => {
       }
     };
 
+    fetchMadrasahName();
     fetchStats();
   }, []);
   
@@ -110,7 +139,10 @@ const Dashboard = () => {
     <div className="space-y-4 md:space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1 md:mb-2">
-          {t("welcomeMessage")}
+          {madrasahName 
+            ? (language === "ur" ? `${madrasahName} میں خوش آمدید` : `Welcome to ${madrasahName}`)
+            : t("welcomeMessage")
+          }
         </h1>
         <p className="text-xs md:text-sm text-muted-foreground">
           {new Date().toLocaleDateString("ur-PK", { 
