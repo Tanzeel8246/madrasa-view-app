@@ -831,6 +831,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      user_has_role_in_madrasah: {
+        Args: { _madrasah_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "teacher" | "manager" | "parent" | "user"
