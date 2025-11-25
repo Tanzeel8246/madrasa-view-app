@@ -831,6 +831,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      is_user_admin_of_madrasah: {
+        Args: { _madrasah_id: string; _user_id: string }
+        Returns: boolean
+      }
       user_has_role_in_madrasah: {
         Args: { _madrasah_id: string; _user_id: string }
         Returns: boolean
