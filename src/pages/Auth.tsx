@@ -111,10 +111,11 @@ const Auth = () => {
         const madrasahName = inviteData.madrasah?.name || "";
         toast.success(
           language === "ur"
-            ? `${madrasahName} میں شامل ہو گئے! براہ کرم اپنی ای میل چیک کریں`
-            : `Successfully joined ${madrasahName}! Please check your email to verify`
+            ? `${madrasahName} میں کامیابی سے شامل ہو گئے`
+            : `Successfully joined ${madrasahName}`
         );
-        navigate("/verify-email");
+        // User is automatically logged in after signup with auto-confirm
+        navigate("/");
       }
     } else {
       // Admin signup - creates new madrasah (only for first admin)
@@ -138,10 +139,11 @@ const Auth = () => {
       } else {
         toast.success(
           language === "ur"
-            ? "نیا مدرسہ کامیابی سے بنایا گیا! براہ کرم اپنی ای میل چیک کریں"
-            : "New madrasa created successfully! Please check your email to verify"
+            ? "نیا مدرسہ کامیابی سے بنایا گیا"
+            : "New madrasa created successfully"
         );
-        navigate("/verify-email");
+        // User is automatically logged in after signup with auto-confirm
+        navigate("/");
       }
     }
 

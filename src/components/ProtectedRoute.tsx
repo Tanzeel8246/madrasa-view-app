@@ -24,11 +24,6 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     return <Navigate to="/auth" replace />;
   }
 
-  // Check if email is verified
-  if (!user.email_confirmed_at) {
-    return <Navigate to="/verify-email" replace />;
-  }
-
   return <>{children}</>;
 };
 
