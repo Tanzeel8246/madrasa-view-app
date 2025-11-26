@@ -26,7 +26,7 @@ interface MadrasahSettings {
 
 const Settings = () => {
   const { t, language } = useLanguage();
-  const { user, signOut, madrasahId } = useAuth();
+  const { user, signOut, madrasahId, userRole } = useAuth();
   const { isAdmin } = useUserRole();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -37,6 +37,11 @@ const Settings = () => {
   const [settings, setSettings] = useState<MadrasahSettings | null>(null);
   const [backups, setBackups] = useState<any[]>([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
+
+  // Debug: Log userRole
+  useEffect(() => {
+    console.log('Current userRole:', userRole);
+  }, [userRole]);
 
   useEffect(() => {
     if (madrasahId) {
@@ -566,7 +571,7 @@ const Settings = () => {
       </Card>
 
       {/* Delete Account Section - Only for Admins */}
-      {isAdmin() && (
+      {userRole === 'admin' && (
         <Card className="border-destructive">
           <CardHeader>
             <CardTitle className="text-destructive flex items-center gap-2">
