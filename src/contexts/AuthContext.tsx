@@ -182,6 +182,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         data: {
           role: (invite as any).role,
           full_name: fullName,
+          madrasah_id: (invite as any).madrasah_id, // Pass madrasah_id in metadata
         },
       },
     });
@@ -194,42 +195,66 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (authData.user) {
       console.log("User created, joining madrasah:", (invite as any).madrasah_id);
       
+      // Wait a moment for session to be fully established
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Create profile with the invite's madrasah (NOT creating new madrasah)
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
           user_id: authData.user.id,
-          madrasah_id: (invite as any).madrasah_id, // Using existing madrasah from invite
+          madrasah_id: (invite as any).madrasah_id,
           full_name: fullName,
           role: (invite as any).role,
         });
 
       if (profileError) {
         console.error("Profile creation failed:", profileError);
-        return { error: profileError };
+        // Don't return error yet, try to delete the auth user
+        try {
+          await supabase.auth.admin.deleteUser(authData.user.id);
+        } catch (e) {
+          console.error("Failed to cleanup user after profile error:", e);
+        }
+        return { error: new Error(`Failed to create profile: ${profileError.message}`) };
       }
+
+      console.log("Profile created successfully");
 
       // Assign the invite's role to the user
       const { error: roleError } = await supabase
         .from("user_roles")
         .insert({
           user_id: authData.user.id,
-          madrasah_id: (invite as any).madrasah_id, // Using existing madrasah from invite
+          madrasah_id: (invite as any).madrasah_id,
           role: (invite as any).role,
         });
 
       if (roleError) {
         console.error("Role assignment failed:", roleError);
-        return { error: roleError };
+        // Try to cleanup
+        try {
+          await supabase.from("profiles").delete().eq("user_id", authData.user.id);
+          await supabase.auth.admin.deleteUser(authData.user.id);
+        } catch (e) {
+          console.error("Failed to cleanup after role error:", e);
+        }
+        return { error: new Error(`Failed to assign role: ${roleError.message}`) };
       }
 
-      console.log("User successfully joined madrasah:", (invite as any).madrasah?.name);
+      console.log("Role assigned successfully");
 
       // Increment used count
       await supabase
         .from('invites' as any)
         .update({ used_count: (invite as any).used_count + 1 })
         .eq('id', (invite as any).id);
+
+      console.log("User successfully joined madrasah:", (invite as any).madrasah?.name);
+      
+      // Update the local auth state immediately
+      setMadrasahId((invite as any).madrasah_id);
+      setUserRole((invite as any).role);
     }
 
     return { error: null };
