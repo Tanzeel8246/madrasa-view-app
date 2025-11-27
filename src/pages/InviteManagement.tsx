@@ -106,8 +106,18 @@ const InviteManagement = () => {
     }
   };
 
-  const handleCopyInviteLink = (token: string) => {
-    const inviteUrl = `${window.location.origin}/auth?invite=${token}`;
+  const handleCopyInviteLink = async (token: string) => {
+    // Fetch the madrasah app_url from database
+    const { data: madrasahData } = await supabase
+      .from("madrasah")
+      .select("app_url")
+      .eq("id", madrasahId)
+      .maybeSingle();
+    
+    // Use custom app_url if set, otherwise fall back to current origin
+    const baseUrl = madrasahData?.app_url || window.location.origin;
+    const inviteUrl = `${baseUrl}/auth?invite=${token}`;
+    
     navigator.clipboard.writeText(inviteUrl);
     toast.success(language === "ur" ? "دعوت نامہ لنک کاپی ہو گیا - اسے شیئر کریں" : "Invite link copied - Share it with users");
   };
