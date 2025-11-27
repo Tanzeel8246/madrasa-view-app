@@ -515,6 +515,7 @@ export type Database = {
       madrasah: {
         Row: {
           address: string | null
+          app_url: string | null
           contact: string | null
           created_at: string
           email: string | null
@@ -526,6 +527,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          app_url?: string | null
           contact?: string | null
           created_at?: string
           email?: string | null
@@ -537,6 +539,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          app_url?: string | null
           contact?: string | null
           created_at?: string
           email?: string | null

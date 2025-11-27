@@ -22,6 +22,7 @@ interface MadrasahSettings {
   address: string | null;
   contact: string | null;
   email: string | null;
+  app_url: string | null;
 }
 
 const Settings = () => {
@@ -139,6 +140,7 @@ const Settings = () => {
         address: settings.address,
         contact: settings.contact,
         email: settings.email,
+        app_url: settings.app_url,
       })
       .eq("id", madrasahId);
 
@@ -430,6 +432,21 @@ const Settings = () => {
                 placeholder={language === "ur" ? "ای میل ایڈریس درج کریں" : "Enter email address"}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="app_url">{language === "ur" ? "ایپ کا URL (انوائٹ لنکس کے لیے)" : "App URL (for invite links)"}</Label>
+            <Input
+              id="app_url"
+              value={settings.app_url || ""}
+              onChange={(e) => setSettings({ ...settings, app_url: e.target.value })}
+              placeholder={language === "ur" ? "مثال: https://your-app.lovable.app" : "e.g., https://your-app.lovable.app"}
+            />
+            <p className="text-xs text-muted-foreground">
+              {language === "ur" 
+                ? "اپنی published ایپ کا URL یہاں درج کریں تاکہ انوائٹ لنکس میں صحیح URL استعمال ہو" 
+                : "Enter your published app URL here so invite links use the correct URL"}
+            </p>
           </div>
 
           <div className="flex justify-end pt-4">
