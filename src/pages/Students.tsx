@@ -97,7 +97,7 @@ const Students = () => {
     );
   }, [searchQuery, students]);
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const headers = [
       isRTL ? "رول نمبر" : "Roll Number",
       isRTL ? "طالب علم کا نام" : "Student Name",
@@ -114,12 +114,13 @@ const Students = () => {
       s.contact || "-",
       s.address || "-",
     ]);
-    generatePDF(
+    await generatePDF(
       isRTL ? "طلباء کی فہرست" : "Students List",
       headers,
       data,
       "students_list.pdf",
-      isRTL
+      isRTL,
+      "students-table"
     );
   };
 

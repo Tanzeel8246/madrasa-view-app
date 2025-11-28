@@ -87,7 +87,7 @@ const Teachers = () => {
     );
   }, [teachers, searchQuery]);
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const headers = [
       t("teacherName"),
       t("subject"),
@@ -102,12 +102,13 @@ const Teachers = () => {
       t.contact || "-",
       t.email || "-",
     ]);
-    generatePDF(
+    await generatePDF(
       isRTL ? "اساتذہ کی فہرست" : "Teachers List",
       headers,
       data,
       "teachers_list.pdf",
-      isRTL
+      isRTL,
+      "teachers-table"
     );
   };
 

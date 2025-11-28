@@ -88,7 +88,7 @@ const Classes = () => {
     printTable("classes-table", isRTL ? "کلاسز کی فہرست" : "Classes List", isRTL);
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const headers = [
       t("className"),
       t("teacher"),
@@ -102,12 +102,13 @@ const Classes = () => {
         cls.description || "-",
       ];
     });
-    generatePDF(
+    await generatePDF(
       isRTL ? "کلاسز کی فہرست" : "Classes List",
       headers,
       data,
       "classes_list.pdf",
-      isRTL
+      isRTL,
+      "classes-table"
     );
   };
 
