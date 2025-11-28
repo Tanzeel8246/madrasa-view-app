@@ -137,7 +137,7 @@ const Reports = () => {
     }
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (reportData.length === 0) {
       toast.error(language === "ur" ? "کوئی ڈیٹا نہیں ہے" : "No data to export");
       return;
@@ -228,12 +228,13 @@ const Reports = () => {
       reportType === "fee" ? (language === "ur" ? "فیس کی رپورٹ" : "Fee Report") :
       (language === "ur" ? "قرضوں کی رپورٹ" : "Loan Report");
 
-    generatePDF(
+    await generatePDF(
       title,
       headers,
       data,
       `${reportType}_report_${fromDate}_to_${toDate}.pdf`,
-      language === "ur"
+      language === "ur",
+      "reports-table"
     );
 
     toast.success(language === "ur" ? "رپورٹ ڈاؤن لوڈ ہو گئی" : "Report downloaded");
