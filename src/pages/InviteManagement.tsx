@@ -10,18 +10,22 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Trash2, AlertTriangle, Settings } from "lucide-react";
 import Layout from "@/components/Layout";
+import { useNavigate } from "react-router-dom";
 
 const InviteManagement = () => {
   const { madrasahId } = useAuth();
   const { isAdmin } = useUserRole();
   const { language } = useLanguage();
+  const navigate = useNavigate();
   const [invites, setInvites] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [appUrl, setAppUrl] = useState<string | null>(null);
   const [newInvite, setNewInvite] = useState({
     role: "teacher" as "admin" | "teacher" | "manager" | "parent",
   });
@@ -30,10 +34,23 @@ const InviteManagement = () => {
     if (madrasahId) {
       console.log('Fetching invites for madrasah:', madrasahId);
       fetchInvites();
+      fetchAppUrl();
     } else {
       console.log('No madrasahId available yet');
     }
   }, [madrasahId]);
+
+  const fetchAppUrl = async () => {
+    if (!madrasahId) return;
+    
+    const { data } = await supabase
+      .from("madrasah")
+      .select("app_url")
+      .eq("id", madrasahId)
+      .maybeSingle();
+    
+    setAppUrl(data?.app_url || null);
+  };
 
   const fetchInvites = async () => {
     if (!madrasahId) {
@@ -197,6 +214,31 @@ const InviteManagement = () => {
   return (
     <Layout>
       <div className="container mx-auto py-6 space-y-6">
+        {!appUrl && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle className="font-bold">
+              {language === "ur" ? "App URL ترتیب نہیں دی گئی" : "App URL Not Configured"}
+            </AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>
+                {language === "ur" 
+                  ? "انوائٹ لنکس بنانے سے پہلے اپنی published ایپ کا URL Settings میں جا کر ترتیب دیں۔ ورنہ لنکس Lovable preview کا استعمال کریں گے اور صحیح طریقے سے کام نہیں کریں گے۔"
+                  : "Please configure your published app URL in Settings before creating invite links. Otherwise, links will use the Lovable preview URL and won't work correctly."}
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate("/settings")}
+                className="mt-2"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                {language === "ur" ? "Settings میں جائیں" : "Go to Settings"}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">

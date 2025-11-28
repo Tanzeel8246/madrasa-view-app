@@ -435,18 +435,29 @@ const Settings = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="app_url">{language === "ur" ? "ایپ کا URL (انوائٹ لنکس کے لیے)" : "App URL (for invite links)"}</Label>
+            <Label htmlFor="app_url" className="text-base font-semibold flex items-center gap-2">
+              {language === "ur" ? "ایپ کا URL (ضروری - انوائٹ لنکس کے لیے)" : "App URL (Required - for invite links)"}
+              <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="app_url"
               value={settings.app_url || ""}
               onChange={(e) => setSettings({ ...settings, app_url: e.target.value })}
               placeholder={language === "ur" ? "مثال: https://your-app.lovable.app" : "e.g., https://your-app.lovable.app"}
+              className="text-base"
             />
-            <p className="text-xs text-muted-foreground">
-              {language === "ur" 
-                ? "اپنی published ایپ کا URL یہاں درج کریں تاکہ انوائٹ لنکس میں صحیح URL استعمال ہو" 
-                : "Enter your published app URL here so invite links use the correct URL"}
-            </p>
+            <div className="bg-primary/10 p-3 rounded-lg border border-primary/20 space-y-2">
+              <p className="text-sm font-medium text-primary">
+                {language === "ur" 
+                  ? "⚠️ انتہائی اہم - انوائٹ لنکس کے لیے ضروری" 
+                  : "⚠️ Very Important - Required for Invite Links"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {language === "ur" 
+                  ? "اپنی published ایپ کا مکمل URL یہاں درج کریں۔ یہ URL استعمال کر کے انوائٹ لنکس بنائے جائیں گے۔ Publish بٹن دبا کر اپنی ایپ publish کریں اور پھر published URL یہاں paste کریں۔" 
+                  : "Enter your published app's full URL here. Invite links will use this URL. Click Publish button to publish your app, then paste the published URL here."}
+              </p>
+            </div>
           </div>
 
           <div className="flex justify-end pt-4">
