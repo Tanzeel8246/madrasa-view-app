@@ -38,6 +38,9 @@ const Settings = () => {
   const [settings, setSettings] = useState<MadrasahSettings | null>(null);
   const [backups, setBackups] = useState<any[]>([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   // Debug: Log userRole
   useEffect(() => {
@@ -290,6 +293,42 @@ const Settings = () => {
       );
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmNewPassword) {
+      toast.error(language === "ur" ? "تمام فیلڈز بھریں" : "Please fill all fields");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error(language === "ur" ? "پاس ورڈ کم از کم 6 حروف ہونا چاہیے" : "Password must be at least 6 characters");
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      toast.error(language === "ur" ? "پاس ورڈ مماثل نہیں" : "Passwords do not match");
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) throw error;
+
+      toast.success(language === "ur" ? "پاس ورڈ کامیابی سے تبدیل ہو گیا" : "Password changed successfully");
+      setNewPassword("");
+      setConfirmNewPassword("");
+    } catch (error: any) {
+      toast.error(language === "ur" ? "پاس ورڈ تبدیل کرنے میں خرابی" : "Error changing password", {
+        description: error.message
+      });
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -595,6 +634,57 @@ const Settings = () => {
               </div>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Change Password Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {language === "ur" ? "پاس ورڈ تبدیل کریں" : "Change Password"}
+          </CardTitle>
+          <CardDescription>
+            {language === "ur" 
+              ? "اپنا پاس ورڈ تبدیل کرنے کے لیے نیا پاس ورڈ درج کریں" 
+              : "Enter a new password to change your password"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="newPassword">
+              {language === "ur" ? "نیا پاس ورڈ" : "New Password"}
+            </Label>
+            <Input
+              id="newPassword"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder={language === "ur" ? "نیا پاس ورڈ درج کریں" : "Enter new password"}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmNewPassword">
+              {language === "ur" ? "پاس ورڈ کی تصدیق" : "Confirm Password"}
+            </Label>
+            <Input
+              id="confirmNewPassword"
+              type="password"
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              placeholder={language === "ur" ? "پاس ورڈ دوبارہ درج کریں" : "Re-enter password"}
+            />
+          </div>
+
+          <Button 
+            onClick={handleChangePassword}
+            disabled={passwordLoading}
+          >
+            <Save className="h-4 w-4 mr-2" />
+            {passwordLoading 
+              ? (language === "ur" ? "تبدیل ہو رہا ہے..." : "Changing...") 
+              : (language === "ur" ? "پاس ورڈ تبدیل کریں" : "Change Password")}
+          </Button>
         </CardContent>
       </Card>
 
