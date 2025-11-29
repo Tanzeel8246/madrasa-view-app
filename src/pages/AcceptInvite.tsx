@@ -9,21 +9,20 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { CheckCircle, XCircle, Loader2, Copy, Eye, EyeOff } from "lucide-react";
+import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 const AcceptInvite = () => {
-  const { user, madrasahId } = useAuth();
+  const { user, madrasahId, signUpWithInvite } = useAuth();
   const navigate = useNavigate();
   const { language } = useLanguage();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [inviteData, setInviteData] = useState<any>(null);
   const [processing, setProcessing] = useState(false);
-  const [showJoinForm, setShowJoinForm] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [generatedPassword, setGeneratedPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     const token = searchParams.get('invite');
@@ -35,14 +34,6 @@ const AcceptInvite = () => {
     validateInvite(token);
   }, [searchParams]);
 
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
-    let password = '';
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
-  };
 
   const validateInvite = async (token: string) => {
     setLoading(true);
@@ -58,82 +49,52 @@ const AcceptInvite = () => {
       setTimeout(() => navigate("/"), 2000);
     } else {
       setInviteData(data);
-      // If user is already logged in, proceed to accept
-      if (user) {
-        // Already logged in, can accept directly
-      } else {
-        // Show join form for new users
-        setShowJoinForm(true);
-      }
     }
     setLoading(false);
   };
 
-  const handleJoinWithAutoSignup = async () => {
-    if (!fullName.trim() || !email.trim()) {
-      toast.error(language === "ur" ? "نام اور ای میل ضروری ہے" : "Name and email are required");
+  const handleJoinWithSignup = async () => {
+    if (!fullName.trim() || !email.trim() || !password.trim()) {
+      toast.error(language === "ur" ? "تمام فیلڈز ضروری ہیں" : "All fields are required");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast.error(language === "ur" ? "پاس ورڈ مماثل نہیں" : "Passwords do not match");
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error(language === "ur" ? "پاس ورڈ کم از کم 6 حروف ہونا چاہیے" : "Password must be at least 6 characters");
       return;
     }
 
     if (!inviteData) return;
     setProcessing(true);
 
-    try {
-      // Generate password
-      const password = generatePassword();
-      setGeneratedPassword(password);
+    const token = searchParams.get('invite');
+    if (!token) {
+      toast.error(language === "ur" ? "غلط دعوت نامہ" : "Invalid invite");
+      setProcessing(false);
+      return;
+    }
 
-      // Create account
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password: password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-          },
-          emailRedirectTo: `${window.location.origin}/`,
-        },
-      });
+    // Use the AuthContext's signUpWithInvite which correctly joins existing madrasah
+    const { error } = await signUpWithInvite(email.trim(), password, token, fullName.trim());
 
-      if (signUpError) throw signUpError;
-      if (!signUpData.user) throw new Error("User creation failed");
-
-      // Add user to madrasah with the invite's role
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .insert({
-          user_id: signUpData.user.id,
-          madrasah_id: inviteData.madrasah_id,
-          role: inviteData.role,
-        });
-
-      if (roleError) throw roleError;
-
-      // Create profile
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({
-          user_id: signUpData.user.id,
-          madrasah_id: inviteData.madrasah_id,
-          full_name: fullName.trim(),
-          role: inviteData.role,
-        });
-
-      if (profileError) throw profileError;
-
-      // Increment used count
-      await supabase
-        .from('invites' as any)
-        .update({ used_count: inviteData.used_count + 1 })
-        .eq('id', inviteData.id);
-
-      toast.success(language === "ur" ? "کامیابی سے شامل ہو گئے! اپنا پاس ورڈ محفوظ کریں" : "Successfully joined! Save your password");
-      setShowPassword(true);
-    } catch (error: any) {
+    if (error) {
       toast.error(language === "ur" ? "خرابی" : "Error", {
         description: error.message,
       });
       setProcessing(false);
+    } else {
+      toast.success(
+        language === "ur" 
+          ? `${inviteData.madrasah?.name} میں کامیابی سے شامل ہو گئے` 
+          : `Successfully joined ${inviteData.madrasah?.name}`
+      );
+      // Auto logged in, redirect to dashboard
+      window.location.href = "/";
     }
   };
 
@@ -199,10 +160,6 @@ const AcceptInvite = () => {
     }
   };
 
-  const copyPassword = () => {
-    navigator.clipboard.writeText(generatedPassword);
-    toast.success(language === "ur" ? "پاس ورڈ کاپی ہو گیا" : "Password copied");
-  };
 
   const handleDecline = () => {
     toast.info(language === "ur" ? "دعوت نامہ مسترد کر دیا گیا" : "Invite declined");
@@ -226,81 +183,8 @@ const AcceptInvite = () => {
     return null;
   }
 
-  // Show password success screen
-  if (generatedPassword && showPassword) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-2" />
-            <CardTitle className="text-2xl">
-              {language === "ur" ? "کامیابی سے شامل ہو گئے!" : "Successfully Joined!"}
-            </CardTitle>
-            <CardDescription>
-              {language === "ur" 
-                ? "آپ کا اکاؤنٹ بن گیا ہے" 
-                : "Your account has been created"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <Alert>
-              <AlertDescription className="text-sm">
-                {language === "ur" 
-                  ? "یہ آپ کا خودکار بنایا ہوا پاس ورڈ ہے۔ اسے محفوظ کریں اور بعد میں Settings میں تبدیل کر سکتے ہیں۔" 
-                  : "This is your auto-generated password. Save it and you can change it later in Settings."}
-              </AlertDescription>
-            </Alert>
-
-            <div className="space-y-2">
-              <Label>{language === "ur" ? "آپ کا پاس ورڈ" : "Your Password"}</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  value={generatedPassword}
-                  readOnly
-                  className="font-mono"
-                />
-                <Button onClick={copyPassword} variant="outline" size="icon">
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="bg-muted p-4 rounded-lg space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {language === "ur" ? "ای میل:" : "Email:"}
-                </span>
-                <span className="font-semibold">{email}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {language === "ur" ? "مدرسہ:" : "Madrasa:"}
-                </span>
-                <span className="font-semibold">{inviteData.madrasah?.name}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {language === "ur" ? "رول:" : "Role:"}
-                </span>
-                <span className="font-semibold capitalize">{inviteData.role}</span>
-              </div>
-            </div>
-
-            <Button
-              onClick={() => window.location.href = "/"}
-              className="w-full"
-            >
-              {language === "ur" ? "ایپ میں جائیں" : "Go to App"}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   // Show join form for new users
-  if (showJoinForm && !user) {
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
@@ -318,8 +202,8 @@ const AcceptInvite = () => {
             <Alert>
               <AlertDescription className="text-sm">
                 {language === "ur" 
-                  ? "صرف اپنا نام اور ای میل درج کریں۔ پاس ورڈ خودکار بنایا جائے گا۔" 
-                  : "Just enter your name and email. Password will be auto-generated."}
+                  ? "اپنا نام، ای میل اور پاس ورڈ درج کر کے اس مدرسے میں شامل ہوں۔" 
+                  : "Enter your name, email and password to join this madrasa."}
               </AlertDescription>
             </Alert>
 
@@ -350,6 +234,34 @@ const AcceptInvite = () => {
                   required
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">
+                  {language === "ur" ? "پاس ورڈ *" : "Password *"}
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={language === "ur" ? "پاس ورڈ درج کریں (کم از کم 6 حروف)" : "Enter password (min 6 chars)"}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">
+                  {language === "ur" ? "پاس ورڈ کی تصدیق *" : "Confirm Password *"}
+                </Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder={language === "ur" ? "پاس ورڈ دوبارہ درج کریں" : "Re-enter password"}
+                  required
+                />
+              </div>
             </div>
 
             <div className="bg-muted p-4 rounded-lg space-y-2">
@@ -369,7 +281,7 @@ const AcceptInvite = () => {
 
             <div className="flex gap-3">
               <Button
-                onClick={handleJoinWithAutoSignup}
+                onClick={handleJoinWithSignup}
                 disabled={processing}
                 className="flex-1"
               >
