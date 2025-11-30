@@ -63,7 +63,7 @@ const UserManagement = () => {
         .select("full_name, user_id")
         .eq("user_id", roleData.user_id)
         .eq("madrasah_id", madrasahId)
-        .single();
+        .maybeSingle();
 
       return {
         ...roleData,

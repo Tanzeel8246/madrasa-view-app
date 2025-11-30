@@ -145,7 +145,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: "admin",
         });
 
-      if (roleError) return { error: roleError };
+      if (roleError) {
+        console.error("Role assignment error:", roleError);
+        return { error: roleError };
+      }
     }
 
     return { error: null };
@@ -232,6 +235,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (roleError) {
         console.error("Role assignment failed:", roleError);
+        console.error("Role details:", {
+          user_id: authData.user.id,
+          madrasah_id: (invite as any).madrasah_id,
+          role: (invite as any).role
+        });
         // Try to cleanup
         try {
           await supabase.from("profiles").delete().eq("user_id", authData.user.id);
