@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, UserPlus } from "lucide-react";
+import { Loader2, UserPlus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 import Layout from "@/components/Layout";
 
@@ -86,10 +87,49 @@ const UserManagement = () => {
       .eq("madrasah_id", madrasahId);
 
     if (error) {
+      console.error("Role update error:", error);
       toast.error(isRTL ? "رول تبدیل کرنے میں خرابی" : "Error updating role");
     } else {
       toast.success(isRTL ? "رول کامیابی سے تبدیل ہو گیا" : "Role updated successfully");
       fetchUsers();
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!madrasahId) return;
+
+    try {
+      // Delete user role
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("madrasah_id", madrasahId);
+
+      if (roleError) throw roleError;
+
+      // Delete profile
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("madrasah_id", madrasahId);
+
+      if (profileError) throw profileError;
+
+      toast.success(
+        isRTL 
+          ? `${userName} کامیابی سے حذف ہو گیا` 
+          : `${userName} deleted successfully`
+      );
+      fetchUsers();
+    } catch (error: any) {
+      console.error("Delete user error:", error);
+      toast.error(
+        isRTL 
+          ? `یوزر حذف کرنے میں خرابی: ${error.message}` 
+          : `Error deleting user: ${error.message}`
+      );
     }
   };
 
@@ -245,28 +285,65 @@ const UserManagement = () => {
             {users.map((user) => (
               <div
                 key={user.user_id}
-                className="flex items-center justify-between p-4 border rounded-lg"
+                className="flex items-center justify-between p-4 border rounded-lg gap-4"
               >
-                <div>
+                <div className="flex-1">
                   <p className={`font-medium ${isRTL ? "font-urdu" : ""}`}>
                     {user.full_name}
                   </p>
                 </div>
-                <Select
-                  value={user.role}
-                  onValueChange={(value) => handleRoleChange(user.user_id, value as typeof newUserRole)}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">{getRoleLabel("admin")}</SelectItem>
-                    <SelectItem value="teacher">{getRoleLabel("teacher")}</SelectItem>
-                    <SelectItem value="manager">{getRoleLabel("manager")}</SelectItem>
-                    <SelectItem value="parent">{getRoleLabel("parent")}</SelectItem>
-                    <SelectItem value="user">{getRoleLabel("user")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={user.role}
+                    onValueChange={(value) => handleRoleChange(user.user_id, value as typeof newUserRole)}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">{getRoleLabel("admin")}</SelectItem>
+                      <SelectItem value="teacher">{getRoleLabel("teacher")}</SelectItem>
+                      <SelectItem value="manager">{getRoleLabel("manager")}</SelectItem>
+                      <SelectItem value="parent">{getRoleLabel("parent")}</SelectItem>
+                      <SelectItem value="user">{getRoleLabel("user")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="destructive" 
+                        size="icon"
+                        className="shrink-0"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className={isRTL ? "font-urdu" : ""}>
+                          {isRTL ? "کیا آپ واقعی حذف کرنا چاہتے ہیں؟" : "Are you sure?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className={isRTL ? "font-urdu" : ""}>
+                          {isRTL 
+                            ? `کیا آپ ${user.full_name} کو حذف کرنا چاہتے ہیں؟ یہ عمل واپس نہیں ہو سکتا۔` 
+                            : `Do you want to delete ${user.full_name}? This action cannot be undone.`}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className={isRTL ? "font-urdu" : ""}>
+                          {isRTL ? "منسوخ کریں" : "Cancel"}
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeleteUser(user.user_id, user.full_name)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          {isRTL ? "حذف کریں" : "Delete"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
             ))}
           </div>
