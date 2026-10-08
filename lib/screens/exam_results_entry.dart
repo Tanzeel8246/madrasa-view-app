@@ -38,7 +38,7 @@ class _ExamResultsEntryPageState extends State<ExamResultsEntryPage> {
   Future<void> _loadData() async {
     final db = DBHelper();
     final classes = await db.getClassesForUser();
-    final students = await db.getStudents();
+    final students = await db.getStudentsForUser();
     final existingResults = await db.getExamResults(widget.exam['id']);
 
     Map<int, Map<String, dynamic>> resultsMap = {};
@@ -120,8 +120,12 @@ class _ExamResultsEntryPageState extends State<ExamResultsEntryPage> {
           canPop: false,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
-            Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (c) => const DashboardPage()));
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (c) => const DashboardPage()));
+            }
           },
           child: Directionality(
             textDirection: isUrdu ? ui.TextDirection.rtl : ui.TextDirection.ltr,

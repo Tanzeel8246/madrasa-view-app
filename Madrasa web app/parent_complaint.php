@@ -1,4 +1,5 @@
 <?php require_once 'db.php'; include 'header.php'; 
+$cur_tenant_id = (int)get_current_tenant_id();
 
 // صرف پیرنٹ کے لیے
 if ($_SESSION['role'] != 'parent') { echo "<script>window.location='index.php';</script>"; exit; }
@@ -10,15 +11,15 @@ if (isset($_POST['submit_complaint'])) {
     $desc = $_POST['description'];
     $date = $_POST['date'];
 
-    $stmt = $pdo->prepare("INSERT INTO parent_complaints (student_id, category, description, date) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$std_id, $category, $desc, $date]);
+    $stmt = $pdo->prepare("INSERT INTO parent_complaints (student_id, category, description, date, tenant_id) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$std_id, $category, $desc, $date, $cur_tenant_id]);
     
     echo "<div class='alert alert-warning'>شکایت انتظامیہ کو بھیج دی گئی ہے۔ جزاک اللہ!</div>";
 }
 
 // سابقہ ہسٹری
-$history = $pdo->prepare("SELECT * FROM parent_complaints WHERE student_id = ? ORDER BY id DESC");
-$history->execute([$std_id]);
+$history = $pdo->prepare("SELECT * FROM parent_complaints WHERE student_id = ? AND tenant_id = ? ORDER BY id DESC");
+$history->execute([$std_id, $cur_tenant_id]);
 ?>
 
 <div class="row">

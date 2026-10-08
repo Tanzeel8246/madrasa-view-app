@@ -5,6 +5,7 @@ import '../utils/sync_service.dart';
 import '../widgets/app_drawer.dart';
 import 'package:intl/intl.dart';
 import '../utils/globals.dart';
+import '../utils/system_type_global.dart';
 
 import '../db_helper.dart';
 
@@ -322,6 +323,7 @@ class _AccVouchersPageState extends State<AccVouchersPage> {
                               'description': descriptionController.text.trim(),
                               'department_id': departmentId,
                               'status': 'Pending',
+                              'system_type': SystemTypeGlobal.currentSystemType.value,
                             },
                             entries: cleanLines,
                           );

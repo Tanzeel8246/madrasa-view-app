@@ -4,7 +4,13 @@ require_once 'finance_accounting_bridge.php';
 include 'header.php'; 
 
 // سیکیورٹی چیک
-if (!isset($_SESSION['user_id']) || !app_has_perm('manage_erp')) { 
+if (!isset($_SESSION['user_id'])) { 
+    echo "<script>window.location='login.php';</script>"; 
+    exit; 
+}
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_erp')) { 
     echo "<script>window.location='dashboard.php';</script>"; 
     exit; 
 }
@@ -36,25 +42,25 @@ $total_cr = 0;
 
 <div class="container py-4">
     <div class="d-print-none card p-3 mb-4 bg-light shadow-sm border-top border-5 border-primary">
-        <h4 class="mb-3 text-primary fw-bold"><i class="fas fa-balance-scale me-2"></i> Trial Balance (میزان)</h4>
+        <h4 class="mb-3 text-primary fw-bold"><i class="fas fa-balance-scale me-2"></i> <?php echo ($lang=='ur') ? 'میزانِ پڑتال' : 'Trial Balance'; ?></h4>
         <form method="GET" class="row g-2 align-items-end">
             <div class="col-md-4">
-                <label class="fw-bold">کس تاریخ تک (As of Date)</label>
-                <input type="date" name="as_of" class="form-control" value="<?php echo e($as_of_date); ?>" required>
+                <label class="fw-bold"><?php echo ($lang=='ur') ? 'کس تاریخ تک' : 'As of Date'; ?></label>
+                <input type="date" name="as_of" class="form-control" value="<?php echo e($as_of_date); ?>" onchange="this.form.submit()" required>
             </div>
             <div class="col-md-3">
-                <button type="submit" class="btn btn-primary w-100 mb-1">رپورٹ دیکھیں</button>
+                <button type="submit" class="btn btn-primary w-100 mb-1"><?php echo ($lang=='ur') ? 'رپورٹ دیکھیں' : 'View Report'; ?></button>
             </div>
             <div class="col-md-3">
-                <button type="button" onclick="window.print()" class="btn btn-dark w-100 mb-1"><i class="fas fa-print"></i> پرنٹ کریں</button>
+                <button type="button" onclick="window.print()" class="btn btn-dark w-100 mb-1"><i class="fas fa-print"></i> <?php echo ($lang=='ur') ? 'پرنٹ کریں' : 'Print'; ?></button>
             </div>
         </form>
     </div>
 
     <div id="printableArea" class="bg-white p-4 border rounded shadow-sm">
         <div class="text-center border-bottom border-2 border-dark mb-4 pb-2">
-            <h3 class="fw-bold text-success m-0">مدرسہ اشرف المدارس</h3>
-            <h5 class="mt-2 fw-bold">Trial Balance / میزان</h5>
+            <h3 class="fw-bold text-success m-0"><?php echo e(t('app_name')); ?></h3>
+            <h5 class="mt-2 fw-bold"><?php echo ($lang=='ur') ? 'میزانِ پڑتال' : 'Trial Balance'; ?></h5>
             <p class="mb-1 fw-bold fs-6 text-muted">As of: <?php echo date('d-M-Y', strtotime($as_of_date)); ?></p>
         </div>
 

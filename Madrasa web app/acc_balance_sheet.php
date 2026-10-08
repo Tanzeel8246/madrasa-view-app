@@ -4,7 +4,13 @@ require_once 'finance_accounting_bridge.php';
 include 'header.php'; 
 
 // سیکیورٹی چیک
-if (!isset($_SESSION['user_id']) || !app_has_perm('manage_erp')) { 
+if (!isset($_SESSION['user_id'])) { 
+    echo "<script>window.location='login.php';</script>"; 
+    exit; 
+}
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_erp')) { 
     echo "<script>window.location='dashboard.php';</script>"; 
     exit; 
 }
@@ -43,27 +49,34 @@ foreach($accounts as $acc) {
     $dr = (float)($acc['total_debit'] ?? 0);
     $cr = (float)($acc['total_credit'] ?? 0);
     
+    $rawType = ucfirst(strtolower(trim((string)($acc['type'] ?? ''))));
+    $isRev = ($rawType === 'Revenue' || $rawType === 'Income');
+    $isExp = ($rawType === 'Expense');
+    $isAsset = ($rawType === 'Asset');
+    $isLiab = ($rawType === 'Liability');
+    $isEq = ($rawType === 'Equity');
+
     // Revenue and Expenses (For Retained Earnings)
-    if ($acc['type'] == 'Revenue') {
+    if ($isRev) {
         $retained_earnings += ($cr - $dr);
-    } else if ($acc['type'] == 'Expense') {
+    } else if ($isExp) {
         $retained_earnings -= ($dr - $cr);
     }
     
     // Assets, Liabilities, Equity
-    if ($acc['type'] == 'Asset') {
+    if ($isAsset) {
         $bal = $dr - $cr;
         if ($bal != 0) {
             $assets[] = ['code' => $acc['code'], 'name' => $acc['name'], 'balance' => $bal];
             $total_assets += $bal;
         }
-    } else if ($acc['type'] == 'Liability') {
+    } else if ($isLiab) {
         $bal = $cr - $dr;
         if ($bal != 0) {
             $liabilities[] = ['code' => $acc['code'], 'name' => $acc['name'], 'balance' => $bal];
             $total_liabilities += $bal;
         }
-    } else if ($acc['type'] == 'Equity') {
+    } else if ($isEq) {
         $bal = $cr - $dr;
         if ($bal != 0) {
             $equity[] = ['code' => $acc['code'], 'name' => $acc['name'], 'balance' => $bal];
@@ -87,7 +100,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
         <form method="GET" class="row g-2 align-items-end">
             <div class="col-md-4">
                 <label class="fw-bold">کس تاریخ تک (As of Date)</label>
-                <input type="date" name="as_of" class="form-control" value="<?php echo e($as_of_date); ?>" required>
+                <input type="date" name="as_of" class="form-control" value="<?php echo e($as_of_date); ?>" onchange="this.form.submit()" required>
             </div>
             <div class="col-md-3">
                 <button type="submit" class="btn btn-primary w-100 mb-1">رپورٹ دیکھیں</button>
@@ -114,7 +127,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                         <?php foreach($assets as $a): ?>
                         <tr>
                             <td><span class="text-muted fs-6 me-2"><?php echo $a['code']; ?></span> <?php echo $a['name']; ?></td>
-                            <td class="text-end fw-bold text-primary"><?php echo number_format($a['balance'], 2); ?></td>
+                            <td class="text-end fw-bold text-primary"><span dir="ltr" class="d-inline-block"><?php echo number_format($a['balance'], 2); ?></span></td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if(empty($assets)): ?>
@@ -124,7 +137,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                     <tfoot class="border-top border-2">
                         <tr>
                             <th class="fs-5">کل اثاثہ جات (Total Assets):</th>
-                            <th class="text-end fs-4 text-primary"><?php echo number_format($total_assets, 2); ?></th>
+                            <th class="text-end fs-4 text-primary"><span dir="ltr" class="d-inline-block"><?php echo number_format($total_assets, 2); ?></span></th>
                         </tr>
                     </tfoot>
                 </table>
@@ -139,7 +152,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                         <?php foreach($liabilities as $l): ?>
                         <tr>
                             <td><span class="text-muted fs-6 me-2"><?php echo $l['code']; ?></span> <?php echo $l['name']; ?></td>
-                            <td class="text-end fw-bold text-danger"><?php echo number_format($l['balance'], 2); ?></td>
+                            <td class="text-end fw-bold text-danger"><span dir="ltr" class="d-inline-block"><?php echo number_format($l['balance'], 2); ?></span></td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if(empty($liabilities)): ?>
@@ -149,7 +162,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                     <tfoot class="border-top border-1">
                         <tr>
                             <th class="fs-6">کل واجبات (Total Liabilities):</th>
-                            <th class="text-end fs-5 text-danger"><?php echo number_format($total_liabilities, 2); ?></th>
+                            <th class="text-end fs-5 text-danger"><span dir="ltr" class="d-inline-block"><?php echo number_format($total_liabilities, 2); ?></span></th>
                         </tr>
                     </tfoot>
                 </table>
@@ -161,7 +174,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                         <?php foreach($equity as $e): ?>
                         <tr>
                             <td><span class="text-muted fs-6 me-2"><?php echo $e['code']; ?></span> <?php echo $e['name']; ?></td>
-                            <td class="text-end fw-bold text-info"><?php echo number_format($e['balance'], 2); ?></td>
+                            <td class="text-end fw-bold text-info"><span dir="ltr" class="d-inline-block"><?php echo number_format($e['balance'], 2); ?></span></td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if(empty($equity)): ?>
@@ -171,7 +184,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                     <tfoot class="border-top border-1">
                         <tr>
                             <th class="fs-6">کل سرمایہ (Total Equity):</th>
-                            <th class="text-end fs-5 text-info"><?php echo number_format($total_equity, 2); ?></th>
+                            <th class="text-end fs-5 text-info"><span dir="ltr" class="d-inline-block"><?php echo number_format($total_equity, 2); ?></span></th>
                         </tr>
                     </tfoot>
                 </table>
@@ -181,7 +194,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                         <tr>
                             <th class="fs-5">کل واجبات و سرمایہ (Total Liab & Eq):</th>
                             <th class="text-end fs-4 <?php echo abs($total_assets - $total_liab_and_equity) < 0.01 ? 'text-success' : 'text-danger'; ?>">
-                                <?php echo number_format($total_liab_and_equity, 2); ?>
+                                <span dir="ltr" class="d-inline-block"><?php echo number_format($total_liab_and_equity, 2); ?></span>
                             </th>
                         </tr>
                     </tfoot>
@@ -191,7 +204,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
 
         <?php if (abs($total_assets - $total_liab_and_equity) > 0.01): ?>
         <div class="alert alert-danger mt-5 fw-bold text-center fs-5">
-            <i class="fas fa-exclamation-triangle me-2"></i> بیلنس شیٹ برابر نہیں ہے! (Out of balance by <?php echo number_format(abs($total_assets - $total_liab_and_equity), 2); ?>)
+            <i class="fas fa-exclamation-triangle me-2"></i> بیلنس شیٹ برابر نہیں ہے! (Out of balance by <span dir="ltr"><?php echo number_format(abs($total_assets - $total_liab_and_equity), 2); ?></span>)
         </div>
         <?php else: ?>
         <div class="alert alert-success mt-5 fw-bold text-center fs-5">

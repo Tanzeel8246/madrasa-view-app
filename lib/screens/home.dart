@@ -102,9 +102,17 @@ class _HomePageState extends State<HomePage> {
             appBar: AppBar(
               backgroundColor: primaryGreen,
               foregroundColor: Colors.white,
-              title: Text(
-                isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              title: ValueListenableBuilder<String?>(
+                valueListenable: currentTenantName,
+                builder: (context, tName, _) {
+                  final titleText = (tName != null && tName.trim().isNotEmpty)
+                      ? tName.trim()
+                      : (isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris');
+                  return Text(
+                    titleText,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  );
+                },
               ),
               centerTitle: true,
               actions: [
@@ -121,40 +129,45 @@ class _HomePageState extends State<HomePage> {
                 final hPad = isSmall ? 10.0 : 15.0;
                 return SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _hero(context, isUrdu, hPad, isSmall),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: hPad),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (_notices.isNotEmpty) _noticeBar(isUrdu),
-                            _statsGrid(isUrdu, isSmall),
-                            const SizedBox(height: 30),
-                            _aboutSection(isUrdu),
-                            const SizedBox(height: 30),
-                            _sectionTitle(isUrdu
-                                ? 'نمایاں شعبہ جات'
-                                : 'Featured Departments'),
-                            const SizedBox(height: 15),
-                            _departmentList(isUrdu),
-                            const SizedBox(height: 30),
-                            _sectionTitle(
-                                isUrdu ? 'دیگر سہولیات' : 'Facilities'),
-                            const SizedBox(height: 15),
-                            _facilitiesGrid(isUrdu),
-                            const SizedBox(height: 30),
-                            _admissionProcess(context, isUrdu),
-                            const SizedBox(height: 30),
-                            _noticeBoard(isUrdu),
-                            const SizedBox(height: 30),
-                          ],
-                        ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1100),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _hero(context, isUrdu, hPad, isSmall),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: hPad),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (_notices.isNotEmpty) _noticeBar(isUrdu),
+                                _statsGrid(isUrdu, isSmall),
+                                const SizedBox(height: 30),
+                                _aboutSection(isUrdu),
+                                const SizedBox(height: 30),
+                                _sectionTitle(isUrdu
+                                    ? 'نمایاں شعبہ جات'
+                                    : 'Featured Departments'),
+                                const SizedBox(height: 15),
+                                _departmentList(isUrdu),
+                                const SizedBox(height: 30),
+                                _sectionTitle(
+                                    isUrdu ? 'دیگر سہولیات' : 'Facilities'),
+                                const SizedBox(height: 15),
+                                _facilitiesGrid(isUrdu),
+                                const SizedBox(height: 30),
+                                _admissionProcess(context, isUrdu),
+                                const SizedBox(height: 30),
+                                _noticeBoard(isUrdu),
+                                const SizedBox(height: 30),
+                              ],
+                            ),
+                          ),
+                          _footer(isUrdu),
+                        ],
                       ),
-                      _footer(isUrdu),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -206,15 +219,22 @@ class _HomePageState extends State<HomePage> {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
-          Text(
-            isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris',
-            style: TextStyle(
-              fontSize: isSmall ? 25 : 30,
-              color: accentGold,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
+          ValueListenableBuilder<String?>(
+            valueListenable: currentTenantName,
+            builder: (context, tName, _) {
+              final heroText = (tName != null && tName.trim().isNotEmpty)
+                  ? tName.trim()
+                  : (isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris');
+              return Text(
+                heroText,
+                style: TextStyle(
+                  fontSize: isSmall ? 25 : 30,
+                  color: accentGold,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              );
+            },
           ),
           const SizedBox(height: 8),
           Text(
@@ -582,13 +602,21 @@ class _HomePageState extends State<HomePage> {
               const Icon(Icons.mosque, color: Colors.white70, size: 40),
               const SizedBox(width: 15),
               Expanded(
-                child: Text(
-                  isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris',
-                  style: TextStyle(
-                    color: accentGold,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                child: ValueListenableBuilder<String?>(
+                  valueListenable: currentTenantName,
+                  builder: (context, tName, _) {
+                    final fName = (tName != null && tName.trim().isNotEmpty)
+                        ? tName.trim()
+                        : (isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris');
+                    return Text(
+                      fName,
+                      style: TextStyle(
+                        color: accentGold,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -607,11 +635,19 @@ class _HomePageState extends State<HomePage> {
             textDirection: TextDirection.ltr,
           ),
           const SizedBox(height: 18),
-          Text(
-            isUrdu
-                ? 'کاپی رائٹ 2026 مدرسہ اشرف المدارس'
-                : 'Copyright 2026 Madrasa Ashraf-ul-Madaris',
-            style: const TextStyle(color: Colors.white30, fontSize: 11),
+          ValueListenableBuilder<String?>(
+            valueListenable: currentTenantName,
+            builder: (context, tName, _) {
+              final cName = (tName != null && tName.trim().isNotEmpty)
+                  ? tName.trim()
+                  : (isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris');
+              return Text(
+                isUrdu
+                    ? 'کاپی رائٹ ${DateTime.now().year} $cName'
+                    : 'Copyright ${DateTime.now().year} $cName',
+                style: const TextStyle(color: Colors.white30, fontSize: 11),
+              );
+            },
           ),
         ],
       ),

@@ -1,5 +1,4 @@
 <?php
-require 'db.php';
-$stmt = $pdo->query("SHOW TABLES");
-$tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
-echo implode("\n", $tables);
+// Archived to archive/dev_tools/schema_inspect.php
+http_response_code(403);
+exit("Access Denied: This test script has been archived.");

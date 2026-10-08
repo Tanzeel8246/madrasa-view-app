@@ -1,6 +1,15 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once 'db.php';
 
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
+$cur_tenant_id = (int)get_current_tenant_id();
 $exam_id = isset($_GET['exam_id']) ? (int)$_GET['exam_id'] : 0;
 $std_id = isset($_GET['student_id']) ? (int)$_GET['student_id'] : 0;
 
@@ -8,16 +17,25 @@ if (!$exam_id || !$std_id) {
     die("Invalid request.");
 }
 
-$exam = $pdo->prepare("SELECT * FROM exams WHERE id = ?");
-$exam->execute([$exam_id]);
+$role = strtolower((string)($_SESSION['role'] ?? 'parent'));
+$logged_uid = (int)($_SESSION['user_id'] ?? 0);
+$is_staff = in_array($role, ['admin', 'superadmin', 'nazim', 'teacher', 'mudarris'], true) || has_permission($role, $_SESSION['permissions'] ?? [], 'manage_exams');
+if (!$is_staff) {
+    if ($role !== 'student' || $std_id !== $logged_uid) {
+        die("<div style='font-family:sans-serif; text-align:center; padding:50px;'><h2>آپ کو نتیجہ کارڈ دیکھنے کی اجازت نہیں ہے۔</h2><a href='dashboard.php'>واپس جائیں</a></div>");
+    }
+}
+
+$exam = $pdo->prepare("SELECT * FROM exams WHERE id = ? AND tenant_id = ?");
+$exam->execute([$exam_id, $cur_tenant_id]);
 $exam_data = $exam->fetch();
 
 $sql = "SELECT er.*, s.name, s.father_name, s.admission_number, s.class, s.photo 
         FROM exam_results er 
         JOIN students s ON er.student_id = s.id 
-        WHERE er.exam_id = ? AND er.student_id = ?";
+        WHERE er.exam_id = ? AND er.student_id = ? AND er.tenant_id = ? AND s.tenant_id = ?";
 $stmt = $pdo->prepare($sql);
-$stmt->execute([$exam_id, $std_id]);
+$stmt->execute([$exam_id, $std_id, $cur_tenant_id, $cur_tenant_id]);
 $res = $stmt->fetch();
 
 if (!$res) die("Result not found.");
@@ -27,13 +45,13 @@ $class_data = null;
 $dynamic_subjects = [];
 $dynamic_subjects_marks_max = [];
 if ($res['class']) {
-    $stmt_c = $pdo->prepare("SELECT * FROM classes WHERE name = ?");
-    $stmt_c->execute([$res['class']]);
+    $stmt_c = $pdo->prepare("SELECT * FROM classes WHERE name = ? AND tenant_id = ?");
+    $stmt_c->execute([$res['class'], $cur_tenant_id]);
     $class_data = $stmt_c->fetch();
     if ($class_data) {
         // 1. Query class_periods for the given class id
-        $stmt_cp = $pdo->prepare("SELECT books FROM class_periods WHERE class_id = ? ORDER BY period_no ASC");
-        $stmt_cp->execute([$class_data['id']]);
+        $stmt_cp = $pdo->prepare("SELECT books FROM class_periods WHERE class_id = ? AND tenant_id = ? ORDER BY period_no ASC");
+        $stmt_cp->execute([$class_data['id'], $cur_tenant_id]);
         $periods_books = $stmt_cp->fetchAll(PDO::FETCH_COLUMN);
         
         $books_found = array_filter(array_map('trim', $periods_books));
@@ -173,7 +191,7 @@ if (file_exists($logo_path)) {
                 <img src="<?php echo $logo_base64; ?>" alt="Logo">
             <?php endif; ?>
         </div>
-        <div class="madrasa-name">مدرسہ اشرف المدارس</div>
+        <div class="madrasa-name"><?php echo htmlspecialchars($_SESSION['tenant_name'] ?? 'مدرسہ'); ?></div>
         <div class="sub-header">فاروقہ، ضلع سرگودھا | فون: 0300-1234567</div>
         <div class="title-badge">رزلٹ کارڈ (Result Card)</div>
         <div style="color: #284D3D; font-weight: bold; font-size: 14px;"><?php echo $exam_data['exam_name']; ?> (<?php echo $exam_data['exam_date']; ?>)</div>

@@ -96,6 +96,16 @@ extension DbSyncTeachers on DBHelper {
           txn, 'teacher_period_attendance', localId, serverId);
       await _updateTeacherReferenceIfTableExists(
           txn, 'acc_payroll', localId, serverId);
+      await _updateTeacherReferenceIfTableExists(
+          txn, 'teacher_leaves', localId, serverId);
+      await _updateTeacherReferenceIfTableExists(
+          txn, 'staff_loans', localId, serverId);
+      await _updateTeacherReferenceIfTableExists(
+          txn, 'maktab_nazira_record', localId, serverId);
+      await _updateTeacherReferenceIfTableExists(
+          txn, 'maktab_hifz_record', localId, serverId);
+      await _updateTeacherReferenceIfTableExists(
+          txn, 'maktab_qaida_records', localId, serverId);
 
       final source = await txn.query('teachers',
           where: 'id = ?', whereArgs: [localId], limit: 1);
@@ -123,5 +133,24 @@ extension DbSyncTeachers on DBHelper {
         );
       }
     });
+  }
+
+  Future<void> markTeacherLeaveAsSynced(int localId, int? serverId) async {
+    Database db = await database;
+    if (serverId != null && serverId > 0 && serverId != localId) {
+      await db.update(
+        'teacher_leaves',
+        {'is_synced': 1, 'server_id': serverId},
+        where: 'id = ?',
+        whereArgs: [localId],
+      );
+    } else {
+      await db.update(
+        'teacher_leaves',
+        {'is_synced': 1},
+        where: 'id = ?',
+        whereArgs: [localId],
+      );
+    }
   }
 }

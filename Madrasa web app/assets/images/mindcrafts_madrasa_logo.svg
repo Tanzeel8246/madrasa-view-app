@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <!-- Background Radial Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#0f2b24" />
+      <stop offset="70%" stop-color="#061814" />
+      <stop offset="100%" stop-color="#020b09" />
+    </radialGradient>
+
+    <!-- Emerald Primary Gradient -->
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="50%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+
+    <!-- Gold Accent Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde68a" />
+      <stop offset="40%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+
+    <!-- Cyan Circuit Gradient -->
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+
+    <!-- Drop Shadow Filters -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Outer Circular Base -->
+  <circle cx="250" cy="250" r="235" fill="url(#bgGrad)" stroke="url(#goldGrad)" stroke-width="6" />
+  <circle cx="250" cy="250" r="222" fill="none" stroke="rgba(16, 185, 129, 0.4)" stroke-width="2" stroke-dasharray="6,4" />
+
+  <!-- Digital AI Tech Rings & Geometric Nodes -->
+  <circle cx="250" cy="250" r="195" fill="none" stroke="url(#cyanGrad)" stroke-width="1.5" opacity="0.4" />
+  <circle cx="250" cy="55" r="4" fill="#10b981" filter="url(#softGlow)" />
+  <circle cx="445" cy="250" r="4" fill="#06b6d4" filter="url(#softGlow)" />
+  <circle cx="250" cy="445" r="4" fill="#10b981" filter="url(#softGlow)" />
+  <circle cx="55" cy="250" r="4" fill="#06b6d4" filter="url(#softGlow)" />
+
+  <!-- Islamic Mihrab Arch & Dome Structure -->
+  <path d="M 170 300 L 170 210 Q 170 140 250 100 Q 330 140 330 210 L 330 300 Z" 
+        fill="rgba(16, 185, 129, 0.08)" 
+        stroke="url(#emeraldGrad)" 
+        stroke-width="3.5" />
+
+  <!-- Inner Architectural Arch Border -->
+  <path d="M 185 300 L 185 220 Q 185 160 250 125 Q 315 160 315 220 L 315 300" 
+        fill="none" 
+        stroke="url(#goldGrad)" 
+        stroke-width="1.5" 
+        opacity="0.85" />
+
+  <!-- Crescent and Star Finial at Apex -->
+  <path d="M 250 72 Q 257 85 244 95 Q 260 93 256 75 Z" fill="url(#goldGrad)" filter="url(#softGlow)" />
+  <polygon points="257,80 260,86 266,86 261,90 263,96 257,92 252,96 254,90 249,86 255,86" fill="#fde68a" transform="scale(0.6) translate(175, 45)" />
+
+  <!-- Open Holy Quran Motif (رحل پر کھلا قرآنِ پاک) -->
+  <g id="open-quran" transform="translate(0, 10)">
+    <!-- Book Leaves Left & Right -->
+    <path d="M 250 255 C 220 235 175 240 145 250 C 142 275 145 295 145 300 C 180 290 220 285 250 305 Z" 
+          fill="#f8fafc" stroke="#d5c7a3" stroke-width="1.5" />
+    <path d="M 250 255 C 280 235 325 240 355 250 C 358 275 355 295 355 300 C 320 290 280 285 250 305 Z" 
+          fill="#f1f5f9" stroke="#d5c7a3" stroke-width="1.5" />
+
+    <!-- Quran Scripture Lines -->
+    <path d="M 165 262 Q 200 254 235 268" stroke="url(#goldGrad)" stroke-width="2" stroke-linecap="round" />
+    <path d="M 165 273 Q 200 265 235 279" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" />
+    <path d="M 165 284 Q 200 276 235 290" stroke="url(#goldGrad)" stroke-width="1.5" stroke-linecap="round" />
+
+    <path d="M 265 268 Q 300 254 335 262" stroke="url(#goldGrad)" stroke-width="2" stroke-linecap="round" />
+    <path d="M 265 279 Q 300 265 335 273" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" />
+    <path d="M 265 290 Q 300 276 335 284" stroke="url(#goldGrad)" stroke-width="1.5" stroke-linecap="round" />
+
+    <!-- Wooden Rihal (Stand) -->
+    <path d="M 220 300 L 175 335 L 195 340 L 235 307 Z" fill="#92400e" stroke="#78350f" stroke-width="1.5" />
+    <path d="M 280 300 L 325 335 L 305 340 L 265 307 Z" fill="#b45309" stroke="#78350f" stroke-width="1.5" />
+  </g>
+
+  <!-- AI / Digital Connectivity Pulse -->
+  <g opacity="0.85">
+    <line x1="250" y1="180" x2="250" y2="240" stroke="url(#cyanGrad)" stroke-width="2" stroke-dasharray="3,3" />
+    <circle cx="250" cy="180" r="3.5" fill="#06b6d4" filter="url(#softGlow)" />
+    <line x1="200" y1="190" x2="235" y2="245" stroke="url(#cyanGrad)" stroke-width="1.5" stroke-dasharray="2,3" />
+    <line x1="300" y1="190" x2="265" y2="245" stroke="url(#cyanGrad)" stroke-width="1.5" stroke-dasharray="2,3" />
+  </g>
+
+  <!-- Typography / Brand Ribbon -->
+  <!-- Upper Urdu Title -->
+  <text x="250" y="375" text-anchor="middle" font-family="'Noto Nastaliq Urdu', 'Urdu Typesetting', Tahoma, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" filter="url(#softGlow)">
+    مدرسہ مینیجمنٹ سسٹم
+  </text>
+
+  <!-- Gold Divider -->
+  <path d="M 130 395 L 370 395" stroke="url(#goldGrad)" stroke-width="2.5" stroke-linecap="round" />
+  <circle cx="250" cy="395" r="4.5" fill="#f59e0b" />
+
+  <!-- Subtitle: Powered by Mindcrafts AI -->
+  <text x="250" y="420" text-anchor="middle" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="2" fill="#38bdf8">
+    BY MINDCRAFTS AI
+  </text>
+  <text x="250" y="438" text-anchor="middle" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="10" font-weight="500" letter-spacing="3" fill="#94a3b8">
+    MAMFSS CLOUD PLATFORM
+  </text>
+</svg>

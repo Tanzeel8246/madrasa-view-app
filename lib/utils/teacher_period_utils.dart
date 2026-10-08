@@ -88,33 +88,56 @@ bool isActiveStatusValue(dynamic value) {
   return true;
 }
 
-bool isHifzClass(Map<String, dynamic> cls) => _classTextContains(cls, [
-      '\u062d\u0641\u0638',
-      '\u06af\u0631\u062f\u0627\u0646',
-      '\u062d\u0633\u0646',
-      'Ø­ÙØ¸',
-      'hifz',
-      'gardan',
-      'husn',
-    ]);
+bool isHusnSautClass(Map<String, dynamic> cls) {
+  final ct = (cls['class_type'] ?? '').toString().toLowerCase();
+  if (ct.contains('hifz') ||
+      ct.contains('gardan') ||
+      ct.contains('حفظ') ||
+      ct.contains('گردان')) {
+    return false;
+  }
+  return _classTextContains(cls, [
+    'حسن',
+    'صوت',
+    'husn',
+  ]);
+}
+
+bool isHifzClass(Map<String, dynamic> cls) {
+  // اگر explicitly Hifz/Gardan class_type ہو تو ہمیشہ Hifz مانیں
+  final ct = (cls['class_type'] ?? '').toString().toLowerCase();
+  if (ct.contains('hifz') ||
+      ct.contains('gardan') ||
+      ct.contains('حفظ') ||
+      ct.contains('گردان')) {
+    return true;
+  }
+  // ورنہ پرانا لوجک (HusnSaut کو خارج کریں)
+  return !isHusnSautClass(cls) &&
+      _classTextContains(cls, [
+        'حفظ',
+        'گردان',
+        'hifz',
+        'gardan',
+      ]);
+}
 
 bool isNaziraClass(Map<String, dynamic> cls) => _classTextContains(cls, [
-      '\u0646\u0627\u0638\u0631\u06c1',
-      'Ù†Ø§Ø¸Ø±Û',
+      'ناظرہ',
       'nazira',
     ]);
 
+bool isQaidaClass(Map<String, dynamic> cls) => _classTextContains(cls, [
+      'قاعدہ',
+      'qaida',
+    ]);
+
 List<String> defaultPeriodKeysForClass(Map<String, dynamic> cls) {
-  if (isHifzClass(cls)) {
-    return const [
-      'hifz_morning',
-      'hifz_after_breakfast',
-      'hifz_noon',
-      'hifz_evening',
-    ];
+  if (isNaziraClass(cls) || isQaidaClass(cls)) {
+    return const ['1', '2'];
   }
-  if (isNaziraClass(cls)) {
-    return const ['nazira_morning', 'nazira_evening'];
+  if (isHifzClass(cls) || isHusnSautClass(cls)) {
+    return const ['1', '2', '3', '4'];
   }
   return const ['1', '2', '3', '4', '5', '6', '7', '8'];
 }

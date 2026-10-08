@@ -1,21 +1,51 @@
-RewriteCond %{HTTPS} !=on
-RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-RewriteEngine On
-RewriteCond %{HTTP:Authorization} ^(.*)
-RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
-RewriteCond %{HTTP:X-API-KEY} ^(.*)
-RewriteRule .* - [e=HTTP_X_API_KEY:%1]
-RewriteCond %{HTTP:X-USER-TOKEN} ^(.*)
-RewriteRule .* - [e=HTTP_X_USER_TOKEN:%1]
-RewriteBase /
-RewriteRule ^index\.html$ - [L]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule . /index.html [L]
+# Directory Index
+DirectoryIndex index.php index.html
 
-# php -- BEGIN cPanel-generated handler, do not edit
-# Set the “ea-php81” package as the default “PHP” programming language.
-<IfModule mime_module>
-  AddHandler application/x-httpd-ea-php81 .php .php8 .phtml
+# Prevent Directory Browsing
+<IfModule mod_autoindex.c>
+    Options -Indexes
 </IfModule>
-# php -- END cPanel-generated handler, do not edit
+
+# Protect sensitive file extensions and hidden files
+<FilesMatch "\.(log|txt|json|sql|db|sqlite|md|bak|env|ini)$|^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>
+
+# Block ZIP archives (source code backups)
+<FilesMatch "\.zip$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>
+
+# Block dangerous admin/diagnostic scripts from public access
+<FilesMatch "^(seed_demo_data|diagnose_sync|fix_admin|fix_schema|fix_all_issues|fix_null_system_type|fix_sync_timestamp|fix_urdu|run_backfill|run_migration|schema_inspect|show_tables|migrate_to_saas|db_migrate_tenant|erp_migration|import_students|update_db|update_masjid_assets_table)\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>
+
+# URL Rewriting & Routing
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block access to archive, logs, php tools, and agent tool directories
+    RewriteRule ^(archive|logs|php|recover|recovered|\.agents)(/.*)?$ - [F,L]
+
+    # Authorization Headers pass-through
+    RewriteCond %{HTTP:Authorization} ^(.*)
+    RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
+    RewriteCond %{HTTP:X-API-KEY} ^(.*)
+    RewriteRule .* - [e=HTTP_X_API_KEY:%1]
+    RewriteCond %{HTTP:X-USER-TOKEN} ^(.*)
+    RewriteRule .* - [e=HTTP_X_USER_TOKEN:%1]
+
+    # Front Controller Routing
+    RewriteBase /
+    RewriteRule ^index\.php$ - [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . /index.php [L]
+</IfModule>

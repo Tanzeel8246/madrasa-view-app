@@ -3,6 +3,34 @@ import 'package:sqflite/sqflite.dart';
 
 class FinanceSyncSaver {
   static Future<void> save(Database db, Batch batch, Map<String, dynamic> data) async {
+    try {
+      final finCols = await db.rawQuery("PRAGMA table_info(finance)");
+      final finColNames = finCols.map((c) => c['name']?.toString()).toSet();
+      if (!finColNames.contains('account_id')) {
+        await db.execute("ALTER TABLE finance ADD COLUMN account_id INTEGER");
+      }
+      if (!finColNames.contains('payment_method')) {
+        await db.execute("ALTER TABLE finance ADD COLUMN payment_method TEXT DEFAULT 'Cash'");
+      }
+      if (!finColNames.contains('spender_name')) {
+        await db.execute("ALTER TABLE finance ADD COLUMN spender_name TEXT");
+      }
+
+      final mFinCols = await db.rawQuery("PRAGMA table_info(masjid_finance)");
+      final mFinColNames = mFinCols.map((c) => c['name']?.toString()).toSet();
+      if (!mFinColNames.contains('account_id')) {
+        await db.execute("ALTER TABLE masjid_finance ADD COLUMN account_id INTEGER");
+      }
+      if (!mFinColNames.contains('payment_method')) {
+        await db.execute("ALTER TABLE masjid_finance ADD COLUMN payment_method TEXT DEFAULT 'Cash'");
+      }
+      if (!mFinColNames.contains('spender_name')) {
+        await db.execute("ALTER TABLE masjid_finance ADD COLUMN spender_name TEXT");
+      }
+    } catch (e) {
+      debugPrint("Finance column verification error: $e");
+    }
+
     // 1. Finance History (Madrasa)
     if (data['finance_history'] != null) {
       try {
@@ -10,29 +38,40 @@ class FinanceSyncSaver {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
           final isDel = int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0;
           if (serverId > 0) {
+            batch.delete('finance',
+                where: 'server_id = ? AND id != ? AND (is_synced = 1 OR is_synced IS NULL)',
+                whereArgs: [serverId, serverId]);
+            final rawSys = item['system_type']?.toString().trim() ?? '';
+            final sysType = (rawSys.isNotEmpty && rawSys.toLowerCase() == 'masjid') ? 'Masjid' : 'Madrasa';
+            final rawType = item['type']?.toString().trim().toLowerCase() ?? '';
+            final normType = (rawType == 'income' || rawType == 'آمدن') ? 'Income' : 'Expense';
             batch.insert(
               'finance',
               {
                 'id': serverId,
                 'server_id': serverId,
                 'date': item['date']?.toString() ?? '',
-                'type': item['type']?.toString() ?? '',
+                'type': normType,
                 'amount': (item['amount'] != null)
                     ? double.tryParse(item['amount'].toString()) ?? 0.0
                     : 0.0,
                 'description': item['description']?.toString() ?? '',
                 'head_id': item['head_id'],
+                'head_name': item['head_name']?.toString() ?? '',
                 'manual_receipt_no':
                     item['manual_receipt_no']?.toString() ?? '',
                 'donor_name': item['donor_name']?.toString() ?? '',
                 'donor_address': item['donor_address']?.toString() ?? '',
+                'spender_name': item['spender_name']?.toString() ?? '',
+                'account_id': item['account_id'] != null ? int.tryParse(item['account_id'].toString()) : null,
+                'payment_method': item['payment_method']?.toString() ?? 'Cash',
                 'computer_receipt_no': item['computer_receipt_no'],
                 'receipt_no': item['receipt_no']?.toString() ??
                     item['computer_receipt_no']?.toString(),
                 'user_id':
                     int.tryParse(item['user_id']?.toString() ?? '1') ?? 1,
                 'user_name': item['user_name']?.toString() ?? 'Admin',
-                'system_type': item['system_type']?.toString() ?? 'Madrasa',
+                'system_type': sysType,
                 'is_deleted': isDel,
                 'is_synced': 1,
               },
@@ -53,13 +92,18 @@ class FinanceSyncSaver {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
           final isDel = int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0;
           if (serverId > 0) {
+            batch.delete('masjid_finance',
+                where: 'server_id = ? AND id != ? AND (is_synced = 1 OR is_synced IS NULL)',
+                whereArgs: [serverId, serverId]);
+            final rawMType = item['type']?.toString().trim().toLowerCase() ?? '';
+            final normMType = (rawMType == 'expense' || rawMType == 'خرچ') ? 'Expense' : 'Income';
             batch.insert(
               'masjid_finance',
               {
                 'id': serverId,
                 'server_id': serverId,
                 'date': item['date']?.toString() ?? '',
-                'type': item['type']?.toString() ?? 'Income',
+                'type': normMType,
                 'amount': (item['amount'] != null)
                     ? double.tryParse(item['amount'].toString()) ?? 0.0
                     : 0.0,
@@ -70,6 +114,9 @@ class FinanceSyncSaver {
                     item['manual_receipt_no']?.toString() ?? '',
                 'donor_name': item['donor_name']?.toString() ?? '',
                 'donor_address': item['donor_address']?.toString() ?? '',
+                'spender_name': item['spender_name']?.toString() ?? '',
+                'account_id': item['account_id'] != null ? int.tryParse(item['account_id'].toString()) : null,
+                'payment_method': item['payment_method']?.toString() ?? 'Cash',
                 'computer_receipt_no': item['computer_receipt_no'],
                 'receipt_no': item['receipt_no']?.toString() ??
                     (item['computer_receipt_no'] != null
@@ -88,6 +135,32 @@ class FinanceSyncSaver {
         }
       } catch (e) {
         debugPrint("Sync Error (masjid_finance): $e");
+      }
+    }
+
+    // 2.1 Process Deleted Finance IDs from Server (Trash Synchronization)
+    final deletedFinanceIds = data['deleted_finance_ids'];
+    if (deletedFinanceIds != null && deletedFinanceIds is List) {
+      try {
+        for (var delId in deletedFinanceIds) {
+          final idVal = int.tryParse(delId.toString());
+          if (idVal != null && idVal > 0) {
+            batch.update(
+              'finance',
+              {'is_deleted': 1, 'computer_receipt_no': null},
+              where: 'id = ? OR server_id = ?',
+              whereArgs: [idVal, idVal],
+            );
+            batch.update(
+              'masjid_finance',
+              {'is_deleted': 1, 'computer_receipt_no': null},
+              where: 'id = ? OR server_id = ?',
+              whereArgs: [idVal, idVal],
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint("Sync Error (deleted_finance_ids): $e");
       }
     }
 

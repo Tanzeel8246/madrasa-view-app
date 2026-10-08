@@ -58,12 +58,30 @@ app.*.map.json
 .codex/
 .sixth/
 scratch/
-scratch.py
+temp_*
+scripts/dev_tools/
+
+# Database & log files
+madrasa.db
+*.log
+debug_log.txt
+header_log.txt
+old_file.txt
 temp.json
 frames_list.txt
-*_rewrite_*.py
-rewrite_*.py
-cleanup_*.py
-accurate_rewrite_*.py
-build_release_attempt.log
+
+# Backup & Old files
+*.bak
+*.old
+
+# Archives & ZIPs
+*.zip
+madrasa_web_app*.zip
+madrasa_web_update*.zip
+php.zip
+
+# Python & scripts
+*.py
+*.pyc
+*.ps1
 *.mp4

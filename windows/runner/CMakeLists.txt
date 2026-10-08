@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.14)
 project(runner LANGUAGES CXX)
 
+# Automatically generate resources/app_icon.ico from assets/logo.png
+find_program(POWERSHELL_PATH powershell)
+if(POWERSHELL_PATH)
+  execute_process(
+    COMMAND "${POWERSHELL_PATH}" -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/generate_icon.ps1"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+endif()
+
 # Define the application target. To change its name, change BINARY_NAME in the
 # top-level CMakeLists.txt, not the value here, or `flutter run` will no longer
 # work.

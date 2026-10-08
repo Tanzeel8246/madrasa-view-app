@@ -2,19 +2,21 @@
 require_once 'db.php';
 session_start();
 
-if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['admin', 'nazim', 'teacher'])) {
+if (!isset($_SESSION['user_id']) || (!has_perm('manage_complaints') && ($_SESSION['role'] ?? '') !== 'admin')) {
     header("Location: dashboard.php");
     exit;
 }
 
 // Handle Delete
+$cur_tenant_id = (int)get_current_tenant_id();
+
 if (isset($_GET['del_id']) && isset($_GET['type'])) {
     $id = (int)$_GET['del_id'];
     $type = $_GET['type'];
     if ($type == 'admin') {
-        $pdo->prepare("DELETE FROM complaints WHERE id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM complaints WHERE id = ? AND tenant_id = ?")->execute([$id, $cur_tenant_id]);
     } else {
-        $pdo->prepare("DELETE FROM parent_complaints WHERE id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM parent_complaints WHERE id = ? AND tenant_id = ?")->execute([$id, $cur_tenant_id]);
     }
     header("Location: manage_complaints.php?msg=deleted");
     exit;
@@ -30,19 +32,22 @@ if (isset($_POST['edit_complaint'])) {
         $cat = $_POST['category'];
         $desc = $_POST['description'];
         $final = "[$cat] $desc";
-        $pdo->prepare("UPDATE complaints SET date = ?, complaint = ? WHERE id = ?")->execute([$date, $final, $id]);
+        $pdo->prepare("UPDATE complaints SET date = ?, complaint = ? WHERE id = ? AND tenant_id = ?")->execute([$date, $final, $id, $cur_tenant_id]);
     } else {
         $cat = $_POST['category'];
         $desc = $_POST['description'];
-        $pdo->prepare("UPDATE parent_complaints SET date = ?, category = ?, description = ? WHERE id = ?")->execute([$date, $cat, $desc, $id]);
+        $pdo->prepare("UPDATE parent_complaints SET date = ?, category = ?, description = ? WHERE id = ? AND tenant_id = ?")->execute([$date, $cat, $desc, $id, $cur_tenant_id]);
     }
     header("Location: manage_complaints.php?msg=updated");
     exit;
 }
 
-// Fetch all
-$admin_comp = $pdo->query("SELECT c.id, c.date, c.complaint, s.name as student_name, s.father_name, 'admin' as type FROM complaints c JOIN students s ON c.student_id = s.id ORDER BY c.date DESC")->fetchAll(PDO::FETCH_ASSOC);
-$parent_comp = $pdo->query("SELECT p.id, p.date, p.category, p.description, s.name as student_name, s.father_name, 'parent' as type FROM parent_complaints p JOIN students s ON p.student_id = s.id ORDER BY p.date DESC")->fetchAll(PDO::FETCH_ASSOC);
+// Fetch all with System Type Isolation
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys === 'Masjid') ? "s.system_type = 'Masjid'" : "(s.system_type = 'Madrasa' OR s.system_type IS NULL OR s.system_type = '')";
+
+$admin_comp = $pdo->query("SELECT c.id, c.date, c.complaint, s.name as student_name, s.father_name, 'admin' as type FROM complaints c JOIN students s ON c.student_id = s.id WHERE (c.is_deleted = 0 OR c.is_deleted IS NULL) AND $sys_cond AND c.tenant_id = $cur_tenant_id AND s.tenant_id = $cur_tenant_id ORDER BY c.date DESC")->fetchAll(PDO::FETCH_ASSOC);
+$parent_comp = $pdo->query("SELECT p.id, p.date, p.category, p.description, s.name as student_name, s.father_name, 'parent' as type FROM parent_complaints p JOIN students s ON p.student_id = s.id WHERE (p.is_deleted = 0 OR p.is_deleted IS NULL) AND $sys_cond AND p.tenant_id = $cur_tenant_id AND s.tenant_id = $cur_tenant_id ORDER BY p.date DESC")->fetchAll(PDO::FETCH_ASSOC);
 
 $all_complaints = [];
 foreach ($admin_comp as $c) {

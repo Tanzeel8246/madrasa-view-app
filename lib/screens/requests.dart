@@ -6,6 +6,7 @@ import '../db_helper.dart';
 import '../utils/globals.dart';
 import '../widgets/app_drawer.dart';
 import '../utils/sync_service.dart';
+import '../utils/system_type_global.dart';
 import 'dashboard.dart';
 
 class RequestsPage extends StatefulWidget {
@@ -37,13 +38,8 @@ class _RequestsPageState extends State<RequestsPage>
     final db = DBHelper();
     final database = await db.database;
 
-    final fees = await database.query('fee_submissions',
-        where: 'is_deleted = 0 OR is_deleted IS NULL', orderBy: 'id DESC');
-    final leaves = await database.query('leave_applications',
-        where: 'is_deleted = 0 OR is_deleted IS NULL', orderBy: 'id DESC');
-    final complaints = await database.query('parent_complaints',
-        where: 'is_deleted = 0 OR is_deleted IS NULL', orderBy: 'id DESC');
-    final students = await db.getStudents();
+    final currentSys = SystemTypeGlobal.currentSystemType.value;
+    final students = await db.getStudents(systemType: currentSys);
 
     // Join with student names
     Map<String, String> studentNames = {
@@ -51,6 +47,18 @@ class _RequestsPageState extends State<RequestsPage>
         (s['id']?.toString() ?? ''):
             "${s['name'] ?? ''} - ${s['father_name'] ?? ''}".trim()
     };
+    final validStudentIds = studentNames.keys.toSet();
+
+    final allFees = await database.query('fee_submissions',
+        where: 'is_deleted = 0 OR is_deleted IS NULL', orderBy: 'id DESC');
+    final allLeaves = await database.query('leave_applications',
+        where: 'is_deleted = 0 OR is_deleted IS NULL', orderBy: 'id DESC');
+    final allComplaints = await database.query('parent_complaints',
+        where: 'is_deleted = 0 OR is_deleted IS NULL', orderBy: 'id DESC');
+
+    final fees = allFees.where((f) => validStudentIds.contains(f['student_id']?.toString())).toList();
+    final leaves = allLeaves.where((l) => validStudentIds.contains(l['student_id']?.toString())).toList();
+    final complaints = allComplaints.where((c) => validStudentIds.contains(c['student_id']?.toString())).toList();
 
     setState(() {
       _fees = fees
@@ -294,10 +302,20 @@ class _RequestsPageState extends State<RequestsPage>
 
   Future<int> _nextComputerReceiptNo(dynamic database) async {
     final userId = currentUserId.value ?? 1;
-    final minNo = userId * 100000;
-    final maxLimit = (userId + 1) * 100000;
+    final int minNo;
+    final int maxLimit;
+    if (userId == 1) {
+      minNo = 300000;
+      maxLimit = 400000;
+    } else if (userId == 3) {
+      minNo = 700000;
+      maxLimit = 800000;
+    } else {
+      minNo = userId * 100000;
+      maxLimit = (userId + 1) * 100000;
+    }
     final rows = await database.rawQuery(
-      'SELECT MAX(computer_receipt_no) as max_no FROM finance WHERE computer_receipt_no >= ? AND computer_receipt_no < ?',
+      'SELECT MAX(computer_receipt_no) as max_no FROM finance WHERE computer_receipt_no >= ? AND computer_receipt_no < ? AND (is_deleted = 0 OR is_deleted IS NULL)',
       [minNo, maxLimit],
     );
     final maxNo = int.tryParse(rows.first['max_no']?.toString() ?? '');
@@ -579,13 +597,18 @@ class _RequestsPageState extends State<RequestsPage>
               ),
               body: _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildFeeTab(isUrdu),
-                        _buildLeaveTab(isUrdu),
-                        _buildComplaintTab(isUrdu),
-                      ],
+                  : Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1100),
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildFeeTab(isUrdu),
+                            _buildLeaveTab(isUrdu),
+                            _buildComplaintTab(isUrdu),
+                          ],
+                        ),
+                      ),
                     ),
             ),
           ),

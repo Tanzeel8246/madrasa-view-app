@@ -4,7 +4,7 @@ require_once 'db.php';
 if (!isset($_GET['id'])) { die('Invalid Request'); }
 
 $id = (int)$_GET['id'];
-$row = $pdo->prepare("SELECT f.*, h.name AS head_name FROM finance f LEFT JOIN heads h ON h.id = f.head_id WHERE f.id = ? LIMIT 1");
+$row = $pdo->prepare("SELECT f.*, h.name AS head_name FROM finance f LEFT JOIN acc_chart_of_accounts h ON h.id = f.head_id WHERE f.id = ? LIMIT 1");
 $row->execute([$id]);
 $data = $row->fetch(PDO::FETCH_ASSOC);
 
@@ -136,7 +136,7 @@ function numberToUrdu($num) {
         .receipt-container {
             width: 250mm; 
             height: 160mm; 
-            background-image: url('<?= (isset($data['system_type']) && $data['system_type'] == 'Masjid') ? 'uploads/MAMFSS.webp' : 'uploads/receipt_bg.webp' ?>');
+            background-image: url('uploads/receipt_bg.webp');
             background-size: 100% 100%;
             background-repeat: no-repeat;
             background-position: center;
@@ -172,14 +172,14 @@ function numberToUrdu($num) {
         }
 
         /* Positions and explicit !important sizes with line decoration */
-        .f-comp-no { top: 34%; left: 13%; font-size: 26px !important; color: #000; font-family: Arial, sans-serif !important; font-weight: 900 !important; }
+        .f-comp-no { top: 35%; left: 13%; font-size: 26px !important; color: #000; font-family: Arial, sans-serif !important; font-weight: 900 !important; }
         .f-date { top: 46.5%; left: 12.5%; font-family: Arial, sans-serif !important; font-size: 22px !important; font-weight: 900 !important; }
         
-        .f-name { top: 41.5%; right: 8%; font-size: 52px !important; font-weight: bold !important; width: 65%; text-align: right; border-bottom: 2px dotted #444; padding-bottom: 2px; }
-        .f-address { top: 54.5%; right: 8%; font-size: 38px !important; font-weight: bold !important; width: 78%; overflow: hidden; text-align: right; border-bottom: 2px dotted #444; padding-bottom: 2px; }
-        .f-head { top: 67.5%; right: 8%; font-size: 38px !important; font-weight: bold !important; width: 50%; text-align: right; border-bottom: 2px dotted #444; padding-bottom: 2px; }
+        .f-name { top: 46.5%; right: 8%; font-size: 52px !important; font-weight: bold !important; width: 65%; text-align: right; border-bottom: 2px dotted #444; padding-bottom: 2px; }
+        .f-address { top: 59.5%; right: 8%; font-size: 38px !important; font-weight: bold !important; width: 78%; overflow: hidden; text-align: right; border-bottom: 2px dotted #444; padding-bottom: 2px; }
+        .f-head { top: 72.5%; right: 8%; font-size: 38px !important; font-weight: bold !important; width: 50%; text-align: right; border-bottom: 2px dotted #444; padding-bottom: 2px; }
         
-        .f-amount-box { top: 68.5%; left: 24%; font-size: 26px !important; font-family: Arial, sans-serif !important; font-weight: 900 !important; }
+        .f-amount-box { top: 73.5%; left: 24%; font-size: 26px !important; font-family: Arial, sans-serif !important; font-weight: 900 !important; }
         
         .f-sig-img { 
             position: absolute;

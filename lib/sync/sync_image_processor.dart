@@ -22,6 +22,9 @@ class SyncImageProcessor {
       } else if ((table == 'teachers' || table == 'maktab_teachers') &&
           map['photo'] != null) {
         map['photo'] = await fileToBase64(map['photo']);
+      } else if ((table == 'finance' || table == 'masjid_finance') &&
+          map['bill_image'] != null) {
+        map['bill_image'] = await fileToBase64(map['bill_image']);
       }
       processed.add(map);
     }

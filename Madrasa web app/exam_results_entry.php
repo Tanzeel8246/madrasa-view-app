@@ -2,15 +2,26 @@
 require_once 'db.php';
 include 'header.php';
 
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'administrator'], true);
+$p_needed = ($sys === 'Masjid') ? 'manage_masjid_exams' : 'manage_exams';
+if (!$is_admin && !app_has_perm($p_needed)) {
+    echo "<div class='alert alert-danger m-4 text-center fw-bold'>آپ کو امتحانی نتائج اندراج کی اجازت نہیں ہے۔</div>";
+    include 'footer.php';
+    exit;
+}
+
 $exam_id = isset($_GET['exam_id']) ? (int)$_GET['exam_id'] : 0;
 if (!$exam_id) {
     echo "<div class='alert alert-danger'>امتحان کا انتخاب نہیں کیا گیا۔</div>";
     include 'footer.php';
     exit;
 }
+$cur_tenant_id = (int)get_current_tenant_id();
 
-$exam = $pdo->prepare("SELECT * FROM exams WHERE id = ?");
-$exam->execute([$exam_id]);
+$exam = $pdo->prepare("SELECT * FROM exams WHERE id = ? AND tenant_id = ?");
+$exam->execute([$exam_id, $cur_tenant_id]);
 $exam_data = $exam->fetch();
 
 if (!$exam_data) {
@@ -40,8 +51,8 @@ if ($selected_class_name) {
         }
     } catch (Exception $e) {}
 
-    $stmt = $pdo->prepare("SELECT * FROM classes WHERE name = ?");
-    $stmt->execute([$selected_class_name]);
+    $stmt = $pdo->prepare("SELECT * FROM classes WHERE name = ? AND tenant_id = ?");
+    $stmt->execute([$selected_class_name, $cur_tenant_id]);
     $class_data = $stmt->fetch() ?: []; // Ensure array even if not found
 }
 
@@ -64,8 +75,8 @@ $total_dynamic_marks = 0;
 
 if ($class_data) {
     // 1. Query class_periods for the given class id
-    $stmt_cp = $pdo->prepare("SELECT books FROM class_periods WHERE class_id = ? ORDER BY period_no ASC");
-    $stmt_cp->execute([$class_data['id']]);
+    $stmt_cp = $pdo->prepare("SELECT books FROM class_periods WHERE class_id = ? AND tenant_id = ? ORDER BY period_no ASC");
+    $stmt_cp->execute([$class_data['id'], $cur_tenant_id]);
     $periods_books = $stmt_cp->fetchAll(PDO::FETCH_COLUMN);
     
     $books_found = array_filter(array_map('trim', $periods_books));
@@ -101,8 +112,18 @@ if ($class_data) {
     }
 }
 
-// تمام کلاسز حاصل کریں (Dropdown Fix)
-$classes = get_allowed_classes($pdo);
+// تمام مجاز کلاسز حاصل کریں
+$classes = get_allowed_classes($pdo, 'id ASC', null, null, $sys);
+$allowed_class_names = array_values(array_filter(array_unique(array_column($classes, 'name'))));
+
+if (!$is_admin) {
+    if (!empty($selected_class_name) && !in_array($selected_class_name, $allowed_class_names, true)) {
+        $selected_class_name = '';
+    }
+    if (empty($selected_class_name) && !empty($allowed_class_names)) {
+        $selected_class_name = $allowed_class_names[0];
+    }
+}
 
 // رزلٹ محفوظ کرنا
 if (isset($_POST['save_results'])) {
@@ -146,16 +167,16 @@ if (isset($_POST['save_results'])) {
             }
             $subjects_marks_json = json_encode($subj_marks_array, JSON_UNESCAPED_UNICODE);
             
-            $check = $pdo->prepare("SELECT id FROM exam_results WHERE exam_id = ? AND student_id = ? AND subject = ?");
-            $check->execute([$exam_id, $student_id, $subject]);
+            $check = $pdo->prepare("SELECT id FROM exam_results WHERE exam_id = ? AND student_id = ? AND subject = ? AND tenant_id = ?");
+            $check->execute([$exam_id, $student_id, $subject, $cur_tenant_id]);
             $existing = $check->fetch();
 
             if ($existing) {
-                $stmt = $pdo->prepare("UPDATE exam_results SET marks_obtained=?, total_marks=?, status=?, remarks=?, grade=?, pukhtagi=?, tajweed=?, lahja=?, masail=?, miqdar_khwandgi=?, p1=?, p2=?, p3=?, p4=?, p5=?, p6=?, subjects_marks=? WHERE id=?");
-                $stmt->execute([$marks, $total, $status, $remarks, $grade, $pukhtagi, $tajweed, $lahja, $masail, $miqdar, $p1, $p2, $p3, $p4, $p5, $p6, $subjects_marks_json, $existing['id']]);
+                $stmt = $pdo->prepare("UPDATE exam_results SET marks_obtained=?, total_marks=?, status=?, remarks=?, grade=?, pukhtagi=?, tajweed=?, lahja=?, masail=?, miqdar_khwandgi=?, p1=?, p2=?, p3=?, p4=?, p5=?, p6=?, subjects_marks=? WHERE id=? AND tenant_id=?");
+                $stmt->execute([$marks, $total, $status, $remarks, $grade, $pukhtagi, $tajweed, $lahja, $masail, $miqdar, $p1, $p2, $p3, $p4, $p5, $p6, $subjects_marks_json, $existing['id'], $cur_tenant_id]);
             } else {
-                $stmt = $pdo->prepare("INSERT INTO exam_results (exam_id, student_id, subject, marks_obtained, total_marks, status, remarks, grade, pukhtagi, tajweed, lahja, masail, miqdar_khwandgi, p1, p2, p3, p4, p5, p6, subjects_marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$exam_id, $student_id, $subject, $marks, $total, $status, $remarks, $grade, $pukhtagi, $tajweed, $lahja, $masail, $miqdar, $p1, $p2, $p3, $p4, $p5, $p6, $subjects_marks_json]);
+                $stmt = $pdo->prepare("INSERT INTO exam_results (exam_id, student_id, subject, marks_obtained, total_marks, status, remarks, grade, pukhtagi, tajweed, lahja, masail, miqdar_khwandgi, p1, p2, p3, p4, p5, p6, subjects_marks, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$exam_id, $student_id, $subject, $marks, $total, $status, $remarks, $grade, $pukhtagi, $tajweed, $lahja, $masail, $miqdar, $p1, $p2, $p3, $p4, $p5, $p6, $subjects_marks_json, $cur_tenant_id]);
             }
         }
         $pdo->commit();
@@ -168,16 +189,20 @@ if (isset($_POST['save_results'])) {
 }
 
 // طلباء کی فہرست
-$student_query = "SELECT id, name, father_name, admission_number, serial_no, class FROM students WHERE status='Active' AND is_deleted=0";
+$sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+$privacy_sql = get_student_class_privacy_sql($pdo, 'class');
+$student_query = "SELECT id, name, father_name, admission_number, serial_no, class FROM students WHERE (LOWER(TRIM(status)) IN ('active', 'present', 'حاضر', '') OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND $sys_cond AND tenant_id = $cur_tenant_id AND ($privacy_sql)";
 if ($selected_class_name) {
     $student_query .= " AND class = " . $pdo->quote($selected_class_name);
+} elseif (!$is_admin) {
+    $student_query .= " AND 1=0";
 }
 $student_query .= " ORDER BY name ASC";
 $students = $pdo->query($student_query)->fetchAll();
 
 $current_subject = $is_hifz_class ? 'Quran' : $selected_subject;
-$results_raw = $pdo->prepare("SELECT * FROM exam_results WHERE exam_id = ? AND subject = ?");
-$results_raw->execute([$exam_id, $current_subject]);
+$results_raw = $pdo->prepare("SELECT * FROM exam_results WHERE exam_id = ? AND subject = ? AND tenant_id = ?");
+$results_raw->execute([$exam_id, $current_subject, $cur_tenant_id]);
 $existing_results = [];
 foreach ($results_raw->fetchAll() as $r) {
     $existing_results[$r['student_id']] = $r;

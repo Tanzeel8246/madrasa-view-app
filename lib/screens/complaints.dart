@@ -44,7 +44,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
   }
 
   Future<void> _loadStudents() async {
-    final data = await DBHelper().getStudents();
+    final data = await DBHelper().getStudentsForUser();
     setState(() {
       _students = data
           .where((s) =>
@@ -63,10 +63,12 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
     final categoryRows = await data.query('parent_complaints',
         columns: ['category'], distinct: true);
     final complaints = await DBHelper().getComplaints();
-    final students = await DBHelper().getStudents();
+    final students = await DBHelper().getStudentsForUser();
+    final allowedStudentIds = students.map((s) => s['id']).toSet();
     final recent = <Map<String, dynamic>>[];
     for (final c in complaints) {
       if (c['is_deleted'] == 1) continue;
+      if (!allowedStudentIds.contains(c['student_id'])) continue;
       final student = students.firstWhere(
         (s) => s['id'] == c['student_id'],
         orElse: () => <String, dynamic>{},
@@ -333,10 +335,13 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
               ),
               body: _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(15),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                  : Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1100),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(15),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const Icon(Icons.feedback,
                               size: 60, color: Colors.orange),
@@ -484,6 +489,8 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                         ],
                       ),
                     ),
+                  ),
+                ),
             ),
           ),
         );

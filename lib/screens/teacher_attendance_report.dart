@@ -83,12 +83,30 @@ class _TeacherAttendanceReportPageState
     try {
       final db = DBHelper();
       final teachers = await db.getTeachers();
-      final classes = await db.getClasses();
-      final activeTeachers = teachers.where((t) {
-        final st = (t['status'] ?? '').toString().trim().toLowerCase();
+      final classes = await db.getClassesForUser();
+      final reportYm = DateFormat('yyyy-MM').format(_startDate);
+
+      final validTeachers = teachers.where((t) {
         final isDel = int.tryParse(t['is_deleted']?.toString() ?? '0') ?? 0;
-        return isDel == 0 &&
-            (st.isEmpty || st == 'active' || st == 'present' || st == 'حاضر');
+        if (isDel != 0) return false;
+
+        final st = (t['status'] ?? '').toString().trim().toLowerCase();
+        final isInactive = st.isNotEmpty && st != 'active' && st != 'present' && st != 'حاضر' && st != 'فعال';
+
+        final joinDate = t['joining_date']?.toString().trim();
+        final joinYm = (joinDate != null && joinDate.length >= 7) ? joinDate.substring(0, 7) : null;
+        if (joinYm != null && reportYm.compareTo(joinYm) < 0) {
+          return false;
+        }
+
+        if (isInactive) {
+          final statusDate = (t['status_change_date'] ?? t['resignation_date'])?.toString().trim();
+          final statusYm = (statusDate != null && statusDate.length >= 7) ? statusDate.substring(0, 7) : null;
+          if (statusYm != null && reportYm.compareTo(statusYm) > 0) {
+            return false;
+          }
+        }
+        return true;
       }).toList()
         ..sort((a, b) => (a['name'] ?? '')
             .toString()
@@ -101,13 +119,19 @@ class _TeacherAttendanceReportPageState
       }
 
       final assignments = buildTeacherPeriodAssignments(
-        teachers: activeTeachers,
+        teachers: validTeachers,
         classes: classes,
       );
 
+      final assignedTeacherIds = assignments.map((a) => a.teacherId).toSet();
+      final relevantTeachers = validTeachers.where((t) {
+        final id = int.tryParse(t['id']?.toString() ?? '') ?? 0;
+        return assignedTeacherIds.contains(id);
+      }).toList();
+
       if (!mounted) return;
       setState(() {
-        _teachers = activeTeachers;
+        _teachers = relevantTeachers;
         _classes = classes;
         _records = records;
         _assignments = assignments;
@@ -212,7 +236,19 @@ class _TeacherAttendanceReportPageState
 
   Map<String, int> _countsForRow(_TeacherAttendanceRow row) {
     final counts = {'P': 0, 'T': 0, 'A': 0, 'L': 0, 'lateMinutes': 0};
+    final t = _teachers.firstWhere(
+      (tc) => tc['id'] == row.teacherId,
+      orElse: () => const {},
+    );
+    final joinDate = t['joining_date']?.toString().trim();
+    final cleanJoin = (joinDate != null && joinDate.isNotEmpty && joinDate != 'null')
+        ? (joinDate.length >= 10 ? joinDate.substring(0, 10) : joinDate)
+        : null;
+
     for (final day in _days) {
+      if (cleanJoin != null && _fmt.format(day).compareTo(cleanJoin) < 0) {
+        continue;
+      }
       for (final period in row.periods) {
         final record = _recordFor(row, day, period);
         final status = _statusFor(record);
@@ -509,6 +545,18 @@ class _TeacherAttendanceReportPageState
   }
 
   Widget _periodDots(_TeacherAttendanceRow row, DateTime day) {
+    final t = _teachers.firstWhere(
+      (tc) => tc['id'] == row.teacherId,
+      orElse: () => const {},
+    );
+    final joinDate = t['joining_date']?.toString().trim();
+    if (joinDate != null && joinDate.isNotEmpty && joinDate != 'null') {
+      final cleanJoin = joinDate.length >= 10 ? joinDate.substring(0, 10) : joinDate;
+      final dayStr = _fmt.format(day);
+      if (dayStr.compareTo(cleanJoin) < 0) {
+        return const Center(child: Text("-", style: TextStyle(color: Colors.grey, fontSize: 11)));
+      }
+    }
     final statuses =
         row.periods.map((p) => _statusFor(_recordFor(row, day, p))).toList();
     if (statuses.every((s) => s.isEmpty)) {

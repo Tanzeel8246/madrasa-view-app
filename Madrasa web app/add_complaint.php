@@ -1,4 +1,5 @@
 <?php require_once 'db.php'; include 'header.php'; 
+$cur_tenant_id = (int)get_current_tenant_id();
 
 // صرف ایڈمن کو اجازت ہے
 if (!in_array($_SESSION['role'] ?? '', ['admin', 'nazim', 'teacher'])) { echo "<script>window.location='dashboard.php';</script>"; exit; }
@@ -13,11 +14,11 @@ if (isset($_POST['save_complaint'])) {
     }
 
     $final_complaint = "[$cat] " . $_POST['complaint'];
-    $stmt = $pdo->prepare("INSERT INTO complaints (student_id, date, complaint) VALUES (?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO complaints (student_id, date, complaint, tenant_id) VALUES (?, ?, ?, ?)");
     
     if (!empty($_POST['std_ids']) && is_array($_POST['std_ids'])) {
         foreach ($_POST['std_ids'] as $std_id) {
-            $stmt->execute([$std_id, $_POST['date'], $final_complaint]);
+            $stmt->execute([$std_id, $_POST['date'], $final_complaint, $cur_tenant_id]);
         }
         echo "<div class='alert alert-success'>✅ شکایت / نوٹ تمام منتخب طلباء کے ریکارڈ میں کامیابی سے شامل کر دیا گیا ہے!</div>";
     } else {
@@ -27,20 +28,19 @@ if (isset($_POST['save_complaint'])) {
 
 // ڈیلیٹ کرنا (اگر غلطی سے درج ہو جائے)
 if (isset($_GET['del'])) {
-    $pdo->prepare("DELETE FROM complaints WHERE id=?")->execute([$_GET['del']]);
+    $pdo->prepare("DELETE FROM complaints WHERE id=? AND tenant_id=?")->execute([$_GET['del'], $cur_tenant_id]);
     echo "<script>window.location='add_complaint.php';</script>";
 }
 
 // طلباء کی لسٹ
-$students = $pdo->query("SELECT * FROM students WHERE status='Active' AND is_deleted=0 ORDER BY name ASC")->fetchAll();
+$students = $pdo->query("SELECT * FROM students WHERE status='Active' AND is_deleted=0 AND tenant_id = {$cur_tenant_id} ORDER BY name ASC")->fetchAll();
 
 // کیٹیگریز
-$categories = $pdo->query("SELECT DISTINCT category FROM parent_complaints WHERE category != ''")->fetchAll(PDO::FETCH_COLUMN);
+$categories = $pdo->query("SELECT DISTINCT category FROM parent_complaints WHERE category != '' AND tenant_id = {$cur_tenant_id}")->fetchAll(PDO::FETCH_COLUMN);
 
 // حالیہ شکایات (Recent)
-// چونکہ اب ہم complaints ٹیبل استعمال کر رہے ہیں اس لیے فلٹر ہٹا دیا گیا ہے
-$stmt = $pdo->prepare("SELECT c.id, c.date, c.complaint AS description, s.name, s.father_name, s.admission_number FROM complaints c JOIN students s ON c.student_id = s.id ORDER BY c.date DESC, c.id DESC LIMIT 50");
-$stmt->execute();
+$stmt = $pdo->prepare("SELECT c.id, c.date, c.complaint AS description, s.name, s.father_name, s.admission_number FROM complaints c JOIN students s ON c.student_id = s.id WHERE c.tenant_id = ? AND s.tenant_id = ? ORDER BY c.date DESC, c.id DESC LIMIT 50");
+$stmt->execute([$cur_tenant_id, $cur_tenant_id]);
 $recent = $stmt->fetchAll();
 ?>
 

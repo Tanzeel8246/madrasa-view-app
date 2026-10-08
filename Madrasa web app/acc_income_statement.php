@@ -4,7 +4,13 @@ require_once 'finance_accounting_bridge.php';
 include 'header.php'; 
 
 // سیکیورٹی چیک
-if (!isset($_SESSION['user_id']) || !app_has_perm('manage_erp')) { 
+if (!isset($_SESSION['user_id'])) { 
+    echo "<script>window.location='login.php';</script>"; 
+    exit; 
+}
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_erp')) { 
     echo "<script>window.location='dashboard.php';</script>"; 
     exit; 
 }
@@ -76,15 +82,15 @@ $net_income = $total_revenue - $total_expense;
         <form method="GET" class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="fw-bold">From Date</label>
-                <input type="date" name="from" class="form-control" value="<?php echo e($from_date); ?>" required>
+                <input type="date" name="from" id="incFrom" class="form-control" value="<?php echo e($from_date); ?>" onchange="if(this.value && document.getElementById('incTo').value) this.form.submit();" required>
             </div>
             <div class="col-md-3">
                 <label class="fw-bold">To Date</label>
-                <input type="date" name="to" class="form-control" value="<?php echo e($to_date); ?>" required>
+                <input type="date" name="to" id="incTo" class="form-control" value="<?php echo e($to_date); ?>" onchange="if(this.value && document.getElementById('incFrom').value) this.form.submit();" required>
             </div>
             <div class="col-md-3">
                 <label class="fw-bold">شعبہ (Department Filter)</label>
-                <select name="department_id" class="form-select">
+                <select name="department_id" class="form-select" onchange="this.form.submit()">
                     <option value="">-- All Departments --</option>
                     <?php foreach($departments as $d): ?>
                         <option value="<?php echo $d['id']; ?>" <?php echo $dept_id == $d['id'] ? 'selected' : ''; ?>><?php echo $d['name']; ?></option>

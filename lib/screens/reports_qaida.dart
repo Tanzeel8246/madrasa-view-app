@@ -1,3 +1,4 @@
+import '../utils/performance_helper.dart';
 // ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously, deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,10 +8,10 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../db_helper.dart';
 import '../utils/globals.dart';
-import '../utils/performance_helper.dart';
 import '../utils/sync_service.dart';
 import '../widgets/app_drawer.dart';
 import 'dashboard.dart';
+import 'student_report.dart';
 
 class QaidaReportPage extends StatefulWidget {
   final String? className;
@@ -58,16 +59,22 @@ class _QaidaReportPageState extends State<QaidaReportPage> {
   }
 
   DateTime _parseRobust(String dateStr) {
-    if (dateStr.isEmpty) return DateTime.now();
-    try {
-      return intl.DateFormat('d/M/yyyy').parse(dateStr);
-    } catch (_) {
-      try {
-        return DateTime.parse(dateStr);
-      } catch (_) {
-        return DateTime.now();
-      }
-    }
+    return PerformanceCalculator.parseDateRobust(dateStr);
+  }
+
+  String _normalizeClassName(dynamic value) {
+    return (value?.toString() ?? '')
+        .trim()
+        .replaceAll('ٰ', '')
+        .replaceAll('ى', 'ی')
+        .replaceAll('ي', 'ی')
+        .replaceAll('ك', 'ک')
+        .replaceAll(RegExp(r'\s+'), '')
+        .toLowerCase();
+  }
+
+  bool _isActiveStudent(Map<String, dynamic> s) {
+    return PerformanceCalculator.isStudentActive(s);
   }
 
   Future<void> _loadData() async {
@@ -78,22 +85,41 @@ class _QaidaReportPageState extends State<QaidaReportPage> {
       int weekStartDay = int.tryParse(settings['week_start_day']?.toString() ?? '6') ?? 6;
 
       // Load students
-      List<Map<String, dynamic>> allStudents;
-      if (widget.className != null && widget.className!.isNotEmpty) {
-        allStudents = await db.query(
-          'students',
-          where: '(class_name = ? OR class = ?) AND (is_deleted = 0 OR is_deleted IS NULL)',
-          whereArgs: [widget.className, widget.className],
-          orderBy: 'name ASC',
-        );
-      } else {
-        allStudents = await db.query(
-          'students',
-          where: 'is_deleted = 0 OR is_deleted IS NULL',
-          orderBy: 'name ASC',
-        );
+      final allStudents = await dbHelper.getStudentsForUser(includeInactive: true);
+      List<Map<String, dynamic>> extraMaktabStudents = [];
+      try {
+        extraMaktabStudents = await dbHelper.getMaktabStudentsForUser(includeInactive: true);
+      } catch (_) {}
+      final combinedStudents = [...allStudents, ...extraMaktabStudents];
+
+      final validStudents = <Map<String, dynamic>>[];
+      final Set<String> seenIds = {};
+
+      for (var s in combinedStudents) {
+        if (!_isActiveStudent(s)) continue;
+
+        String cName = (s['class_name']?.toString() ?? s['class']?.toString() ?? '').toLowerCase();
+        String normCName = _normalizeClassName(s['class_name'] ?? s['class']);
+
+        bool isTarget = true;
+        if (widget.className != null && widget.className!.trim().isNotEmpty) {
+          String normTarget = _normalizeClassName(widget.className);
+          isTarget = (normCName == normTarget ||
+              cName == widget.className!.toLowerCase().trim() ||
+              (s['class_name']?.toString().trim() == widget.className?.trim()) ||
+              (s['class']?.toString().trim() == widget.className?.trim()));
+        }
+
+        final idStr = s['id']?.toString();
+        if (isTarget && idStr != null && !seenIds.contains(idStr)) {
+          seenIds.add(idStr);
+          validStudents.add(s);
+        }
       }
-      _students = allStudents;
+      _students = validStudents;
+      if (selectedStudentId != null && !seenIds.contains(selectedStudentId)) {
+        selectedStudentId = null;
+      }
 
       // Set default date range
       if (fromDate == null || toDate == null) {
@@ -104,8 +130,10 @@ class _QaidaReportPageState extends State<QaidaReportPage> {
         _toDateController.text = toDate!;
       }
 
-      DateTime sDate = _parseRobust(fromDate!);
-      DateTime eDate = _parseRobust(toDate!);
+      DateTime sDateRaw = _parseRobust(fromDate!);
+      DateTime eDateRaw = _parseRobust(toDate!);
+      DateTime sDate = DateTime(sDateRaw.year, sDateRaw.month, sDateRaw.day, 0, 0, 0);
+      DateTime eDate = DateTime(eDateRaw.year, eDateRaw.month, eDateRaw.day, 23, 59, 59, 999);
 
       // Build student IDs filter
       List<dynamic> stdIds;
@@ -120,6 +148,13 @@ class _QaidaReportPageState extends State<QaidaReportPage> {
         return;
       }
 
+      final database = await DBHelper().database;
+      final allAttRaw = await database.query('attendance');
+      List<Map<String, dynamic>> extraAtt = [];
+      try {
+        extraAtt = await db.query('maktab_attendance');
+      } catch (_) {}
+      final allAttendance = [...allAttRaw, ...extraAtt];
       final qs = stdIds.map((e) => '?').join(',');
       final allRecords = await db.rawQuery(
         'SELECT q.*, s.name, s.roll_number, s.admission_number FROM qaida_records q '
@@ -139,7 +174,93 @@ class _QaidaReportPageState extends State<QaidaReportPage> {
         }
       }).toList();
 
-      setState(() => _records = filtered);
+      final studentIdSet = stdIds.map((e) => e.toString()).toSet();
+      final relevantAttendance = allAttendance.where((a) {
+        String sid = a['student_id']?.toString() ?? '';
+        if (!studentIdSet.contains(sid)) return false;
+        try {
+          DateTime d = _parseRobust(a['date'] ?? '');
+          return !d.isBefore(sDate) && !d.isAfter(eDate);
+        } catch (_) {
+          return true;
+        }
+      }).toList();
+
+      var injectedFiltered = PerformanceCalculator.injectMissingAttendanceRecords(
+          filtered, relevantAttendance, _students, 'qaida');
+
+      // STRICT DE-DUPLICATION: Exactly 1 row per student per date
+      Map<String, Map<String, dynamic>> uniqueCombined = {};
+      for (var r in injectedFiltered) {
+        String sid = r['student_id']?.toString() ?? '';
+        String rNorm = PerformanceCalculator.normalizeDate(r['date']?.toString() ?? '');
+        if (sid.isNotEmpty && rNorm.isNotEmpty) {
+          String key = "${sid}_$rNorm";
+          if (!uniqueCombined.containsKey(key)) {
+            var copy = Map<String, dynamic>.from(r);
+            copy['date'] = rNorm;
+            uniqueCombined[key] = copy;
+          } else {
+            if (uniqueCombined[key]!['is_dummy'] == 1 && r['is_dummy'] != 1) {
+              var copy = Map<String, dynamic>.from(r);
+              copy['date'] = rNorm;
+              uniqueCombined[key] = copy;
+            }
+          }
+        }
+      }
+
+      List<Map<String, dynamic>> finalRecords = uniqueCombined.values.map((r) {
+        var copy = Map<String, dynamic>.from(r);
+        DateTime dt = _parseRobust(copy['date']?.toString() ?? '');
+        if (dt.weekday == DateTime.friday) {
+          copy['sabaq_1'] = 'جمعہ';
+          copy['grade_1'] = 'جمعہ';
+          copy['attendance'] = 'جمعہ';
+        }
+        return copy;
+      }).toList();
+
+      final existingStudentIds = finalRecords.map((r) => r['student_id']?.toString() ?? '').toSet();
+      for (var s in _students) {
+        String sid = s['id'].toString();
+        if (selectedStudentId != null && sid != selectedStudentId) continue;
+        if (!existingStudentIds.contains(sid)) {
+          finalRecords.add({
+            'student_id': s['id'],
+            'name': s['name'] ?? '',
+            'roll_number': s['roll_number'] ?? s['admission_number'] ?? '',
+            'admission_number': s['admission_number'] ?? '',
+            'date': toDate ?? intl.DateFormat('dd/MM/yyyy').format(DateTime.now()),
+            'sabaq_1': '-',
+            'qty_1': '-',
+            'grade_1': '-',
+            'sabaq_2': '-',
+            'qty_2': '-',
+            'grade_2': '-',
+            'sabaq_3': '-',
+            'qty_3': '-',
+            'grade_3': '-',
+            'sabaq_4': '-',
+            'qty_4': '-',
+            'grade_4': '-',
+            'attendance': 'حاضر',
+            'behavior': '-',
+            'hearing_time': '-',
+            'is_dummy': 1,
+          });
+        }
+      }
+
+      finalRecords.sort((a, b) {
+        DateTime dA = _parseRobust(a['date'] ?? '');
+        DateTime dB = _parseRobust(b['date'] ?? '');
+        int dCmp = dB.compareTo(dA);
+        if (dCmp != 0) return dCmp;
+        return (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString());
+      });
+
+      setState(() => _records = finalRecords);
     } catch (e) {
       debugPrint("Error loading Qaida reports: $e");
     } finally {
@@ -226,10 +347,15 @@ class _QaidaReportPageState extends State<QaidaReportPage> {
   Color _gradeColor(String? grade) {
     if (grade == null) return Colors.black;
     final g = grade.toLowerCase();
+    if (g == 'جمعہ') return Colors.indigo.shade700;
     if (g == 'excellent' || g == 'ممتاز') return Colors.green.shade700;
     if (g == 'good' || g == 'بہتر') return Colors.blue.shade700;
     if (g == 'average' || g == 'معمولی') return Colors.orange.shade700;
     if (g == 'weak' || g == 'کمزور') return Colors.red.shade700;
+    if (g.contains('غیر حاضر') || g == 'absent') return Colors.red.shade900;
+    if (g.contains('رخصت') || g == 'leave') return Colors.orange.shade800;
+    if (g.contains('نہیں سنا')) return Colors.orange.shade900;
+    if (g.contains('ناغہ')) return Colors.red.shade700;
     return Colors.black;
   }
 
@@ -305,7 +431,7 @@ class _QaidaReportPageState extends State<QaidaReportPage> {
                     r['sabaq_${i+1}']?.toString() ?? '-',
                     r['qty_${i+1}']?.toString() ?? '-',
                     r['grade_${i+1}']?.toString() ?? '-',
-                  ]).expand((x) => x).toList(),
+                  ]).expand((x) => x),
                   r['attendance']?.toString() ?? '-',
                   r['complaint']?.toString() ?? r['remarks']?.toString() ?? '-',
                 ];
@@ -483,13 +609,21 @@ class _QaidaReportPageState extends State<QaidaReportPage> {
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : _records.isEmpty
-                      ? Center(
-                          child: Text(
-                            isUrduGlobal.value ? "کوئی ریکارڈ نہیں ملا" : "No records found",
-                            style: const TextStyle(color: Colors.red, fontSize: 16),
-                          ))
-                      : SingleChildScrollView(
+                  : selectedStudentId != null
+                      ? StudentReportPage(
+                          key: ValueKey(selectedStudentId),
+                          forceStudentId: selectedStudentId,
+                          isEmbedded: true,
+                        )
+                      : _records.isEmpty
+                          ? Center(
+                              child: Text(
+                                isUrduGlobal.value
+                                    ? "اس کلاس میں کوئی فعال طلبہ موجود نہیں ہیں"
+                                    : "No active students found in this class",
+                                style: const TextStyle(color: Colors.red, fontSize: 16),
+                              ))
+                          : SingleChildScrollView(
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: SingleChildScrollView(
@@ -526,3 +660,5 @@ class _QaidaReportPageState extends State<QaidaReportPage> {
     );
   }
 }
+
+

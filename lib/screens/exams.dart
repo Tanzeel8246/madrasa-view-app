@@ -7,6 +7,7 @@ import 'package:intl/intl.dart' as intl;
 import '../db_helper.dart';
 import '../utils/globals.dart';
 import '../utils/sync_service.dart';
+import '../utils/system_type_global.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/neo_box.dart';
 import 'dashboard.dart';
@@ -158,6 +159,7 @@ class _ExamsPageState extends State<ExamsPage> {
                     double.tryParse(totalController.text.trim()) ?? 100,
                 'passing_marks':
                     double.tryParse(passController.text.trim()) ?? 33,
+                'system_type': SystemTypeGlobal.currentSystemType.value,
               });
               if (!mounted) return;
               Navigator.pop(context);
@@ -177,15 +179,60 @@ class _ExamsPageState extends State<ExamsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final role = currentUserRole.value?.toLowerCase() ?? '';
+    final isAdmin = role == 'admin' || role == 'superadmin' || role == 'super_admin' || role == 'administrator';
+    final hasExamPerm = isAdmin || currentUserPermissions.value.contains('manage_exams') || currentUserPermissions.value.contains('manage_masjid_exams');
+
     return ValueListenableBuilder<bool>(
       valueListenable: isUrduGlobal,
       builder: (context, isUrdu, child) {
+        if (!hasExamPerm) {
+          return Directionality(
+            textDirection: isUrdu ? ui.TextDirection.rtl : ui.TextDirection.ltr,
+            child: Scaffold(
+              backgroundColor: bgColor,
+              drawer: const AppDrawer(),
+              appBar: AppBar(
+                leading: Builder(
+                  builder: (context) => IconButton(
+                    icon: const Icon(Icons.menu, color: Colors.white),
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                  ),
+                ),
+                title: Text(isUrdu ? 'امتحانات' : 'Exams',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                backgroundColor: primaryGreen,
+                foregroundColor: Colors.white,
+                centerTitle: true,
+              ),
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_outline, size: 64, color: Colors.grey.shade400),
+                    const SizedBox(height: 16),
+                    Text(
+                      isUrdu ? 'آپ کے پاس امتحانات تک رسائی کی اجازت نہیں ہے۔' : 'You do not have permission to access Exams.',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
-            Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (c) => const DashboardPage()));
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (c) => const DashboardPage()));
+            }
           },
           child: Directionality(
             textDirection: isUrdu ? ui.TextDirection.rtl : ui.TextDirection.ltr,
@@ -217,13 +264,18 @@ class _ExamsPageState extends State<ExamsPage> {
                   ? const Center(child: CircularProgressIndicator())
                   : _exams.isEmpty
                       ? _buildEmptyState(isUrdu)
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(15),
-                          itemCount: _exams.length,
-                          itemBuilder: (context, index) {
-                            final exam = _exams[index];
-                            return _buildExamCard(exam, isUrdu);
-                          },
+                      : Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1100),
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(15),
+                              itemCount: _exams.length,
+                              itemBuilder: (context, index) {
+                                final exam = _exams[index];
+                                return _buildExamCard(exam, isUrdu);
+                              },
+                            ),
+                          ),
                         ),
               floatingActionButton: FloatingActionButton.extended(
                 backgroundColor: primaryGreen,

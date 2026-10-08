@@ -1,5 +1,4 @@
 <?php
-require_once 'db.php';
-$stmt = $pdo->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='qaida_reports'");
-echo $stmt->fetchColumn();
-?>
+// Archived to archive/dev_tools/test_schema.php
+http_response_code(403);
+exit("Access Denied: This test script has been archived.");

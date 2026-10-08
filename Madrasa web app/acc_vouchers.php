@@ -2,12 +2,20 @@
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 require_once 'db.php';
 
-if (!isset($_SESSION['user_id']) || !app_has_perm('manage_erp')) {
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_erp')) {
     header("Location: dashboard.php");
     exit;
 }
 $role = $_SESSION['role'] ?? '';
 $user = ['id' => $_SESSION['user_id'], 'role' => $role];
+
+$cur_tenant_id = get_current_tenant_id($pdo);
 
 // Handle Actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_voucher'])) {
@@ -16,10 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_voucher'])) {
     $desc = $_POST['description'] ?? '';
     $ref = $_POST['reference'] ?? '';
     
-    // Auto-generate voucher number
+    // Auto-generate voucher number scoped by tenant
     $prefix = strtoupper(substr($type, 0, 1)) . 'V-';
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM acc_vouchers WHERE type = ?");
-    $stmt->execute([$type]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM acc_vouchers WHERE type = ? AND tenant_id = ?");
+    $stmt->execute([$type, $cur_tenant_id]);
     $count = $stmt->fetchColumn() + 1;
     $voucher_no = $prefix . str_pad($count, 5, '0', STR_PAD_LEFT);
     
@@ -55,13 +63,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_voucher'])) {
             throw new Exception("Debits and Credits must balance. Dr: $total_debit, Cr: $total_credit");
         }
 
+        $sys = $_SESSION['system_type'] ?? 'Madrasa';
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare("INSERT INTO acc_vouchers (voucher_no, date, type, reference, description, department_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$voucher_no, $date, $type, $ref, $desc, $department_id, $user['id']]);
+        $stmt = $pdo->prepare("INSERT INTO acc_vouchers (voucher_no, date, type, reference, description, department_id, created_by, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$voucher_no, $date, $type, $ref, $desc, $department_id, $user['id'], $sys, $cur_tenant_id]);
         $voucher_id = $pdo->lastInsertId();
-        $entry_stmt = $pdo->prepare("INSERT INTO acc_ledger_entries (voucher_id, account_id, debit, credit, department_id) VALUES (?, ?, ?, ?, ?)");
+        $entry_stmt = $pdo->prepare("INSERT INTO acc_ledger_entries (voucher_id, account_id, debit, credit, department_id, tenant_id) VALUES (?, ?, ?, ?, ?, ?)");
         foreach ($clean_lines as $line) {
-            $entry_stmt->execute([$voucher_id, $line[0], $line[1], $line[2], $department_id]);
+            $entry_stmt->execute([$voucher_id, $line[0], $line[1], $line[2], $department_id, $cur_tenant_id]);
         }
         $pdo->commit();
         $msg = "Voucher $voucher_no created successfully!";
@@ -75,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status']) && $
     $v_id = (int)$_POST['voucher_id'];
     $new_status = $_POST['status'];
     if (in_array($new_status, ['Pending', 'Approved', 'Rejected'])) {
-        $pdo->prepare("UPDATE acc_vouchers SET status = ? WHERE id = ?")->execute([$new_status, $v_id]);
+        $pdo->prepare("UPDATE acc_vouchers SET status = ? WHERE id = ? AND tenant_id = ?")->execute([$new_status, $v_id, $cur_tenant_id]);
         $msg = "Voucher status updated to $new_status.";
     }
 }
@@ -83,21 +92,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status']) && $
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_voucher']) && $role === 'admin') {
     $v_id = (int)$_POST['voucher_id'];
     try {
-        try { $pdo->prepare("UPDATE acc_vouchers SET is_deleted = 1 WHERE id = ?")->execute([$v_id]); } catch (Exception $e) { $pdo->prepare("DELETE FROM acc_vouchers WHERE id = ?")->execute([$v_id]); }
+        try { 
+            $pdo->prepare("UPDATE acc_vouchers SET is_deleted = 1 WHERE id = ? AND tenant_id = ?")->execute([$v_id, $cur_tenant_id]); 
+        } catch (Exception $e) { 
+            $pdo->prepare("DELETE FROM acc_vouchers WHERE id = ? AND tenant_id = ?")->execute([$v_id, $cur_tenant_id]); 
+        }
         $msg = "Voucher deleted successfully.";
     } catch (Exception $e) {
         $err = "Failed to delete voucher.";
     }
 }
 
-// Fetch Vouchers
-$vouchers = $pdo->query("SELECT v.*, u.name as creator_name, (SELECT SUM(debit) FROM acc_ledger_entries WHERE voucher_id = v.id) as total_amount FROM acc_vouchers v LEFT JOIN admins u ON v.created_by = u.id WHERE (v.is_deleted = 0 OR v.is_deleted IS NULL) ORDER BY v.date DESC, v.id DESC LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+// Fetch Vouchers with System Type and Tenant Isolation
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys === 'Masjid') ? "v.system_type = 'Masjid'" : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
 
-// Fetch Chart of Accounts for Dropdown
-$accounts_list = $pdo->query("SELECT id, code, name FROM acc_chart_of_accounts WHERE is_deleted = 0 ORDER BY code")->fetchAll(PDO::FETCH_ASSOC);
+$v_stmt = $pdo->prepare("SELECT v.*, u.name as creator_name, (SELECT SUM(debit) FROM acc_ledger_entries WHERE voucher_id = v.id) as total_amount FROM acc_vouchers v LEFT JOIN admins u ON v.created_by = u.id WHERE (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $sys_cond AND v.tenant_id = ? ORDER BY v.date DESC, v.id DESC LIMIT 200");
+$v_stmt->execute([$cur_tenant_id]);
+$vouchers = $v_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch Departments
-$departments_list = $pdo->query("SELECT id, name FROM departments WHERE status = 'Active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+// Fetch Chart of Accounts for Dropdown (Tenant scoped)
+$acc_list_stmt = $pdo->prepare("SELECT id, code, name FROM acc_chart_of_accounts WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? ORDER BY code");
+$acc_list_stmt->execute([$cur_tenant_id]);
+$accounts_list = $acc_list_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch Departments (Tenant scoped)
+$dept_stmt = $pdo->prepare("SELECT id, name FROM departments WHERE status = 'Active' AND tenant_id = ? ORDER BY name");
+$dept_stmt->execute([$cur_tenant_id]);
+$departments_list = $dept_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $title = "Vouchers - ERP Accounting";
 include 'header.php';

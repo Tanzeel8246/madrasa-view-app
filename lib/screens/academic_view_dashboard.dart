@@ -10,6 +10,7 @@ import 'dashboard.dart';
 import 'reports_nazira.dart';
 import 'reports_qaida.dart';
 import 'reports_hifz.dart';
+import 'reports_husn_saut.dart';
 import 'reports_academic.dart';
 
 class AcademicViewDashboardPage extends StatefulWidget {
@@ -59,7 +60,7 @@ class _AcademicViewDashboardPageState extends State<AcademicViewDashboardPage> {
   Future<void> _loadClasses() async {
     final db = DBHelper();
     final data = await db.getClassesForUser();
-    final students = await db.getStudents();
+    final students = await db.getStudentsForUser();
     final counts = <String, int>{};
     for (final student in students) {
       if (!_isActiveStudent(student)) continue;
@@ -86,8 +87,12 @@ class _AcademicViewDashboardPageState extends State<AcademicViewDashboardPage> {
           canPop: false,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
-            Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (c) => const DashboardPage()));
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (c) => const DashboardPage()));
+            }
           },
           child: Directionality(
             textDirection: isUrdu ? ui.TextDirection.rtl : ui.TextDirection.ltr,
@@ -142,7 +147,12 @@ class _AcademicViewDashboardPageState extends State<AcademicViewDashboardPage> {
                   ? const Center(child: CircularProgressIndicator())
                   : _classes.isEmpty
                       ? _buildEmptyState(isUrdu)
-                      : _buildClassesList(isUrdu),
+                      : Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1100),
+                            child: _buildClassesList(isUrdu),
+                          ),
+                        ),
             ),
           ),
         );
@@ -214,18 +224,25 @@ class _AcademicViewDashboardPageState extends State<AcademicViewDashboardPage> {
       child: InkWell(
         onTap: () {
           String classType = c['class_type'] ?? '';
-          if (classType == 'Qaida' || classType == 'نورانی قاعدہ' || c['name'].toString().contains('قاعدہ') || classType == 'نماز حنفی' || c['name'].toString().contains('نماز حنفی')) {
+          String className = c['name']?.toString() ?? '';
+          if (classType == 'Qaida' || classType == 'نورانی قاعدہ' || className.contains('قاعدہ') || classType == 'نماز حنفی' || className.contains('نماز حنفی')) {
             Navigator.push(
                 context,
                 MaterialPageRoute(
                     builder: (_) => QaidaReportPage(className: c['name'])));
-          } else if (classType == 'Nazira') {
+          } else if (classType == 'Nazira' || className.contains('ناظرہ')) {
             Navigator.push(
                 context,
                 MaterialPageRoute(
                     builder: (_) => ReportsNaziraPage(className: c['name'])));
+          } else if (className.contains('حسن') || className.contains('صوت') || className.toLowerCase().contains('husn') || className.toLowerCase().contains('saut') || classType == 'Husn Saut' || classType == 'Husn') {
+            Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => ReportsHusnSautPage(className: c['name'])));
           } else if (classType == 'Hifz/Gardan/Husn' ||
-              classType == 'Hifz/Nazira') {
+              classType == 'Hifz/Nazira' ||
+              className.contains('حفظ')) {
             Navigator.push(
                 context,
                 MaterialPageRoute(

@@ -1,0 +1,2567 @@
+<?php 
+
+
+//  
+
+
+ini_set('display_errors', 0);
+
+
+error_reporting(E_ALL);
+
+
+
+
+
+require_once 'db.php';
+$sys = 'Maktab'; 
+
+
+include 'header.php'; 
+
+
+
+
+
+$can_maktab_teacher_attendance_report = app_has_perm('manage_maktab_teacher_attendance') || app_has_perm('manage_attendance');
+
+
+if (!$can_maktab_teacher_attendance_report) {
+
+
+    echo "<script>window.location='dashboard.php';</script>";
+
+
+    exit;
+
+
+}
+
+
+
+
+
+// --- 1.    ---
+
+
+$offset_file = 'hijri_offset.txt';
+
+
+if (isset($_POST['update_offset'])) {
+
+
+    $new_offset = (int)$_POST['offset_value'];
+
+
+    file_put_contents($offset_file, $new_offset);
+
+
+    echo "<script>window.location.href = window.location.href;</script>";
+
+
+    exit;
+
+
+}
+
+
+$hijri_offset = file_exists($offset_file) ? (int)file_get_contents($offset_file) : -1; 
+
+
+
+
+
+// --- 2.   ---
+
+
+$mode = isset($_GET['mode']) ? $_GET['mode'] : 'month'; 
+
+
+$view_type = isset($_GET['view_type']) ? $_GET['view_type'] : 'classwise';
+
+
+$current_month = date('m');
+
+
+$current_year = date('Y');
+
+
+$today = date('Y-m-d');
+
+
+$last_year_today = date('Y-m-d', strtotime('-1 year'));
+
+
+
+
+
+$urdu_months_greg = [
+
+
+    'January' => '', 'February' => '', 'March' => '', 'April' => '',
+
+
+    'May' => '', 'June' => '', 'July' => '', 'August' => '',
+
+
+    'September' => '', 'October' => '', 'November' => '', 'December' => ''
+
+
+];
+
+
+
+
+
+if ($mode == 'month') {
+
+
+    $month = $_GET['month'] ?? $current_month;
+
+
+    $year = $_GET['year'] ?? $current_year;
+
+
+    $start_date = "$year-$month-01";
+
+
+    $end_date = date("Y-m-t", strtotime($start_date));
+
+
+} else {
+
+
+    $start_date = $_GET['from'] ?? $last_year_today;
+
+
+    $end_date = $_GET['to'] ?? $today;
+
+
+}
+
+
+
+
+
+//   
+
+
+$period = new DatePeriod(new DateTime($start_date), new DateInterval('P1D'), (new DateTime($end_date))->modify('+1 day'));
+
+
+$grouped_months = [];
+
+
+foreach ($period as $dt) {
+
+
+    $ym = $dt->format('Y-m'); 
+
+
+    $grouped_months[$ym][] = $dt->format('Y-m-d');
+
+
+}
+
+
+krsort($grouped_months); 
+
+
+
+
+
+//  
+
+
+$t_query = [];
+
+$selected_teacher_id = isset($_GET['t_id']) && $_GET['t_id'] !== '' ? (int)$_GET['t_id'] : 0;
+
+$teacherWhere = "(t.is_deleted=0 OR t.is_deleted IS NULL)";
+
+// صرف فعال اساتذہ — مستعفی/برطرف حاضری رپورٹ میں نہ آئیں
+$t_query_sql = "
+    SELECT t.id, t.name, t.phone, t.assigned_maktab_classes, t.assigned_periods, t.joining_date, t.status
+    FROM maktab_teachers t
+    WHERE ($teacherWhere)
+      AND (t.status IS NULL OR t.status = '' OR t.status = 'Active' OR t.status = 'حاضر' OR t.status = 'فعال' OR t.status = 'On Leave' OR t.status = 'رخصت پر')
+";
+
+$t_query_args = [];
+
+if ($selected_teacher_id) {
+
+    $t_query_sql .= " AND t.id = ?";
+
+    $t_query_args[] = $selected_teacher_id;
+
+}
+
+$t_query_sql .= " ORDER BY t.name ASC";
+
+$stmt = $pdo->prepare($t_query_sql);
+
+$stmt->execute($t_query_args);
+
+$t_query = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+
+$all_ts_stmt = $pdo->prepare("
+    SELECT id, name
+    FROM maktab_teachers t
+    WHERE $teacherWhere
+      AND (t.status IS NULL OR t.status = '' OR t.status = 'Active' OR t.status = 'حاضر' OR t.status = 'فعال' OR t.status = 'On Leave' OR t.status = 'رخصت پر')
+    ORDER BY name ASC
+");
+$all_ts_stmt->execute([]);
+
+$all_ts = $all_ts_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+
+
+
+$all_maktab_classes = $pdo->query("SELECT id as class_id, name as class_name, class_type, main_teacher_ids FROM maktab_classes")->fetchAll();
+
+
+$all_class_periods = $pdo->query("SELECT class_id, period_no, teacher_id, teacher_ids FROM class_periods")->fetchAll();
+
+
+
+
+
+function tar_list_values($value) {
+
+
+    $raw = trim((string)$value);
+
+
+    if ($raw === '') return [];
+
+
+    $decoded = json_decode($raw, true);
+
+
+    $items = is_array($decoded) ? $decoded : explode(',', $raw);
+
+
+    $out = [];
+
+
+    foreach ($items as $item) {
+
+
+        $item = trim((string)$item);
+
+
+        if ($item !== '') $out[] = $item;
+
+
+    }
+
+
+    return array_values(array_unique($out));
+
+
+}
+
+
+
+
+
+function tar_period_no_from_key($key) {
+
+
+    $key = trim((string)$key);
+
+
+    $map = [
+
+
+        'hifz_sabaq' => 1,
+
+
+        'hifz_morning' => 1,
+
+
+        'hifz_sabqi' => 2,
+
+
+        'hifz_after_breakfast' => 2,
+
+
+        'hifz_manzil' => 3,
+
+
+        'hifz_noon' => 3,
+
+
+        'hifz_review' => 4,
+
+
+        'hifz_evening' => 4,
+
+
+        'nazira_morning' => 1,
+
+
+        'nazira_evening' => 2,
+
+
+    ];
+
+
+    return isset($map[$key]) ? $map[$key] : (int)$key;
+
+
+}
+
+
+
+
+
+function tar_assigned_period_numbers($assignedPeriods, $className) {
+
+
+    $raw = trim((string)$assignedPeriods);
+
+
+    if ($raw === '') return [];
+
+
+    $values = [];
+
+
+    $decoded = json_decode($raw, true);
+
+
+    if (is_array($decoded)) {
+
+
+        if (array_key_exists($className, $decoded)) {
+
+
+            $values = is_array($decoded[$className]) ? $decoded[$className] : explode(',', (string)$decoded[$className]);
+
+
+        }
+
+
+    } else {
+
+
+        $values = explode(',', $raw);
+
+
+    }
+
+
+    $periods = [];
+
+
+    foreach ($values as $value) {
+
+
+        $periodNo = tar_period_no_from_key($value);
+
+
+        if ($periodNo > 0) $periods[] = $periodNo;
+
+
+    }
+
+
+    return array_values(array_unique($periods));
+
+
+}
+
+
+
+
+
+function tar_default_periods_for_class($classRowOrName) {
+
+
+    $name = is_array($classRowOrName)
+
+
+        ? trim((string)($classRowOrName['class_name'] ?? $classRowOrName['name'] ?? '') . ' ' . (string)($classRowOrName['class_type'] ?? ''))
+
+
+        : (string)$classRowOrName;
+
+
+    $lower = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+
+
+    if (strpos($lower, 'hifz') !== false || strpos($name, '') !== false || strpos($name, '') !== false || strpos($name, '') !== false) return [1, 2, 3, 4];
+
+
+    if (strpos($lower, 'nazira') !== false || strpos($name, '') !== false) return [1, 2];
+
+
+    return [1, 2, 3, 4, 5, 6, 7, 8];
+
+
+}
+
+
+
+
+
+$maktab_teachers_with_maktab_classes = [];
+
+
+foreach ($t_query as $t) {
+    if (!empty($t['joining_date']) && substr($t['joining_date'], 0, 7) > $ym) continue;
+    $t_id = $t['id'];
+
+
+    $profile_maktab_classes = tar_list_values($t['assigned_maktab_classes'] ?? '');
+
+
+    $found_class = false;
+
+
+    foreach ($all_maktab_classes as $c) {
+
+
+        $c_id = $c['class_id'];
+
+
+        $is_assigned = false;
+
+
+        if (in_array($c['class_name'], $profile_maktab_classes, true)) {
+
+
+            $is_assigned = true;
+
+
+        }
+
+
+        
+
+
+        if (!$is_assigned) {
+
+
+            $m_ids = json_decode($c['main_teacher_ids'] ?? '[]', true) ?: [];
+
+
+            if (in_array($t_id, $m_ids) || in_array((string)$t_id, $m_ids)) {
+
+
+                $is_assigned = true;
+
+
+            }
+
+
+        }
+
+
+        
+
+
+        if (!$is_assigned) {
+
+
+            foreach ($all_class_periods as $cp) {
+
+
+                if ($cp['class_id'] == $c_id) {
+
+
+                    $cp_t_ids = json_decode($cp['teacher_ids'] ?? '[]', true) ?: [];
+
+
+                    if (!empty($cp['teacher_id']) && !in_array($cp['teacher_id'], $cp_t_ids)) $cp_t_ids[] = $cp['teacher_id'];
+
+
+                    if (in_array($t_id, $cp_t_ids) || in_array((string)$t_id, $cp_t_ids)) {
+
+
+                        $is_assigned = true; break;
+
+
+                    }
+
+
+                }
+
+
+            }
+
+
+        }
+
+
+        
+
+
+        if ($is_assigned) {
+
+
+            $maktab_teachers_with_maktab_classes[] = [
+
+
+                'id' => $t['id'], 'name' => $t['name'], 'phone' => $t['phone'], 'joining_date' => $t['joining_date'] ?? null,
+
+
+                'class_id' => $c['class_id'], 'class_name' => $c['class_name'],
+
+
+                'class_type' => $c['class_type'], 'main_teacher_ids' => $c['main_teacher_ids']
+
+
+            ];
+
+
+            $found_class = true;
+
+
+        }
+
+
+    }
+
+
+    if (!$found_class) {
+
+
+        $maktab_teachers_with_maktab_classes[] = ['id' => $t['id'], 'name' => $t['name'], 'phone' => $t['phone'], 'joining_date' => $t['joining_date'] ?? null, 'class_id' => null, 'class_name' => null, 'class_type' => null, 'main_teacher_ids' => null];
+
+
+    }
+
+
+}
+
+
+usort($maktab_teachers_with_maktab_classes, function($a, $b) {
+
+
+    $cmp = strcmp($a['name'], $b['name']);
+
+
+    return $cmp === 0 ? strcmp($a['class_name'] ?? '', $b['class_name'] ?? '') : $cmp;
+
+
+});
+
+
+
+
+
+$grouped_maktab_teachers = [];
+
+
+$ordered_maktab_classes = [];
+
+
+foreach ($maktab_teachers_with_maktab_classes as $t) {
+
+
+    $cname = $t['class_name'] ?: ' ';
+
+
+    if (!in_array($cname, $ordered_maktab_classes)) $ordered_maktab_classes[] = $cname;
+
+
+    $grouped_maktab_teachers[$cname][] = $t;
+
+
+}
+
+
+
+
+
+$maktab_teachers_by_id = [];
+
+
+foreach ($t_query as $teacherRow) {
+
+
+    $maktab_teachers_by_id[(int)$teacherRow['id']] = $teacherRow;
+
+
+}
+
+
+
+
+
+$maktab_classes_by_id = [];
+
+
+$maktab_classes_by_name = [];
+
+
+foreach ($all_maktab_classes as $classRow) {
+
+
+    $cid = (int)$classRow['class_id'];
+
+
+    $maktab_classes_by_id[$cid] = $classRow;
+
+
+    if (!empty($classRow['class_name'])) $maktab_classes_by_name[$classRow['class_name']] = $classRow;
+
+
+}
+
+
+
+
+
+$periods_by_teacher_class = [];
+
+
+$explicit_by_teacher_class = [];
+
+
+foreach ($all_class_periods as $cp) {
+
+
+    $cid = (int)($cp['class_id'] ?? 0);
+
+
+    $periodNo = (int)($cp['period_no'] ?? 0);
+
+
+    if (!$cid || !$periodNo) continue;
+
+
+    $teacherIds = [];
+
+
+    if (!empty($cp['teacher_ids'])) {
+
+
+        $decoded = json_decode($cp['teacher_ids'], true);
+
+
+        if (is_array($decoded)) $teacherIds = array_merge($teacherIds, $decoded);
+
+
+    }
+
+
+    if (!empty($cp['teacher_id'])) $teacherIds[] = $cp['teacher_id'];
+
+
+    foreach (array_unique(array_filter($teacherIds)) as $tidRaw) {
+
+
+        $tid = (int)$tidRaw;
+
+
+        if (!$tid || !isset($maktab_teachers_by_id[$tid])) continue;
+
+
+        $periods_by_teacher_class[$tid][$cid][] = $periodNo;
+
+
+        $explicit_by_teacher_class[$tid][$cid] = true;
+
+
+    }
+
+
+}
+
+
+
+
+
+foreach ($t_query as $teacherRow) {
+
+
+    $tid = (int)$teacherRow['id'];
+
+
+    foreach (tar_list_values($teacherRow['assigned_maktab_classes'] ?? '') as $className) {
+
+
+        if (!isset($maktab_classes_by_name[$className])) continue;
+
+
+        $classRow = $maktab_classes_by_name[$className];
+
+
+        $cid = (int)$classRow['class_id'];
+
+
+        $periods = tar_assigned_period_numbers($teacherRow['assigned_periods'] ?? '', $className);
+
+
+        if (empty($periods)) $periods = tar_default_periods_for_class($classRow);
+
+
+        foreach ($periods as $periodNo) {
+
+
+            $periods_by_teacher_class[$tid][$cid][] = (int)$periodNo;
+
+
+        }
+
+
+    }
+
+
+}
+
+
+
+
+
+foreach ($all_maktab_classes as $classRow) {
+
+
+    $cid = (int)$classRow['class_id'];
+
+
+    foreach (tar_list_values($classRow['main_teacher_ids'] ?? '') as $tidRaw) {
+
+
+        $tid = (int)$tidRaw;
+
+
+        if (!$tid || !isset($maktab_teachers_by_id[$tid])) continue;
+
+
+        if (isset($explicit_by_teacher_class[$tid][$cid])) continue;
+
+
+        foreach (tar_default_periods_for_class($classRow) as $periodNo) {
+
+
+            $periods_by_teacher_class[$tid][$cid][] = (int)$periodNo;
+
+
+        }
+
+
+    }
+
+
+}
+
+
+
+
+
+$grouped_maktab_teachers = [];
+
+
+$ordered_maktab_classes = [];
+
+
+
+
+
+if ($view_type === 'consolidated') {
+
+
+    $cname = '   (Consolidated)';
+
+
+    $ordered_maktab_classes[] = $cname;
+
+
+    
+
+
+    $consolidated_by_tid = [];
+
+
+    foreach ($periods_by_teacher_class as $tid => $maktab_classesForTeacher) {
+
+
+        $teacherRow = $maktab_teachers_by_id[$tid];
+
+
+        $all_periods = [];
+
+
+        foreach ($maktab_classesForTeacher as $cid => $periods) {
+
+
+            foreach ($periods as $p) {
+
+
+                $all_periods[] = ['cid' => $cid, 'pno' => $p];
+
+
+            }
+
+
+        }
+
+
+        $consolidated_by_tid[$tid] = [
+
+
+            'id' => $teacherRow['id'],
+
+
+            'name' => $teacherRow['name'],
+
+
+            'phone' => $teacherRow['phone'],
+
+
+            'class_id' => 0,
+
+
+            'class_name' => $cname,
+
+
+            'class_type' => '',
+
+
+            'main_teacher_ids' => '[]',
+
+
+            'periods' => $all_periods,
+
+
+        ];
+
+
+    }
+
+
+    foreach ($maktab_teachers_by_id as $tid => $teacherRow) {
+
+
+        if (isset($consolidated_by_tid[$tid])) continue;
+
+
+        $consolidated_by_tid[$tid] = [
+
+
+            'id' => $teacherRow['id'],
+
+
+            'name' => $teacherRow['name'],
+
+
+            'phone' => $teacherRow['phone'] ?? '',
+
+
+            'class_id' => 0,
+
+
+            'class_name' => $cname,
+
+
+            'class_type' => null,
+
+
+            'periods' => [['cid' => 0, 'pno' => 1]],
+
+
+            'main_teacher_ids' => '[]',
+
+
+        ];
+
+
+    }
+
+
+    $grouped_maktab_teachers[$cname] = array_values($consolidated_by_tid);
+
+
+} else {
+
+
+    foreach ($periods_by_teacher_class as $tid => $maktab_classesForTeacher) {
+
+
+    foreach ($maktab_classesForTeacher as $cid => $periods) {
+
+
+        if (!isset($maktab_classes_by_id[$cid])) continue;
+
+
+        $classRow = $maktab_classes_by_id[$cid];
+
+
+        $teacherRow = $maktab_teachers_by_id[$tid];
+
+
+        $periods = tar_default_periods_for_class($classRow);
+
+
+        $cname = $classRow['class_name'] ?: ' ';
+
+
+        if (!in_array($cname, $ordered_maktab_classes, true)) $ordered_maktab_classes[] = $cname;
+
+
+        $grouped_maktab_teachers[$cname][] = [
+
+
+            'id' => $teacherRow['id'],
+
+
+            'name' => $teacherRow['name'],
+
+
+            'phone' => $teacherRow['phone'],
+
+
+            'class_id' => $cid,
+
+
+            'class_name' => $classRow['class_name'],
+
+
+            'class_type' => $classRow['class_type'] ?? '',
+
+
+            'main_teacher_ids' => $classRow['main_teacher_ids'] ?? '[]',
+
+
+            'periods' => $periods,
+
+
+        ];
+
+
+    }
+
+
+    }
+
+
+    foreach ($maktab_teachers_by_id as $tid => $teacherRow) {
+
+
+        $alreadyGrouped = false;
+
+
+        foreach ($grouped_maktab_teachers as $teacherRows) {
+
+
+            foreach ($teacherRows as $row) {
+
+
+                if ((int)$row['id'] === (int)$tid) {
+
+
+                    $alreadyGrouped = true;
+
+
+                    break 2;
+
+
+                }
+
+
+            }
+
+
+        }
+
+
+        if ($alreadyGrouped) continue;
+
+
+        $cname = ' ';
+
+
+        if (!in_array($cname, $ordered_maktab_classes, true)) $ordered_maktab_classes[] = $cname;
+
+
+        $grouped_maktab_teachers[$cname][] = [
+
+
+            'id' => $teacherRow['id'],
+
+
+            'name' => $teacherRow['name'],
+
+
+            'phone' => $teacherRow['phone'] ?? '',
+
+
+            'class_id' => 0,
+
+
+            'class_name' => $cname,
+
+
+            'class_type' => null,
+
+
+            'periods' => [1],
+
+
+            'main_teacher_ids' => '[]',
+
+
+        ];
+
+
+    }
+
+
+}
+
+
+foreach ($grouped_maktab_teachers as &$teacherRows) {
+
+
+    usort($teacherRows, function($a, $b) {
+
+
+        return strcmp((string)$a['name'], (string)$b['name']);
+
+
+    });
+
+
+}
+
+
+unset($teacherRows);
+
+
+sort($ordered_maktab_classes);
+
+
+
+
+
+if ($selected_teacher_id && isset($maktab_teachers_by_id[$selected_teacher_id])) {
+
+
+    $cname = '  ( )';
+
+
+    array_unshift($ordered_maktab_classes, $cname);
+
+
+    $grouped_maktab_teachers[$cname][] = [
+
+
+        'id' => $selected_teacher_id,
+
+
+        'name' => $maktab_teachers_by_id[$selected_teacher_id]['name'],
+
+
+        'phone' => $maktab_teachers_by_id[$selected_teacher_id]['phone'] ?? '',
+
+
+        'class_id' => 0,
+
+
+        'class_name' => $cname,
+
+
+        'class_type' => null,
+
+
+        'periods' => [1,2,3,4,5,6,7,8],
+
+
+        'main_teacher_ids' => '[]',
+
+
+    ];
+
+
+}
+
+
+
+
+
+$attendance_data = [];
+
+
+$stmt = $pdo->prepare("SELECT * FROM teacher_period_attendance WHERE system_type='$sys' AND date BETWEEN ? AND ?");
+
+
+$stmt->execute([$start_date, $end_date]);
+
+
+while($row = $stmt->fetch()) {
+
+
+    $tid = $row['teacher_id'];
+
+
+    $cid = $row['class_id'];
+
+
+    $d = $row['date'];
+
+
+    $p = $row['period_no'];
+
+
+
+
+
+    $attendance_data[$tid][$cid][$d][$p] = [
+
+
+        'status' => $row['status'],
+
+
+        'late_minutes' => (int)($row['late_minutes'] ?? 0)
+
+
+    ];
+
+
+
+
+
+    if (!isset($attendance_data[$tid][0][$d][$p])) {
+
+
+        $attendance_data[$tid][0][$d][$p] = [
+
+
+            'status' => $row['status'],
+
+
+            'late_minutes' => (int)($row['late_minutes'] ?? 0)
+
+
+        ];
+
+
+    }
+
+
+}
+
+
+
+
+
+$grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 0; $grand_total_slots = 0; $grand_total_late_mins = 0;
+
+
+?>
+
+
+
+
+
+<style>
+
+
+    .att-grid { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; min-height: 14px; margin: 0 auto; gap: 1px; }
+
+
+    .dot { width: 6px; height: 6px; border-radius: 50%; display: block; box-sizing: border-box; filter: none !important; -webkit-filter: none !important; opacity: 1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+    .dot-P { background-color: #198754 !important; border: 1px solid #146c43 !important; }
+
+
+    .dot-OD { background-color: #20c997 !important; border: 1px solid #1aa179 !important; } /* Teal */
+
+
+    .dot-LA { background-color: #0dcaf0 !important; border: 1px solid #0aa2c0 !important; } /* Cyan/Blue */
+
+
+    .dot-L { background-color: #ffc107 !important; border: 1px solid #d39e00 !important; }
+
+
+    .dot-T { background-color: #fd7e14 !important; border: 1px solid #dc6502 !important; }
+
+
+    .dot-None { background-color: #dee2e6 !important; border: 1px solid #ced4da !important; }
+
+
+    .bg-p { background-color: #198754 !important; border: 1px solid #146c43 !important; } 
+
+
+    .bg-l { background-color: #ffc107 !important; border: 1px solid #d39e00 !important; } 
+
+
+    .bg-n { background-color: #dee2e6 !important; border: 1px solid #ced4da !important; }
+
+
+    .bg-late { background-color: #fd7e14 !important; border: 1px solid #dc6502 !important; } 
+
+
+    .report-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+
+
+    .report-table th, .report-table td { border: 1px solid #000; padding: 2px 1px; text-align: center; vertical-align: middle; }
+
+
+    .teacher-name-cell { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+
+
+    .madrasa-header { border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
+
+
+    .page-break { page-break-after: always; }
+
+
+    .title-box { font-family: 'Noto Nastaliq Urdu', sans-serif; font-size: 18px; font-weight: bold; display: inline-block; border-bottom: 1px solid #ccc; padding-bottom: 2px; line-height: 1.4; }
+
+
+    .date-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+
+
+    .greg-date { font-size: 13px; font-weight: bold; color: #000; display: block; }
+
+
+    .hijri-date { font-size: 9px; color: #198754; font-weight: bold; margin-top: 2px; display: block; }
+
+
+    .print-title-bar { display: none; }
+
+
+    @media print {
+
+
+        @page { size: A4 landscape; margin: 6mm 5mm; }
+
+
+        /* ===  : sidebar, navbar, filter, buttons === */
+
+
+        #wrapper, .no-print, .navbar, form, .nav-tabs,
+
+
+        .card-header, nav, header, footer, aside,
+
+
+        .sidebar, [class*="sidebar"], [id*="sidebar"],
+
+
+        .card.shadow-sm.mb-3 { display: none !important; }
+
+
+        /* ===      === */
+
+
+        .print-title-bar { display: block !important; }
+
+
+        /* ===   === */
+
+
+        html, body { background: white !important; margin: 0 !important; padding: 0 !important;
+
+
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+
+
+            font-family: 'Noto Nastaliq Urdu', sans-serif; }
+
+
+        .container-fluid { padding: 0 1mm !important; margin: 0 !important; width: 100% !important; }
+
+
+        .report-card { border: none !important; box-shadow: none !important; margin-bottom: 2mm !important; }
+
+
+        .page-break { page-break-after: always; display: block; height: 1px; }
+
+
+        .report-table { font-size: 8pt !important; border-collapse: collapse !important; }
+
+
+        .report-table th, .report-table td { border: 0.5pt solid #555 !important; padding: 1px !important; }
+
+
+        .report-table thead tr { background-color: var(--primary) !important; color: #fff !important;
+
+
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+        .madrasa-header { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+        .dot-P { background-color: #198754 !important; border: 1px solid #146c43 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+        .dot-OD { background-color: #20c997 !important; border: 1px solid #1aa179 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+        .dot-LA { background-color: #0dcaf0 !important; border: 1px solid #0aa2c0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+        .dot-L { background-color: #ffc107 !important; border: 1px solid #d39e00 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+        .dot-T { background-color: #fd7e14 !important; border: 1px solid #dc6502 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+        .dot-None { background-color: #dee2e6 !important; border: 1px solid #ced4da !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+        .dot { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; filter: none !important; opacity: 1 !important; }
+
+
+        .hijri-date { color: #198754 !important; -webkit-print-color-adjust: exact; }
+
+
+        /* ===      === */
+
+
+        .no-print-break { display: block !important; max-width: 100% !important; }
+
+
+        .no-print-break .card-header { display: block !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+
+    }
+
+
+</style>
+
+
+
+
+
+<div class="container-fluid py-3">
+
+
+    
+
+
+    <div class="card shadow-sm mb-3 no-print">
+
+
+        <div class="card-header bg-light p-0">
+
+
+            <div class="d-flex justify-content-between align-items-center px-2">
+
+
+                <div class="d-flex align-items-center">
+
+
+                    <ul class="nav nav-tabs fw-bold border-0">
+
+
+                        <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='month'?'active bg-white':''; ?>" onclick="window.location='?mode=month&view_type=<?php echo $view_type; ?>&t_id=<?php echo $selected_teacher_id; ?>'"></button></li>
+
+
+                        <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='range'?'active bg-white text-primary':'text-muted'; ?>" onclick="window.location='?mode=range&view_type=<?php echo $view_type; ?>&t_id=<?php echo $selected_teacher_id; ?>'"> </button></li>
+
+
+                    </ul>
+
+
+                    <div class="btn-group shadow-sm mx-3" style="height: 28px;">
+
+
+                        <a href="?mode=<?php echo $mode; ?>&view_type=classwise&t_id=<?php echo $selected_teacher_id; ?>" class="btn btn-sm <?php echo $view_type=='classwise'?'btn-primary':'btn-outline-secondary bg-white text-dark'; ?> fw-bold py-0" style="line-height:26px;"> </a>
+
+
+                        <a href="?mode=<?php echo $mode; ?>&view_type=consolidated&t_id=<?php echo $selected_teacher_id; ?>" class="btn btn-sm <?php echo $view_type=='consolidated'?'btn-primary':'btn-outline-secondary bg-white text-dark'; ?> fw-bold py-0" style="line-height:26px;"> </a>
+
+
+                    </div>
+
+
+                </div>
+
+
+                <form method="POST" class="d-flex align-items-center gap-1 bg-white border rounded px-2 py-1 shadow-sm" style="height: 30px;">
+
+
+                    <span class="small fw-bold text-muted"> :</span>
+
+
+                    <button type="submit" name="update_offset" class="btn btn-sm btn-outline-danger py-0 px-2 fw-bold" style="height: 22px; line-height: 0;" onclick="document.getElementById('off_val').value = <?php echo $hijri_offset - 1; ?>">-</button>
+
+
+                    <span class="fw-bold text-dark mx-1" style="font-size: 14px; min-width: 20px; text-align: center;"><?php echo ($hijri_offset > 0 ? '+' : '') . $hijri_offset; ?></span>
+
+
+                    <button type="submit" name="update_offset" class="btn btn-sm btn-outline-success py-0 px-2 fw-bold" style="height: 22px; line-height: 0;" onclick="document.getElementById('off_val').value = <?php echo $hijri_offset + 1; ?>">+</button>
+
+
+                    <input type="hidden" name="offset_value" id="off_val" value="<?php echo $hijri_offset; ?>">
+
+
+                    <span class="small text-muted ms-1"></span>
+
+
+                </form>
+
+
+            </div>
+
+
+        </div>
+
+
+
+
+
+        <div class="card-body py-2">
+
+
+            <div class="row align-items-center">
+
+
+                <div class="col-md-9">
+
+
+                    <?php if($mode == 'month'): ?>
+
+
+                    <form class="d-flex gap-2 align-items-center">
+
+
+                        <input type="hidden" name="mode" value="month">
+
+
+                        <input type="hidden" name="view_type" value="<?php echo $view_type; ?>">
+
+
+                        <select name="month" class="form-select form-select-sm" style="width: 120px;" onchange="this.form.submit()">
+
+
+                            <?php 
+
+
+                            $sel_m = $_GET['month'] ?? $current_month;
+
+
+                            for($m=1; $m<=12; $m++) echo "<option value='$m' ".($m==$sel_m?'selected':'').">".$urdu_months_greg[date('F', mktime(0,0,0,$m,1))]."</option>"; 
+
+
+                            ?>
+
+
+                        </select>
+
+
+                        <select name="year" class="form-select form-select-sm" style="width: 100px;" onchange="this.form.submit()">
+
+
+                            <?php 
+
+
+                            $sel_y = $_GET['year'] ?? $current_year;
+
+
+                            $start_y = $current_year - 2; $end_y = $current_year + 2;
+
+
+                            for($y=$start_y; $y<=$end_y; $y++) echo "<option value='$y' ".($y==$sel_y?'selected':'').">$y</option>";
+
+
+                            ?>
+
+
+                        </select>
+
+
+                        <select name="t_id" class="form-select form-select-sm" style="width: 150px;" onchange="this.form.submit()">
+
+
+                            <option value=""> </option>
+
+
+                            <?php 
+
+
+                            $t_id = $_GET['t_id'] ?? '';
+
+
+                            foreach($all_ts as $t) echo "<option value='{$t['id']}' ".($t_id==$t['id']?'selected':'').">{$t['name']}</option>";
+
+
+                            ?>
+
+
+                        </select>
+
+
+                        <button type="submit" class="btn btn-primary btn-sm"> </button>
+
+
+                    </form>
+
+
+                    <?php else: ?>
+
+
+                    <form class="d-flex gap-2 align-items-center">
+
+
+                        <input type="hidden" name="mode" value="range">
+
+
+                        <input type="hidden" name="view_type" value="<?php echo $view_type; ?>">
+
+
+                        <input type="date" name="from" id="maktabTAttRangeFrom" class="form-control form-control-sm" value="<?php echo $start_date; ?>" onchange="if(this.value && document.getElementById('maktabTAttRangeTo').value) this.form.submit();">
+
+
+                        <input type="date" name="to" id="maktabTAttRangeTo" class="form-control form-control-sm" value="<?php echo $end_date; ?>" onchange="if(this.value && document.getElementById('maktabTAttRangeFrom').value) this.form.submit();">
+
+
+                        <select name="t_id" class="form-select form-select-sm" style="width: 150px;" onchange="this.form.submit()">
+
+
+                            <option value=""> </option>
+
+
+                            <?php 
+
+
+                            $t_id = $_GET['t_id'] ?? '';
+
+
+                            foreach($all_ts as $t) echo "<option value='{$t['id']}' ".($t_id==$t['id']?'selected':'').">{$t['name']}</option>";
+
+
+                            ?>
+
+
+                        </select>
+
+
+                        <button type="submit" class="btn btn-primary btn-sm"> </button>
+
+
+                    </form>
+
+
+                    <?php endif; ?>
+
+
+                </div>
+
+
+                <div class="col-md-3 text-end">
+
+
+                    <button onclick="printLandscape()" class="btn btn-success btn-sm fw-bold shadow"><i class="fas fa-print me-2"></i>  (Landscape)</button>
+
+
+                </div>
+
+
+            </div>
+
+
+        </div>
+
+
+    </div>
+
+
+
+
+
+    <!-- Print Title Bar      -->
+
+
+    <div class="print-title-bar">
+
+
+        <div style="text-align:center; border-bottom:2px solid var(--primary); margin-bottom:6px; padding-bottom:5px; font-family:'Noto Nastaliq Urdu',sans-serif;">
+
+
+            <h4 style="color:var(--primary); margin:0; font-size:13pt;">  </h4>
+
+
+            <p style="margin:1px 0; font-size:8.5pt;">
+
+
+                   &mdash;  
+
+
+                &nbsp;|&nbsp; : <strong><?php echo date('d M Y', strtotime($start_date)); ?>  <?php echo date('d M Y', strtotime($end_date)); ?></strong>
+
+
+            </p>
+
+
+        </div>
+
+
+    </div>
+
+
+
+
+
+    <?php foreach ($grouped_months as $ym => $dates_array): 
+
+
+        $first_day = reset($dates_array);
+
+
+        $last_day = end($dates_array);
+
+
+        
+
+
+        $eng_month_name = $urdu_months_greg[date('F', strtotime($first_day))];
+
+
+        $eng_year = date('Y', strtotime($first_day));
+
+
+        $english_part = "$eng_month_name $eng_year";
+
+
+        
+
+
+        $islamic_part = getHijriMonthRangeTitle($first_day, $last_day, $hijri_offset);
+
+
+    ?>
+
+
+
+
+
+    <?php foreach($ordered_maktab_classes as $cName): ?>
+
+
+    <?php
+
+
+        $maxTeacherNameLen = 12;
+
+
+        foreach (($grouped_maktab_teachers[$cName] ?? []) as $nameRow) {
+
+
+            $len = function_exists('mb_strlen') ? mb_strlen((string)$nameRow['name'], 'UTF-8') : strlen((string)$nameRow['name']);
+
+
+            if ($len > $maxTeacherNameLen) $maxTeacherNameLen = $len;
+
+
+        }
+
+
+        $teacherNameColWidth = min(280, max(130, ($maxTeacherNameLen * 9) + 28));
+
+
+    ?>
+
+
+    <div class="card report-card shadow-sm mb-4 page-break">
+
+
+        <div class="card-body p-2">
+
+
+            
+
+
+            <div class="madrasa-header d-flex justify-content-between align-items-end" style="font-family: 'Jameel Noori Nastaleeq', sans-serif;">
+
+
+                <div class="text-start" style="width: 25%;">
+
+
+                    <h4 class="fw-bold m-0">  </h4>
+
+
+                    <h6 class="m-0"> </h6>
+
+
+                </div>
+
+
+                <div class="text-center" style="width: 50%;">
+
+
+                    <div class="title-box">
+
+
+                        <span class="text-dark"><?php echo $english_part; ?></span>
+
+
+                        <span class="mx-2 text-muted" style="font-size: 20px;">/</span>
+
+
+                        <span class="text-success"><?php echo $islamic_part; ?></span>
+
+
+                    </div>
+
+
+                    <div class="mt-1 fw-bold text-primary" style="font-family: 'Noto Nastaliq Urdu', sans-serif; font-size: 14px;"><?php echo $cName; ?></div>
+
+
+                </div>
+
+
+                <div class="text-end" style="width: 25%;">
+
+
+                    <h3 class="fw-bold m-0 text-decoration-underline">  </h3>
+
+
+                </div>
+
+
+            </div>
+
+
+
+
+
+            <div class="text-center mb-2" style="font-size: 11px;">
+
+
+                <span class="badge rounded-pill border border-success text-success bg-light mx-1">P </span>
+
+
+                <span class="badge rounded-pill border border-info text-info bg-light mx-1" style="border-color: #20c997 !important; color: #20c997 !important;">OD  </span>
+
+
+                <span class="badge rounded-pill border border-warning text-dark bg-light mx-1">L </span>
+
+
+                <span class="badge rounded-pill border border-info text-dark bg-light mx-1" style="border-color: #0dcaf0 !important; color: #0dcaf0 !important;">LA  </span>
+
+
+                <span class="badge rounded-pill border border-warning text-dark bg-light mx-1" style="border-color: #fd7e14 !important; color: #fd7e14 !important;">T </span>
+
+
+            </div>
+
+
+
+
+
+            <div class="table-responsive">
+
+
+                <table class="report-table">
+
+
+                    <thead>
+
+
+                        <tr class="bg-light">
+
+
+                            <th style="width: 25px;">#</th>
+
+
+                            <th class="teacher-name-cell" style="width: <?php echo $teacherNameColWidth; ?>px; min-width: <?php echo $teacherNameColWidth; ?>px; text-align:right; padding-right:5px;"> </th>
+
+
+                            <?php foreach($dates_array as $date_str): 
+
+
+                                $is_friday = (date('N', strtotime($date_str)) == 5);
+
+
+                                $g_day = (int)date('d', strtotime($date_str));
+
+
+                                $h_data = getHijriDateLoop($date_str, $hijri_offset); 
+
+
+                                $h_day = $h_data['d'];
+
+
+                            ?>
+
+
+                                <th style="width: 28px;">
+
+
+                                    <div class="date-cell">
+
+
+                                        <span class="greg-date"><?php echo $g_day; ?></span>
+
+
+                                        <span class="hijri-date"><?php echo $h_day; ?></span>
+
+
+                                    </div>
+
+
+                                </th>
+
+
+                            <?php endforeach; ?>
+
+
+                            <th class="bg-light text-success" style="width: 30px; font-size:10px;"> ()</th>
+
+
+                            <th class="bg-light text-warning" style="width: 30px; font-size:10px; color: #fd7e14 !important;"> ()</th>
+
+
+                            <th class="bg-light text-warning" style="width: 38px; font-size:10px; color: #fd7e14 !important;"> </th>
+
+
+                            <th class="bg-light text-warning" style="width: 30px; font-size:10px;"> ()</th>
+
+
+                            <th class="bg-light text-primary" style="width: 50px; font-size:10px;"></th>
+
+
+                        </tr>
+
+
+                    </thead>
+
+
+                    <tbody>
+
+
+                        <?php 
+
+
+                        if (!function_exists('fmtNum')) {
+
+
+                            function fmtNum($n) { $r = round($n, 1); return floor($r) == $r ? (int)$r : $r; }
+
+
+                        }
+
+
+                        $t_count = count($grouped_maktab_teachers[$cName]);
+
+
+                        $sr = 1; foreach($grouped_maktab_teachers[$cName] as $t): 
+
+
+                            $month_p = 0.0; $month_t = 0; $month_l = 0.0; $month_late_mins = 0;
+
+
+                            $t_class_id = $t['class_id'] ?? 0;
+
+
+                            $row_name = $t['name'];
+
+
+                            $assigned_periods = $t['periods'] ?? [];
+
+
+                            if (empty($assigned_periods)) $assigned_periods = [1, 2, 3, 4];
+
+
+                            
+
+
+                            $appointed_count = count($assigned_periods);
+
+
+                        ?>
+
+
+                        <tr>
+
+
+                            <td><?php echo $sr++; ?></td>
+
+
+                            <td class="teacher-name-cell" style="width: <?php echo $teacherNameColWidth; ?>px; min-width: <?php echo $teacherNameColWidth; ?>px; text-align:right; padding-right:5px; font-weight:bold; font-size:10px;"><?php echo htmlspecialchars($row_name); ?></td>
+
+
+                            <?php foreach($dates_array as $date_str): 
+                                if (!empty($t['joining_date']) && $date_str < $t['joining_date']) {
+                                    echo '<td style="text-align:center; vertical-align:middle; background-color:#f9f9f9;"><span class="text-muted" style="font-size:9px;">-</span></td>';
+                                    continue;
+                                } 
+
+
+                                $is_friday = (date('N', strtotime($date_str)) == 5);
+
+
+                                $is_friday = (date('w', strtotime($date_str)) == 5);
+
+
+                                if ($is_friday) {
+
+
+                                    $month_p += 1.0;
+
+
+                                    $grand_total_p += 1.0;
+
+
+                                    $grand_total_slots += 1.0;
+
+
+                                }
+
+
+
+
+
+                                $has_any_att = isset($attendance_data[$t['id']][$t_class_id][$date_str]); // Actually, for consolidated, we might need a broader check.
+
+
+                                if ($view_type === 'consolidated') {
+
+
+                                    $has_any_att = isset($attendance_data[$t['id']]);
+
+
+                                }
+
+
+                                
+
+
+                                $cell_html = '<div class="att-grid" style="width:'.(count($assigned_periods) > 4 ? '28px' : '14px').'">';
+
+
+
+
+
+                                $n_periods = count($assigned_periods);
+
+
+                                $n_periods = $n_periods > 0 ? $n_periods : 1;
+
+
+                                $fraction = 1.0 / $n_periods;
+
+
+
+
+
+                                foreach ($assigned_periods as $periodItem) {
+
+
+                                    if (is_array($periodItem)) {
+
+
+                                        $p_cid = $periodItem['cid'];
+
+
+                                        $periodNo = $periodItem['pno'];
+
+
+                                    } else {
+
+
+                                        $p_cid = $t_class_id;
+
+
+                                        $periodNo = $periodItem;
+
+
+                                    }
+
+
+                                    
+
+
+                                    $period_attendance = $attendance_data[$t['id']][$p_cid][$date_str][$periodNo] ?? [];
+
+
+                                    $st = $period_attendance['status'] ?? '';
+
+
+                                    $late_mins = (int)($period_attendance['late_minutes'] ?? 0);
+
+
+                                    
+
+
+                                    if($st == '' || (($st == '' || $st == 'P') && $late_mins > 0)) { 
+
+
+                                        if (!$is_friday) {
+
+
+                                            $month_p += $fraction; 
+
+
+                                            $grand_total_p += $fraction; 
+
+
+                                            $grand_total_slots += $fraction;
+
+
+                                        }
+
+
+                                        $month_t++; 
+
+
+                                        $month_late_mins += $late_mins;
+
+
+                                        $grand_total_late++;
+
+
+                                        $grand_total_late_mins += $late_mins;
+
+
+                                        $dot_class = 'dot-T';
+
+
+                                    } elseif($st == ' ' || $st == 'OD') {
+
+
+                                        if (!$is_friday) {
+
+
+                                            $month_p += $fraction; 
+
+
+                                            $grand_total_p += $fraction; 
+
+
+                                            $grand_total_slots += $fraction;
+
+
+                                        }
+
+
+                                        $dot_class = 'dot-OD';
+
+
+                                    } elseif($st == '' || $st == 'P') {
+
+
+                                        if (!$is_friday) {
+
+
+                                            $month_p += $fraction; 
+
+
+                                            $grand_total_p += $fraction; 
+
+
+                                            $grand_total_slots += $fraction;
+
+
+                                        }
+
+
+                                        $dot_class = 'dot-P';
+
+
+                                    } elseif($st == ' ' || $st == 'LA') {
+
+
+                                        if (!$is_friday) {
+
+
+                                            $month_l += $fraction;
+
+
+                                            $grand_total_l += $fraction;
+
+
+                                            $grand_total_slots += $fraction;
+
+
+                                        }
+
+
+                                        $dot_class = 'dot-LA';
+
+
+                                    } elseif($st == '' || $st == 'L') {
+
+
+                                        if (!$is_friday) {
+
+
+                                            $month_l += $fraction;
+
+
+                                            $grand_total_l += $fraction;
+
+
+                                            $grand_total_slots += $fraction;
+
+
+                                        }
+
+
+                                        $dot_class = 'dot-L';
+
+
+                                    } else {
+
+
+                                        $dot_class = 'dot-None';
+
+
+                                    }
+
+
+                                    
+
+
+                                    $cell_html .= '<div class="dot '.$dot_class.'"></div>';
+
+
+                                }
+
+
+                                $cell_html .= '</div>';
+
+
+                            ?>
+
+
+                            <?php if($is_friday): ?>
+
+
+                                <td style="background-color: #f8f9fa; position: relative; padding: 0; min-width: 28px; width: 28px;">
+
+
+                                    <?php if($sr % 4 == 2): ?>
+
+
+                                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(180deg); writing-mode: vertical-rl; color: #dc2626; font-size: 11px; font-weight: bold; white-space: nowrap; z-index: 10; letter-spacing: 2px;">جمعۃ المبارک</div>
+
+
+                                    <?php endif; ?>
+
+
+                                </td>
+
+
+                            <?php else: ?>
+
+
+                                <td>
+
+
+                                    <?php if($has_any_att): ?>
+
+
+                                        <?php echo $cell_html; ?>
+
+
+                                    <?php endif; ?>
+
+
+                                </td>
+
+
+                            <?php endif; ?>
+
+
+                            <?php endforeach; ?>
+
+
+                            <td style="font-weight:bold;"><?php echo fmtNum($month_p); ?></td>
+
+
+                            <td style="font-weight:bold; color: #fd7e14;"><?php echo $month_t; ?></td>
+
+
+                            <td style="font-weight:bold; color: #fd7e14;"><?php echo $month_late_mins; ?></td>
+
+
+                            <td style="font-weight:bold;"><?php echo fmtNum($month_l); ?></td>
+
+
+                            <?php 
+
+
+                                $total_slots = $month_p + $month_t + $month_l;
+
+
+                                $status = "-";
+
+
+                                $status_color = "black";
+
+
+                                if ($total_slots > 0) {
+
+
+                                    $perc = (($month_p + $month_t) / $total_slots) * 100;
+
+
+                                    if ($perc >= 100) {
+
+
+                                        $status = " ";
+
+
+                                        $status_color = "green";
+
+
+                                    } else {
+
+
+                                        $status = round($perc) . "% ";
+
+
+                                        $status_color = "blue";
+
+
+                                    }
+
+
+                                }
+
+
+                            ?>
+
+
+                            <td style="font-weight:bold; color: <?php echo $status_color; ?>;"><?php echo $status; ?></td>
+
+
+                        </tr>
+
+
+                        <?php $sr++; endforeach; ?>
+
+
+                    </tbody>
+
+
+                </table>
+
+
+            </div>
+
+
+        </div>
+
+
+    </div>
+
+
+    <?php endforeach; ?>
+
+
+    <?php endforeach; ?>
+
+
+
+
+
+    <?php 
+
+
+    $base = ($grand_total_slots > 0) ? $grand_total_slots : 1;
+
+
+    $perc_p = round(($grand_total_p / $base) * 100, 1);
+
+
+    $perc_l = round(($grand_total_l / $base) * 100, 1);
+
+
+    $perc_late = round(($grand_total_late / $base) * 100, 1);
+
+
+    ?>
+
+
+    <div class="card shadow border-dark mt-4 no-print-break" style="max-width: 900px; margin: 0 auto;">
+
+
+        <div class="card-header bg-dark text-white text-center fw-bold">
+
+
+               (<?php echo date('d M', strtotime($start_date)) . "  " . date('d M', strtotime($end_date)); ?>)
+
+
+        </div>
+
+
+        <div class="card-body">
+
+
+            <div class="row text-center">
+
+
+                <div class="col border-end"><h4 class="text-success fw-bold mb-0"><?php echo $perc_p; ?>%</h4><small>  </small></div>
+
+
+                <div class="col border-end"><h4 class="text-warning fw-bold mb-0" style="color: #fd7e14 !important;"><?php echo $perc_late; ?>%</h4><small>  </small></div>
+
+
+                <div class="col border-end"><h4 class="text-warning fw-bold mb-0" style="color: #fd7e14 !important;"><?php echo fmtNum($grand_total_late_mins); ?></h4><small>  </small></div>
+
+
+                <div class="col"><h4 class="text-info fw-bold mb-0"><?php echo $perc_l; ?>%</h4><small>  </small></div>
+
+
+            </div>
+
+
+        </div>
+
+
+    </div>
+
+
+</div>
+
+
+
+
+
+<script>
+
+
+function printLandscape() {
+
+
+    document.querySelectorAll('.print-title-bar').forEach(el => el.style.display = 'block');
+
+
+    window.print();
+
+
+    document.querySelectorAll('.print-title-bar').forEach(el => el.style.display = 'none');
+
+
+}
+
+
+</script>
+
+
+
+
+
+<?php 
+
+
+include 'footer.php'; 
+
+
+function t_cls($s) { 
+
+
+    if($s=='P') return 'text-success'; 
+
+
+    if($s=='A') return 'text-danger'; 
+
+
+    if($s=='L') return 'text-warning'; 
+
+
+    if($s=='T') return 'text-info'; 
+
+
+    return 'text-dark'; 
+
+
+}
+
+
+
+
+
+function getHijriMonthRangeTitle($start, $end, $offset) {
+
+
+    $h1 = getHijriDateLoop($start, $offset);
+
+
+    $h2 = getHijriDateLoop($end, $offset);
+
+
+    $months = [1=>" ",2=>" ",3=>" ",4=>" ",5=>" ",6=>" ",7=>" ",8=>" ",9=>" ",10=>" ",11=>"",12=>" "];
+
+
+    $m1 = isset($months[$h1['m']]) ? $months[$h1['m']] : '';
+
+
+    $m2 = isset($months[$h2['m']]) ? $months[$h2['m']] : '';
+
+
+    if ($h1['m'] == $h2['m']) { return $m1 . " " . $h1['y'] . " "; }
+
+
+    else { if ($h1['y'] != $h2['y']) { return $m1 . " " . $h1['y'] . " - " . $m2 . " " . $h2['y'] . " "; } return $m1 . " - " . $m2 . " " . $h1['y'] . " "; }
+
+
+}
+
+
+
+
+
+//  LOOP METHOD (The only way to guarantee 100% accuracy without library)
+
+
+function getHijriDateLoop($date_str, $offset) {
+
+
+    // Anchor: 19 July 2023 = 1 Muharram 1445
+
+
+    $ref_date = new DateTime('2023-07-19');
+
+
+    $target_date = new DateTime($date_str);
+
+
+    
+
+
+    //  
+
+
+    $interval = $ref_date->diff($target_date);
+
+
+    $days = $interval->days; // Total days difference
+
+
+    
+
+
+    //             (   )
+
+
+    //      1445    
+
+
+    if ($ref_date > $target_date) {
+
+
+        // Fallback for older dates (Simple approx)
+
+
+        return ['d'=>1, 'm'=>1, 'y'=>1445];
+
+
+    }
+
+
+
+
+
+    // 
+
+
+    $days = $days + $offset;
+
+
+
+
+
+    //   
+
+
+    $h_year = 1445;
+
+
+    $h_month = 1;
+
+
+    
+
+
+    while ($days > 0) {
+
+
+        //   30   29 
+
+
+        $days_in_month = ($h_month % 2 == 1) ? 30 : 29;
+
+
+        
+
+
+        //  (12)    30   
+
+
+        // Leap Year Logic: (11 * year + 14) % 30 < 11
+
+
+        if ($h_month == 12 && ((11 * $h_year + 14) % 30 < 11)) {
+
+
+            $days_in_month = 30; 
+
+
+        }
+
+
+
+
+
+        if ($days >= $days_in_month) {
+
+
+            $days -= $days_in_month;
+
+
+            $h_month++;
+
+
+            if ($h_month > 12) {
+
+
+                $h_month = 1;
+
+
+                $h_year++;
+
+
+            }
+
+
+        } else {
+
+
+            break; //    
+
+
+        }
+
+
+    }
+
+
+    
+
+
+    //          (0       +1)
+
+
+    $h_day = $days + 1;
+
+
+
+
+
+    return ['d' => (int)$h_day, 'm' => (int)$h_month, 'y' => (int)$h_year];
+
+
+}
+
+
+?>
+
+

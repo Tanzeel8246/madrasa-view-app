@@ -15,6 +15,7 @@ if (!in_array($role, ['admin', 'nazim', 'teacher'], true) && !$can_class_attenda
 $date = $_GET['date'] ?? $_POST['date'] ?? date('Y-m-d');
 $selected_class = $_GET['class'] ?? $_POST['class'] ?? '';
 $selected_period = $_GET['period_num'] ?? $_POST['period_num'] ?? '';
+$cur_tenant_id = (int)get_current_tenant_id();
 
 function normalize_teacher_attendance_status($status) {
     $clean = trim((string)$status);
@@ -25,9 +26,9 @@ function normalize_teacher_attendance_status($status) {
     return $clean === '' ? 'P' : $clean;
 }
 
-function sync_teacher_daily_summary(PDO $pdo, $teacherId, $date) {
-    $stmt = $pdo->prepare("SELECT status, late_minutes FROM teacher_period_attendance WHERE teacher_id = ? AND date = ?");
-    $stmt->execute([$teacherId, $date]);
+function sync_teacher_daily_summary(PDO $pdo, $teacherId, $date, $tenantId = 1) {
+    $stmt = $pdo->prepare("SELECT status, late_minutes FROM teacher_period_attendance WHERE teacher_id = ? AND date = ? AND tenant_id = ?");
+    $stmt->execute([$teacherId, $date, $tenantId]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if (!$rows) return;
     $status = 'A';
@@ -38,15 +39,15 @@ function sync_teacher_daily_summary(PDO $pdo, $teacherId, $date) {
         elseif ($status !== 'P' && $cur === 'L') $status = 'L';
         $late = max($late, (int)($r['late_minutes'] ?? 0));
     }
-    $check = $pdo->prepare("SELECT id FROM attendance_teachers WHERE teacher_id = ? AND date = ? LIMIT 1");
-    $check->execute([$teacherId, $date]);
+    $check = $pdo->prepare("SELECT id FROM attendance_teachers WHERE teacher_id = ? AND date = ? AND tenant_id = ? LIMIT 1");
+    $check->execute([$teacherId, $date, $tenantId]);
     $id = $check->fetchColumn();
     if ($id) {
-        $pdo->prepare("UPDATE attendance_teachers SET status = ?, late_minutes = ?, remarks = ? WHERE id = ?")
-            ->execute([$status, $late, (string)$late, $id]);
+        $pdo->prepare("UPDATE attendance_teachers SET status = ?, late_minutes = ?, remarks = ? WHERE id = ? AND tenant_id = ?")
+            ->execute([$status, $late, (string)$late, $id, $tenantId]);
     } else {
-        $pdo->prepare("INSERT INTO attendance_teachers (teacher_id, date, status, late_minutes, remarks) VALUES (?, ?, ?, ?, ?)")
-            ->execute([$teacherId, $date, $status, $late, (string)$late]);
+        $pdo->prepare("INSERT INTO attendance_teachers (teacher_id, date, status, late_minutes, remarks, tenant_id) VALUES (?, ?, ?, ?, ?, ?)")
+            ->execute([$teacherId, $date, $status, $late, (string)$late, $tenantId]);
     }
 }
 
@@ -172,7 +173,7 @@ function att_teacher_ids_for_class_period(PDO $pdo, $class_id, $selected_period)
 
     $profileClassMap = [];
     $profilePeriodMap = [];
-    $teachersStmt = $pdo->query("SELECT id, assigned_classes, assigned_periods FROM teachers WHERE (status = 'Active' OR status = '' OR status IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL)");
+    $teachersStmt = $pdo->query("SELECT id, assigned_classes, assigned_periods FROM teachers WHERE (status = 'Active' OR status = 'حاضر' OR status = 'فعال' OR status = '' OR status IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL)");
     foreach ($teachersStmt->fetchAll(PDO::FETCH_ASSOC) as $teacher) {
         $tid = (string)$teacher['id'];
         $assignedClasses = att_id_list($teacher['assigned_classes'] ?? '');
@@ -343,18 +344,18 @@ if (isset($_POST['save_attendance'])) {
                 $t_late_mins = $_POST['teacher_late_mins'][$t_id] ?? 0;
                 $t_remarks = $_POST['teacher_remarks'][$t_id] ?? '';
                 
-                $exist_t = $pdo->prepare("SELECT id FROM teacher_period_attendance WHERE teacher_id=? AND class_id=? AND date=? AND period_no=?");
-                $exist_t->execute([$t_id, $class_id, $date, $selected_period]);
+                $exist_t = $pdo->prepare("SELECT id FROM teacher_period_attendance WHERE teacher_id=? AND class_id=? AND date=? AND period_no=? AND tenant_id=?");
+                $exist_t->execute([$t_id, $class_id, $date, $selected_period, $cur_tenant_id]);
                 $row_t = $exist_t->fetch();
                 
                 if ($row_t) {
-                    $sql = "UPDATE teacher_period_attendance SET status=?, late_minutes=?, remarks=? WHERE id=?";
-                    $pdo->prepare($sql)->execute([$t_status, $t_late_mins, $t_remarks, $row_t['id']]);
+                    $sql = "UPDATE teacher_period_attendance SET status=?, late_minutes=?, remarks=? WHERE id=? AND tenant_id=?";
+                    $pdo->prepare($sql)->execute([$t_status, $t_late_mins, $t_remarks, $row_t['id'], $cur_tenant_id]);
                 } else {
-                    $sql = "INSERT INTO teacher_period_attendance (teacher_id, class_id, date, period_no, status, late_minutes, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)";
-                    $pdo->prepare($sql)->execute([$t_id, $class_id, $date, $selected_period, $t_status, $t_late_mins, $t_remarks]);
+                    $sql = "INSERT INTO teacher_period_attendance (teacher_id, class_id, date, period_no, status, late_minutes, remarks, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                    $pdo->prepare($sql)->execute([$t_id, $class_id, $date, $selected_period, $t_status, $t_late_mins, $t_remarks, $cur_tenant_id]);
                 }
-                sync_teacher_daily_summary($pdo, $t_id, $date);
+                sync_teacher_daily_summary($pdo, $t_id, $date, $cur_tenant_id);
             }
         }
 
@@ -367,16 +368,16 @@ if (isset($_POST['save_attendance'])) {
                 
                 if ($st === '') continue; // Skip if not marked
 
-                $exist = $pdo->prepare("SELECT id FROM period_attendance WHERE student_id=? AND date=? AND period_num=?");
-                $exist->execute([$std_id, $date, $selected_period]);
+                $exist = $pdo->prepare("SELECT id FROM period_attendance WHERE student_id=? AND date=? AND period_num=? AND tenant_id=?");
+                $exist->execute([$std_id, $date, $selected_period, $cur_tenant_id]);
                 $row = $exist->fetch();
                 
                 if ($row) {
-                    $sql = "UPDATE period_attendance SET status=?, remarks=? WHERE id=?";
-                    $pdo->prepare($sql)->execute([$st, $rem, $row['id']]);
+                    $sql = "UPDATE period_attendance SET status=?, remarks=? WHERE id=? AND tenant_id=?";
+                    $pdo->prepare($sql)->execute([$st, $rem, $row['id'], $cur_tenant_id]);
                 } else {
-                    $sql = "INSERT INTO period_attendance (student_id, date, period_num, status, remarks) VALUES (?, ?, ?, ?, ?)";
-                    $pdo->prepare($sql)->execute([$std_id, $date, $selected_period, $st, $rem]);
+                    $sql = "INSERT INTO period_attendance (student_id, date, period_num, status, remarks, tenant_id) VALUES (?, ?, ?, ?, ?, ?)";
+                    $pdo->prepare($sql)->execute([$std_id, $date, $selected_period, $st, $rem, $cur_tenant_id]);
                 }
             }
         }
@@ -393,22 +394,21 @@ if ($can_teacher_attendance && $class_id && $selected_period) {
 
     if (!empty($t_ids)) {
         $placeholders = implode(',', array_fill(0, count($t_ids), '?'));
-        $stmt = $pdo->prepare("SELECT id, name FROM teachers WHERE id IN ($placeholders) AND (is_deleted = 0 OR is_deleted IS NULL)");
-        $stmt->execute($t_ids);
+        $stmt = $pdo->prepare("SELECT id, name FROM teachers WHERE id IN ($placeholders) AND tenant_id = ? AND (status = 'Active' OR status = 'حاضر' OR status = 'فعال' OR status = '' OR status IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL)");
+        $stmt->execute(array_merge($t_ids, [$cur_tenant_id]));
         $teachers_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($teachers_data as $t) {
-            // 3. Fetch teacher's existing attendance
-            $chk_t = $pdo->prepare("SELECT status, late_minutes, remarks FROM teacher_period_attendance WHERE teacher_id=? AND class_id=? AND date=? AND period_no=?");
-            $chk_t->execute([$t['id'], $class_id, $date, $selected_period]);
-            $res_t = $chk_t->fetch();
+            $t_chk = $pdo->prepare("SELECT status, late_minutes, remarks FROM teacher_period_attendance WHERE teacher_id=? AND class_id=? AND date=? AND period_no=? AND tenant_id=?");
+            $t_chk->execute([$t['id'], $class_id, $date, $selected_period, $cur_tenant_id]);
+            $t_res = $t_chk->fetch();
 
             $assigned_teachers[] = [
                 'id' => $t['id'],
                 'name' => $t['name'],
-                'status' => $res_t ? normalize_teacher_attendance_status($res_t['status'] ?? 'P') : 'P',
-                'late_minutes' => $res_t['late_minutes'] ?? 0,
-                'remarks' => $res_t['remarks'] ?? ''
+                'status' => $t_res['status'] ?? 'P',
+                'late_minutes' => (int)($t_res['late_minutes'] ?? 0),
+                'remarks' => $t_res['remarks'] ?? ''
             ];
         }
     }
@@ -418,10 +418,32 @@ if ($can_teacher_attendance && $class_id && $selected_period) {
 $students = [];
 if ($selected_class && $selected_period) {
     $sys = $_SESSION['system_type'] ?? 'Madrasa';
-$query = "SELECT * FROM students WHERE system_type = '$sys' AND (LOWER(status)='active' OR LOWER(status)='present' OR status='') AND is_deleted=0 AND class = ? ORDER BY admission_number ASC";
+    $sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+    
+    $studentCols = [];
+    try { $studentCols = $pdo->query("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN); } catch(Exception $e){}
+    $hasSys = in_array('system_type', $studentCols, true);
+    $stdSysCond = $hasSys ? $sys_cond : "1=1";
+    
+    $classExpr = in_array('class_name', $studentCols, true) 
+        ? "(TRIM(class) = ? OR TRIM(class_name) = ?)" 
+        : "TRIM(class) = ?";
+    $params = in_array('class_name', $studentCols, true) 
+        ? [$cur_tenant_id, $date, trim($selected_class), trim($selected_class)] 
+        : [$cur_tenant_id, $date, trim($selected_class)];
+        
+    $query = "SELECT * FROM students WHERE tenant_id = ? AND $stdSysCond AND (LOWER(TRIM(status)) IN ('active', 'present', 'حاضر', '') OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND (admission_date IS NULL OR admission_date = '' OR admission_date <= ?) AND $classExpr ORDER BY admission_number ASC";
     $stmt = $pdo->prepare($query);
-    $stmt->execute([$selected_class]);
-    $students = $stmt->fetchAll();
+    $stmt->execute($params);
+    $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Fallback if zero found: check without system_type constraint if class is unique
+    if (empty($students)) {
+        $queryFb = "SELECT * FROM students WHERE tenant_id = ? AND (LOWER(TRIM(status)) IN ('active', 'present', 'حاضر', '') OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND (admission_date IS NULL OR admission_date = '' OR admission_date <= ?) AND $classExpr ORDER BY admission_number ASC";
+        $stmtFb = $pdo->prepare($queryFb);
+        $stmtFb->execute($params);
+        $students = $stmtFb->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
 ?>
 
@@ -474,9 +496,12 @@ $query = "SELECT * FROM students WHERE system_type = '$sys' AND (LOWER(status)='
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-3 text-end d-flex align-items-end justify-content-end mt-3 mt-md-0">
-                    <button type="submit" name="save_attendance" id="save_btn" class="btn btn-success fw-bold px-4 shadow w-100" <?php echo (!$selected_class || !$selected_period) ? 'disabled' : ''; ?>>
-                        <i class="fas fa-save me-2"></i> محفوظ کریں
+                <div class="col-md-3 text-end d-flex align-items-end justify-content-end gap-2 mt-3 mt-md-0">
+                    <button type="button" id="wa_btn" class="btn btn-outline-success fw-bold px-3 shadow" <?php echo (!$selected_class || !$selected_period || empty($students)) ? 'disabled' : ''; ?> onclick="openWhatsAppModal()">
+                        <i class="fab fa-whatsapp me-1"></i> WhatsApp متن
+                    </button>
+                    <button type="submit" name="save_attendance" id="save_btn" class="btn btn-success fw-bold px-3 shadow" <?php echo (!$selected_class || !$selected_period) ? 'disabled' : ''; ?>>
+                        <i class="fas fa-save me-1"></i> محفوظ کریں
                     </button>
                 </div>
             </div>
@@ -557,8 +582,8 @@ $query = "SELECT * FROM students WHERE system_type = '$sys' AND (LOWER(status)='
                             
                             <!-- Students Loop -->
                             <?php foreach($students as $s): 
-                                $chk = $pdo->prepare("SELECT status, remarks FROM period_attendance WHERE student_id=? AND date=? AND period_num=?");
-                                $chk->execute([$s['id'], $date, $selected_period]);
+                                $chk = $pdo->prepare("SELECT status, remarks FROM period_attendance WHERE student_id=? AND date=? AND period_num=? AND tenant_id=?");
+                                $chk->execute([$s['id'], $date, $selected_period, $cur_tenant_id]);
                                 $res = $chk->fetch();
                                 
                                 $val       = $res['status']  ?? 'P'; // Default to Present
@@ -788,6 +813,117 @@ function urduToNum(str) {
     for(var k in map) if(str.includes(k)) return map[k];
     return str;
 }
+
+function openWhatsAppModal() {
+    var dateVal = document.getElementById('dateInput').value;
+    var classSelect = document.getElementById('classSelect');
+    var className = classSelect.options[classSelect.selectedIndex] ? classSelect.options[classSelect.selectedIndex].text : '';
+    var periodSelect = document.getElementById('periodSelect');
+    var periodName = periodSelect.options[periodSelect.selectedIndex] ? periodSelect.options[periodSelect.selectedIndex].text : '';
+
+    var total = 0, present = 0, absent = 0, leave = 0;
+    var absentList = [];
+    var leaveList = [];
+
+    var selectElements = document.querySelectorAll('select[name^="period_status"]');
+    selectElements.forEach(function(sel) {
+        total++;
+        var val = sel.value;
+        var row = sel.closest('tr');
+        var nameEl = row ? row.querySelector('td:nth-child(2) span') : null;
+        var studentName = nameEl ? nameEl.innerText.trim() : 'طالب علم';
+
+        if (val === 'P') {
+            present++;
+        } else if (val === 'A') {
+            absent++;
+            absentList.push(studentName);
+        } else if (val === 'L') {
+            leave++;
+            leaveList.push(studentName);
+        } else {
+            present++;
+        }
+    });
+
+    var msg = "📋 *مدرسہ اشرف المدارس - روزانہ حاضری رپورٹ*\n";
+    msg += "━━━━━━━━━━━━━━━━━━━━\n";
+    msg += "📅 *تاریخ:* " + dateVal + "\n";
+    if (className) msg += "🏫 *جماعت:* " + className + "\n";
+    if (periodName) msg += "⏰ *پیریڈ:* " + periodName + "\n";
+    msg += "━━━━━━━━━━━━━━━━━━━━\n";
+    msg += "👥 *کل طلبہ:* " + total + "\n";
+    msg += "✅ *حاضر:* " + present + "\n";
+    msg += "❌ *غیر حاضر:* " + absent + "\n";
+    msg += "📝 *رخصت:* " + leave + "\n";
+
+    if (absentList.length > 0) {
+        msg += "\n❌ *غیر حاضر طلبہ:*\n";
+        absentList.forEach(function(name, idx) {
+            msg += (idx + 1) + ". " + name + "\n";
+        });
+    }
+
+    if (leaveList.length > 0) {
+        msg += "\n📝 *رخصت پر طلبہ:*\n";
+        leaveList.forEach(function(name, idx) {
+            msg += (idx + 1) + ". " + name + "\n";
+        });
+    }
+
+    msg += "\n_اشرف المدارس مینجمنٹ سسٹم_";
+
+    document.getElementById('wa_message_text').value = msg;
+    var waUrl = "https://wa.me/?text=" + encodeURIComponent(msg);
+    document.getElementById('wa_direct_link').setAttribute('href', waUrl);
+
+    var waModal = new bootstrap.Modal(document.getElementById('whatsAppModal'));
+    waModal.show();
+}
+
+function copyWhatsAppText() {
+    var copyText = document.getElementById("wa_message_text");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(copyText.value).then(function() {
+        var alertBox = document.getElementById('copySuccessAlert');
+        alertBox.classList.remove('d-none');
+        setTimeout(function() {
+            alertBox.classList.add('d-none');
+        }, 2500);
+    });
+}
 </script>
+
+<!-- WhatsApp Modal -->
+<div class="modal fade" id="whatsAppModal" tabindex="-1" aria-labelledby="whatsAppModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="whatsAppModalLabel"><i class="fab fa-whatsapp me-2"></i> WhatsApp حاضری خلاصہ</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="copySuccessAlert" class="alert alert-success d-none py-2 text-center small fw-bold">
+                    <i class="fas fa-check-circle me-1"></i> متن کامیابی سے کلپ بورڈ پر کاپی ہو گیا!
+                </div>
+                <label class="form-label fw-bold small text-muted">پیغام کا متن:</label>
+                <textarea id="wa_message_text" class="form-control font-monospace" rows="10" readonly style="direction: rtl; font-size: 13px;"></textarea>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">بند کریں</button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary btn-sm fw-bold shadow-sm" onclick="copyWhatsAppText()">
+                        <i class="fas fa-copy me-1"></i> کلپ بورڈ پر کاپی کریں
+                    </button>
+                    <a id="wa_direct_link" href="#" target="_blank" class="btn btn-success btn-sm fw-bold shadow-sm">
+                        <i class="fab fa-whatsapp me-1"></i> WhatsApp پر کھولیں
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>.pulse-btn { animation: pulse 1s infinite; }</style>
 <?php include 'footer.php'; ?>

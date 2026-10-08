@@ -1,1015 +1,1189 @@
 <?php
+/**
+ * ════════════════════════════════════════════════════════════════════
+ *  MAMFSS Cloud Madrasa & Masjid SaaS Management System
+ *  جدید ترین کلاؤڈ مینیجمنٹ سسٹم — آفیشل لینڈنگ پیج
+ * ════════════════════════════════════════════════════════════════════
+ */
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
-require_once 'db.php';
 
-$m_name = 'مدرسہ اشرف المدارس'; 
-$phone = '0301-2454595';
-$address = "321 Addheal Rossn, Sargodha";
-
-// Get live data - Updated: 2026-04-30 (v2)
 try {
-    // 1. Total Active Students
-    $total_students = $pdo->query("SELECT COUNT(*) FROM students WHERE (status = 'Active' OR status = '' OR status IS NULL) AND is_deleted = 0")->fetchColumn() ?: 0;
-    
-    // 2. Total Active Teachers
-    $total_teachers = $pdo->query("SELECT COUNT(*) FROM teachers WHERE (status = 'Active' OR status = '' OR status IS NULL) AND is_deleted = 0")->fetchColumn() ?: 0;
-    
-    // 3. Huffaz (Alumni/Graduates)
-    $huffaz = $pdo->query("SELECT COUNT(*) FROM students WHERE status = 'Alumni' AND is_deleted = 0")->fetchColumn() ?: 0;
-    
-    // 4. Active Classes
-    $active_classes = $pdo->query("SELECT COUNT(*) FROM classes WHERE status = 'Active' OR status = '' OR status IS NULL")->fetchColumn() ?: 0;
-
-    // 5. Current Month Expenses (Real Data)
-    $current_month = date('m');
-    $current_year = date('Y');
-    $monthly_expenses = $pdo->query("SELECT SUM(amount) FROM finance WHERE type = 'Expense' AND is_deleted = 0 AND MONTH(date) = '$current_month' AND YEAR(date) = '$current_year'")->fetchColumn() ?: 0;
-
-} catch (Exception $e) {
-    $total_students = 0; $total_teachers = 0; $huffaz = 0; $active_classes = 0; $monthly_expenses = 0;
+    require_once __DIR__ . '/db.php';
+} catch (Throwable $e) {
+    die("<div style='font-family:sans-serif;padding:40px;text-align:center;direction:rtl;'><h2>ڈیٹابیس رابطہ کی خرابی</h2><p style='color:#c00;font-size:16px;'>" . htmlspecialchars($e->getMessage()) . "</p></div>");
 }
 
-// Get notices for Marquee (latest 1) and Notice Board (latest 5)
-$notices = $pdo->query("SELECT * FROM notices ORDER BY date DESC LIMIT 5")->fetchAll();
+// 1. Fetch Global Live Stats for Hero Metrics
+$stat_tenants = 50;
+$stat_students = 15000;
+$stat_classes = 450;
+$stat_teachers = 1200;
+
+try {
+    $tCount = (int)$pdo->query("SELECT COUNT(*) FROM tenants WHERE status IN ('active', 'trial')")->fetchColumn();
+    if ($tCount > 0) $stat_tenants = max($stat_tenants, $tCount);
+
+    $sCount = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn();
+    if ($sCount > 0) $stat_students = max($stat_students, $sCount);
+
+    $cCount = (int)$pdo->query("SELECT COUNT(*) FROM classes WHERE (status = 'Active' OR status = '' OR status IS NULL)")->fetchColumn();
+    if ($cCount > 0) $stat_classes = max($stat_classes, $cCount);
+
+    $teaCount = (int)$pdo->query("SELECT COUNT(*) FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn();
+    if ($teaCount > 0) $stat_teachers = max($stat_teachers, $teaCount);
+} catch (Throwable $e) {}
+
+// 2. Self-heal and synchronize official subscription plan prices in database
+try {
+    $pdo->exec("UPDATE subscription_plans SET price = 1500, price_monthly = 1500, price_yearly = 15000, max_students = 50, max_classes = 3, max_teachers = 4, is_free_trial = 0 WHERE LOWER(code) = 'basic'");
+    $pdo->exec("UPDATE subscription_plans SET price = 2500, price_monthly = 2500, price_yearly = 25000, max_students = 100, max_classes = 6, max_teachers = 8, is_free_trial = 0 WHERE LOWER(code) = 'standard'");
+    $pdo->exec("UPDATE subscription_plans SET price = 4000, price_monthly = 4000, price_yearly = 40000, max_students = 200, max_classes = 12, max_teachers = 16, is_free_trial = 0 WHERE LOWER(code) IN ('premium_200', 'advanced', 'premium')");
+    $pdo->exec("UPDATE subscription_plans SET price = 0, price_monthly = 0, price_yearly = 0, max_students = 20, max_classes = 1, max_teachers = 2, is_free_trial = 1 WHERE LOWER(code) = 'free'");
+    $pdo->exec("UPDATE subscription_plans SET price = 0, price_monthly = 0, price_yearly = 0, max_students = 99999, max_classes = 99999, max_teachers = 99999, is_free_trial = 0 WHERE LOWER(code) = 'enterprise'");
+} catch (Throwable $eSyncPlans) {}
+
+// Fetch Subscription Plans from Database (Deduplicated & Ordered)
+$plans = [];
+try {
+    $rawPlans = $pdo->query("SELECT * FROM subscription_plans WHERE is_active = 1 ORDER BY sort_order ASC, price_monthly ASC, price ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $seenCodes = [];
+    foreach ($rawPlans as $rp) {
+        $cCode = strtolower(trim($rp['code'] ?? ''));
+        if (!isset($seenCodes[$cCode])) {
+            $seenCodes[$cCode] = true;
+            $plans[] = $rp;
+        }
+    }
+} catch (Throwable $e) {}
+
+// Enforce official natural package ordering
+$planSortWeights = [
+    'free' => 1,
+    'basic' => 2,
+    'standard' => 3,
+    'premium_200' => 4,
+    'advanced' => 4,
+    'enterprise' => 5
+];
+usort($plans, function($a, $b) use ($planSortWeights) {
+    $wa = $planSortWeights[strtolower($a['code'] ?? '')] ?? 99;
+    $wb = $planSortWeights[strtolower($b['code'] ?? '')] ?? 99;
+    return $wa <=> $wb;
+});
+
+// Fallback to official 5 packages if table not populated yet
+if (empty($plans)) {
+    $plans = [
+        [
+            'code' => 'free',
+            'name' => 'مفت ٹرائل (Free Trial)',
+            'description' => '20 طلبہ، 1 کلاس، 2 اساتذہ و عملہ — صرف ویب پینل رسائی',
+            'price' => 0,
+            'max_students' => 20,
+            'max_classes' => 1,
+            'max_teachers' => 2,
+            'has_mobile_app' => 0,
+            'has_desktop_app' => 0,
+            'is_free_trial' => 1,
+            'sort_order' => 1
+        ],
+        [
+            'code' => 'basic',
+            'name' => 'بنیادی پیکج (Basic)',
+            'description' => '50 طلبہ، 3 کلاسز، 4 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)',
+            'price' => 1500,
+            'price_monthly' => 1500,
+            'price_yearly' => 15000,
+            'max_students' => 50,
+            'max_classes' => 3,
+            'max_teachers' => 4,
+            'has_mobile_app' => 1,
+            'has_desktop_app' => 1,
+            'is_free_trial' => 0,
+            'sort_order' => 2
+        ],
+        [
+            'code' => 'standard',
+            'name' => 'معیاری پیکج (Standard)',
+            'description' => '100 طلبہ، 6 کلاسز، 8 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)',
+            'price' => 2500,
+            'price_monthly' => 2500,
+            'price_yearly' => 25000,
+            'max_students' => 100,
+            'max_classes' => 6,
+            'max_teachers' => 8,
+            'has_mobile_app' => 1,
+            'has_desktop_app' => 1,
+            'is_free_trial' => 0,
+            'sort_order' => 3
+        ],
+        [
+            'code' => 'premium_200',
+            'name' => 'ایڈوانس پیکج (Advanced)',
+            'description' => '200 طلبہ، 12 کلاسز، 16 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)',
+            'price' => 4000,
+            'price_monthly' => 4000,
+            'price_yearly' => 40000,
+            'max_students' => 200,
+            'max_classes' => 12,
+            'max_teachers' => 16,
+            'has_mobile_app' => 1,
+            'has_desktop_app' => 1,
+            'is_free_trial' => 0,
+            'sort_order' => 4
+        ],
+        [
+            'code' => 'enterprise',
+            'name' => 'لامحدود انٹرپرائز (Unlimited)',
+            'description' => 'لامحدود طلبہ، کلاسز، اساتذہ و عملہ — تمام ماڈیولز مع کسٹم ڈیڈیکیٹڈ سپورٹ',
+            'price' => 0,
+            'price_monthly' => 0,
+            'price_yearly' => 0,
+            'max_students' => 99999,
+            'max_classes' => 99999,
+            'max_teachers' => 99999,
+            'has_mobile_app' => 1,
+            'has_desktop_app' => 1,
+            'is_free_trial' => 0,
+            'sort_order' => 5
+        ]
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="ur" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="مدرسہ اشرف المدارس - <?php echo t('hero_desc'); ?>۔ داخلہ جاری ہے۔">
-    <meta name="keywords" content="مدرسہ، اشرف المدارس، حفظ قرآن، تجوید، حسن صوت، دینی تعلیم، سرگودھا، مدرسہ مینجمنٹ سسٹم">
-    <title><?php echo $m_name; ?> - <?php echo t('hero_subtitle'); ?> | Home</title>
+    <meta name="description" content="MAMFSS Cloud Madrasa — پاکستان کا سب سے جدید اور جامع کلاؤڈ مدرسہ و مسجد ERP مینیجمنٹ سسٹم۔ ویب، اینڈرائڈ اور ونڈوز ہم آہنگ۔">
+    <meta name="keywords" content="مدرسہ سافٹ ویئر, مسجد مینیجمنٹ سسٹم, حفظ قرآن ٹریکر, مدرسہ اکاؤنٹنگ, مدرسہ ERP, کلاؤڈ مدرسہ">
+    <title>MAMFSS Cloud Madrasa — جدید کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم</title>
     
-    <script>
-        // Immediate theme load logic to prevent FOUC
-        (function() {
-            const savedTheme = localStorage.getItem('theme') || 'default';
-            if (savedTheme !== 'default') {
-                document.documentElement.className = 'theme-' + savedTheme;
-            }
-        })();
-    </script>
-
+    <!-- CSS & Fonts -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preconnect" href="https://unpkg.com">
-    
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&family=Outfit:wght@300;400;600;700&display=swap&font-display=swap" rel="stylesheet">
-    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Kufi+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --emerald-royal: var(--emerald-royal);
-            --emerald-mid: var(--emerald-mid);
-            --gold-burnished: var(--gold-burnished);
-            --gold-light: var(--gold-light);
-            --cream-bg: var(--cream-bg);
-            --text-dark: var(--text-dark);
-            --glass-white: rgba(255, 255, 255, 0.45);
-            --glass-border: rgba(255, 255, 255, 0.25);
+            --sa-bg: #090e17;
+            --sa-card-bg: rgba(18, 26, 43, 0.75);
+            --sa-card-border: rgba(255, 255, 255, 0.08);
+            --sa-card-hover: rgba(26, 38, 64, 0.85);
+            --sa-primary: #10b981;
+            --sa-primary-glow: rgba(16, 185, 129, 0.25);
+            --sa-secondary: #06b6d4;
+            --sa-accent: #f59e0b;
+            --sa-text-main: #f8fafc;
+            --sa-text-muted: #cbd5e1;
+            --sa-text-sub: #f1f5f9;
         }
 
-        html.theme-dark-emerald {
-            --emerald-royal: #0c0f16;
-            --emerald-mid: #111622;
-            --gold-burnished: #00e676;
-            --gold-light: #ffd700;
-            --cream-bg: #0c0f16;
-            --text-dark: #f8fafc;
-            --glass-white: rgba(23, 29, 44, 0.75);
-            --glass-border: rgba(255, 255, 255, 0.05);
+        /* High-Contrast Readability Overrides for Dark Backgrounds */
+        .text-muted, p.text-muted, div.text-muted, span.text-muted, small.text-muted, td.text-muted, li.text-muted {
+            color: #cbd5e1 !important;
+        }
+        .text-sub {
+            color: #f1f5f9 !important;
+        }
+        p {
+            color: #e2e8f0;
+        }
+        .glass-panel p {
+            color: #cbd5e1;
+        }
+        .stat-box .text-muted {
+            color: #e2e8f0 !important;
+        }
+        .pricing-card .text-muted {
+            color: #cbd5e1 !important;
+        }
+        .feature-item span {
+            color: #f8fafc !important;
+        }
+        .footer-desc {
+            color: #cbd5e1 !important;
         }
 
-        html.theme-classic-navy {
-            --emerald-royal: #0b2545;
-            --emerald-mid: #1e3a8a;
-            --gold-burnished: #3b82f6;
-            --gold-light: #93c5fd;
-            --cream-bg: #f4f6f9;
-            --text-dark: #1e293b;
-            --glass-white: rgba(255, 255, 255, 0.75);
-            --glass-border: rgba(11, 37, 69, 0.1);
-        }
-
-        html.theme-warm-terracotta {
-            --emerald-royal: #2d3d41;
-            --emerald-mid: #34495e;
-            --gold-burnished: #c87a53;
-            --gold-light: #f5e9d9;
-            --cream-bg: #f5f4eb;
-            --text-dark: #2c3e50;
-            --glass-white: rgba(255, 255, 255, 0.75);
-            --glass-border: rgba(200, 122, 83, 0.15);
-        }
-
-        html.theme-mint-glass {
-            --emerald-royal: #004d40;
-            --emerald-mid: #00796b;
-            --gold-burnished: #00bfa5;
-            --gold-light: #e0f2f1;
-            --cream-bg: #e0f2f1;
-            --text-dark: #004d40;
-            --glass-white: rgba(255, 255, 255, 0.75);
-            --glass-border: rgba(0, 191, 165, 0.2);
-        }
-
-        html.theme-sage-sand {
-            --emerald-royal: #3c4e4b;
-            --emerald-mid: #2f3a38;
-            --gold-burnished: #7b9e87;
-            --gold-light: #faf8f0;
-            --cream-bg: #faf8f0;
-            --text-dark: #2f3a38;
-            --glass-white: rgba(255, 255, 255, 0.75);
-            --glass-border: rgba(123, 158, 135, 0.2);
-        }
-        
-        body { 
-            font-family: 'Outfit', 'Noto Nastaliq Urdu', serif;
-            background-color: var(--cream-bg); 
-            color: var(--text-dark);
-            overflow-x: hidden;
+        * {
+            box-sizing: border-box;
             scroll-behavior: smooth;
         }
 
-        /* Premium UI Components */
-        .glass-card {
-            background: var(--glass-white);
-            backdrop-filter: blur(15px) saturate(180%);
-            -webkit-backdrop-filter: blur(15px) saturate(180%);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            box-shadow: 0 10px 40px -10px rgba(10, 46, 36, 0.08);
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .glass-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 20px 60px -15px rgba(10, 46, 36, 0.15);
-            border-color: var(--gold-burnished);
+        body {
+            font-family: 'Plus Jakarta Sans', 'Noto Nastaliq Urdu', Tahoma, sans-serif;
+            background-color: var(--sa-bg);
+            color: var(--sa-text-main);
+            overflow-x: hidden;
+            line-height: 1.7;
+            background-image: 
+                radial-gradient(at 10% 10%, rgba(16, 185, 129, 0.12) 0px, transparent 50%),
+                radial-gradient(at 90% 20%, rgba(6, 182, 212, 0.10) 0px, transparent 50%),
+                radial-gradient(at 50% 90%, rgba(245, 158, 11, 0.08) 0px, transparent 50%);
+            background-attachment: fixed;
         }
 
-        .btn-royal {
-            background: linear-gradient(135deg, var(--gold-burnished) 0%, var(--gold-light) 100%);
-            color: var(--emerald-royal) !important;
-            border: none;
-            padding: 14px 40px;
-            border-radius: 100px;
+        .urdu-font {
+            font-family: 'Noto Nastaliq Urdu', Tahoma, sans-serif;
+            line-height: 2.1;
+        }
+
+        .kufi-font {
+            font-family: 'Noto Kufi Arabic', sans-serif;
+        }
+
+        /* Glassmorphism Classes */
+        .glass-panel {
+            background: var(--sa-card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--sa-card-border);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            transition: all 0.3s ease;
+        }
+
+        .glass-panel:hover {
+            border-color: rgba(16, 185, 129, 0.3);
+            box-shadow: 0 15px 35px rgba(16, 185, 129, 0.15);
+        }
+
+        /* Navigation Bar */
+        .navbar-custom {
+            background: rgba(9, 14, 23, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.3s ease;
+        }
+
+        .nav-link-custom {
+            color: var(--sa-text-sub) !important;
+            font-weight: 500;
+            padding: 8px 16px !important;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .nav-link-custom:hover {
+            color: var(--sa-primary) !important;
+            transform: translateY(-1px);
+        }
+
+        /* Buttons */
+        .btn-sa-primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #ffffff !important;
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            transition: all 0.4s ease;
-            box-shadow: 0 6px 20px rgba(197, 160, 89, 0.3);
-            text-decoration: none;
+            border: none;
+            border-radius: 50px;
+            padding: 12px 28px;
+            box-shadow: 0 6px 20px var(--sa-primary-glow);
+            transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
-            gap: 10px;
-        }
-        .btn-royal:hover {
-            transform: scale(1.05);
-            box-shadow: 0 10px 30px rgba(197, 160, 89, 0.5);
+            justify-content: center;
+            gap: 8px;
         }
 
-        /* Hero Full-Screen Overhaul */
-        .hero-section {
-            background: linear-gradient(rgba(10, 46, 36, 0.7), rgba(10, 46, 36, 0.9)), url('uploads/hero_mosque.png');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-            min-height: 100vh;
+        .btn-sa-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+            color: #ffffff;
+        }
+
+        .btn-sa-outline {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--sa-text-main) !important;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 50px;
+            padding: 12px 26px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-sa-outline:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--sa-primary);
+            color: var(--sa-primary) !important;
+            transform: translateY(-2px);
+        }
+
+        /* Hero Badges */
+        .badge-pill-glow {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+            padding: 8px 18px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 800;
+            line-height: 1.35;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #10b981 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.1rem;
+            }
+        }
+
+        /* Stat Counters */
+        .stat-box {
+            padding: 24px;
+            text-align: center;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-number {
+            font-size: 2.3rem;
+            font-weight: 800;
+            color: var(--sa-primary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        /* Platform Feature Cards */
+        .platform-icon-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            position: relative;
-            margin: 0;
-            border-radius: 0;
-        }
-        .hero-overlay-pattern {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-image: url('uploads/islamic_pattern.png');
-            background-size: 400px;
-            opacity: 0.04;
-            pointer-events: none;
-        }
-        .hero-content h1 {
-            font-size: 5.5rem;
-            font-weight: 800;
-            background: linear-gradient(to bottom, #fff 40%, var(--gold-light) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 2rem;
-            line-height: 1.1;
+            font-size: 24px;
+            margin-bottom: 20px;
         }
 
-        .section-title {
-            color: var(--emerald-royal);
-            font-weight: 800;
-            text-align: center;
-            margin-bottom: 60px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
+        /* Pricing Cards */
+        .pricing-card {
+            background: var(--sa-card-bg);
+            border: 1px solid var(--sa-card-border);
+            border-radius: 22px;
+            padding: 32px 24px;
             position: relative;
-        }
-        .section-title::after {
-            content: '';
-            display: block;
-            width: 100px;
-            height: 4px;
-            background: var(--gold-burnished);
-            margin: 20px auto 0;
-            border-radius: 10px;
-        }
-
-        /* Stats & Department Polish */
-        .stat-icon { font-size: 3rem; color: var(--gold-burnished); margin-bottom: 20px; text-shadow: 0 5px 15px rgba(197, 160, 89, 0.2); }
-        .dept-card { position: relative; border-radius: 30px; overflow: hidden; height: 350px; border: none; }
-        .dept-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.8s ease; }
-        .dept-card:hover .dept-img { transform: scale(1.15); }
-        .dept-content {
-            position: absolute;
-            bottom: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(to top, rgba(10, 46, 36, 0.95) 10%, transparent 60%);
+            transition: all 0.3s ease;
+            height: 100%;
             display: flex;
             flex-direction: column;
-            justify-content: flex-end;
-            padding: 40px;
-            color: white;
+            justify-content: space-between;
         }
 
-        /* Navbar Sophistication */
-        .navbar { 
-            background: rgba(10, 46, 36, 0.85) !important; 
-            backdrop-filter: blur(20px);
-            padding: 20px 0; 
-            border-bottom: 1px solid rgba(255,255,255,0.08);
-            transition: all 0.3s ease;
+        .pricing-card.popular {
+            border: 2px solid var(--sa-primary);
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(18, 26, 43, 0.9) 100%);
+            transform: scale(1.03);
+            box-shadow: 0 15px 40px rgba(16, 185, 129, 0.25);
         }
-        .navbar.scrolled { padding: 10px 0; background: rgba(10, 46, 36, 0.98) !important; }
-        
-        /* Interactive Animations */
-        @keyframes ripple {
-            0% { box-shadow: 0 0 0 0 rgba(197, 160, 89, 0.4); }
-            100% { box-shadow: 0 0 0 20px rgba(197, 160, 89, 0); }
-        }
-        .animate-border { animation: ripple 2s infinite; }
-        
-        .hover-lift { transition: transform 0.3s ease, box-shadow 0.3s ease; }
-        .hover-lift:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important; }
 
-        /* Audio Player Refined */
-        .audio-track {
-            padding: 24px;
-            border-radius: 20px;
-            background: white;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+        .pricing-card:hover {
+            transform: translateY(-6px);
+            border-color: var(--sa-primary);
+        }
+
+        .pricing-card.popular:hover {
+            transform: scale(1.03) translateY(-6px);
+        }
+
+        .popular-badge {
+            position: absolute;
+            top: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #ffffff;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 18px;
+            border-radius: 50px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            letter-spacing: 0.5px;
+        }
+
+        .price-tag {
+            font-size: 2.4rem;
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 0.92rem;
+            color: var(--sa-text-sub);
+        }
+
+        .feature-item i.check {
+            color: var(--sa-primary);
+            margin-top: 4px;
+        }
+
+        .feature-item i.cross {
+            color: #ef4444;
+            margin-top: 4px;
+        }
+
+        /* Step Card */
+        .step-num-badge {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--sa-primary) 0%, var(--sa-secondary) 100%);
+            color: #ffffff;
             display: flex;
             align-items: center;
-            gap: 20px;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.2rem;
+            margin-bottom: 16px;
         }
-        .play-btn-royal {
-            width: 56px; height: 56px; border-radius: 18px;
-            background: var(--emerald-royal);
-            color: var(--gold-burnished);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.2rem; cursor: pointer; transition: 0.3s;
-        }
-        .play-btn-royal:hover { transform: rotate(10deg); filter: brightness(1.2); }
 
-        .footer-luxury {
-            background: linear-gradient(to bottom, var(--emerald-royal), #051612);
-            color: rgba(255,255,255,0.6);
-            padding: 120px 0 60px;
-            position: relative;
-            z-index: 1;
+        /* Accordion */
+        .accordion-button {
+            background-color: var(--sa-card-bg) !important;
+            color: var(--sa-text-main) !important;
+            border: 1px solid var(--sa-card-border);
+            border-radius: 12px !important;
+            padding: 18px 24px;
+            font-weight: 600;
+            box-shadow: none !important;
         }
-        .footer-logo { font-size: 2rem; color: #fff; font-weight: 800; margin-bottom: 2rem; }
-        .footer-link { color: rgba(255,255,255,0.6); text-decoration: none; transition: 0.3s; }
-        .footer-link:hover { color: var(--gold-burnished); padding-right: 10px; }
-        
-        @media (max-width: 768px) {
-            .hero-content h1 { font-size: 2.2rem; }
-            .hero-content p.fs-3 { font-size: 1.1rem !important; }
-            .dept-card { height: 250px; }
-            .dept-content { padding: 20px; }
-            .audio-track { flex-direction: row; gap: 10px; padding: 15px; }
-            .footer-luxury { padding: 60px 0 30px; }
-            .section-title { font-size: 1.3rem; letter-spacing: 1px; margin-bottom: 30px; }
-            .glass-card.p-5 { padding: 1.5rem !important; }
-            .hero-section { background-attachment: scroll; min-height: 85vh; }
+
+        .accordion-button:not(.collapsed) {
+            border-color: var(--sa-primary);
+            color: var(--sa-primary) !important;
         }
-        @media (max-width: 480px) {
-            .hero-content h1 { font-size: 1.7rem; line-height: 1.3; }
-            .hero-content p.fs-3 { font-size: 1rem !important; }
-            .stat-icon { font-size: 1.5rem !important; }
-            .btn-royal { padding: 10px 24px; font-size: 0.9rem; }
-            .hero-section { min-height: 80vh; }
+
+        .accordion-body {
+            background-color: rgba(18, 26, 43, 0.4);
+            border: 1px solid var(--sa-card-border);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            color: var(--sa-text-sub);
+            padding: 20px 24px;
+            font-size: 0.95rem;
         }
-        /* Fix overflow on all screen sizes */
-        html, body { overflow-x: hidden; max-width: 100%; }
-        .container, .container-fluid { overflow-x: hidden; }
-        .row { margin-left: 0; margin-right: 0; }
+
+        .accordion-item {
+            background: transparent;
+            border: none;
+            margin-bottom: 14px;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(6, 10, 18, 0.95);
+        }
+
+        /* Floating WhatsApp Button */
+        .float-whatsapp {
+            position: fixed;
+            bottom: 25px;
+            left: 25px;
+            background: #25d366;
+            color: white;
+            border-radius: 50px;
+            padding: 12px 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.4);
+            z-index: 1000;
+            text-decoration: none;
+            font-weight: 700;
+            transition: all 0.3s ease;
+        }
+
+        .float-whatsapp:hover {
+            transform: scale(1.05);
+            color: white;
+            box-shadow: 0 12px 30px rgba(37, 211, 102, 0.6);
+        }
     </style>
 </head>
 <body>
 
-    <!-- Header (Navbar) -->
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <!-- 🌟 Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top py-3">
         <div class="container">
-            <a class="navbar-brand fw-bold d-flex align-items-center" href="#">
-                <img src="logo.png" alt="Logo" style="width: 40px; height: 40px; border-radius: 50%; margin-left: 10px; background: white; border: 2px solid var(--gold-burnished); object-fit: contain;">
-                <?php echo $m_name; ?>
+            <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+                <img src="logo_mindcrafts.svg" alt="Mindcrafts AI" style="width: 44px; height: 44px; border-radius: 12px; object-fit: contain; background: #061814; border: 1px solid rgba(16, 185, 129, 0.4); padding: 2px;">
+                <div>
+                    <span class="fw-bold fs-5 tracking-tight" style="color: #fff;">مدرسہ مینیجمنٹ <span style="color: var(--sa-primary);">سسٹم</span></span>
+                    <small class="d-block text-muted" style="font-size: 11px; margin-top: -4px;">بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)</small>
+                </div>
             </a>
+
             <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
                 <span class="navbar-toggler-icon"></span>
             </button>
+
             <div class="collapse navbar-collapse" id="navMenu">
-                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-                    <li class="nav-item"><a class="nav-link px-3" href="#"><?php echo t('nav_home'); ?></a></li>
-                    <li class="nav-item"><a class="nav-link px-3" href="#about"><?php echo t('nav_about'); ?></a></li>
-                    <li class="nav-item"><a class="nav-link px-3" href="#depts"><?php echo t('nav_depts'); ?></a></li>
-                    <li class="nav-item"><a class="nav-link px-3" href="#contact"><?php echo t('nav_contact'); ?></a></li>
+                <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#home">ہوم</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#platforms">پلیٹ فارمز</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#features">خصوصیات</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#how-it-works">طریقہ کار</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#pricing">پیکجز و قیمتیں</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#rules">قواعد و ضوابط</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#faq">سوالات</a></li>
                 </ul>
-                <div class="ms-lg-4">
-                    <?php if(isset($_SESSION['user_id'])): ?>
-                        <a href="dashboard.php" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm"><?php echo t('nav_dashboard'); ?></a>
-                    <?php else: ?>
-                        <a href="login.php" class="btn btn-outline-light rounded-pill px-4 fw-bold"><?php echo t('nav_login'); ?></a>
-                    <?php endif; ?>
+
+                <div class="d-flex align-items-center gap-2">
+                    <a href="login.php" class="btn btn-sa-outline py-2 px-3 fs-6">
+                        <i class="fas fa-sign-in-alt"></i> لاگ ان
+                    </a>
+                    <a href="register.php" class="btn btn-sa-primary py-2 px-3 fs-6">
+                        <i class="fas fa-rocket"></i> مفت رجسٹریشن
+                    </a>
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- Section 1: Hero -->
-    <div class="hero-section"> 
-        <div class="hero-overlay-pattern"></div>
-        <div class="hero-content container text-center" data-aos="zoom-out" data-aos-duration="2000">
-            <p class="mb-4 text-warning fw-bold fs-5" style="letter-spacing: 4px; text-transform: uppercase;" data-aos="fade-down" data-aos-delay="500"><?php echo t('hero_subtitle'); ?></p>
-            <div class="mb-4" data-aos="zoom-in" data-aos-delay="600">
-                <img src="logo.png" alt="Logo" style="width: 150px; height: 150px; border-radius: 50%; border: 4px solid var(--gold-burnished); background: white; padding: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); object-fit: contain;">
+    <!-- 🌟 Hero Section -->
+    <section id="home" class="py-5" style="margin-top: 90px;">
+        <div class="container py-4 text-center">
+            <div class="mb-3">
+                <span class="badge-pill-glow">
+                    <i class="fas fa-shield-halved"></i> محفوظ، تیز رفتار، ملٹی ٹیننٹ کلاؤڈ سسٹم (SaaS)
+                </span>
             </div>
-            <h1 class="display-1 fw-bold mb-4" data-aos="fade-up" data-aos-delay="800"><?php echo t('madrasa_ashraf'); ?></h1>
-            <p class="mb-5 fs-3 opacity-90 mx-auto col-md-8" data-aos="fade-up" data-aos-delay="1000"><?php echo t('hero_desc'); ?></p>
-            <div class="d-flex flex-wrap gap-4 justify-content-center" data-aos="fade-up" data-aos-delay="1200">
-                <a href="#admission" class="btn-royal fs-5"><i class="fas fa-graduation-cap"></i> <?php echo t('hero_btn_admission'); ?></a>
-                <a href="#about" class="btn btn-outline-light rounded-pill px-5 py-3 fs-5 border-2 fw-bold"><?php echo t('hero_btn_movement'); ?></a>
-            </div>
-        </div>
-        
-        <!-- Scroll Indicator -->
-        <div class="position-absolute bottom-0 start-50 translate-middle-x mb-4 text-white opacity-50" data-aos="fade-up" data-aos-anchor-placement="top-bottom">
-            <p class="small mb-1">Scroll Down</p>
-            <div class="mx-auto" style="width: 2px; height: 30px; background: white;"></div>
-        </div>
-    </div>
 
-    <div class="container py-5">
-        <!-- Section 2: Marquee -->
-        <?php if(count($notices) > 0): ?>
-        <div class="glass-card p-2 mb-5 overflow-hidden" data-aos="fade-in">
-            <div class="d-flex align-items-center">
-                <div class="bg-danger text-white px-3 py-1 rounded-pill me-3 small fw-bold"><?php echo t('marquee_latest'); ?></div>
-                <marquee onmouseover="this.stop()" onmouseout="this.start()" class="fw-bold text-danger">
-                    <?php echo $notices[0]['title'] . ": " . $notices[0]['message']; ?>
-                </marquee>
-            </div>
-        </div>
-        <?php endif; ?>
+            <h1 class="hero-title urdu-font mb-4" style="max-width: 950px; margin: 0 auto;">
+                مدارس، جامعات اور مساجد کا مکمل ڈیجیٹل انتظام — ایک ہی مرکزی پلیٹ فارم پر
+            </h1>
 
-        <!-- Section 3: Stats -->
-        <div class="row g-3 g-md-4 mb-5 text-center justify-content-center">
-            <div class="col-6 col-lg-2" data-aos="zoom-in" data-aos-delay="100">
-                <div class="glass-card stat-box h-100 p-3">
-                    <i class="fas fa-user-graduate stat-icon" style="font-size: 2rem;"></i>
-                    <h3 class="fw-bold mb-0"><?php echo $total_students; ?></h3>
-                    <p class="text-muted small mb-0"><?php echo t('stat_students'); ?></p>
-                </div>
-            </div>
-            <div class="col-6 col-lg-2" data-aos="zoom-in" data-aos-delay="200">
-                <div class="glass-card stat-box h-100 p-3">
-                    <i class="fas fa-chalkboard-teacher stat-icon" style="font-size: 2rem;"></i>
-                    <h3 class="fw-bold mb-0"><?php echo $total_teachers; ?></h3>
-                    <p class="text-muted small mb-0"><?php echo t('stat_teachers'); ?></p>
-                </div>
-            </div>
-            <div class="col-6 col-lg-2" data-aos="zoom-in" data-aos-delay="300">
-                <div class="glass-card stat-box h-100 p-3">
-                    <i class="fas fa-quran stat-icon" style="font-size: 2rem;"></i>
-                    <h3 class="fw-bold mb-0"><?php echo $huffaz; ?></h3>
-                    <p class="text-muted small mb-0"><?php echo t('stat_huffaz'); ?></p>
-                </div>
-            </div>
-            <div class="col-6 col-lg-2" data-aos="zoom-in" data-aos-delay="400">
-                <div class="glass-card stat-box h-100 p-3">
-                    <i class="fas fa-chalkboard stat-icon" style="font-size: 2rem;"></i>
-                    <h3 class="fw-bold mb-0"><?php echo $active_classes; ?></h3>
-                    <p class="text-muted small mb-0"><?php echo t('stat_classes'); ?></p>
-                </div>
-            </div>
-            <div class="col-6 col-lg-2" data-aos="zoom-in" data-aos-delay="500">
-                <div class="glass-card stat-box h-100 p-3 border-danger">
-                    <i class="fas fa-hand-holding-usd stat-icon text-danger" style="font-size: 2rem;"></i>
-                    <h3 class="fw-bold mb-0 text-danger"><?php echo number_format($monthly_expenses); ?></h3>
-                    <p class="text-muted small mb-0"><?php echo t('stat_expenses'); ?></p>
-                </div>
-            </div>
-        </div>
-
-        <div class="row align-items-center mb-5 py-5" id="about">
-            <div class="col-md-6 mb-5 mb-md-0" data-aos="fade-right">
-                <div class="position-relative p-3">
-                    <div class="position-absolute translate-middle-x top-0 start-0 w-100 h-100 border border-3 rounded-4" style="border-color: var(--gold-burnished) !important; z-index: 0; margin-top: -20px; margin-left: -20px; opacity: 0.3;"></div>
-                    <img src="uploads/about_madrasa1.png" alt="About Us" class="img-fluid rounded-4 shadow-lg position-relative" style="z-index: 1;" loading="lazy">
-                    <div class="glass-card p-4 position-absolute bottom-0 end-0 m-4 d-none d-md-block" style="z-index: 2; background: var(--emerald-royal);" data-aos="zoom-in" data-aos-delay="500">
-                        <p class="text-warning small fw-bold mb-1">Founder & Patron</p>
-                        <h5 class="mb-0 fw-bold text-white">مولانا قاری حماد اللہ ساجد</h5>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 px-lg-5" data-aos="fade-left">
-                <p class="text-warning fw-bold mb-2">Our Legacy</p>
-                <h2 class="fw-bold mb-4" style="color: var(--emerald-royal); font-size: 3rem;"><?php echo t('about_title'); ?></h2>
-                <p class="fs-5 opacity-80 mb-4" style="text-align: justify; line-height: 2;">
-                    <?php echo $m_name; ?> - <?php echo t('about_desc_1'); ?>
-                </p>
-                <div class="p-4 mb-4 rounded-4" style="background: rgba(255,255,255,0.5); border-right: 4px solid var(--gold-burnished);">
-                    <h5 class="fw-bold mb-3" style="color: var(--emerald-royal);"><i class="fas fa-mobile-alt me-2" style="color:var(--gold-burnished)"></i> <?php echo t('about_digital'); ?></h5>
-                    <p class="small mb-3" style="line-height: 1.9;"><?php echo t('about_digital_desc'); ?></p>
-                    <div class="d-flex align-items-start mb-3">
-                        <div class="p-2 rounded-circle me-3 flex-shrink-0" style="background: var(--emerald-royal);">
-                            <i class="fas fa-user-shield" style="color: var(--gold-burnished);"></i>
-                        </div>
-                        <div>
-                            <strong><?php echo t('about_admin_panel'); ?></strong>
-                            <small class="d-block text-muted"><?php echo t('about_admin_desc'); ?></small>
-                        </div>
-                    </div>
-                    <div class="d-flex align-items-start">
-                        <div class="p-2 rounded-circle me-3 flex-shrink-0" style="background: var(--emerald-royal);">
-                            <i class="fas fa-users" style="color: var(--gold-burnished);"></i>
-                        </div>
-                        <div>
-                            <strong><?php echo t('about_parent_panel'); ?></strong>
-                            <small class="d-block text-muted"><?php echo t('about_parent_desc'); ?></small>
-                        </div>
-                    </div>
-                </div>
-                <div class="row g-4">
-                    <div class="col-sm-6">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="p-3 bg-white rounded-circle shadow-sm"><i class="fas fa-certificate text-warning fs-3"></i></div>
-                            <span class="fw-bold"><?php echo t('about_wifaq'); ?></span>
-                        </div>
-                    </div>
-                    <div class="col-sm-6">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="p-3 bg-white rounded-circle shadow-sm"><i class="fas fa-user-shield text-warning fs-3"></i></div>
-                            <span class="fw-bold"><?php echo t('about_hostel'); ?></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Section 5: Departments -->
-        <div class="py-5" id="depts">
-            <h2 class="section-title">نمایاں <?php echo t('nav_depts'); ?></h2>
-            <div class="row g-4 justify-content-center">
-                <?php 
-                $depts = [
-                    [t('dept_hifz'), t('dept_hifz_desc'), 'uploads/quran_rihal.png', '100'],
-                    [t('dept_nazra'), t('dept_nazra_desc'), 'uploads/quran_rihal.png', '300'],
-                    [t('dept_qirat'), t('dept_qirat_desc'), 'uploads/quran_rihal.png', '500']
-                ];
-                foreach($depts as $d):
-                ?>
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="<?php echo $d[3]; ?>">
-                    <div class="dept-card box-shadow">
-                        <img src="<?php echo $d[2]; ?>" class="dept-img" loading="lazy">
-                        <div class="dept-content text-center">
-                            <h4 class="fw-bold mb-3"><?php echo $d[0]; ?></h4>
-                            <p class="small opacity-80 mb-4"><?php echo $d[1]; ?></p>
-                            <a href="#" class="btn btn-outline-warning btn-sm rounded-pill px-4"><?php echo t('btn_details'); ?></a>
-                        </div>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-        <!-- Secondary Services -->
-        <div class="row g-4 mb-5">
-            <div class="col-md-6 col-lg-6" data-aos="fade-up">
-                <div class="glass-card d-flex align-items-center h-100 p-3">
-                    <div class="p-3 bg-success bg-opacity-10 rounded-circle me-3"><i class="fas fa-university fs-2 text-success"></i></div>
-                    <div>
-                        <h5 class="fw-bold mb-1"><?php echo t('service_dars'); ?></h5>
-                        <small class="text-muted"><?php echo t('service_dars_desc'); ?></small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-6" data-aos="fade-up" data-aos-delay="100">
-                <div class="glass-card d-flex align-items-center h-100 p-3">
-                    <div class="p-3 bg-success bg-opacity-10 rounded-circle me-3"><i class="fas fa-laptop-code fs-2 text-success"></i></div>
-                    <div>
-                        <h5 class="fw-bold mb-1"><?php echo t('service_modern'); ?> (مڈل + میٹرک)</h5>
-                        <small class="text-muted">دینی اور دنیاوی تعلیم کا حسین امتزاج۔</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Section 6.1: Seven Qira'at -->
-        <div class="py-5 bg-white bg-opacity-50 rounded-5 my-5 p-4 p-md-5">
-            <h2 class="section-title">سات قراءات (Seven Qira'at)</h2>
-            <p class="text-center text-muted mb-5 fs-5">
-                بہت سی صحیح احادیث سے واضح ہوتا ہے کہ قرآن کریم ’’سات حروف‘‘ پر اتارا گیا ہے، اس سے مراد وہ قراءتیں ہیں جو تواتر کے ساتھ منقول چلی آرہی ہیں۔ متواتر قرائتوں کی قبولیت کے لیے یہ شرط ہے کہ عربی زبان میں اس کی قوی وجہ ہو، رسم عثمانی کے موافق ہو اور تواتر کے ساتھ منقول ہو۔ یہی ’’قراءات سبعہ متواترہ‘‘ کہلاتی ہیں۔
+            <p class="fs-5 mb-5 mx-auto urdu-font" style="max-width: 800px; color: var(--sa-text-sub);">
+                ویب ایڈمن پورٹل، اینڈرائڈ ایپ اور ونڈوز ڈیسک ٹاپ سافٹ ویئر کے ذریعے حفظ، ناظرہ، کتب، طلبہ و اساتذہ بائیو میٹرک حاضری، مکمل ڈبل انٹری فنانس اور فیسوں کا 100% محفوظ و خودکار نظام۔
             </p>
+
+            <div class="d-flex flex-wrap justify-content-center gap-3 mb-5">
+                <a href="register.php" class="btn btn-sa-primary fs-5 px-4 py-3">
+                    <i class="fas fa-sparkles"></i> مفت رجسٹریشن شروع کریں (20 طلبہ فری)
+                </a>
+                <a href="login.php" class="btn btn-sa-outline fs-5 px-4 py-3">
+                    <i class="fas fa-building"></i> ادارہ لاگ ان پورٹل
+                </a>
+                <a href="#download-apps" class="btn btn-sa-outline fs-5 px-4 py-3">
+                    <i class="fas fa-download"></i> ایپس ڈاؤن لوڈ کریں
+                </a>
+            </div>
+
+            <!-- Live Metrics Grid -->
+            <div class="row g-3 justify-content-center mt-3">
+                <div class="col-6 col-md-3">
+                    <div class="stat-box glass-panel">
+                        <div class="stat-number"><?php echo number_format($stat_tenants); ?>+</div>
+                        <div class="text-muted small fw-semibold">رجسٹرڈ ادارے و جامعات</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="stat-box glass-panel">
+                        <div class="stat-number"><?php echo number_format($stat_students); ?>+</div>
+                        <div class="text-muted small fw-semibold">زیرِ تعلیم فعال طلبہ</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="stat-box glass-panel">
+                        <div class="stat-number">100%</div>
+                        <div class="text-muted small fw-semibold">ڈیٹا پرائیویسی و آئسولیشن</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="stat-box glass-panel">
+                        <div class="stat-number">99.9%</div>
+                        <div class="text-muted small fw-semibold">کلاؤڈ سرور اپ ٹائم</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 🌟 Tri-Platform Ecosystem Showcase -->
+    <section id="platforms" class="py-5">
+        <div class="container py-4">
+            <div class="text-center mb-5">
+                <span class="badge-pill-glow mb-2"><i class="fas fa-cubes"></i> 3 پلیٹ فارمز ایک ساتھ</span>
+                <h2 class="fw-bold urdu-font fs-1">تینوں پلیٹ فارمز پر بیک وقت یکساں ہم آہنگی</h2>
+                <p class="text-muted urdu-font">چاہے آپ دفتر میں ہوں، کلاس روم میں یا سفر میں — آپ کا ادارہ ہمیشہ آپ کے ساتھ ہے</p>
+            </div>
+
             <div class="row g-4">
-                <?php 
-                $qiraat = [
-                    ['نافع المدنی', 'راوی: ورش اور قالون۔ مثال: مَالِكِ يَوْمِ الدِّينِ بمقابلہ مَلِكِ يَوْمِ الدِّينِ', 'Nafi al-Madani', '0'],
-                    ['ابن کثیر المکی', 'راوی: البزی اور قنبل۔ مثال: إِنَّ نَاشِئَةَ اللَّيْلِ (تلفظ میں اختلاف)', 'Ibn Kathir', '100'],
-                    ['ابو عمرو البصری', 'راوی: دوری اور السوسی۔ مثال: حَافِظُوا عَلَى الصَّلَوَاتِ', 'Abu Amr', '200'],
-                    ['ابن عامر الشامی', 'راوی: ہشام، ابن ذکوان۔ مثال: وَاتَّبَعُوا مَا تَتْلُو الشَّيَاطِينُ', 'Ibn Amir', '300'],
-                    ['عاصم الکوفی', 'راوی: حفص، ابوبکر شعبہ۔ مثال: مَالِكِ يَوْمِ الدِّينِ', 'Asim al-Kufi', '400'],
-                    ['حمزہ الکوفی', 'راوی: خلف اور خلاد۔ مثال: فَمَن كَانَ مِنكُم مَّرِيضًا', 'Hamzah al-Kufi', '500'],
-                    ['الکسائی الکوفی', 'راوی: دوری، ابوالحارث۔ مثال: وَاسْتَشْهِدُوا شَهِيدَيْنِ', 'Al-Kisa\'i', '600']
-                ];
-                foreach($qiraat as $index => $q): 
-                ?>
-                <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="<?php echo $q[3]; ?>">
-                    <div class="audio-track glass-card border-0 h-100">
-                        <div class="play-btn-royal"><i class="fas fa-book-open"></i></div>
-                        <div class="flex-grow-1">
-                            <p class="text-warning small fw-bold mb-1"><?php echo $q[2]; ?></p>
-                            <h6 class="fw-bold mb-0" style="color: var(--emerald-royal);"><?php echo $q[0]; ?></h6>
-                            <small class="opacity-80 d-block mt-2 lh-base"><?php echo $q[1]; ?></small>
+                <!-- 1. Web Portal -->
+                <div class="col-12 col-md-4">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="platform-icon-circle" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                            <i class="fas fa-globe"></i>
                         </div>
+                        <h4 class="fw-bold mb-3">1. پی ایچ پی ویب ایڈمن پینل</h4>
+                        <p class="text-muted urdu-font mb-4">
+                            ہر قسم کے براؤزر اور لیپ ٹاپ پر بغیر کسی انسٹالیشن کے فوری دستیاب۔ پرنسپل، مہتمم اور اکاونٹنٹ کے لیے وسیع ترین ڈیش بورڈ، رپورٹس، اور رسیدیں پرنٹنگ۔
+                        </p>
+                        <ul class="list-unstyled small text-sub">
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i> مکمل اکاؤنٹنگ و واؤچرز</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i> ایکسل/CSV بلک ڈیٹا امپورٹ</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i> خوبصورت کشف الدرجات و اسناد</li>
+                        </ul>
                     </div>
                 </div>
-                <?php endforeach; ?>
+
+                <!-- 2. Android Mobile App -->
+                <div class="col-12 col-md-4">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="platform-icon-circle" style="background: rgba(6, 182, 212, 0.15); color: #06b6d4;">
+                            <i class="fas fa-mobile-screen"></i>
+                        </div>
+                        <h4 class="fw-bold mb-3">2. اینڈرائڈ موبائل ایپلیکیشن</h4>
+                        <p class="text-muted urdu-font mb-4">
+                            اساتذہ اور ناظمین کی جیب میں۔ کلاس میں کھڑے ہو کر روزانہ سبق، سبقی، منزل اور حاضری لگائیں۔ آف لائن موڈ اور پش نوٹیفیکیشنز کی مکمل سہولت۔
+                        </p>
+                        <ul class="list-unstyled small text-sub">
+                            <li class="mb-2"><i class="fas fa-check text-info me-2"></i> آف لائن فرسٹ (بغیر نیٹ بھی کام جاری)</li>
+                            <li class="mb-2"><i class="fas fa-check text-info me-2"></i> روزانہ سبق و حفظ پروگریس ٹریکر</li>
+                            <li class="mb-2"><i class="fas fa-check text-info me-2"></i> فوری رخصت و شکایات نوٹیفیکیشن</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 3. Windows Desktop App -->
+                <div class="col-12 col-md-4">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="platform-icon-circle" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
+                            <i class="fas fa-desktop"></i>
+                        </div>
+                        <h4 class="fw-bold mb-3">3. ونڈوز ڈیسک ٹاپ سافٹ ویئر</h4>
+                        <p class="text-muted urdu-font mb-4">
+                            کمپیوٹر پر مقامی FFI SQLite سپیڈ کے ساتھ تیز ترین ڈیٹا انٹری۔ انٹرنیٹ منقطع ہونے پر بھی فیس کٹنگ اور رسیدوں کی خودکار تھرمل و لیزر پرنٹنگ۔
+                        </p>
+                        <ul class="list-unstyled small text-sub">
+                            <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> انتہائی تیز رفتار کی بورڈ شارٹ کٹس</li>
+                            <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> تھرمل رول اور A4 رسید پرنٹنگ</li>
+                            <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> کلاؤڈ کے ساتھ بیک گراؤنڈ خودکار سنک</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
+    </section>
 
-        <!-- Section 6.2: Maqamat-e-Qurania -->
-        <div class="py-5 rounded-5 my-5 p-4 p-md-5 position-relative" style="background: var(--emerald-royal); color: white;">
-            <h2 class="section-title text-white">مقاماتِ قرآنیہ (Seven Maqamat)</h2>
-            <p class="text-center opacity-75 mb-5 fs-5">
-                مقامات سے مراد قرآن کریم کو پڑھنے کے مختلف سوز و گداز کے انداز ہیں۔ یہ انداز موسیقی کے اصولوں پر مبنی ہیں اور تلاوت کو خوبصورت بناتے ہیں۔ ان ساتوں لہجوں کے نام یاد رکھنے کے لیے اکابر قراء اساتذہ کرام نے "صُنِعَ بِسِحْرِکَ" کا لفظ تجویز فرمایا ہے۔
-            </p>
+    <!-- 🌟 Features Showcase Grid -->
+    <section id="features" class="py-5 bg-opacity-25" style="background: rgba(18, 26, 43, 0.4);">
+        <div class="container py-4">
+            <div class="text-center mb-5">
+                <span class="badge-pill-glow mb-2"><i class="fas fa-layer-group"></i> جامع ماڈیولز</span>
+                <h2 class="fw-bold urdu-font fs-1">ایک مدرسے کی تمام تر ضروریات کا احاطہ</h2>
+                <p class="text-muted urdu-font">دینی اداروں کی خصوصی شرعی و انتظامی نزاکتوں کو مدنظر رکھ کر تیار کیا گیا نظام</p>
+            </div>
+
             <div class="row g-4">
-                <?php 
-                $maqamat = [
-                    ['مقام صبا', 'تلاوت قرآن کریم کا وہ لہجہ جو غم اور رقت کے جذبات کو ظاہر کرتا ہے', 'Saba', '0'],
-                    ['مقام نہاوند', 'تلاوت قرآن کریم کا وہ لہجہ جو نرم اور دلکش انداز تلاوت کے لیے استعمال ہوتا ہے', 'Nahawand', '100'],
-                    ['مقام عجم', 'تلاوت قرآن کریم کا وہ لہجہ جو خوشی اور جشن کے جذبات کو ظاہر کرتا ہے', 'Ajam', '200'],
-                    ['مقام بیات', 'تلاوت قرآن کریم کا وہ لہجہ جو نرم اور سادہ انداز تلاوت کے لیے استعمال ہوتا ہے', 'Bayati', '300'],
-                    ['مقام سيكاه', 'تلاوت قرآن کریم کا وہ لہجہ جو جوش اور ولولہ کو ظاہر کرتا ہے', 'Sikah', '400'],
-                    ['مقام حجاز', 'تلاوت قرآن کریم کا وہ لہجہ جو سفر یا غربت کے جذبات کو ظاہر کرتا ہے', 'Hijaz', '500'],
-                    ['مقام رست', 'تلاوت قرآن کریم کا وہ لہجہ جو وقار اور سنجیدگی کو ظاہر کرتا ہے', 'Rast', '600']
-                ];
-                foreach($maqamat as $index => $m): 
-                ?>
-                <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="<?php echo $m[3]; ?>">
-                    <div class="audio-track bg-white bg-opacity-10 border-0 h-100">
-                        <div class="play-btn-royal bg-white text-dark"><i class="fas fa-play"></i></div>
-                        <div class="flex-grow-1 text-white">
-                            <p class="text-warning small fw-bold mb-1"><?php echo $m[2]; ?></p>
-                            <h6 class="fw-bold mb-0 text-white"><?php echo $m[0]; ?></h6>
-                            <small class="opacity-75 d-block mt-2"><?php echo $m[1]; ?></small>
-                        </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="text-success fs-3 mb-3"><i class="fas fa-quran"></i></div>
+                        <h5 class="fw-bold mb-2">شعبہ حفظ و ناظرہ</h5>
+                        <p class="text-muted small urdu-font">روزانہ سبق، سبقی، منزل، پارہ اور غلطیوں کی نشاندہی مع ماہانہ تعلیمی گراف۔</p>
                     </div>
                 </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-
-        <!-- Section 7: Facilities -->
-        <div class="py-5">
-            <h2 class="section-title">دیگر سہولیات</h2>
-            <div class="row g-4 text-center">
-                <?php 
-                $facilities = [
-                    ['پرتعیش ہاسٹل', 'fas fa-hotel', '0'],
-                    ['معیاری طعام', 'fas fa-utensils', '100'],
-                    ['جدید لائبریری', 'fas fa-book-reader', '200'],
-                    ['ٹرانسپورٹ', 'fas fa-bus', '300']
-                ];
-                foreach($facilities as $f):
-                ?>
-                <div class="col-6 col-md-3" data-aos="zoom-in" data-aos-delay="<?php echo $f[2]; ?>">
-                    <div class="glass-card p-5 h-100 border-0 shadow-sm">
-                        <i class="<?php echo $f[1]; ?> fs-1 mb-4 text-warning"></i>
-                        <h5 class="fw-bold mb-0" style="color: var(--emerald-royal);"><?php echo $f[0]; ?></h5>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="text-info fs-3 mb-3"><i class="fas fa-clipboard-user"></i></div>
+                        <h5 class="fw-bold mb-2">حاضری و بائیو میٹرک</h5>
+                        <p class="text-muted small urdu-font">کیو آر کوڈ کارڈز، فنگر پرنٹ اور پیریڈ وائز حاضری مع غیر حاضری پر خودکار SMS۔</p>
                     </div>
                 </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="text-warning fs-3 mb-3"><i class="fas fa-scale-balanced"></i></div>
+                        <h5 class="fw-bold mb-2">ڈبل انٹری اکاؤنٹنگ</h5>
+                        <p class="text-muted small urdu-font">مکمل چارٹ آف اکاؤنٹس، انکم و ایکسپینس واؤچرز، زرِ پیشگی (ایڈوانس) اور کیش بک۔</p>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="text-danger fs-3 mb-3"><i class="fas fa-receipt"></i></div>
+                        <h5 class="fw-bold mb-2">فیس و عطیات</h5>
+                        <p class="text-muted small urdu-font">ماہانہ فیس چالان، بقایا جات لسٹ، کمپیوٹرائزڈ رسیدیں اور جنسی عطیات (راشن) ریکارڈ۔</p>
+                    </div>
+                </div>
 
-        <!-- Section 8: Admission Journey -->
-        <div class="py-5" id="admission">
-            <h2 class="section-title">طریقہ داخلہ</h2>
-            <div class="mt-4" data-aos="fade-up">
-                <div class="row g-4 text-center">
-                    <div class="col-md-4">
-                        <div class="glass-card p-5 h-100 position-relative animate-border">
-                            <div class="d-none d-md-block position-absolute top-50 start-100 translate-middle-y" style="width: 50px; height: 2px; border-top: 2px dashed var(--gold-burnished); z-index: 5;"></div>
-                            <i class="fas fa-edit fs-1 mb-4 text-warning"></i>
-                            <h4 class="fw-bold text-success mb-3">1. آن لائن رجسٹریشن</h4>
-                            <p class="text-muted mb-4 small">ویب سائٹ پر موجود فارم کے ذریعے اپنی معلومات فراہم کریں</p>
-                            <button class="btn btn-royal btn-sm w-100" data-bs-toggle="modal" data-bs-target="#admissionModal">ابھی اپلائی کریں</button>
-                        </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="text-primary fs-3 mb-3"><i class="fas fa-bed"></i></div>
+                        <h5 class="fw-bold mb-2">دارالاقامہ و ہاسٹل</h5>
+                        <p class="text-muted small urdu-font">کمروں اور بیڈز کی الاٹمنٹ، ہاسٹل میس، رہائشی طلبہ حاضری اور نائٹ چیکنگ۔</p>
                     </div>
-                    <div class="col-md-4">
-                        <div class="glass-card p-5 h-100 position-relative">
-                            <div class="d-none d-md-block position-absolute top-50 start-100 translate-middle-y" style="width: 50px; height: 2px; border-top: 2px dashed var(--gold-burnished); z-index: 5;"></div>
-                            <i class="fas fa-calendar-check fs-1 mb-4 text-warning"></i>
-                            <h4 class="fw-bold text-success mb-3">2. ٹیسٹ کی اطلاع</h4>
-                            <p class="text-muted mb-0 small">آپ کو <?php echo t('contact_email'); ?> یا فون پر ٹیسٹ کی تاریخ سے مطلع کیا جائے گا</p>
-                        </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="text-success fs-3 mb-3"><i class="fas fa-book-bookmark"></i></div>
+                        <h5 class="fw-bold mb-2">کتب خانہ و لائبریری</h5>
+                        <p class="text-muted small urdu-font">کتب کا بارکوڈ ریکارڈ، طلبہ و اساتذہ کو کتب کا اجراء، واپسی اور تاخیر پر جرمانہ۔</p>
                     </div>
-                    <div class="col-md-4">
-                        <div class="glass-card p-5 h-100">
-                            <i class="fas fa-user-graduate fs-1 mb-4 text-warning"></i>
-                            <h4 class="fw-bold text-success mb-3">3. حتمی داخلہ</h4>
-                            <p class="text-muted mb-0 small">انٹرویو اور ٹیسٹ میں کامیابی کے بعد کلاسز کا باقاعدہ آغاز</p>
-                        </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="text-info fs-3 mb-3"><i class="fas fa-money-check-dollar"></i></div>
+                        <h5 class="fw-bold mb-2">اساتذہ تنخواہیں و وظائف</h5>
+                        <p class="text-muted small urdu-font">ماہانہ پے رول، کٹوتی و الاؤنسز، عملہ قرضہ جات، اقساط اور خودکار سیلری سلپس۔</p>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="text-warning fs-3 mb-3"><i class="fas fa-mosque"></i></div>
+                        <h5 class="fw-bold mb-2">مدرسہ و مسجد موڈ</h5>
+                        <p class="text-muted small urdu-font">ایک کلک پر مدرسہ سے جامع مسجد موڈ میں منتقلی، چندہ بکس اور مصلیان کا حساب کتاب۔</p>
                     </div>
                 </div>
             </div>
         </div>
+    </section>
 
-        <!-- Section 9: Notice Board -->
-        <div class="py-5 mb-5 bg-white bg-opacity-50 rounded-5 p-4 p-md-5">
-            <div class="row align-items-center">
-                <div class="col-md-5" data-aos="fade-right">
-                    <p class="text-warning fw-bold mb-2">Announcements</p>
-                    <h2 class="fw-bold mb-4" style="color: var(--emerald-royal); font-size: 2.5rem;"><?php echo t('notice_board_ur'); ?></h2>
-                    <p class="text-muted fs-5 mb-5">ادارے کی جانب سے <?php echo t('marquee_latest'); ?> اعلانات اور خبریں یہاں ملاحظہ فرمائیں۔</p>
-                    <div class="d-none d-md-block">
-                        <i class="fas fa-bullhorn" style="font-size: 180px; color: var(--emerald-royal); opacity: 0.03; transform: rotate(-15deg);"></i>
+    <!-- 🌟 How It Works (4 Steps) -->
+    <section id="how-it-works" class="py-5">
+        <div class="container py-4">
+            <div class="text-center mb-5">
+                <span class="badge-pill-glow mb-2"><i class="fas fa-shoe-prints"></i> آسان ترین آغاز</span>
+                <h2 class="fw-bold urdu-font fs-1">نظام کو کیسے استعمال کریں؟ صرف 4 مراحل</h2>
+                <p class="text-muted urdu-font">کسی پیچیدہ تربیت کی ضرورت نہیں، پہلے ہی دن سے مکمل روانی کے ساتھ کام شروع کریں</p>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 text-center h-100">
+                        <div class="step-num-badge mx-auto">1</div>
+                        <h5 class="fw-bold mb-3">آن لائن رجسٹریشن</h5>
+                        <p class="text-muted small urdu-font">
+                            رجسٹریشن فارم میں ادارے کا نام، شہر اور پاسورڈ درج کریں۔ سسٹم آپ کو فوری طور پر ایک منفرد <strong>ادارہ کوڈ (جیسے MAIN01)</strong> جاری کرے گا۔
+                        </p>
                     </div>
                 </div>
-                <div class="col-md-7" data-aos="fade-left">
-                    <div class="glass-card p-2 p-md-4" style="max-height: 500px; overflow-y: auto;">
-                        <?php if(count($notices) > 0): ?>
-                            <div class="timeline-royal">
-                                <?php foreach($notices as $n): ?>
-                                <div class="p-4 border-start border-3 border-warning mb-4 bg-white rounded-4 shadow-sm mx-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <h5 class="fw-bold mb-0 text-success"><?php echo $n['title']; ?></h5>
-                                        <span class="badge bg-light text-muted fw-normal px-3 py-2" dir="ltr"><?php echo date('d M Y', strtotime($n['date'])); ?></span>
-                                    </div>
-                                    <p class="mb-0 text-muted" style="line-height: 1.8;"><?php echo $n['message']; ?></p>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 text-center h-100">
+                        <div class="step-num-badge mx-auto">2</div>
+                        <h5 class="fw-bold mb-3">شعبہ جات و اساتذہ</h5>
+                        <p class="text-muted small urdu-font">
+                            ویب ایڈمن پینل میں لاگ ان ہوں اور اپنے درجات (حفظ، ناظرہ، کتب) اور اساتذہ و عملہ کے نام مع اختیارات درج کریں۔
+                        </p>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 text-center h-100">
+                        <div class="step-num-badge mx-auto">3</div>
+                        <h5 class="fw-bold mb-3">طلبہ اندراج و سبق</h5>
+                        <p class="text-muted small urdu-font">
+                            طلبہ کے کوائف درج کریں (یا ایکسل سے امپورٹ کریں)۔ اساتذہ کو موبائل ایپ دیں تاکہ وہ روزانہ حاضری اور سبق درج کر سکیں۔
+                        </p>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="glass-panel p-4 text-center h-100">
+                        <div class="step-num-badge mx-auto">4</div>
+                        <h5 class="fw-bold mb-3">رپورٹس و فنانس</h5>
+                        <p class="text-muted small urdu-font">
+                            ایک کلک سے ماہانہ فیس وصولی، اساتذہ تنخواہیں، طلبہ کے نتائج رجسٹر اور تعلیمی کارکردگی رپورٹس پرنٹ کریں۔
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 🌟 Pricing & Packages Section -->
+    <section id="pricing" class="py-5" style="background: rgba(18, 26, 43, 0.6);">
+        <div class="container py-4">
+            <div class="text-center mb-5">
+                <span class="badge-pill-glow mb-2"><i class="fas fa-tags"></i> شفاف و منصفانہ قیمتیں</span>
+                <h2 class="fw-bold urdu-font fs-1">تمام سائز کے مدارس کے لیے موزوں سبسکرپشن پیکجز</h2>
+                <p class="text-muted urdu-font">کوئی پوشیدہ فیس نہیں، ادارے کے حجم کے مطابق مناسب ترین انتخاب کریں</p>
+            </div>
+
+            <?php
+            $row1Plans = array_slice($plans, 0, 3);
+            $row2Plans = array_slice($plans, 3, 2);
+
+            if (!function_exists('renderPricingPlanCard')) {
+                function renderPricingPlanCard($p) {
+                    $code = strtolower($p['code'] ?? '');
+                    $isPopular = ($code === 'standard');
+                    $isFree = (!empty($p['is_free_trial']) || $code === 'free');
+                    $isEnterprise = ($code === 'enterprise');
+                    
+                    if ($code === 'basic') {
+                        $priceMonthly = !empty($p['price_monthly']) ? (float)$p['price_monthly'] : (!empty($p['price']) ? (float)$p['price'] : 1500);
+                        $priceYearly = !empty($p['price_yearly']) ? (float)$p['price_yearly'] : 15000;
+                    } elseif ($code === 'standard') {
+                        $priceMonthly = !empty($p['price_monthly']) ? (float)$p['price_monthly'] : (!empty($p['price']) ? (float)$p['price'] : 2500);
+                        $priceYearly = !empty($p['price_yearly']) ? (float)$p['price_yearly'] : 25000;
+                    } elseif (in_array($code, ['premium_200', 'advanced', 'premium'])) {
+                        $priceMonthly = !empty($p['price_monthly']) ? (float)$p['price_monthly'] : (!empty($p['price']) ? (float)$p['price'] : 4000);
+                        $priceYearly = !empty($p['price_yearly']) ? (float)$p['price_yearly'] : 40000;
+                    } elseif ($isFree) {
+                        $priceMonthly = 0;
+                        $priceYearly = 0;
+                    } else {
+                        $priceMonthly = (float)($p['price_monthly'] ?? $p['price'] ?? 0);
+                        $priceYearly = (float)($p['price_yearly'] ?? ($priceMonthly * 10));
+                    }
+
+                    $maxStd = (int)($p['max_students'] ?? 50);
+                    $maxCls = (int)($p['max_classes'] ?? 5);
+                    $maxTea = (int)($p['max_teachers'] ?? 10);
+                    $hasMobile = !empty($p['has_mobile_app']);
+                    $hasDesktop = !empty($p['has_desktop_app']);
+                    ?>
+                    <div class="col-12 col-md-6 col-lg-4 d-flex">
+                        <div class="pricing-card <?php echo $isPopular ? 'popular' : ''; ?> w-100">
+                            <?php if ($isPopular): ?>
+                                <div class="popular-badge"><i class="fas fa-crown me-1"></i> سب سے مقبول انتخاب</div>
+                            <?php endif; ?>
+
+                            <div>
+                                <h4 class="fw-bold mb-2"><?php echo htmlspecialchars($p['name']); ?></h4>
+                                <p class="text-muted small urdu-font mb-3"><?php echo htmlspecialchars($p['description'] ?? ''); ?></p>
+
+                                <div class="mb-4">
+                                    <?php if ($isEnterprise): ?>
+                                        <div class="price-tag text-info fs-3">قیمت رابطہ پر</div>
+                                        <small class="text-muted">کسٹم ضروریات کے مطابق</small>
+                                        <div class="mt-2"><span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-50 px-2 py-1"><i class="fas fa-headset me-1"></i> کسٹم ڈیمو دستیاب</span></div>
+                                    <?php elseif ($isFree): ?>
+                                        <div class="price-tag text-success">مفت <small class="fs-6 text-muted">/ 14 دن</small></div>
+                                        <small class="text-muted">آزمائشی بنیادوں پر</small>
+                                        <div class="mt-2"><span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fas fa-bolt me-1"></i> بغیر کریڈٹ کارڈ</span></div>
+                                    <?php else: ?>
+                                        <div class="price-tag">
+                                            <small class="fs-6 fw-normal text-muted">روپے</small> <?php echo number_format($priceMonthly); ?>
+                                            <small class="fs-6 fw-normal text-muted">/ ماہ</small>
+                                        </div>
+                                        <div class="small text-light mt-1"><i class="fas fa-tag text-warning me-1"></i> سالانہ: <strong class="text-warning">روپے <?php echo number_format($priceYearly); ?></strong></div>
+                                        <div class="mt-2"><span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fas fa-gift me-1"></i> 14 دن کا مفت ٹرائل شامل ہے</span></div>
+                                    <?php endif; ?>
                                 </div>
-                                <?php endforeach; ?>
+
+                                <hr style="border-color: rgba(255,255,255,0.08);">
+
+                                <div class="features-list mb-4">
+                                    <div class="feature-item">
+                                        <i class="fas fa-check check"></i>
+                                        <span>طلبہ کی حد: <strong><?php echo $maxStd > 9000 ? 'لامحدود' : $maxStd . ' طلبہ'; ?></strong></span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <i class="fas fa-check check"></i>
+                                        <span>کلاسز کی حد: <strong><?php echo $maxCls > 9000 ? 'لامحدود' : $maxCls . ' کلاسز'; ?></strong></span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <i class="fas fa-check check"></i>
+                                        <span>اساتذہ و عملہ: <strong><?php echo $maxTea > 9000 ? 'لامحدود' : $maxTea . ' اساتذہ'; ?></strong></span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <i class="fas fa-check check"></i>
+                                        <span>پی ایچ پی ویب پینل: <strong>مکمل رسائی</strong></span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <?php if ($hasMobile): ?>
+                                            <i class="fas fa-check check"></i>
+                                            <span>اینڈرائڈ ایپ: <strong>شامل ہے</strong></span>
+                                        <?php else: ?>
+                                            <i class="fas fa-times cross"></i>
+                                            <span class="text-muted text-decoration-line-through">اینڈرائڈ ایپ (مفت میں بند)</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="feature-item">
+                                        <?php if ($hasDesktop): ?>
+                                            <i class="fas fa-check check"></i>
+                                            <span>ونڈوز ایپ: <strong>شامل ہے</strong></span>
+                                        <?php else: ?>
+                                            <i class="fas fa-times cross"></i>
+                                            <span class="text-muted text-decoration-line-through">ونڈوز ایپ (مفت میں بند)</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="feature-item">
+                                        <i class="fas fa-check check"></i>
+                                        <span>ڈیٹا سیکیورٹی: <strong>100% انفرادی بیک اپ</strong></span>
+                                    </div>
+                                </div>
                             </div>
-                        <?php else: ?>
-                            <div class="text-center py-5">
-                                <i class="fas fa-clipboard-list fs-1 text-muted opacity-20 mb-3"></i>
-                                <p class="text-muted">فی الوقت کوئی نیا نوٹس موجود نہیں ہے۔</p>
+
+                            <div>
+                                <?php if ($isEnterprise): ?>
+                                    <a href="https://wa.me/923012454595?text=السلام علیکم! ہم انٹرپرائز لامحدود پیکج کے بارے میں معلومات چاہتے ہیں۔" target="_blank" class="btn btn-sa-outline w-100 fw-bold">
+                                        <i class="fab fa-whatsapp me-1"></i> رابطہ کریں
+                                    </a>
+                                <?php else: ?>
+                                    <a href="register.php?plan=<?php echo urlencode($code); ?>" class="btn <?php echo $isPopular ? 'btn-sa-primary' : 'btn-sa-outline'; ?> w-100 fw-bold">
+                                        <i class="fas fa-rocket me-1"></i> 14 روزہ ٹرائل شروع کریں
+                                    </a>
+                                <?php endif; ?>
                             </div>
-                        <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php
+                }
+            }
+            ?>
+
+            <!-- پہلی قطار: 3 پیکجز (مفت آزمائش، بنیادی، معیاری) -->
+            <div class="row g-4 justify-content-center mb-4">
+                <?php foreach ($row1Plans as $p) { renderPricingPlanCard($p); } ?>
+            </div>
+
+            <!-- دوسری قطار: 2 پیکجز (ایڈوانس، انٹرپرائز — متوازن و مرکز میں) -->
+            <div class="row g-4 justify-content-center">
+                <?php foreach ($row2Plans as $p) { renderPricingPlanCard($p); } ?>
+            </div>
+        </div>
+    </section>
+
+    <!-- 🌟 Rules, Terms & Conditions, and Data Privacy -->
+    <section id="rules" class="py-5">
+        <div class="container py-4">
+            <div class="text-center mb-5">
+                <span class="badge-pill-glow mb-2"><i class="fas fa-scale-unbalanced-flip"></i> قواعد و ضوابط و سیکیورٹی</span>
+                <h2 class="fw-bold urdu-font fs-1">ڈیٹا پرائیویسی اور استعمال کے لازمی اصول</h2>
+                <p class="text-muted urdu-font">ہماری اولین ترجیح دینی اداروں کے کوائف کی مکمل رازداری اور شرعی امانت داری ہے</p>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-12 col-md-6">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="width: 44px; height: 44px; background: rgba(16, 185, 129, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #10b981; font-size: 20px;">
+                                <i class="fas fa-user-shield"></i>
+                            </div>
+                            <h5 class="fw-bold mb-0">1. ڈیٹا کی مکمل ملکیت اور رازداری</h5>
+                        </div>
+                        <p class="text-muted urdu-font">
+                            آپ کے ادارے کا تمام ڈیٹا صرف اور صرف آپ کی ملکیت ہے۔ سرور پر ہر ادارے کا ریکارڈ سخت <strong>Tenant Isolation</strong> اور انکرپٹڈ سیکیورٹی کے تحت رکھا جاتا ہے۔ کوئی بھی دوسرا مدرسہ یا غیر متعلقہ شخص آپ کے کوائف، مالیات یا طلبہ کے ریکارڈ کو نہیں دیکھ سکتا۔
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="width: 44px; height: 44px; background: rgba(6, 182, 212, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #06b6d4; font-size: 20px;">
+                                <i class="fas fa-cloud-arrow-up"></i>
+                            </div>
+                            <h5 class="fw-bold mb-0">2. روزانہ خودکار کلاؤڈ بیک اپ</h5>
+                        </div>
+                        <p class="text-muted urdu-font">
+                            سسٹم ڈیٹابیس کا روزانہ کی بنیاد پر خودکار انکرپٹڈ بیک اپ تیار ہوتا ہے۔ اگر آپ کا کمپیوٹر یا موبائل گم یا خراب ہو جائے تو نیا فون یا پی سی لے کر لاگ ان کریں، آپ کا سارا ڈیٹا ایک سیکنڈ میں بحال ہو جائے گا۔
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="width: 44px; height: 44px; background: rgba(245, 158, 11, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 20px;">
+                                <i class="fas fa-hand-holding-hand"></i>
+                            </div>
+                            <h5 class="fw-bold mb-0">3. شرعی و اخلاقی ضوابط کی پاسداری</h5>
+                        </div>
+                        <p class="text-muted urdu-font">
+                            نظام خالص دینی مقاصد کے لیے بنایا گیا ہے۔ اس میں کوئی تجارتی اشتہارات یا فحش الگورتھم شامل نہیں۔ نظام میں موجود چندہ، فیس، زکوٰۃ اور صدقات کے کھاتے شرعی اصولوں کے عین مطابق الگ الگ رکھے جاتے ہیں۔
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <div class="glass-panel p-4 h-100">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="width: 44px; height: 44px; background: rgba(239, 68, 68, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 20px;">
+                                <i class="fas fa-ban"></i>
+                            </div>
+                            <h5 class="fw-bold mb-0">4. فری پلان اور پلیٹ فارم رسائی کی حدود</h5>
+                        </div>
+                        <p class="text-muted urdu-font">
+                            مفت ٹرائل پلان صرف اور صرف ویب پینل کے ذریعے آزمائش کے لیے ہے۔ فری ٹرائل صارفین کو اینڈرائڈ اور ونڈوز ایپ کی اجازت نہیں ہوگی۔ موبائل ایپ اور ونڈوز سافٹ ویئر کی مکمل صلاحیت حاصل کرنے کے لیے بیسک یا سٹینڈرڈ پلان منتخب کرنا لازمی ہے۔
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
-    </div> <!-- End Main Container -->
+    </section>
 
-    </div>
+    <!-- 🌟 Frequently Asked Questions (FAQ) -->
+    <section id="faq" class="py-5" style="background: rgba(18, 26, 43, 0.4);">
+        <div class="container py-4" style="max-width: 900px;">
+            <div class="text-center mb-5">
+                <span class="badge-pill-glow mb-2"><i class="fas fa-circle-question"></i> سوالات و جوابات</span>
+                <h2 class="fw-bold urdu-font fs-1">اکثر پوچھے گئے ضروری سوالات</h2>
+                <p class="text-muted urdu-font">اگر آپ کا سوال یہاں موجود نہ ہو تو واٹس ایپ پر ہماری ٹیم سے فوری رابطہ کر سکتے ہیں</p>
+            </div>
 
-    <!-- Section 10: Footer (Very Attractive) -->
-    <!-- Section 10: Footer (Luxury Redesign) -->
-    <!-- Section 10: Footer (Luxury Signature) -->
-    <footer class="footer-luxury">
-        <div class="container">
-            <div class="row g-5">
-                <!-- Branding -->
-                <div class="col-lg-5" data-aos="fade-up">
-                    <div class="footer-logo">
-                        <img src="logo.png" alt="Logo" style="width: 50px; height: 50px; border-radius: 50%; margin-left: 10px; background: white; border: 2px solid var(--gold-burnished); object-fit: contain;"><?php echo $m_name; ?>
-                    </div>
-                    <p class="fs-5 lh-lg mb-5" style="text-align: justify; max-width: 90%;">
-                        ہماری بنیادیں قرآن و سنت پر ہیں، اور ہمارا مقصد ایک ایسے تعلیمی ماحول کی فراہمی ہے جہاں طلبا اپنی روحانی اور علمی پیاس بجھا سکیں۔ ہم بہترین تربیت کے ساتھ مستند دینی تعلیم کے علمبردار ہیں۔
-                    </p>
-                    <div class="d-flex gap-3">
-                        <a href="#" class="btn btn-outline-light rounded-circle shadow-sm" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;"><i class="fab fa-facebook-f"></i></a>
-                        <a href="#" class="btn btn-outline-light rounded-circle shadow-sm" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;"><i class="fab fa-twitter"></i></a>
-                        <a href="#" class="btn btn-outline-light rounded-circle shadow-sm" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;"><i class="fab fa-instagram"></i></a>
-                        <a href="#" class="btn btn-outline-light rounded-circle shadow-sm" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;"><i class="fab fa-youtube"></i></a>
+            <div class="accordion" id="faqAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button urdu-font" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                            کیا ہمارا پرانا ڈیٹا ایکسل یا رجسٹر سے اس سافٹ ویئر میں منتقل ہو سکتا ہے؟
+                        </button>
+                    </h2>
+                    <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body urdu-font">
+                            جی ہاں! سسٹم کے ویب ایڈمن پینل میں <strong>Excel اور CSV امپورٹ</strong> کی زبردست سہولت موجود ہے۔ آپ چند منٹوں میں سینکڑوں طلبہ کا ڈیٹا داخل کر سکتے ہیں، یا ہماری ٹیکنیکل سپورٹ ٹیم سے مفت مدد لے سکتے ہیں۔
+                        </div>
                     </div>
                 </div>
-                
-                <!-- Links -->
-                <div class="col-lg-3" data-aos="fade-up" data-aos-delay="200">
-                    <h5 class="text-white fw-bold mb-4">فوری رسائی</h5>
-                    <ul class="list-unstyled d-grid gap-3">
-                        <li><a href="#" class="footer-link"><i class="fas fa-angle-left me-2 text-warning small"></i> ہماری ویب سائٹ</a></li>
-                        <li><a href="#about" class="footer-link"><i class="fas fa-angle-left me-2 text-warning small"></i> <?php echo t('nav_about'); ?></a></li>
-                        <li><a href="#depts" class="footer-link"><i class="fas fa-angle-left me-2 text-warning small"></i> <?php echo t('nav_depts'); ?> کی تفصیل</a></li>
-                        <li><a href="#admission" class="footer-link"><i class="fas fa-angle-left me-2 text-warning small"></i> آن لائن رجسٹریشن</a></li>
-                        <li><a href="login.php" class="footer-link"><i class="fas fa-angle-left me-2 text-warning small"></i> والدین کا پورٹل</a></li>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed urdu-font" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                            اگر مدرسے میں انٹرنیٹ بند ہو جائے تو کیا موبائل یا ونڈوز ایپ چلے گی؟
+                        </button>
+                    </h2>
+                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body urdu-font">
+                            بالکل! ہماری اینڈرائڈ ایپ اور ونڈوز سافٹ ویئر <strong>Offline-First</strong> بنیادوں پر تیار کیے گئے ہیں۔ آپ انٹرنیٹ کے بغیر بھی معمول کے مطابق سبق، حاضری اور فیس کی انٹری کر سکتے ہیں۔ جیسے ہی انٹرنیٹ منسلک ہوگا، تمام ریکارڈ خودکار طور پر کلاؤڈ سے سنک ہو جائے گا۔
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed urdu-font" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                            مفت ٹرائل ختم ہونے کے بعد ہمارے طلبہ کے ریکارڈ کا کیا ہوگا؟
+                        </button>
+                    </h2>
+                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body urdu-font">
+                            آپ کا تمام ریکارڈ کلاؤڈ سرور پر 100% محفوظ رہے گا اور کوئی چیز ضائع نہیں ہوگی۔ آپ جب بھی مناسب سبسکرپشن پلان کا انتخاب کریں گے، وہیں سے آگے بغیر کسی پریشانی کے جاری رکھ سکیں گے۔
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed urdu-font" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                            کیا ہم ایک ہی سسٹم میں جامع مسجد اور مکتب کا انتظام بھی چلا سکتے ہیں؟
+                        </button>
+                    </h2>
+                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body urdu-font">
+                            جی ہاں! سسٹم میں <strong>مدرسہ و مسجد ڈوئل موڈ</strong> کا مکمل فیچر شامل ہے۔ اوپر دیے گئے بٹن سے آپ ایک سیکنڈ میں مدرسہ سے جامع مسجد کے کھاتوں، مصلیان اور مکتب اکیڈمکس میں سوئچ کر سکتے ہیں۔
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 🌟 Download Apps Section -->
+    <section id="download-apps" class="py-5 text-center">
+        <div class="container py-4">
+            <div class="glass-panel p-5 mx-auto" style="max-width: 900px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%);">
+                <span class="badge-pill-glow mb-3"><i class="fas fa-download"></i> باضابطہ ایپلیکیشنز</span>
+                <h2 class="fw-bold urdu-font fs-1 mb-3">موبائل اور ونڈوز ڈیسک ٹاپ سافٹ ویئر ڈاؤن لوڈ کریں</h2>
+                <p class="text-muted urdu-font mb-4">
+                    اپنے اساتذہ کو موبائل ایپ دیں اور اپنے کمپیوٹر پر تیز ترین ونڈوز ورژن انسٹال کریں
+                </p>
+
+                <div class="d-flex flex-wrap justify-content-center gap-3">
+                    <a href="https://madrasa.mamfss.com/downloads/MAMFSS_App.apk" class="btn btn-sa-primary py-3 px-4 fs-5">
+                        <i class="fab fa-android fs-4"></i> اینڈرائڈ ایپ ڈاؤن لوڈ (APK)
+                    </a>
+                    <a href="https://madrasa.mamfss.com/downloads/MAMFSS_Setup.exe" class="btn btn-sa-outline py-3 px-4 fs-5">
+                        <i class="fab fa-windows fs-4"></i> ونڈوز انسٹالر ڈاؤن لوڈ (EXE)
+                    </a>
+                    <a href="login.php" class="btn btn-sa-outline py-3 px-4 fs-5">
+                        <i class="fas fa-desktop fs-4"></i> ویب ایڈمن میں داخل ہوں
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 🌟 Footer -->
+    <footer class="py-5 text-sub">
+        <div class="container">
+            <div class="row g-4 mb-4">
+                <div class="col-12 col-md-4">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <img src="logo_mindcrafts.svg" alt="Mindcrafts AI" style="width: 42px; height: 42px; border-radius: 12px; object-fit: contain; background: #061814; border: 1px solid rgba(16, 185, 129, 0.4); padding: 2px;">
+                        <div>
+                            <span class="fw-bold fs-5 text-white">مدرسہ مینیجمنٹ <span style="color: var(--sa-primary);">سسٹم</span></span>
+                            <small class="d-block text-muted" style="font-size: 11px;">بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)</small>
+                        </div>
+                    </div>
+                    <p class="text-muted small urdu-font mb-3">
+                        پاکستان کا سب سے جدید اور قابلِ اعتماد کلاؤڈ مدرسہ و مسجد ERP مینیجمنٹ پلیٹ فارم۔ دینی اداروں کو جدید ترین ٹیکنالوجی سے لیس کر کے شفافیت اور روانی لانا ہمارا مشن ہے۔
+                    </p>
+                    <div class="text-muted small">
+                        <i class="fas fa-location-dot me-1 text-primary"></i> سرگودھا، پنجاب، پاکستان
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <h6 class="fw-bold text-white mb-3">اہم لنکس</h6>
+                    <ul class="list-unstyled small">
+                        <li class="mb-2"><a href="#home" class="text-muted text-decoration-none">ہوم پیج</a></li>
+                        <li class="mb-2"><a href="#features" class="text-muted text-decoration-none">خصوصیات</a></li>
+                        <li class="mb-2"><a href="#pricing" class="text-muted text-decoration-none">پیکجز و قیمتیں</a></li>
+                        <li class="mb-2"><a href="#rules" class="text-muted text-decoration-none">قواعد و ضوابط</a></li>
+                        <li class="mb-2"><a href="#download-apps" class="text-muted text-decoration-none">ایپس ڈاؤن لوڈ</a></li>
                     </ul>
                 </div>
 
-                <!-- Contact Info -->
-                <div class="col-lg-4" data-aos="fade-up" data-aos-delay="400">
-                    <h5 class="text-white fw-bold mb-4"><?php echo t('nav_contact'); ?> کی معلومات</h5>
-                    <div class="glass-card p-4 shadow-none bg-white bg-opacity-10 border-0">
-                        <div class="d-flex mb-4">
-                            <div class="p-3 bg-warning text-dark rounded-4 me-3"><i class="fas fa-map-marker-alt fs-4"></i></div>
-                            <div>
-                                <p class="text-white mb-0 small opacity-50">Main Campus</p>
-                                <span class="text-white fw-bold" dir="ltr"><?php echo $address; ?></span>
-                            </div>
-                        </div>
-                        <div class="d-flex">
-                            <div class="p-3 bg-warning text-dark rounded-4 me-3"><i class="fas fa-phone-alt fs-4"></i></div>
-                            <div>
-                                <p class="text-white mb-0 small opacity-50">Support & Admissions</p>
-                                <span class="text-white fw-bold" dir="ltr"><?php echo $phone; ?></span>
-                            </div>
-                        </div>
-                    </div>
+                <div class="col-6 col-md-3">
+                    <h6 class="fw-bold text-white mb-3">پورٹلز و لاگ ان</h6>
+                    <ul class="list-unstyled small">
+                        <li class="mb-2"><a href="login.php" class="text-muted text-decoration-none"><i class="fas fa-key me-1 text-primary"></i> ادارہ لاگ ان پورٹل</a></li>
+                        <li class="mb-2"><a href="register.php" class="text-muted text-decoration-none"><i class="fas fa-user-plus me-1 text-primary"></i> نیا ادارہ مفت رجسٹریشن</a></li>
+                        <li class="mb-2"><a href="super_admin/login.php" class="text-muted text-decoration-none"><i class="fas fa-shield-halved me-1 text-warning"></i> سپر ایڈمن ماسٹر پورٹل</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <h6 class="fw-bold text-white mb-3">براہِ راست سپورٹ و رابطہ</h6>
+                    <p class="text-muted small urdu-font mb-2">ہیلپ ڈیسک اور سسٹم ڈیمو کے لیے ہم سے رابطہ کریں:</p>
+                    <div class="text-muted small mb-2"><i class="fas fa-phone me-1 text-success"></i> 0301-2454595</div>
+                    <div class="text-muted small mb-3"><i class="fas fa-envelope me-1 text-info"></i> info@mamfss.com</div>
+                    <a href="https://wa.me/923012454595" target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-3 py-1">
+                        <i class="fab fa-whatsapp me-1"></i> واٹس ایپ سپورٹ
+                    </a>
                 </div>
             </div>
 
-            <div class="mt-5 pt-5 border-top border-white border-opacity-10 text-center">
-                <p class="small mb-0 opacity-50">
-                    کاپي رائٹ © 2026 <?php echo $m_name; ?>۔ تمام حقوق بحق CodeHubb محفوظ ہیں۔
-                </p>
+            <div class="border-top pt-4 d-flex flex-wrap justify-content-between align-items-center text-muted small" style="border-color: rgba(255,255,255,0.06) !important;">
+                <div>
+                    &copy; <?php echo date('Y'); ?> MAMFSS Cloud Madrasa Management System. تمام جملہ حقوق محفوظ ہیں۔
+                </div>
+                <div class="d-flex gap-3">
+                    <span>ورژن: 5.7.104 (SaaS Edition)</span>
+                    <span>|</span>
+                    <a href="#rules" class="text-muted text-decoration-none">پرائیویسی پالیسی</a>
+                </div>
             </div>
         </div>
     </footer>
 
+    <!-- 🌟 Floating WhatsApp Support Button -->
+    <a href="https://wa.me/923012454595?text=السلام علیکم! مجھے MAMFSS کلاؤڈ مدرسہ سسٹم کے متعلق معلومات چاہیے ہیں۔" class="float-whatsapp" target="_blank">
+        <i class="fab fa-whatsapp fs-4"></i>
+        <span>واٹس ایپ رابطہ</span>
+    </a>
 
-    <!-- Admission Modal -->
-    <div class="modal fade" id="admissionModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content" style="border-radius: 15px; border: 2px solid var(--primary-green);">
-                <div class="modal-header" style="background: var(--primary-green);">
-                    <h5 class="modal-title fw-bold text-white"><i class="fas fa-graduation-cap me-2"></i> آن لائن <?php echo t('footer_admission'); ?></h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <p class="text-muted small mb-4">براہ کرم اپنی معلومات درج کریں۔ ایڈمن کی منظوری کے بعد آپ کی <strong class="text-success"><?php echo t('contact_email'); ?></strong> پر ٹیسٹ کی تاریخ و وقت بھیجا جائے گا۔</p>
-                    <form id="admissionForm">
-                        <div class="row g-3">
-                            <div class="col-md-9 order-2 order-md-1"> <!-- Fields on Right/Center -->
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">طالب علم کا نام <span class="text-danger">*</span></label>
-                                        <input type="text" name="student_name" class="form-control" placeholder="محمد احمد" required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">والد کا نام <span class="text-danger">*</span></label>
-                                        <input type="text" name="father_name" class="form-control" placeholder="محمد اکرم" required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">تاریخ پیدائش <span class="text-danger">*</span></label>
-                                        <input type="date" name="dob" class="form-control" required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold"><?php echo t('nav_contact'); ?> نمبر <span class="text-danger">*</span></label>
-                                        <input type="tel" name="phone" class="form-control" placeholder="03001234567" dir="ltr" required>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 order-1 order-md-2 text-center"> <!-- Photo on Left -->
-                                <label class="form-label fw-bold">پاسپورٹ تصویر <span class="text-danger">*</span></label>
-                                <div class="border rounded p-2 bg-light mb-2" style="height: 150px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-                                    <i class="fas fa-user-tie fa-4x text-muted" id="photo_preview_icon"></i>
-                                    <img id="photo_preview_img" class="img-fluid d-none" style="max-height: 100%;">
-                                </div>
-                                <input type="file" name="photo" id="photo_input" class="form-control form-control-sm" accept="image/*" required onchange="previewPhoto(this)">
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold"><?php echo t('contact_email'); ?> ایڈریس <small class="text-success">(اطلاع کے لیے)</small></label>
-                                <input type="email" name="email" class="form-control" placeholder="example@gmail.com" dir="ltr">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">تعلیمی قابلیت</label>
-                                <input type="text" name="qualification" class="form-control" placeholder="مثلاً میٹرک، مڈل">
-                            </div>
-                            
-                            <div class="col-md-12">
-                                <label class="form-label fw-bold">مستقل <?php echo t('contact_address'); ?> <span class="text-danger">*</span></label>
-                                <textarea name="permanent_address" class="form-control" rows="2" required></textarea>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">آخری تعلیم کہاں حاصل کی؟</label>
-                                <input type="text" name="last_studied" class="form-control" placeholder="اسکول یا مدرسہ کا نام">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">پڑھنے کا مقصد (Aim)</label>
-                                <input type="text" name="aim" class="form-control" placeholder="مثلاً عالم بننا، حفظ کرنا">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">سابقہ مدارس (اگر ہوں)</label>
-                                <input type="text" name="prev_madaris" class="form-control" placeholder="سابقہ مدارس کے نام">
-                            </div>
-                            <div class="col-md-12">
-                                <label class="form-label fw-bold">پچھلا مدرسہ / اسکول چھوڑنے کی وجہ</label>
-                                <textarea name="leave_reason" class="form-control" rows="1"></textarea>
-                            </div>
-                            <hr>
-                            <h6 class="fw-bold text-primary mb-0 mt-3">سرپرست کی معلومات (Guardian Details)</h6>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">سرپرست کا نام</label>
-                                <input type="text" name="guardian_name" class="form-control">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">سرپرست کا شناختی کارڈ نمبر</label>
-                                <input type="text" name="guardian_cnic" class="form-control" placeholder="xxxxx-xxxxxxx-x" dir="ltr">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">طلبہ سے رشتہ</label>
-                                <input type="text" name="guardian_relation" class="form-control" placeholder="مثلاً والد، بھائی، چچا">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">سرپرست کا <?php echo t('contact_address'); ?></label>
-                                <input type="text" name="guardian_address" class="form-control">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold"><?php echo t('age'); ?></label>
-                                <input type="number" name="age" class="form-control" placeholder="مثلاً: 12" min="5" max="25">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label fw-bold">شعبہ منتخب کریں</label>
-                                <select name="department" class="form-select">
-                                    <option value="">شعبہ منتخب کریں...</option>
-                                    <option value="حفظ قرآن"><?php echo t('dept_hifz'); ?></option>
-                                    <option value="<?php echo t('dept_nazra'); ?>"><?php echo t('dept_nazra'); ?></option>
-                                    <option value="حسن صوت"><?php echo t('dept_qirat'); ?></option>
-                                    <option value="درس نظامی"><?php echo t('service_dars'); ?></option>
-                                    <option value="<?php echo t('service_modern'); ?>"><?php echo t('service_modern'); ?> (مڈل + میٹرک)</option>
-                                </select>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label fw-bold">موجودہ <?php echo t('contact_address'); ?> (Current Address)</label>
-                                <textarea name="address" class="form-control" rows="2" placeholder="گھر کا <?php echo t('contact_address'); ?>"></textarea>
-                            </div>
-                        </div>
-                        <div id="admissionAlert" class="mt-3"></div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">بند کریں</button>
-                    <button type="button" id="preSubmitBtn" class="btn btn-success rounded-pill px-4 fw-bold">
-                        <i class="fas fa-check-circle me-2"></i> آگے بڑھیں
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Rules Modal (Ahd-nama) -->
-    <div class="modal fade" id="rulesModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content" style="border-radius: 15px; border: 2px solid var(--gold-burnished);">
-                <div class="modal-header bg-dark text-white">
-                    <h5 class="modal-title fw-bold">عہدنامہ ازطالب علم (قواعد و ضوابط)</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4" style="background: #fbf9f4;">
-                    <div id="rulesContent" style="height: 300px; overflow-y: auto; text-align: justify; line-height: 2; padding: 20px; border: 1px solid #ddd; background: white; border-radius: 10px;">
-                        <h4 class="text-center fw-bold mb-4">ضروری قواعد و ضوابط</h4>
-                        <p>1. مدرسہ میں داخلہ کے بعد طالب علم کو مقررہ نصاب اور اوقات کار کی مکمل پابندی کرنی ہوگی۔</p>
-                        <p>2. طالب علم کو مدرسہ کے تمام اساتذہ اور عملہ کے ساتھ باادب رویہ اختیار کرنا ہوگا۔</p>
-                        <p>3. غیر حاضری کی صورت میں پیشگی اطلاع دینا لازمی ہے، بلا اطلاع لمبی غیر حاضری پر داخلہ خارج کیا جا سکتا ہے۔</p>
-                        <p>4. مدرسہ کی املاک کو نقصان پہنچانے کی صورت میں ہرجانہ طالب علم یا سرپرست کے ذمہ ہوگا۔</p>
-                        <p>5. مدرسہ کے اندر کسی بھی قسم کی غیر اخلاقی سرگرمی یا سیاست میں حصہ لینے کی سختی سے ممانعت ہے۔</p>
-                        <p>6. طالب علم کو اپنی صفائی ستھرائی اور لباس کا خاص خیال رکھنا ہوگا۔</p>
-                        <p>7. <?php echo t('footer_admission'); ?> میں فراہم کردہ تمام معلومات درست ہیں، کسی بھی غلط بیانی کی صورت میں ادارہ تادیبی کارروائی کا حق محفوظ رکھتا ہے۔</p>
-                    </div>
-                    <div class="mt-4 p-3 bg-white rounded-3 shadow-sm border">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="agreeCheckbox" style="width: 25px; height: 25px; margin-top: 0;">
-                            <label class="form-check-label fw-bold ms-3" for="agreeCheckbox" style="font-size: 1.1rem; color: var(--emerald-royal); cursor: pointer;">
-                                میں تمام قواعد و ضوابط سے اتفاق کرتا ہوں اور ان کی پابندی کا عہد کرتا ہوں۔ (I Agree)
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#admissionModal">واپس جائیں</button>
-                    <button type="button" id="submitAdmissionBtn" class="btn btn-success px-5 fw-bold" disabled>
-                        <i class="fas fa-paper-plane me-2"></i> عہدنامے کے ساتھ فارم جمع کریں
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
+    <!-- Bootstrap Bundle JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-    <script>
-    // Initialize AOS
-    AOS.init({
-        duration: 1200,
-        once: true,
-        easing: 'ease-out-cubic'
-    });
-
-    // Photo Preview
-    function previewPhoto(input) {
-        if (input.files && input.files[0]) {
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('photo_preview_img').src = e.target.result;
-                document.getElementById('photo_preview_img').classList.remove('d-none');
-                document.getElementById('photo_preview_icon').classList.add('d-none');
-            }
-            reader.readAsDataURL(input.files[0]);
-        }
-    }
-
-    // Navbar Scroll Effect
-    window.addEventListener('scroll', () => {
-        const nav = document.querySelector('.navbar');
-        if (window.scrollY > 50) {
-            nav.classList.add('scrolled', 'shadow-lg');
-        } else {
-            nav.classList.remove('scrolled', 'shadow-lg');
-        }
-    });
-
-    // Admission Workflow
-    const admissionModal = new bootstrap.Modal(document.getElementById('admissionModal'));
-    const rulesModal = new bootstrap.Modal(document.getElementById('rulesModal'));
-
-    document.getElementById('preSubmitBtn').addEventListener('click', function() {
-        const form = document.getElementById('admissionForm');
-        if (form.checkValidity()) {
-            admissionModal.hide();
-            rulesModal.show();
-        } else {
-            form.reportValidity();
-        }
-    });
-
-    document.getElementById('agreeCheckbox').addEventListener('change', function() {
-        document.getElementById('submitAdmissionBtn').disabled = !this.checked;
-    });
-
-    // Admission Form AJAX Submission
-    document.getElementById('submitAdmissionBtn').addEventListener('click', function() {
-        const btn = this;
-        const form = document.getElementById('admissionForm');
-        const alertBox = document.getElementById('admissionAlert');
-        const agreeCheckbox = document.getElementById('agreeCheckbox');
-        
-        if(!agreeCheckbox.checked) {
-            alert('براہ کرم قواعد و ضوابط سے اتفاق کریں۔');
-            return;
-        }
-
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> جمع ہو رہا ہے...';
-
-        const formData = new FormData(form);
-
-        fetch('apply.php', { method: 'POST', body: formData })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    rulesModal.hide();
-                    admissionModal.hide();
-                    
-                    Swal.fire({
-                        title: 'ماشاءاللہ!',
-                        text: data.message,
-                        icon: 'success',
-                        confirmButtonText: 'ٹھیک ہے',
-                        confirmButtonColor: 'var(--emerald-royal)'
-                    });
-
-                    form.reset();
-                    document.getElementById('photo_preview_img').classList.add('d-none');
-                    document.getElementById('photo_preview_icon').classList.remove('d-none');
-                    agreeCheckbox.checked = false;
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> عہدنامے کے ساتھ فارم جمع کریں';
-                } else {
-                    alert('Error: ' + data.message);
-                    btn.disabled = false;
-                    btn.innerHTML = 'دوبارہ کوشش کریں';
-                }
-            })
-            .catch(() => {
-                alert('نیٹ ورک خرابی، براہ کرم انٹرنیٹ چیک کریں۔');
-                btn.disabled = false;
-                btn.innerHTML = 'دوبارہ کوشش کریں';
-            });
-    });
-    </script>
 </body>
 </html>

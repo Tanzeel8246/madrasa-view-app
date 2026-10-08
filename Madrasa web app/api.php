@@ -2,6 +2,7 @@
 ob_start();
 require_once __DIR__ . '/env_loader.php';
 require_once __DIR__ . '/finance_accounting_bridge.php';
+require_once __DIR__ . '/fcm_helper.php';
 // پروڈکشن سیکیورٹی: ایرر کو ڈسپلے نہیں کریں، صرف لاگ فائل میں لکھیں
 ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
@@ -9,32 +10,50 @@ error_reporting(E_ALL);
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/php_errors.log');
 
+define('MADRASA_DEBUG', trim(getenv('MADRASA_DEBUG') ?: 'false') === 'true');
+
 /**
  * ڈیبگ لاگ لکھنے کا فنکشن (Global)
  */
 function write_log($msg) {
+    if (!defined('MADRASA_DEBUG') || !MADRASA_DEBUG) return; // production میں خاموش
     try {
-        file_put_contents(__DIR__ . "/debug_log.txt", date('H:i:s') . " - " . $msg . PHP_EOL, FILE_APPEND);
+        $logDir = __DIR__ . "/logs";
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        file_put_contents($logDir . "/debug_log.txt", date('H:i:s') . " - " . $msg . PHP_EOL, FILE_APPEND);
     } catch (Exception $e) {}
 }
 
-// CORS - صرف اجازت یافتہ Origins کو اجازت دیں
+// CORS - صرف اجازت یافتہ Origins اور موبائل ایپ کو اجازت دیں
 $allowedOrigins = [
     'https://madrasa.mindcraftsai.com',
     'http://madrasa.mindcraftsai.com',
     'https://madrasa.mamfss.com',
     'http://madrasa.mamfss.com',
     'http://localhost',
-    'capacitor://localhost',
     'http://localhost:8080',
     'http://localhost:3000',
+    'capacitor://localhost',
+    'ionic://localhost',
+    'http://localhost:8100',
 ];
-$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
-if (in_array($origin, $allowedOrigins)) {
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? trim($_SERVER['HTTP_ORIGIN']) : '';
+
+// اگر موبائل ایپ ہو (کوئی origin نہیں، یا 'null'، یا capacitor/ionic/localhost وغیرہ)
+$isMobileOrLocal = ($origin === '' || $origin === 'null' || strpos($origin, 'capacitor://') === 0 || strpos($origin, 'ionic://') === 0 || strpos($origin, 'http://localhost') === 0 || strpos($origin, 'https://localhost') === 0);
+
+if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: $origin");
-} else {
-    // موبائل ایپ کے لیے کھلا چھوڑو (Capacitor/Flutter)
+} elseif ($isMobileOrLocal) {
     header("Access-Control-Allow-Origin: *");
+} else {
+    // غیر مجاز ویب اوریجنز کو 403
+    http_response_code(403);
+    header("Content-Type: application/json; charset=UTF-8");
+    echo json_encode(['status' => 'error', 'message' => 'CORS forbidden: Origin not allowed']);
+    exit;
 }
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-API-KEY, X-USER-TOKEN");
@@ -48,14 +67,11 @@ header("X-XSS-Protection: 1; mode=block");
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
 // سیکیورٹی کی (Security Key Configuration)
-$envSecret = trim(getenv('MADRASA_API_SECRET') ?: '');
-define('API_SECRET_KEY', ($envSecret !== '') ? $envSecret : 'ASHRAF_SECRET_2026');
-
-if (API_SECRET_KEY === '') {
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'API secret is not configured.']);
-    exit;
+$envSecret = trim(function_exists('get_env_val') ? get_env_val('MADRASA_API_SECRET', 'u349923428_madrasau349923428_madrasa') : (getenv('MADRASA_API_SECRET') ?: 'u349923428_madrasau349923428_madrasa'));
+if ($envSecret === '') {
+    $envSecret = 'u349923428_madrasau349923428_madrasa';
 }
+define('API_SECRET_KEY', $envSecret);
 
 /**
  * getallheaders() کا متبادل (ہوسٹنگ اور Nginx/FastCGI کے لیے)
@@ -82,13 +98,17 @@ function b64url_decode($data) {
     return base64_decode(strtr($data, '-_', '+/'));
 }
 
-function issue_user_token($userId, $role, $permissions = []) {
+function issue_user_token($userId, $role, $permissions = [], $tenantId = null, $tenantCode = null) {
+    $tid = $tenantId !== null ? (int)$tenantId : (function_exists('get_current_tenant_id') ? get_current_tenant_id() : 1);
+    $tcode = $tenantCode !== null ? (string)$tenantCode : (function_exists('get_current_tenant_code') ? get_current_tenant_code() : 'MAIN01');
     $payload = [
         'uid' => (int)$userId,
         'role' => (string)$role,
         'permissions' => array_values($permissions ?: []),
+        'tid' => $tid,
+        'tcode' => $tcode,
         'iat' => time(),
-        'exp' => time() + (86400 * 3650) // 10 سال: موبائل ایپ میں سیشن لاگ آؤٹ تک برقرار رہے
+        'exp' => time() + (86400 * 90) // 90 دن کی میعاد
     ];
     $body = b64url_encode(json_encode($payload));
     $sig = b64url_encode(hash_hmac('sha256', $body, API_SECRET_KEY, true));
@@ -96,9 +116,49 @@ function issue_user_token($userId, $role, $permissions = []) {
 }
 
 function read_user_token() {
-    $headers = getallheaders();
+    $headers = function_exists('getallheaders') ? (getallheaders() ?: []) : [];
     $normHeaders = array_change_key_case($headers, CASE_LOWER);
-    return $normHeaders['x-user-token'] ?? ($_SERVER['HTTP_X_USER_TOKEN'] ?? ($_SERVER['REDIRECT_HTTP_X_USER_TOKEN'] ?? ''));
+    
+    // 1. Direct custom header
+    $token = $normHeaders['x-user-token'] 
+          ?? ($_SERVER['HTTP_X_USER_TOKEN'] 
+          ?? ($_SERVER['REDIRECT_HTTP_X_USER_TOKEN'] ?? ''));
+
+    // 2. Authorization Bearer header
+    if (!$token) {
+        $auth = $normHeaders['authorization'] 
+             ?? ($_SERVER['HTTP_AUTHORIZATION'] 
+             ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
+        if (strpos($auth, 'Bearer ') === 0) {
+            $bearer = trim(substr($auth, 7));
+            if (strpos($bearer, '.') !== false) {
+                $token = $bearer;
+            }
+        }
+    }
+
+    // 3. Request parameters
+    if (!$token) {
+        $token = $_REQUEST['user_token'] 
+              ?? ($_GET['user_token'] 
+              ?? ($_POST['user_token'] 
+              ?? ($_REQUEST['token'] 
+              ?? ($_GET['token'] 
+              ?? ($_POST['token'] ?? '')))));
+    }
+
+    // 4. Raw JSON payload fallback
+    if (!$token && isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $raw = file_get_contents('php://input');
+        if (!empty($raw) && ($raw[0] === '{' || $raw[0] === '[')) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded) && !empty($decoded['user_token'])) {
+                $token = (string)$decoded['user_token'];
+            }
+        }
+    }
+
+    return trim((string)$token);
 }
 
 function user_token_signature_is_valid() {
@@ -121,7 +181,25 @@ function current_user() {
 
     $token = read_user_token();
     $user = null;
-    if (!$token || strpos($token, '.') === false) return null;
+    if (!$token || strpos($token, '.') === false) {
+        if (session_status() === PHP_SESSION_NONE && isset($_COOKIE[session_name()])) {
+            session_start();
+        }
+        if (!empty($_SESSION['user_id'])) {
+            $tenantId = !empty($_SESSION['tenant_id']) ? (int)$_SESSION['tenant_id'] : (function_exists('get_current_tenant_id') ? get_current_tenant_id() : 1);
+            $tenantCode = !empty($_SESSION['tenant_code']) ? (string)$_SESSION['tenant_code'] : (function_exists('get_current_tenant_code') ? get_current_tenant_code() : 'MAIN01');
+            $user = [
+                'id' => (int)$_SESSION['user_id'],
+                'role' => strtolower((string)($_SESSION['role'] ?? 'admin')),
+                'permissions' => is_array($_SESSION['permissions'] ?? null) ? $_SESSION['permissions'] : [],
+                'system_type' => $_SESSION['system_type'] ?? 'Madrasa',
+                'tenant_id' => $tenantId,
+                'tenant_code' => $tenantCode
+            ];
+            return $user;
+        }
+        return null;
+    }
 
     [$body, $sig] = explode('.', $token, 2);
     $expected = b64url_encode(hash_hmac('sha256', $body, API_SECRET_KEY, true));
@@ -131,27 +209,75 @@ function current_user() {
     if (!is_array($payload) || empty($payload['uid']) || empty($payload['role'])) return null;
     if (($payload['exp'] ?? 0) < time()) return null;
 
+    $tenantId = !empty($payload['tid']) ? (int)$payload['tid'] : (function_exists('get_current_tenant_id') ? get_current_tenant_id() : 1);
+    $tenantCode = !empty($payload['tcode']) ? (string)$payload['tcode'] : (function_exists('get_current_tenant_code') ? get_current_tenant_code() : 'MAIN01');
+
     $resolvedUser = [
         'id' => (int)$payload['uid'],
         'role' => strtolower((string)$payload['role']),
-        'permissions' => is_array($payload['permissions'] ?? null) ? $payload['permissions'] : []
+        'permissions' => is_array($payload['permissions'] ?? null) ? $payload['permissions'] : [],
+        'tenant_id' => $tenantId,
+        'tenant_code' => $tenantCode
     ];
 
     try {
         global $pdo;
         if (isset($pdo) && $pdo instanceof PDO) {
-            if (in_array($resolvedUser['role'], ['admin', 'nazim', 'teacher'], true)) {
-                $stmt = $pdo->prepare("SELECT id, role, permissions FROM admins WHERE id = ? LIMIT 1");
-                $stmt->execute([$resolvedUser['id']]);
+            if (in_array($resolvedUser['role'], ['admin', 'nazim'], true)) {
+                $stmt = $pdo->prepare("SELECT id, role, permissions, system_type FROM admins WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1");
+                $stmt->execute([$resolvedUser['id'], $tenantId]);
                 $admin = $stmt->fetch(PDO::FETCH_ASSOC);
-                if (!$admin) return null;
-                $role = !empty($admin['role']) ? strtolower((string)$admin['role']) : 'admin';
-                if ($role !== $resolvedUser['role']) return null;
-                $permissions = json_decode($admin['permissions'] ?? '[]', true);
-                $resolvedUser['permissions'] = is_array($permissions) ? $permissions : [];
-            } elseif (in_array($resolvedUser['role'], ['student', 'parent'], true)) {
-                $stmt = $pdo->prepare("SELECT id FROM students WHERE id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
-                $stmt->execute([$resolvedUser['id']]);
+                if (!$admin) {
+                    // Check if super_admin
+                    $saStmt = $pdo->prepare("SELECT id, name, username FROM super_admins WHERE id = ? LIMIT 1");
+                    $saStmt->execute([$resolvedUser['id']]);
+                    $sa = $saStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($sa) {
+                        $resolvedUser['role'] = 'admin';
+                        $resolvedUser['system_type'] = 'Madrasa';
+                        $resolvedUser['is_super_admin'] = true;
+                    } else {
+                        return null;
+                    }
+                } else {
+                    $role = !empty($admin['role']) ? strtolower((string)$admin['role']) : 'admin';
+                    if ($role !== $resolvedUser['role']) return null;
+                    $permissions = json_decode($admin['permissions'] ?? '[]', true);
+                    $resolvedUser['permissions'] = is_array($permissions) ? $permissions : [];
+                    $resolvedUser['system_type'] = $admin['system_type'] ?? 'Madrasa';
+                }
+            } elseif ($resolvedUser['role'] === 'teacher') {
+                // Check teachers table first
+                $tStmt = $pdo->prepare("SELECT id, name, system_type FROM teachers WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+                $tStmt->execute([$resolvedUser['id'], $tenantId]);
+                $teacher = $tStmt->fetch(PDO::FETCH_ASSOC);
+                if ($teacher) {
+                    $resolvedUser['system_type'] = $teacher['system_type'] ?? 'Madrasa';
+                    $resolvedUser['permissions'] = ['manage_attendance', 'manage_hifz', 'manage_academics', 'manage_teacher_attendance'];
+                } else {
+                    // Fallback: Check if teacher is registered in admins table
+                    $stmtA = $pdo->prepare("SELECT id, role, permissions, system_type FROM admins WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1");
+                    $stmtA->execute([$resolvedUser['id'], $tenantId]);
+                    $admin = $stmtA->fetch(PDO::FETCH_ASSOC);
+                    if (!$admin) return null;
+                    $resolvedUser['permissions'] = json_decode($admin['permissions'] ?? '[]', true) ?: [];
+                    $resolvedUser['system_type'] = $admin['system_type'] ?? 'Madrasa';
+                }
+            } elseif ($resolvedUser['role'] === 'student') {
+                $stmt = $pdo->prepare("SELECT id, system_type FROM students WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+                $stmt->execute([$resolvedUser['id'], $tenantId]);
+                $student = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$student) {
+                    $stmtM = $pdo->prepare("SELECT id FROM maktab_students WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+                    $stmtM->execute([$resolvedUser['id'], $tenantId]);
+                    if (!$stmtM->fetch(PDO::FETCH_ASSOC)) return null;
+                    $resolvedUser['system_type'] = 'Masjid';
+                } else {
+                    $resolvedUser['system_type'] = $student['system_type'] ?? 'Madrasa';
+                }
+            } elseif ($resolvedUser['role'] === 'parent') {
+                $stmt = $pdo->prepare("SELECT id FROM parents WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL) AND is_active = 1 LIMIT 1");
+                $stmt->execute([$resolvedUser['id'], $tenantId]);
                 if (!$stmt->fetch(PDO::FETCH_ASSOC)) return null;
             } else {
                 return null;
@@ -180,7 +306,7 @@ function require_user($roles = null, $permission = null) {
             exit;
         }
     }
-    if ($permission !== null && $user['role'] !== 'admin' && !in_array($permission, $user['permissions'], true)) {
+    if ($permission !== null && !has_permission($user['role'], $user['permissions'], $permission, $user['system_type'] ?? null)) {
         http_response_code(403);
         echo json_encode(['status' => 'error', 'message' => 'Permission denied']);
         exit;
@@ -200,9 +326,11 @@ function sync_permission_for_table($table) {
         'students' => 'manage_students',
         'teachers' => 'manage_teachers',
         'finance_entries' => 'manage_finance',
+        'masjid_finance_entries' => 'manage_finance',
         'hifz_entries' => 'manage_hifz',
         'nazira_record' => 'manage_hifz',
         'nazira_entries' => 'manage_hifz',
+        'qaida_records' => 'manage_hifz',
         'attendance_entries' => 'manage_attendance',
         'attendance_teachers' => 'manage_teacher_attendance',
         'teacher_period_attendance' => 'manage_teacher_attendance',
@@ -211,7 +339,7 @@ function sync_permission_for_table($table) {
         'acc_chart_of_accounts' => 'manage_erp',
         'acc_vouchers' => 'manage_erp',
         'acc_ledger_entries' => 'manage_erp',
-        'acc_payroll' => 'manage_finance',
+        'acc_payroll' => 'manage_stipends',
         'acc_invoices' => 'manage_erp',
         'parent_complaints' => 'manage_requests',
         'notices' => 'manage_notices',
@@ -221,6 +349,19 @@ function sync_permission_for_table($table) {
         'departments' => 'manage_erp',
         'leave_applications' => 'manage_requests',
         'fee_submissions' => 'manage_finance',
+        'in_kind_donations' => 'manage_finance',
+        'masjid_assets' => 'manage_finance',
+        'maktab_students' => 'manage_students',
+        'maktab_teachers' => 'manage_teachers',
+        'maktab_classes' => 'manage_classes',
+        'maktab_exams' => 'manage_exams',
+        'maktab_attendance' => 'manage_attendance',
+        'maktab_nazira_record' => 'manage_hifz',
+        'maktab_hifz_record' => 'manage_hifz',
+        'maktab_qaida_records' => 'manage_hifz',
+        'maktab_academic_reports' => 'manage_academics',
+        'maktab_exam_results' => 'manage_exams',
+        'teacher_leaves' => 'manage_teacher_attendance',
     ];
     return $map[$table] ?? null;
 }
@@ -233,13 +374,15 @@ function filter_sync_payload_for_user($input, $user) {
         $permission = sync_permission_for_table($table);
         if ($table === 'complaints' && in_array($user['role'], ['admin', 'nazim', 'teacher'], true)) {
             $filtered[$table] = $rows;
-        } elseif (($table === 'attendance_teachers' || $table === 'teacher_period_attendance') && (in_array('manage_attendance', $user['permissions'], true) || in_array('manage_teacher_attendance', $user['permissions'], true))) {
+        } elseif ($table === 'teacher_leaves' && in_array($user['role'], ['admin', 'nazim', 'teacher'], true)) {
             $filtered[$table] = $rows;
-        } elseif ($table === 'academic_reports' && (in_array('manage_academics', $user['permissions'], true) || in_array('manage_hifz', $user['permissions'], true))) {
+        } elseif (($table === 'attendance_teachers' || $table === 'teacher_period_attendance') && (has_permission($user['role'], $user['permissions'], 'manage_attendance') || has_permission($user['role'], $user['permissions'], 'manage_teacher_attendance'))) {
             $filtered[$table] = $rows;
-        } elseif ($table === 'acc_payroll' && (in_array('manage_finance', $user['permissions'], true) || in_array('manage_erp', $user['permissions'], true))) {
+        } elseif (($table === 'academic_reports' || $table === 'maktab_academic_reports') && (has_permission($user['role'], $user['permissions'], 'manage_academics') || has_permission($user['role'], $user['permissions'], 'manage_hifz'))) {
             $filtered[$table] = $rows;
-        } elseif ($permission !== null && in_array($permission, $user['permissions'], true)) {
+        } elseif ($table === 'acc_payroll' && (has_permission($user['role'], $user['permissions'], 'manage_finance') || has_permission($user['role'], $user['permissions'], 'manage_erp') || has_permission($user['role'], $user['permissions'], 'manage_stipends') || has_permission($user['role'], $user['permissions'], 'manage_masjid_stipends'))) {
+            $filtered[$table] = $rows;
+        } elseif ($permission !== null && has_permission($user['role'], $user['permissions'], $permission)) {
             $filtered[$table] = $rows;
         }
     }
@@ -295,13 +438,13 @@ function sync_decode_teacher_periods($raw) {
  * یوزر کی تصدیق کا فنکشن
  */
 function authenticate() {
-    $headers = getallheaders();
+    $headers = function_exists('getallheaders') ? (getallheaders() ?: []) : [];
     $normHeaders = array_change_key_case($headers, CASE_LOWER);
     
     // Check Authorization header
-    $authHeader = $normHeaders['authorization'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+    $authHeader = $normHeaders['authorization'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
     
-    // Check X-API-KEY header
+    // Check X-API-KEY header / param
     $xApiKey = trim($normHeaders['x-api-key'] ?? 
                ($_SERVER['HTTP_X_API_KEY'] ?? 
                ($_SERVER['REDIRECT_HTTP_X_API_KEY'] ?? 
@@ -318,17 +461,32 @@ function authenticate() {
         return true;
     }
 
-    $providedKey = ($xApiKey !== '') ? substr($xApiKey, 0, 6) . '... (len=' . strlen($xApiKey) . ')' : 'NONE';
-    $expectedKey = substr(API_SECRET_KEY, 0, 6) . '... (len=' . strlen(API_SECRET_KEY) . ')';
-    $debugHeaders = json_encode(['headers' => getallheaders(), 'get' => $_GET, 'post' => $_POST]);
-    write_log("Unauthorized Access: Action=" . ($_GET['action'] ?? 'none') . " ProvidedKey=" . $providedKey . " ExpectedKey=" . $expectedKey . " Debug=" . $debugHeaders);
+    if (session_status() === PHP_SESSION_NONE && isset($_COOKIE[session_name()])) {
+        session_start();
+    }
+    if (!empty($_SESSION['user_id'])) {
+        return true;
+    }
+
+    $token = read_user_token();
+    write_log("Unauthorized Access: Action=" . ($_GET['action'] ?? 'none') . " TokenProvided=" . ($token ? 'YES (len=' . strlen($token) . ')' : 'NO') . " Method=" . ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
     http_response_code(401);
-    echo json_encode(['status' => 'error', 'message' => 'Unauthorized Access']);
+    echo json_encode(['status' => 'error', 'message' => 'Unauthorized Access: Please log in again.']);
     exit;
 }
 
 // تمام ریکوئسٹس کو چیک کریں
-$publicActions = ['get_stats', 'login_student', 'login_admin', 'login_parent', 'reset_password'];
+$publicActions = [
+    'login',
+    'login_admin',
+    'login_student',
+    'login_parent',
+    'get_stats',
+    'request_otp',
+    'verify_otp_and_reset',
+    'reset_password_otp',
+    'reset_password'
+];
 if (!in_array($action, $publicActions, true)) {
     authenticate();
 }
@@ -339,17 +497,14 @@ if (!in_array($action, $publicActions, true)) {
 function normalize_date($rawDate) {
     $rawDate = trim((string)$rawDate);
     if ($rawDate === '') return null;
-    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawDate)) return $rawDate;
-    if (strpos($rawDate, '/') !== false) {
-        $parts = explode('/', $rawDate);
-        if (count($parts) === 3) {
-            $day = str_pad((string)((int)$parts[0]), 2, '0', STR_PAD_LEFT);
-            $month = str_pad((string)((int)$parts[1]), 2, '0', STR_PAD_LEFT);
-            $year = (string)((int)$parts[2]);
-            if ($year !== '0') return $year . '-' . $month . '-' . $day;
-        }
+    if (preg_match('/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/', $rawDate, $m)) {
+        return sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
     }
-    return $rawDate;
+    if (preg_match('/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/', $rawDate, $m)) {
+        return sprintf('%04d-%02d-%02d', (int)$m[3], (int)$m[2], (int)$m[1]);
+    }
+    $ts = strtotime($rawDate);
+    return $ts ? date('Y-m-d', $ts) : $rawDate;
 }
 
 function normalize_shift($shiftRaw) {
@@ -385,12 +540,14 @@ function to_int_or_null($value) {
 function map_grade($urdu) {
     $u = trim((string)$urdu);
     $u_lower = strtolower($u);
+    if ($u === '' || $u === '-' || $u === '0') return '';
+    if (in_array($u_lower, ['absent', 'leave', 'غیر حاضر', 'رخصت', 'ناغہ', 'نہیں سنایا', 'نہیں سنائی'])) return $u;
     if (in_array($u_lower, ['excellent', 'good', 'average', 'weak'])) return ucfirst($u_lower);
     if (mb_strpos($u, 'ممتاز') !== false || mb_strpos($u, 'بہترین') !== false || mb_strpos($u, 'اعلیٰ') !== false || mb_strpos($u, 'اچھے') !== false || mb_strpos($u, 'پختہ') !== false) return 'Excellent';
     if (mb_strpos($u, 'بہتر') !== false || mb_strpos($u, 'اچھا') !== false || mb_strpos($u, 'ٹھیک') !== false) return 'Good';
     if (mb_strpos($u, 'معمولی') !== false || mb_strpos($u, 'مناسب') !== false || mb_strpos($u, 'درمیانہ') !== false || mb_strpos($u, 'رعایتی پاس') !== false) return 'Average';
     if (mb_strpos($u, 'کمزور') !== false || mb_strpos($u, 'طلب') !== false || mb_strpos($u, 'کچا') !== false || mb_strpos($u, 'ناقص') !== false) return 'Weak';
-    return 'Good';
+    return $u !== '' ? $u : '';
 }
 
 function ensure_column(PDO $pdo, $table, $column, $definition) {
@@ -417,29 +574,60 @@ function ensure_head_id(PDO $pdo, $type) {
     } catch (Exception $e) { return 1; }
 }
 
-function next_user_receipt_no(PDO $pdo, $userId, $preferredNo = null, $excludeFinanceId = null) {
+function next_user_receipt_no(PDO $pdo, $userId, $preferredNo = null, $excludeFinanceId = null, $systemType = 'Madrasa', $tenant_id = null) {
     $userId = max(1, (int)$userId);
-    $minNo = $userId * 100000;
-    $maxNo = ($userId + 1) * 100000;
+    if ($userId === 1) {
+        // تنزیل الرحمن (ایڈمن ID 1) کا رسید تسلسل سابقہ 300000 سیریز (300041 آگے) سے جاری رہے
+        $minNo = 300000;
+        $maxNo = 400000;
+    } elseif ($userId === 3) {
+        // قاری سلیم اللہ صاحب (ID 3) کے لیے 700000 بلاک تاکہ تنزیل کے نمبرز سے تصادم نہ ہو
+        $minNo = 700000;
+        $maxNo = 800000;
+    } else {
+        $minNo = $userId * 100000;
+        $maxNo = ($userId + 1) * 100000;
+    }
     $preferredNo = to_int_or_null($preferredNo);
+    $sysCond = ($systemType === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+    $tCond = $tenant_id ? "AND (tenant_id = " . (int)$tenant_id . " OR tenant_id IS NULL OR tenant_id = 0)" : "";
 
-    if ($preferredNo !== null && $preferredNo > $minNo && $preferredNo < $maxNo) {
-        $sql = "SELECT id FROM finance WHERE computer_receipt_no = ?";
+    // Always find current highest active receipt number
+    $stmt = $pdo->prepare("SELECT MAX(computer_receipt_no) FROM finance WHERE computer_receipt_no > ? AND computer_receipt_no < ? AND $sysCond $tCond AND (is_deleted = 0 OR is_deleted IS NULL)");
+    $stmt->execute([$minNo, $maxNo]);
+    $currentMax = (int)$stmt->fetchColumn();
+
+    if ($systemType === 'Masjid') {
+        try {
+            $hasMasjidFinTable = !empty($pdo->query("SHOW TABLES LIKE 'masjid_finance'")->fetchAll());
+            if ($hasMasjidFinTable) {
+                $mStmt = $pdo->prepare("SELECT MAX(computer_receipt_no) FROM masjid_finance WHERE computer_receipt_no > ? AND computer_receipt_no < ? $tCond AND (is_deleted = 0 OR is_deleted IS NULL)");
+                $mStmt->execute([$minNo, $maxNo]);
+                $mMax = (int)$mStmt->fetchColumn();
+                if ($mMax > $currentMax) {
+                    $currentMax = $mMax;
+                }
+            }
+        } catch (Exception $e) {}
+    }
+
+    $expectedNext = ($currentMax > $minNo) ? ($currentMax + 1) : ($minNo + 1);
+
+    // If a preferred number is requested by mobile app, only accept it if it does not conflict AND is not jumping ahead of expected next
+    if ($preferredNo !== null && $preferredNo > $minNo && $preferredNo < $maxNo && $preferredNo <= $expectedNext) {
+        $sql = "SELECT id FROM finance WHERE computer_receipt_no = ? AND $sysCond $tCond AND (is_deleted = 0 OR is_deleted IS NULL)";
         $args = [$preferredNo];
         if ($excludeFinanceId) {
             $sql .= " AND id <> ?";
             $args[] = (int)$excludeFinanceId;
         }
         $sql .= " LIMIT 1";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($args);
-        if (!$stmt->fetchColumn()) return $preferredNo;
+        $checkStmt = $pdo->prepare($sql);
+        $checkStmt->execute($args);
+        if (!$checkStmt->fetchColumn()) return $preferredNo;
     }
 
-    $stmt = $pdo->prepare("SELECT MAX(computer_receipt_no) FROM finance WHERE computer_receipt_no > ? AND computer_receipt_no < ?");
-    $stmt->execute([$minNo, $maxNo]);
-    $currentMax = (int)$stmt->fetchColumn();
-    $nextNo = ($currentMax > $minNo) ? ($currentMax + 1) : ($minNo + 1);
+    $nextNo = $expectedNext;
     if ($nextNo >= $maxNo) {
         throw new Exception("Receipt number quota exhausted for user " . $userId);
     }
@@ -522,7 +710,8 @@ function call_ai_provider(PDO $pdo, $prompt) {
 require_once 'db.php';
 try { $pdo->exec("SET NAMES utf8mb4"); } catch (Exception $e) {}
 
-// Auto Schema Fixer
+// Auto Schema Fixer (Legacy fallback; superseded by versioned migrations in /migrations/)
+if (isset($_GET['run_schema_fix']) && $_GET['run_schema_fix'] === '1') {
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS heads (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -697,7 +886,75 @@ try {
         relation VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
         UNIQUE KEY parent_student_unique (parent_id, student_id)
     )");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS staff_loans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        teacher_id INT NULL,
+        borrower_name VARCHAR(255) NULL,
+        phone VARCHAR(50) NULL,
+        loan_direction VARCHAR(20) DEFAULT 'Given',
+        loan_amount DECIMAL(15,2) DEFAULT 0,
+        installment_amount DECIMAL(15,2) DEFAULT 0,
+        repaid_amount DECIMAL(15,2) DEFAULT 0,
+        remaining_amount DECIMAL(15,2) DEFAULT 0,
+        date_issued DATE NULL,
+        due_date DATE NULL,
+        description TEXT NULL,
+        status VARCHAR(50) DEFAULT 'Active',
+        system_type VARCHAR(50) DEFAULT 'Madrasa',
+        is_deleted TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    try { $pdo->exec("ALTER TABLE staff_loans MODIFY teacher_id INT NULL DEFAULT NULL"); } catch (Exception $e) {}
+    ensure_column($pdo, 'staff_loans', 'loan_direction', "VARCHAR(20) DEFAULT 'Given'");
+    ensure_column($pdo, 'staff_loans', 'borrower_name', "VARCHAR(255) DEFAULT NULL");
+    ensure_column($pdo, 'staff_loans', 'phone', "VARCHAR(50) DEFAULT NULL");
+    ensure_column($pdo, 'staff_loans', 'repaid_amount', "DECIMAL(15,2) DEFAULT 0");
+    ensure_column($pdo, 'staff_loans', 'due_date', "DATE DEFAULT NULL");
+    ensure_column($pdo, 'staff_loans', 'remaining_amount', "DECIMAL(15,2) DEFAULT 0");
+    ensure_column($pdo, 'staff_loans', 'system_type', "VARCHAR(50) DEFAULT 'Madrasa'");
+    ensure_column($pdo, 'staff_loans', 'is_deleted', "TINYINT(1) DEFAULT 0");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS loan_transactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        loan_id INT NULL,
+        type VARCHAR(20) NOT NULL,
+        borrower_lender_name VARCHAR(255) NULL,
+        amount DECIMAL(15,2) DEFAULT 0,
+        date DATE NOT NULL,
+        payment_method VARCHAR(50) DEFAULT 'Cash',
+        remarks TEXT NULL,
+        system_type VARCHAR(50) DEFAULT 'Madrasa',
+        created_by INT DEFAULT 1,
+        is_deleted TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    ensure_column($pdo, 'loan_transactions', 'system_type', "VARCHAR(50) DEFAULT 'Madrasa'");
+    ensure_column($pdo, 'loan_transactions', 'created_by', "INT DEFAULT 1");
+    ensure_column($pdo, 'loan_transactions', 'is_deleted', "TINYINT(1) DEFAULT 0");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS acc_payroll (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        teacher_id INT NOT NULL,
+        month_year VARCHAR(20) NOT NULL,
+        basic_salary DECIMAL(15,2) DEFAULT 0,
+        allowances DECIMAL(15,2) DEFAULT 0,
+        deductions DECIMAL(15,2) DEFAULT 0,
+        net_salary DECIMAL(15,2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'Unpaid',
+        payment_date DATE NULL,
+        created_by INT DEFAULT 1,
+        system_type VARCHAR(50) DEFAULT 'Madrasa',
+        is_deleted TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    ensure_column($pdo, 'acc_payroll', 'system_type', "VARCHAR(50) DEFAULT 'Madrasa'");
+    ensure_column($pdo, 'acc_payroll', 'created_by', "INT DEFAULT 1");
+    ensure_column($pdo, 'acc_payroll', 'net_salary', "DECIMAL(15,2) DEFAULT 0");
+    ensure_column($pdo, 'acc_payroll', 'is_deleted', "TINYINT(1) DEFAULT 0");
+    ensure_column($pdo, 'students', 'hifz_section', "VARCHAR(50) DEFAULT 'regular'");
+    ensure_column($pdo, 'maktab_students', 'hifz_section', "VARCHAR(50) DEFAULT 'regular'");
 } catch (Exception $e) {}
+}
 
 // ===== تصویر اپلوڈ فنکشن (موبائل سے base64 ملتا ہے، سرور پر محفوظ کرتا ہے) =====
 $uploadImage = function(string $imageData, string $type) use ($pdo): string {
@@ -724,1518 +981,240 @@ $uploadImage = function(string $imageData, string $type) use ($pdo): string {
     return $filename; // مثال: "uploads/fees/1234567_abc.jpg"
 };
 
+require_once __DIR__ . '/api/controllers/AuthController.php';
+require_once __DIR__ . '/api/controllers/SyncController.php';
+require_once __DIR__ . '/api/controllers/StudentController.php';
+require_once __DIR__ . '/api/controllers/FinanceController.php';
+require_once __DIR__ . '/api/controllers/AcademicController.php';
+require_once __DIR__ . '/fcm_helper.php';
+
 $response = [];
 
 try {
     write_log("API Request Action: " . $action);
-    if ($action == 'get_stats') {
-        $total_students = $pdo->query("SELECT COUNT(*) FROM students WHERE LOWER(status) = 'active'")->fetchColumn();
-        $total_teachers = $pdo->query("SELECT COUNT(*) FROM teachers WHERE LOWER(status) = 'active'")->fetchColumn();
-        $total_hifz = $pdo->query("SELECT COUNT(*) FROM students WHERE LOWER(status) = 'active' AND (class LIKE '%حفظ%' OR class LIKE '%Hifz%')")->fetchColumn();
-        $response = ['status' => 'success', 'data' => ['total_students' => (int)$total_students, 'total_teachers' => (int)$total_teachers, 'total_hifz' => (int)$total_hifz, 'total_depts' => 8]];
+    $raw_input = file_get_contents("php://input");
+    $input = json_decode($raw_input, true) ?: $_POST;
+
+    // 🌟 Unified Single Login Endpoint (3x faster mobile login)
+    if ($action == 'login') {
+        $response = AuthController::login($pdo, $input);
+    } elseif ($action == 'get_subscription_status') {
+        $user = function_exists('current_user') ? current_user() : null;
+        $tid = $user ? (int)($user['tenant_id'] ?? 1) : (int)($_GET['tenant_id'] ?? $input['tenant_id'] ?? 1);
+
+        $subData = [
+            'status' => 'success',
+            'is_trial' => false,
+            'days_left' => 0,
+            'plan_name' => 'بنیادی پیکج (Basic)',
+            'plan_code' => 'basic',
+            'subscription_ends_at' => '',
+            'subscription_status' => 'active',
+            'max_students' => 50,
+            'max_classes' => 3,
+            'max_teachers' => 4,
+            'price_monthly' => 1500,
+            'price_yearly' => 15000,
+            'used_students' => 0,
+            'used_classes' => 0,
+            'used_teachers' => 0,
+        ];
+
+        try {
+            $sStmt = $pdo->prepare("SELECT s.*, p.name as plan_name, p.code as plan_code, p.max_students as p_max_students, p.max_classes as p_max_classes, p.max_teachers as p_max_teachers, p.price_monthly, p.price_yearly FROM subscriptions s LEFT JOIN subscription_plans p ON s.plan_id = p.id WHERE s.tenant_id = ? ORDER BY s.id DESC LIMIT 1");
+            $sStmt->execute([$tid]);
+            $sRow = $sStmt->fetch(PDO::FETCH_ASSOC);
+            if ($sRow) {
+                $subData['is_trial'] = ($sRow['status'] === 'trial');
+                $subData['subscription_status'] = $sRow['status'];
+                if (!empty($sRow['plan_name'])) $subData['plan_name'] = $sRow['plan_name'];
+                if (!empty($sRow['plan_code'])) $subData['plan_code'] = $sRow['plan_code'];
+                $subData['subscription_ends_at'] = $sRow['ends_at'] ?: '';
+                if ($sRow['ends_at']) {
+                    $subData['days_left'] = max(0, (int)ceil((strtotime($sRow['ends_at']) - time()) / 86400));
+                }
+                if (!empty($sRow['p_max_students'])) $subData['max_students'] = (int)$sRow['p_max_students'];
+                if (!empty($sRow['p_max_classes'])) $subData['max_classes'] = (int)$sRow['p_max_classes'];
+                if (!empty($sRow['p_max_teachers'])) $subData['max_teachers'] = (int)$sRow['p_max_teachers'];
+                if (!empty($sRow['price_monthly'])) $subData['price_monthly'] = (float)$sRow['price_monthly'];
+                if (!empty($sRow['price_yearly'])) $subData['price_yearly'] = (float)$sRow['price_yearly'];
+            }
+
+            $subData['used_students'] = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE (tenant_id = $tid OR tenant_id IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn();
+            $subData['used_classes'] = (int)$pdo->query("SELECT COUNT(*) FROM classes WHERE (tenant_id = $tid OR tenant_id IS NULL) AND (status = 'Active' OR status = '' OR status IS NULL)")->fetchColumn();
+            $subData['used_teachers'] = (int)$pdo->query("SELECT COUNT(*) FROM teachers WHERE (tenant_id = $tid OR tenant_id IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn();
+        } catch (Throwable $eSub) {}
+
+        $response = $subData;
+    } elseif ($action == 'get_stats') {
+        $response = StudentController::getStats($pdo);
     } elseif ($action == 'get_ai_insight') {
         require_user(['admin', 'nazim', 'teacher']);
-        $json_data = file_get_contents("php://input");
-        $input = json_decode($json_data, true) ?: $_POST;
-        $prompt = trim((string)($input['prompt'] ?? ''));
-        if ($prompt === '') {
-            $total_students = $pdo->query("SELECT COUNT(*) FROM students WHERE status='Active'")->fetchColumn();
-            $prompt = "You are an AI Management Advisor for a Quran Madrasa. Total Students: $total_students. Provide a 2-line strategic advice in URDU for the ADMIN. Just Urdu text.";
-        }
-        $ai_response = call_ai_provider($pdo, $prompt);
-        $response = ['status' => 'success', 'insight' => trim($ai_response)];
+        $response = AcademicController::getAiInsight($pdo, $input);
     } elseif ($action == 'login_student') {
-        $json_data = file_get_contents("php://input");
-        $input = json_decode($json_data, true) ?: $_POST;
-        $username = trim((string)($input['username'] ?? ''));
-        $password = trim((string)($input['password'] ?? ''));
-        
-        $stmt = $pdo->prepare("SELECT * FROM students WHERE admission_number = ? AND is_deleted = 0");
-        $stmt->execute([$username]);
-        $student = $stmt->fetch();
-        
-        if ($student && function_exists('verify_pass') && verify_pass($password, $student['password'])) {
-            $response = [
-                'status' => 'success',
-                'message' => 'Login successful',
-                'student_id' => $student['id'],
-                'role' => 'student',
-                'token' => issue_user_token($student['id'], 'student', [])
-            ];
-        } else {
-            $response = ['status' => 'error', 'message' => 'Invalid credentials'];
-        }
+        $response = AuthController::loginStudent($pdo, $input);
     } elseif ($action == 'login_parent') {
-        $json_data = file_get_contents("php://input");
-        $input = json_decode($json_data, true) ?: $_POST;
-        $phone = trim((string)($input['phone'] ?? ''));
-        $password = trim((string)($input['password'] ?? ''));
-        
-        $stmt = $pdo->prepare("SELECT * FROM parents WHERE phone = ? AND is_active = 1");
-        $stmt->execute([$phone]);
-        $parent = $stmt->fetch();
-        
-        if ($parent && function_exists('verify_pass') && verify_pass($password, $parent['password'])) {
-            $response = [
-                'status' => 'success',
-                'message' => 'Login successful',
-                'parent_id' => $parent['id'],
-                'role' => 'parent',
-                'token' => issue_user_token($parent['id'], 'parent', [])
-            ];
-        } else {
-            $response = ['status' => 'error', 'message' => 'Invalid parent credentials'];
-        }
+        $response = AuthController::loginParent($pdo, $input);
     } elseif ($action == 'login_admin') {
-        $json_data = file_get_contents("php://input");
-        $input = json_decode($json_data, true) ?: $_POST;
-        $username = trim((string)($input['username'] ?? ''));
-        $password = trim((string)($input['password'] ?? ''));
-        
-        $stmt = $pdo->prepare("SELECT * FROM admins WHERE username = ?");
-        $stmt->execute([$username]);
-        $admin = $stmt->fetch();
-        
-        // verify_pass already available from db.php included above
-        if ($admin && function_exists('verify_pass') && verify_pass($password, $admin['password'])) {
-            $role = !empty($admin['role']) ? $admin['role'] : 'admin';
-            $permissions = json_decode($admin['permissions'] ?? '[]', true) ?: [];
-            $response = [
-                'status' => 'success',
-                'message' => 'Login successful',
-                'admin_id' => $admin['id'],
-                'role' => $role,
-                'permissions' => $permissions,
-                'token' => issue_user_token($admin['id'], $role, $permissions)
-            ];
-        } else {
-            $response = ['status' => 'error', 'message' => 'Invalid admin credentials'];
-        }
+        $response = AuthController::loginAdmin($pdo, $input);
     } elseif ($action == 'sync_down') {
         $user = require_user();
-        write_log("Sync Down Started");
-        $data = [];
-        $fetch = function($originalSql) use ($pdo) {
-            try { 
-                return $pdo->query($originalSql)->fetchAll(PDO::FETCH_ASSOC); 
-            } catch (Exception $e) { 
-                return [];
-            }
-        };
-        $settings = $pdo->query("SELECT madrasa_name, phone, current_hijri_year, week_start_day, ai_provider, auto_notify_day, auto_notify_time FROM settings WHERE id=1")->fetch(PDO::FETCH_ASSOC);
-        if ($settings) $data['settings'] = $settings;
-        $allowed_classes = get_allowed_classes($pdo, 'id ASC', $user['role'] ?? null, $user['id'] ?? null);
-        $data['classes'] = array_values(array_filter($allowed_classes, function($c) { return $c['status'] == 'Active'; }));
-        $data['notices'] = $fetch("SELECT * FROM notices ORDER BY date DESC LIMIT 300");
-
-        if ($user['role'] === 'student' || $user['role'] === 'parent') {
-            $studentIds = [];
-            if ($user['role'] === 'student') {
-                $studentIds[] = (int)$user['id'];
-            } else {
-                $pid = (int)$user['id'];
-                $stStmt = $pdo->prepare("SELECT student_id FROM student_parents WHERE parent_id = ?");
-                $stStmt->execute([$pid]);
-                $studentIds = $stStmt->fetchAll(PDO::FETCH_COLUMN);
-            }
-
-            if (empty($studentIds)) {
-                $data['students'] = [];
-                $data['hifz_history'] = [];
-                $data['attendance_history'] = [];
-                $data['academic_reports'] = [];
-                $data['qaida_records'] = [];
-                $data['complaints'] = [];
-                $data['parent_complaints'] = [];
-                $data['acc_chart_of_accounts'] = $pdo->query("SELECT * FROM acc_chart_of_accounts ORDER BY code ASC LIMIT 1000")->fetchAll(PDO::FETCH_ASSOC);
-                $data['acc_vouchers'] = $pdo->query("SELECT * FROM acc_vouchers ORDER BY date DESC, id DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                $data['acc_ledger_entries'] = $pdo->query("SELECT * FROM acc_ledger_entries ORDER BY id DESC LIMIT 2000")->fetchAll(PDO::FETCH_ASSOC);
-                $data['acc_payroll'] = $pdo->query("SELECT p.* FROM acc_payroll p JOIN teachers t ON p.teacher_id = t.id WHERE (t.is_deleted = 0 OR t.is_deleted IS NULL) AND (t.status = 'Active' OR t.status IS NULL OR t.status = '') ORDER BY p.id DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                $data['acc_invoices'] = $pdo->query("SELECT * FROM acc_invoices ORDER BY id DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                $data['departments'] = $pdo->query("SELECT * FROM departments ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
-            } else {
-                $inClause = implode(',', array_map('intval', $studentIds));
-                $data['students'] = array_map('strip_sensitive_row', $pdo->query("SELECT id, name, father_name, admission_number, class, contact_number, address, status, admission_date, graduation_date, duration, photo, leaving_reason, serial_no, hijri_year, is_deleted, residence_status FROM students WHERE id IN ($inClause)")->fetchAll(PDO::FETCH_ASSOC));
-                $data['hifz_history'] = $pdo->query("SELECT * FROM daily_hifz WHERE student_id IN ($inClause) ORDER BY date DESC LIMIT 5000")->fetchAll(PDO::FETCH_ASSOC);
-                $data['nazira_history'] = $pdo->query("SELECT * FROM daily_nazira WHERE student_id IN ($inClause) ORDER BY date DESC LIMIT 5000")->fetchAll(PDO::FETCH_ASSOC);
-                $data['attendance_history'] = $pdo->query("SELECT * FROM period_attendance WHERE student_id IN ($inClause) ORDER BY date DESC LIMIT 1000")->fetchAll(PDO::FETCH_ASSOC);
-                $data['qaida_records'] = $pdo->query("SELECT * FROM qaida_records WHERE student_id IN ($inClause) ORDER BY date DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                  $data['academic_reports'] = $pdo->query("SELECT * FROM academic_reports WHERE student_id IN ($inClause) ORDER BY date DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                $data['complaints'] = $pdo->query("SELECT * FROM complaints WHERE student_id IN ($inClause) ORDER BY date DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                $data['parent_complaints'] = $pdo->query("SELECT * FROM parent_complaints WHERE student_id IN ($inClause) ORDER BY date DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                $data['leave_applications'] = $pdo->query("SELECT * FROM leave_applications WHERE student_id IN ($inClause) ORDER BY id DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                $data['fee_submissions'] = $pdo->query("SELECT * FROM fee_submissions WHERE student_id IN ($inClause) ORDER BY id DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                $data['exam_results'] = $pdo->query("SELECT * FROM exam_results WHERE student_id IN ($inClause) ORDER BY id DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-                $data['finance_history'] = $pdo->query("
-                    SELECT f.*, COALESCE(MONTH(f.date), 0) AS month, COALESCE(YEAR(f.date), 0) AS year 
-                    FROM fee_submissions f 
-                    WHERE f.student_id IN ($inClause)
-                    ORDER BY f.date DESC, f.id DESC
-                    LIMIT 500
-                ")->fetchAll(PDO::FETCH_ASSOC);
-            }
-        }
-
-        if ($user['role'] === 'admin' || $user['role'] === 'nazim' || $user['role'] === 'teacher' || in_array('manage_students', $user['permissions'], true)) {
-            if ($user['role'] === 'admin') {
-                $data['students'] = array_map('strip_sensitive_row', $fetch("SELECT id, name, father_name, admission_number, class, contact_number, address, status, admission_date, graduation_date, duration, photo, leaving_reason, serial_no, hijri_year, is_deleted, residence_status FROM students ORDER BY id DESC LIMIT 10000"));
-                $data['complaints'] = $fetch("SELECT * FROM complaints ORDER BY date DESC LIMIT 1000");
-            } else {
-                $allowed_class_names = array_column($allowed_classes, 'name');
-                if (empty($allowed_class_names)) {
-                    $data['students'] = [];
-                    $data['complaints'] = [];
-                } else {
-                    $inClasses = implode(',', array_map(function($c) use ($pdo) { return $pdo->quote($c); }, $allowed_class_names));
-                    $data['students'] = array_map('strip_sensitive_row', $fetch("SELECT id, name, father_name, admission_number, class, contact_number, address, status, admission_date, graduation_date, duration, photo, leaving_reason, serial_no, hijri_year, is_deleted, residence_status FROM students WHERE class IN ($inClasses) ORDER BY id DESC LIMIT 10000"));
-                    $studentIds = array_column($data['students'], 'id');
-                    if (!empty($studentIds)) {
-                        $inStudentIds = implode(',', array_map('intval', $studentIds));
-                        $data['complaints'] = $fetch("SELECT * FROM complaints WHERE student_id IN ($inStudentIds) ORDER BY date DESC LIMIT 1000");
-                    } else {
-                        $data['complaints'] = [];
-                    }
-                }
-            }
-        }
-        if ($user['role'] === 'admin' || $user['role'] === 'nazim' || in_array('manage_finance', $user['permissions'], true)) {
-            if ($user['role'] === 'admin' || $user['role'] === 'nazim') {
-                // Madrasa finance (system_type = 'Madrasa' OR NULL)
-                $data['finance_history'] = $fetch("SELECT * FROM finance WHERE (system_type = 'Madrasa' OR system_type IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY date DESC, id DESC LIMIT 5000");
-                // Masjid finance (system_type = 'Masjid')
-                $data['masjid_finance_history'] = $fetch("SELECT * FROM finance WHERE system_type = 'Masjid' AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY date DESC, id DESC LIMIT 5000");
-            } else {
-                $uid = intval($user['id'] ?? 0);
-                $data['finance_history'] = $fetch("SELECT * FROM finance WHERE user_id = $uid AND (system_type = 'Madrasa' OR system_type IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY date DESC, id DESC LIMIT 5000");
-                $data['masjid_finance_history'] = $fetch("SELECT * FROM finance WHERE user_id = $uid AND system_type = 'Masjid' AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY date DESC, id DESC LIMIT 5000");
-            }
-            sync_all_heads_with_chart_and_departments($pdo);
-            $data['heads'] = $fetch("SELECT * FROM heads WHERE is_deleted = 0 OR is_deleted IS NULL ORDER BY type ASC, name ASC LIMIT 1000");
-            $data['fee_submissions'] = $fetch("SELECT * FROM fee_submissions ORDER BY id DESC LIMIT 1000");
-        }
-        if ($user['role'] === 'admin' || $user['role'] === 'nazim' || $user['role'] === 'teacher' || in_array('manage_exams', $user['permissions'], true)) {
-            $data['exams'] = $fetch("SELECT * FROM exams ORDER BY exam_date DESC, id DESC LIMIT 1000");
-            if ($user['role'] === 'admin' || $user['role'] === 'nazim') {
-                $data['exam_results'] = $fetch("SELECT * FROM exam_results ORDER BY id DESC LIMIT 5000");
-            } else {
-                // Reuse allowed student IDs if already built
-                $inAllowedStdExams = $inAllowedStd ?? ($inAllowedStd2 ?? null);
-                if (!$inAllowedStdExams) {
-                    $allowed_class_names_ex = array_column($allowed_classes, 'name');
-                    if (!empty($allowed_class_names_ex)) {
-                        $inCEx = implode(',', array_map(function($c) use ($pdo) { return $pdo->quote($c); }, $allowed_class_names_ex));
-                        $exStdIds = array_column($pdo->query("SELECT id FROM students WHERE class IN ($inCEx) AND is_deleted=0")->fetchAll(PDO::FETCH_ASSOC), 'id');
-                        $inAllowedStdExams = !empty($exStdIds) ? implode(',', array_map('intval', $exStdIds)) : null;
-                    }
-                }
-                if ($inAllowedStdExams) {
-                    $data['exam_results'] = $fetch("SELECT * FROM exam_results WHERE student_id IN ($inAllowedStdExams) ORDER BY id DESC LIMIT 5000");
-                } else {
-                    $data['exam_results'] = [];
-                }
-            }
-        }
-        if ($user['role'] === 'admin' || $user['role'] === 'nazim' || in_array('manage_erp', $user['permissions'], true) || in_array('manage_finance', $user['permissions'], true)) {
-            finance_accounting_backfill($pdo);
-            $data['departments'] = $fetch("SELECT * FROM departments ORDER BY name ASC LIMIT 1000");
-            $data['acc_chart_of_accounts'] = $fetch("SELECT * FROM acc_chart_of_accounts ORDER BY code ASC LIMIT 1000");
-            $data['acc_vouchers'] = $fetch("SELECT * FROM acc_vouchers ORDER BY date DESC, id DESC LIMIT 1000");
-            $data['acc_ledger_entries'] = $fetch("SELECT * FROM acc_ledger_entries ORDER BY id DESC LIMIT 5000");
-            $data['acc_payroll'] = $fetch("SELECT p.* FROM acc_payroll p JOIN teachers t ON p.teacher_id = t.id WHERE (t.is_deleted = 0 OR t.is_deleted IS NULL) AND (t.status = 'Active' OR t.status IS NULL OR t.status = '') ORDER BY p.id DESC LIMIT 1000");
-            $data['acc_invoices'] = $fetch("SELECT * FROM acc_invoices ORDER BY id DESC LIMIT 1000");
-        }
-            if ($user['role'] === 'admin' || $user['role'] === 'nazim' || in_array('manage_requests', $user['permissions'], true)) {
-                $data['parent_complaints'] = $fetch("SELECT * FROM parent_complaints ORDER BY date DESC LIMIT 300");
-                $data['leave_applications'] = $fetch("SELECT * FROM leave_applications ORDER BY id DESC LIMIT 300");
-            }
-            if ($user['role'] === 'admin' || $user['role'] === 'nazim' || in_array('manage_finance', $user['permissions'], true)) {
-                $data['fee_submissions'] = $fetch("SELECT * FROM fee_submissions ORDER BY id DESC LIMIT 500");
-            }
-            if ($user['role'] === 'admin' || $user['role'] === 'nazim' || $user['role'] === 'teacher' || in_array('manage_hifz', $user['permissions'], true) || in_array('manage_academics', $user['permissions'], true)) {
-                if ($user['role'] === 'admin' || $user['role'] === 'nazim') {
-                    $data['hifz_history'] = $fetch("SELECT * FROM daily_hifz ORDER BY date DESC LIMIT 5000");
-                    $data['nazira_history'] = $fetch("SELECT * FROM daily_nazira ORDER BY date DESC LIMIT 5000");
-                } else {
-                    // Filter by allowed classes via student join
-                    $sync_class_names = array_column($allowed_classes, 'name');
-                    if (!empty($sync_class_names)) {
-                        $inSyncClasses = implode(',', array_map(function($c) use ($pdo) { return $pdo->quote($c); }, $sync_class_names));
-                        $allowedStudentIds = array_column($pdo->query("SELECT id FROM students WHERE class IN ($inSyncClasses) AND is_deleted=0")->fetchAll(PDO::FETCH_ASSOC), 'id');
-                    } else {
-                        $allowedStudentIds = [];
-                    }
-                    if (!empty($allowedStudentIds)) {
-                        $inAllowedStd = implode(',', array_map('intval', $allowedStudentIds));
-                        $data['hifz_history'] = $fetch("SELECT * FROM daily_hifz WHERE student_id IN ($inAllowedStd) ORDER BY date DESC LIMIT 5000");
-                        $data['nazira_history'] = $fetch("SELECT * FROM daily_nazira WHERE student_id IN ($inAllowedStd) ORDER BY date DESC LIMIT 5000");
-                    } else {
-                        $data['hifz_history'] = [];
-                        $data['nazira_history'] = [];
-                    }
-                }
-            }
-            if ($user['role'] === 'admin' || $user['role'] === 'nazim' || $user['role'] === 'teacher' || in_array('manage_attendance', $user['permissions'], true)) {
-                if ($user['role'] === 'admin' || $user['role'] === 'nazim') {
-                    $data['attendance_history'] = $fetch("SELECT * FROM attendance ORDER BY date DESC LIMIT 5000");
-                } else {
-                    if (!isset($inAllowedStd)) {
-                        $sync_class_names2 = array_column($allowed_classes, 'name');
-                        if (!empty($sync_class_names2)) {
-                            $inSyncClasses2 = implode(',', array_map(function($c) use ($pdo) { return $pdo->quote($c); }, $sync_class_names2));
-                            $allowedStudentIds2 = array_column($pdo->query("SELECT id FROM students WHERE class IN ($inSyncClasses2) AND is_deleted=0")->fetchAll(PDO::FETCH_ASSOC), 'id');
-                        } else { $allowedStudentIds2 = []; }
-                        $inAllowedStd2 = !empty($allowedStudentIds2) ? implode(',', array_map('intval', $allowedStudentIds2)) : null;
-                    } else {
-                        $inAllowedStd2 = $inAllowedStd;
-                    }
-                    if ($inAllowedStd2) {
-                        $data['attendance_history'] = $fetch("SELECT * FROM attendance WHERE student_id IN ($inAllowedStd2) ORDER BY date DESC LIMIT 5000");
-                    } else {
-                        $data['attendance_history'] = [];
-                    }
-                }
-            }
-            if ($user['role'] === 'admin' || $user['role'] === 'nazim' || in_array('manage_teachers', $user['permissions'], true) || in_array('manage_attendance', $user['permissions'], true) || in_array('manage_teacher_attendance', $user['permissions'], true)) {
-                if ($user['role'] === 'admin' || $user['role'] === 'nazim' || in_array('manage_attendance', $user['permissions'], true) || in_array('manage_teacher_attendance', $user['permissions'], true)) {
-                    $data['attendance_teachers'] = $fetch("SELECT * FROM attendance_teachers ORDER BY date DESC LIMIT 5000");
-                    $data['teacher_period_attendance'] = $fetch("SELECT tpa.*, c.name AS class_name FROM teacher_period_attendance tpa LEFT JOIN classes c ON c.id = tpa.class_id ORDER BY tpa.date DESC, tpa.id DESC LIMIT 5000");
-                }
-
-                // Fetch teachers and add assigned_periods for mobile
-                $data['teachers'] = $pdo->query("SELECT * FROM teachers")->fetchAll(PDO::FETCH_ASSOC);
-                $all_cp = $pdo->query("SELECT cp.class_id, cp.period_no, cp.teacher_id, cp.teacher_ids, c.name AS class_name, c.main_teacher_ids FROM class_periods cp JOIN classes c ON c.id = cp.class_id WHERE (c.status = 'Active' OR c.status IS NULL OR c.status = '')")->fetchAll(PDO::FETCH_ASSOC);
-                
-                $explicit_map = [];
-                foreach ($all_cp as $row) {
-                    $cid = $row['class_id'];
-                    $pno = $row['period_no'];
-                    $tids = [];
-                    if (!empty($row['teacher_ids'])) {
-                        $decoded = json_decode($row['teacher_ids'], true);
-                        if (is_array($decoded)) $tids = array_merge($tids, $decoded);
-                    }
-                    if (!empty($row['teacher_id'])) $tids[] = $row['teacher_id'];
-                    foreach ($tids as $tid) {
-                        $explicit_map[$cid][$tid][] = $pno;
-                    }
-                }
-                
-                $teacher_assigned_periods = [];
-                foreach ($all_cp as $row) {
-                    $cid = $row['class_id'];
-                    $className = $row['class_name'] ?? '';
-                    $pno = (string)$row['period_no'];
-                    $tids_for_this_period = [];
-                    if (!empty($row['teacher_ids'])) {
-                        $decoded = json_decode($row['teacher_ids'], true);
-                        if (is_array($decoded)) $tids_for_this_period = array_merge($tids_for_this_period, $decoded);
-                    }
-                    if (!empty($row['teacher_id'])) $tids_for_this_period[] = $row['teacher_id'];
-                    if (!empty($row['main_teacher_ids'])) {
-                        $m_ids = json_decode($row['main_teacher_ids'], true);
-                        if (!is_array($m_ids)) $m_ids = array_filter(explode(',', $row['main_teacher_ids']));
-                        foreach ($m_ids as $tid) {
-                            $has_explicit = isset($explicit_map[$cid][$tid]) && count($explicit_map[$cid][$tid]) > 0;
-                            if (!$has_explicit) {
-                                $tids_for_this_period[] = $tid;
-                            }
-                        }
-                    }
-                    foreach (array_unique(array_filter($tids_for_this_period)) as $tid) {
-                        if ($className !== '') $teacher_assigned_periods[$tid][$className][] = $pno;
-                    }
-                }
-                
-                foreach ($data['teachers'] as &$t) {
-                    $tid = $t['id'];
-                    $profileClasses = sync_list_values($t['assigned_classes'] ?? '');
-                    $periodMap = sync_decode_teacher_periods($t['assigned_periods'] ?? '');
-                    foreach (($teacher_assigned_periods[$tid] ?? []) as $className => $periods) {
-                        if (!isset($periodMap[$className]) || empty($periodMap[$className])) {
-                            $periodMap[$className] = $periods;
-                        }
-                    }
-                    foreach ($periodMap as $className => $periods) {
-                        $periodMap[$className] = array_values(array_unique(array_map('strval', $periods)));
-                    }
-                    $classList = array_values(array_unique(array_filter(array_merge($profileClasses, array_keys($periodMap)))));
-                    $t['assigned_classes'] = implode(',', $classList);
-                    $t['assigned_periods'] = json_encode($periodMap, JSON_UNESCAPED_UNICODE);
-                }
-            }
-            if ($user['role'] === 'admin' || $user['role'] === 'nazim' || $user['role'] === 'teacher' || in_array('manage_hifz', $user['permissions'], true) || in_array('manage_academics', $user['permissions'], true)) {
-                if ($user['role'] === 'admin' || $user['role'] === 'nazim') {
-                    $data['academic_reports'] = $fetch("SELECT * FROM academic_reports ORDER BY date DESC LIMIT 5000");
-                } else {
-                    $inAllowedStdFinal = $inAllowedStd ?? ($inAllowedStd2 ?? null);
-                    if ($inAllowedStdFinal) {
-                        $data['academic_reports'] = $fetch("SELECT * FROM academic_reports WHERE student_id IN ($inAllowedStdFinal) ORDER BY date DESC LIMIT 5000");
-                    } else {
-                        $data['academic_reports'] = [];
-                    }
-                }
-            }
-            if ($user['role'] === 'admin' || $user['role'] === 'nazim' || $user['role'] === 'teacher' || in_array('manage_hifz', $user['permissions'], true)) {
-                if ($user['role'] === 'admin' || $user['role'] === 'nazim') {
-                    $data['qaida_records'] = $fetch("SELECT * FROM qaida_records WHERE (is_deleted = 0 OR is_deleted IS NULL) ORDER BY date DESC LIMIT 5000");
-                } else {
-                    $inAllowedStdQaida = $inAllowedStd ?? ($inAllowedStd2 ?? null);
-                    if (!$inAllowedStdQaida) {
-                        $sync_class_names_q = array_column($allowed_classes, 'name');
-                        if (!empty($sync_class_names_q)) {
-                            $inSyncClassesQ = implode(',', array_map(function($c) use ($pdo) { return $pdo->quote($c); }, $sync_class_names_q));
-                            $allowedStudentIdsQ = array_column($pdo->query("SELECT id FROM students WHERE class IN ($inSyncClassesQ) AND is_deleted=0")->fetchAll(PDO::FETCH_ASSOC), 'id');
-                            $inAllowedStdQaida = !empty($allowedStudentIdsQ) ? implode(',', array_map('intval', $allowedStudentIdsQ)) : null;
-                        }
-                    }
-                    if ($inAllowedStdQaida) {
-                        $data['qaida_records'] = $fetch("SELECT * FROM qaida_records WHERE student_id IN ($inAllowedStdQaida) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY date DESC LIMIT 5000");
-                    } else {
-                        $data['qaida_records'] = [];
-                    }
-                }
-            }
-        $response = ['status' => 'success', 'data' => $data];
-        write_log("Sync Down Finished");
+        $response = SyncController::syncDown($pdo, $user);
     } elseif ($action == 'sync_up') {
         $user = require_user();
-        $json_data = file_get_contents("php://input");
-        write_log("Sync Up Data Received: " . strlen($json_data) . " bytes");
-        $input = json_decode($json_data, true) ?: [];
-        if ($user['role'] === 'student' || $user['role'] === 'parent') {
-            $allowedStudentSync = ['parent_complaints', 'leave_applications', 'fee_submissions'];
-            $parentStudentIds = [];
-            if ($user['role'] === 'parent') {
-                $stStmt = $pdo->prepare("SELECT student_id FROM student_parents WHERE parent_id = ?");
-                $stStmt->execute([$user['id']]);
-                $parentStudentIds = array_map('intval', $stStmt->fetchAll(PDO::FETCH_COLUMN));
-            }
-            $input = array_intersect_key($input, array_flip($allowedStudentSync));
-            foreach ($allowedStudentSync as $key) {
-                if (!empty($input[$key]) && is_array($input[$key])) {
-                    foreach ($input[$key] as &$item) {
-                        if (is_array($item) && $user['role'] === 'student') {
-                            $item['student_id'] = $user['id'];
-                        } elseif (is_array($item) && $user['role'] === 'parent') {
-                            $requestedStudentId = (int)($item['student_id'] ?? 0);
-                            if (!in_array($requestedStudentId, $parentStudentIds, true)) {
-                                $item = null;
-                            }
-                        }
-                    }
-                    unset($item);
-                    $input[$key] = array_values(array_filter($input[$key], 'is_array'));
-                }
-            }
-        } elseif (!in_array($user['role'], ['admin', 'nazim', 'teacher'], true)) {
-            http_response_code(403);
-            echo json_encode(['status' => 'error', 'message' => 'Forbidden']);
-            exit;
-        } else {
-            $input = filter_sync_payload_for_user($input, $user);
-        }
-        if (empty($input)) {
-            write_log("Sync Up: Decoded input is empty or invalid JSON.");
-        } else {
-            write_log("Sync Up: Keys present: " . implode(', ', array_keys($input)));
-        }
-        $syncedIds = ['finance_entries' => [], 'masjid_finance_entries' => [], 'heads' => [], 'hifz_entries' => [], 'nazira_record' => [], 'students' => [], 'teachers' => [], 'attendance_entries' => [], 'attendance_teachers' => [], 'teacher_period_attendance' => [], 'complaints' => [], 'parent_complaints' => [], 'notices' => [], 'exams' => [], 'leave_applications' => [], 'fee_submissions' => [], 'academic_reports' => [], 'qaida_records' => [], 'exam_results' => [], 'classes' => [], 'departments' => [], 'acc_chart_of_accounts' => [], 'acc_vouchers' => [], 'acc_ledger_entries' => [], 'acc_payroll' => [], 'acc_invoices' => []];
-        $serverIds = ['finance_entries' => [], 'teachers' => [], 'notices' => []];
-        $syncErrors = [];
-
-        // Permission setup for all sync_up checks
-        $userRole = $user['role'] ?? '';
-        $allowed_classes_up = get_allowed_classes($pdo, 'id ASC', $userRole, $user['id'] ?? null);
-        $allowed_class_names_up = array_column($allowed_classes_up, 'name');
-
-        // Image Upload Helper
-        $uploadImage = function($base64Data, $prefix) {
-            if (empty($base64Data) || strlen($base64Data) < 100) return $base64Data;
-            // If it's already a filename (no base64 prefix), return it
-            if (strpos($base64Data, 'data:image') === false && strpos($base64Data, ';base64,') === false) return $base64Data;
-            
-            try {
-                $parts = explode(";base64,", $base64Data);
-                if (count($parts) != 2) return $base64Data;
-                $ext = 'jpg';
-                if (strpos($parts[0], 'png') !== false) $ext = 'png';
-                $filename = $prefix . "_" . time() . "_" . rand(1000, 9999) . "." . $ext;
-                
-                $folder = "uploads/students";
-                if ($prefix === 'fee' || $prefix === 'leave' || $prefix === 'teacher') {
-                    $folder = "uploads/" . ($prefix === 'fee' ? 'fees' : ($prefix === 'leave' ? 'leaves' : 'teachers'));
-                }
-                
-                $path = __DIR__ . "/" . $folder . "/" . $filename;
-                if (!is_dir(__DIR__ . "/" . $folder)) mkdir(__DIR__ . "/" . $folder, 0777, true);
-                file_put_contents($path, base64_decode($parts[1]));
-                return $folder . "/" . $filename;
-            } catch (Exception $e) { return $base64Data; }
-        };
-
-        // Finance
-        // Note: finance_entries are processed below (in the simple finance block)
-        // Hifz
-        if (!empty($input['hifz_entries']) && is_array($input['hifz_entries'])) {
-            foreach ($input['hifz_entries'] as $h) {
-                $localId = to_int_or_null($h['id'] ?? null);
-                try {
-                    $date = normalize_date($h['date'] ?? ''); $studentId = $h['student_id'] ?? null;
-                    if (!$date || !$studentId) continue;
-
-                    // Permission check: only allow entry for allowed classes
-                    if ($userRole !== 'admin' && $userRole !== 'nazim') {
-                        $hClsStmt = $pdo->prepare("SELECT class FROM students WHERE id = ? LIMIT 1");
-                        $hClsStmt->execute([$studentId]);
-                        $hCls = $hClsStmt->fetchColumn();
-                        if ($hCls && !in_array($hCls, $allowed_class_names_up)) {
-                            write_log("Sync Up: hifz_entries - user not allowed for class $hCls");
-                            if ($localId !== null) $syncedIds['hifz_entries'][] = $localId;
-                            continue;
-                        }
-                    }
-
-                    $sabaq_status = map_grade($h['sabaq_grade'] ?? $h['sabaq_status'] ?? '');
-                    $sabqi_status = map_grade($h['sabqi_grade'] ?? $h['sabqi_status'] ?? '');
-                    $manzil_status = map_grade($h['manzil_grade'] ?? $h['manzil_status'] ?? '');
-                    $check = $pdo->prepare("SELECT * FROM daily_hifz WHERE date = ? AND student_id = ?");
-                    $check->execute([$date, $studentId]);
-                    $existingHifz = $check->fetch(PDO::FETCH_ASSOC);
-                    if (!$existingHifz) {
-                        $stmt = $pdo->prepare("INSERT INTO daily_hifz (date, student_id, sabaq_parah, sabaq_lines, sabaq_status, sabqi_parah, sabqi_amount, sabqi_status, sabqi_listener, manzil_parah, manzil_amount, manzil_status, manzil_listener, sabaq_time, sabqi_time, manzil_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        $res = $stmt->execute([$date, $studentId, $h['sabaq_para'] ?? '', $h['sabaq_lines'] ?? '', $sabaq_status, $h['sabqi_para'] ?? '', $h['sabqi_qty'] ?? '', $sabqi_status, $h['sabqi_listener'] ?? '', $h['manzil_details'] ?? '', $h['manzil_total_qty'] ?? '', $manzil_status, $h['manzil_listener'] ?? '', $h['sabaq_time'] ?? '', $h['sabqi_time'] ?? '', $h['manzil_time'] ?? '']);
-                        write_log("Hifz Insert Result: " . ($res ? "Success" : "Fail"));
-                    } else {
-                        $keepOld = function($newValue, $oldValue) {
-                            return trim((string)$newValue) !== '' ? $newValue : $oldValue;
-                        };
-                        $stmt = $pdo->prepare("UPDATE daily_hifz SET sabaq_parah=?, sabaq_lines=?, sabaq_status=?, sabqi_parah=?, sabqi_amount=?, sabqi_status=?, sabqi_listener=?, manzil_parah=?, manzil_amount=?, manzil_status=?, manzil_listener=?, sabaq_time=?, sabqi_time=?, manzil_time=? WHERE id=?");
-                        $res = $stmt->execute([
-                            $keepOld($h['sabaq_para'] ?? '', $existingHifz['sabaq_parah'] ?? ''),
-                            $keepOld($h['sabaq_lines'] ?? '', $existingHifz['sabaq_lines'] ?? ''),
-                            $keepOld($sabaq_status, $existingHifz['sabaq_status'] ?? ''),
-                            $keepOld($h['sabqi_para'] ?? '', $existingHifz['sabqi_parah'] ?? ''),
-                            $keepOld($h['sabqi_qty'] ?? '', $existingHifz['sabqi_amount'] ?? ''),
-                            $keepOld($sabqi_status, $existingHifz['sabqi_status'] ?? ''),
-                            $keepOld($h['sabqi_listener'] ?? '', $existingHifz['sabqi_listener'] ?? ''),
-                            $keepOld($h['manzil_details'] ?? '', $existingHifz['manzil_parah'] ?? ''),
-                            $keepOld($h['manzil_total_qty'] ?? '', $existingHifz['manzil_amount'] ?? ''),
-                            $keepOld($manzil_status, $existingHifz['manzil_status'] ?? ''),
-                            $keepOld($h['manzil_listener'] ?? '', $existingHifz['manzil_listener'] ?? ''),
-                            $keepOld($h['sabaq_time'] ?? '', $existingHifz['sabaq_time'] ?? ''),
-                            $keepOld($h['sabqi_time'] ?? '', $existingHifz['sabqi_time'] ?? ''),
-                            $keepOld($h['manzil_time'] ?? '', $existingHifz['manzil_time'] ?? ''),
-                            $existingHifz['id'],
-                        ]);
-                        write_log("Hifz Update Result: " . ($res ? "Success" : "Fail"));
-                    }
-                    if ($localId !== null) $syncedIds['hifz_entries'][] = $localId;
-                } catch (Exception $e) {
-                    write_log("SQL Error in Sync: " . $e->getMessage());
-                    $syncErrors[] = $e->getMessage();
-                }
-            }
-        }
-        
-        if (!empty($input['nazira_record'])) {
-            foreach ($input['nazira_record'] as $row) {
-                $localId = to_int_or_null($row['id'] ?? null);
-                $date = normalize_date($row['date'] ?? '');
-                $student_id = $row['student_id'] ?? null;
-                if (!$date || !$student_id) continue;
-
-                // Permission check for nazira
-                if ($userRole !== 'admin' && $userRole !== 'nazim') {
-                    $nClsStmt = $pdo->prepare("SELECT class FROM students WHERE id = ? LIMIT 1");
-                    $nClsStmt->execute([$student_id]);
-                    $nCls = $nClsStmt->fetchColumn();
-                    if ($nCls && !in_array($nCls, $allowed_class_names_up)) {
-                        write_log("Sync Up: nazira_record - user not allowed for class $nCls");
-                        if ($localId !== null) $syncedIds['nazira_record'][] = $localId;
-                        continue;
-                    }
-                }
-                $check = $pdo->prepare("SELECT * FROM daily_nazira WHERE date = ? AND student_id = ?");
-                $check->execute([$date, $student_id]);
-                $ex = $check->fetch(PDO::FETCH_ASSOC);
-                if (!$ex) {
-                    $stmt = $pdo->prepare("INSERT INTO daily_nazira (date, student_id, morning_sabaq, morning_qty, morning_time, morning_status, evening_sabaq, evening_qty, evening_time, evening_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([$date, $student_id, $row['morning_sabaq'], $row['morning_qty'] ?? '', $row['morning_time'] ?? '', $row['morning_status'], $row['evening_sabaq'], $row['evening_qty'] ?? '', $row['evening_time'] ?? '', $row['evening_status']]);
-                } else {
-                    $stmt = $pdo->prepare("UPDATE daily_nazira SET morning_sabaq=?, morning_qty=?, morning_time=?, morning_status=?, evening_sabaq=?, evening_qty=?, evening_time=?, evening_status=? WHERE id=?");
-                    $stmt->execute([
-                        trim($row['morning_sabaq'] ?? '') !== '' ? $row['morning_sabaq'] : $ex['morning_sabaq'],
-                        isset($row['morning_qty']) ? $row['morning_qty'] : $ex['morning_qty'],
-                        isset($row['morning_time']) ? $row['morning_time'] : $ex['morning_time'],
-                        trim($row['morning_status'] ?? '') !== '' ? $row['morning_status'] : $ex['morning_status'],
-                        trim($row['evening_sabaq'] ?? '') !== '' ? $row['evening_sabaq'] : $ex['evening_sabaq'],
-                        isset($row['evening_qty']) ? $row['evening_qty'] : $ex['evening_qty'],
-                        isset($row['evening_time']) ? $row['evening_time'] : $ex['evening_time'],
-                        trim($row['evening_status'] ?? '') !== '' ? $row['evening_status'] : $ex['evening_status'],
-                        $ex['id']
-                    ]);
-                }
-                if ($localId !== null) $syncedIds['nazira_record'][] = $localId;
-            }
-        }
-
-        // Academic Reports
-        if (!empty($input['academic_reports']) && is_array($input['academic_reports'])) {
-            foreach ($input['academic_reports'] as $ar) {
-                $localId = to_int_or_null($ar['id'] ?? null);
-                try {
-                    $date = normalize_date($ar['date'] ?? '');
-                    $studentId = $ar['student_id'] ?? null;
-                    if (!$date || !$studentId) continue;
-
-                    // Permission check using class_name from payload
-                    if ($userRole !== 'admin' && $userRole !== 'nazim') {
-                        $arCls = $ar['class_name'] ?? '';
-                        if ($arCls === '') {
-                            $arClsStmt = $pdo->prepare("SELECT class FROM students WHERE id = ? LIMIT 1");
-                            $arClsStmt->execute([$studentId]);
-                            $arCls = $arClsStmt->fetchColumn() ?: '';
-                        }
-                        if ($arCls && !in_array($arCls, $allowed_class_names_up)) {
-                            write_log("Sync Up: academic_reports - user not allowed for class $arCls");
-                            if ($localId !== null) $syncedIds['academic_reports'][] = $localId;
-                            continue;
-                        }
-                    }
-                    
-                    $check = $pdo->prepare("SELECT id FROM academic_reports WHERE student_id = ? AND date = ? AND subject = ?");
-                    $check->execute([$studentId, $date, $ar['subject'] ?? '']);
-                    $existingAr = $check->fetch(PDO::FETCH_ASSOC);
-                    if (!$existingAr) {
-                        $stmt = $pdo->prepare("INSERT INTO academic_reports (student_id, date, class_name, subject, lesson_details, grade, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                        $stmt->execute([$studentId, $date, $ar['class_name'] ?? '', $ar['subject'] ?? '', $ar['lesson_details'] ?? '', $ar['grade'] ?? '', $ar['remarks'] ?? '']);
-                    } else {
-                        $stmt = $pdo->prepare("UPDATE academic_reports SET class_name=?, lesson_details=?, grade=?, remarks=? WHERE id=?");
-                        $stmt->execute([$ar['class_name'] ?? '', $ar['lesson_details'] ?? '', $ar['grade'] ?? '', $ar['remarks'] ?? '', $existingAr['id']]);
-                    }
-                    if ($localId !== null) $syncedIds['academic_reports'][] = $localId;
-                } catch (Exception $e) {
-                    write_log("SQL Error in Sync Academic Reports: " . $e->getMessage());
-                    $syncErrors[] = $e->getMessage();
-                }
-            }
-        }
-        $userRole = $user['role'] ?? '';
-        $allowed_classes = get_allowed_classes($pdo, 'id ASC', $userRole, $user['id'] ?? null);
-        $allowed_class_names = array_column($allowed_classes, 'name');
-
-        // Students
-        if (!empty($input['students']) && is_array($input['students'])) {
-            foreach ($input['students'] as $s) {
-                $localId = to_int_or_null($s['id'] ?? null);
-                try {
-                    $name = trim((string)($s['name'] ?? '')); if ($name === '') continue;
-                    $sClass = $s['class_name'] ?? $s['class'] ?? '';
-                    if ($userRole !== 'admin' && !in_array($sClass, $allowed_class_names)) {
-                        write_log("Sync Up: User not allowed to update/insert student for class $sClass.");
-                        if ($localId !== null) $syncedIds['students'][] = $localId;
-                        continue;
-                    }
-                    $admissionNo = trim((string)($s['admission_number'] ?? ($s['roll_number'] ?? '')));
-                    $stmtCheck = $pdo->prepare("SELECT id, is_deleted FROM students WHERE admission_number = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
-                    $stmtCheck->execute([$admissionNo]);
-                    $row = $admissionNo ? $stmtCheck->fetch() : null;
-                    if ($row) {
-                        if ($row['is_deleted'] == 1) {
-                            write_log("Sync Up: Student $admissionNo is deleted on server. Skipping.");
-                            if ($localId !== null) $syncedIds['students'][] = $localId;
-                            continue;
-                        }
-                        $existingId = $row['id'];
-                        $rawPass = $s['password'] ?? '';
-                        $finalPass = (strlen($rawPass) > 0 && strlen($rawPass) < 20) ? hash_pass($rawPass) : $rawPass;
-                        $newStatus = trim((string)($s['status'] ?? 'Active'));
-                        $photoPath = $uploadImage($s['photo'] ?? '', 'std');
-                        $residence_status = $s['residence_status'] ?? '';
-                        
-                        $stmt = $pdo->prepare("UPDATE students SET name=?, father_name=?, admission_number=?, class=?, contact_number=?, address=?, password=COALESCE(NULLIF(?, ''), password), status=?, admission_date=?, graduation_date=?, duration=?, leaving_reason=?, photo=COALESCE(NULLIF(?, ''), photo), residence_status=? WHERE id=?");
-                        $res = $stmt->execute([$name, $s['father_name'] ?? '', $admissionNo, $s['class_name'] ?? $s['class'] ?? '', $s['contact_number'] ?? $s['mobile_no'] ?? '', $s['address'] ?? '', $finalPass, $newStatus, normalize_date($s['admission_date'] ?? ''), normalize_date($s['graduation_date'] ?? ''), $s['duration'] ?? '', $s['leaving_reason'] ?? '', $photoPath, $residence_status, $existingId]);
-                        write_log("Student Update Result ($admissionNo / Status: $newStatus): " . ($res ? "Success" : "Fail"));
-                    } else {
-                        $rawPass = $s['password'] ?? '';
-                        $finalPass = (strlen($rawPass) > 0 && strlen($rawPass) < 20) ? hash_pass($rawPass) : $rawPass;
-                        $photoPath = $uploadImage($s['photo'] ?? '', 'std');
-                        $residence_status = $s['residence_status'] ?? '';
-                        
-                        $stmt = $pdo->prepare("INSERT INTO students (name, father_name, admission_number, class, contact_number, address, password, status, admission_date, graduation_date, duration, photo, residence_status) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?)");
-                        $res = $stmt->execute([$name, $s['father_name'] ?? '', $admissionNo, $s['class_name'] ?? $s['class'] ?? '', $s['contact_number'] ?? $s['mobile_no'] ?? '', $s['address'] ?? '', $finalPass, normalize_date($s['admission_date'] ?? ''), normalize_date($s['graduation_date'] ?? ''), $s['duration'] ?? '', $photoPath, $residence_status]);
-                        $newId = $pdo->lastInsertId();
-                        write_log("Student Insert Result ($admissionNo): " . ($res ? "Success (New ID: $newId)" : "Fail"));
-                    }
-                    if ($localId !== null) $syncedIds['students'][] = $localId;
-                } catch (Exception $e) {
-                    write_log("SQL Error in Student Sync: " . $e->getMessage());
-                    $syncErrors[] = $e->getMessage();
-                }
-            }
-        }
-        // Teachers
-        if (!empty($input['teachers']) && is_array($input['teachers'])) {
-            foreach ($input['teachers'] as $t) {
-                $localId = to_int_or_null($t['id'] ?? null);
-                try {
-                    $name = trim((string)($t['name'] ?? '')); if ($name === '') continue;
-                    $cnic = trim((string)($t['cnic'] ?? ''));
-                    $savedTeacherId = null;
-                    
-                    $teacherData = null;
-                    
-                    if ($localId) {
-                        $row = $pdo->prepare("SELECT id, name, father_name, cnic, is_deleted FROM teachers WHERE id = ? LIMIT 1");
-                        $row->execute([$localId]);
-                        $teacherData = $row->fetch();
-                        if ($teacherData) {
-                            $sameCnic = $cnic !== '' && trim((string)($teacherData['cnic'] ?? '')) === $cnic;
-                            $sameName = trim((string)($teacherData['name'] ?? '')) === $name
-                                && trim((string)($teacherData['father_name'] ?? '')) === trim((string)($t['father_name'] ?? ''));
-                            if (!$sameCnic && !$sameName) {
-                                $teacherData = null;
-                            }
-                        }
-                    }
-                    
-                    // صرف تب میچ کریں اگر CNIC موجود ہو
-                    if (!$teacherData && !empty($cnic)) {
-                        $row = $pdo->prepare("SELECT id, name, father_name, cnic, is_deleted FROM teachers WHERE cnic = ? LIMIT 1");
-                        $row->execute([$cnic]);
-                        $teacherData = $row->fetch();
-                    }
-                    
-                    // اگر CNIC سے نہ ملے تو نام اور ولدیت سے چیک کریں (لیکن یہ بہت واضح ہونا چاہیے)
-                    if (!$teacherData && !empty($name)) {
-                        $row = $pdo->prepare("SELECT id, name, father_name, cnic, is_deleted FROM teachers WHERE name = ? AND father_name = ? AND (cnic = '' OR cnic IS NULL) LIMIT 1");
-                        $row->execute([$name, $t['father_name'] ?? '']);
-                        $teacherData = $row->fetch();
-                    }
-
-                    if ((int)($t['is_deleted'] ?? 0) === 1) {
-                        if ($teacherData) {
-                            $pdo->prepare("UPDATE teachers SET is_deleted = 1 WHERE id = ?")->execute([$teacherData['id']]);
-                            $savedTeacherId = (int)$teacherData['id'];
-                        }
-                        if ($localId !== null) {
-                            $syncedIds['teachers'][] = $localId;
-                            if ($savedTeacherId) $serverIds['teachers'][(string)$localId] = $savedTeacherId;
-                        }
-                        continue;
-                    }
-
-                    if ($teacherData) {
-                        if ($teacherData['is_deleted'] == 1) {
-                            if ($localId !== null) {
-                                $syncedIds['teachers'][] = $localId;
-                                $serverIds['teachers'][(string)$localId] = (int)$teacherData['id'];
-                            }
-                            continue;
-                        }
-                        $existingId = $teacherData['id'];
-                        $photoPath = $uploadImage($t['photo'] ?? '', 'teacher');
-                          $stmt = $pdo->prepare("UPDATE teachers SET name=?, father_name=?, phone=?, cnic=?, qualification=?, salary=?, house_rent=?, medical_allowance=?, travel_allowance=?, daily_deduction_rate=?, joining_date=?, status=?, address=?, photo=COALESCE(NULLIF(?, ''), photo), assigned_classes=?, assigned_periods=?, is_deleted=0 WHERE id=?");
-                          $stmt->execute([$name, $t['father_name'] ?? '', $t['phone'] ?? '', $cnic, $t['qualification'] ?? '', to_int_or_null($t['salary'] ?? null), to_int_or_null($t['house_rent'] ?? null), to_int_or_null($t['medical_allowance'] ?? null), to_int_or_null($t['travel_allowance'] ?? null), to_int_or_null($t['daily_deduction_rate'] ?? null), normalize_date($t['joining_date'] ?? ''), $t['status'] ?? 'Active', $t['address'] ?? '', $photoPath, $t['assigned_classes'] ?? '', $t['assigned_periods'] ?? '', $existingId]);
-                          $savedTeacherId = (int)$existingId;
-                    } else {
-                        $photoPath = $uploadImage($t['photo'] ?? '', 'teacher');
-                          $stmt = $pdo->prepare("INSERT INTO teachers (name, father_name, phone, cnic, qualification, salary, house_rent, medical_allowance, travel_allowance, daily_deduction_rate, joining_date, status, address, photo, assigned_classes, assigned_periods, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)");
-                          $stmt->execute([$name, $t['father_name'] ?? '', $t['phone'] ?? '', $cnic, $t['qualification'] ?? '', to_int_or_null($t['salary'] ?? null), to_int_or_null($t['house_rent'] ?? null), to_int_or_null($t['medical_allowance'] ?? null), to_int_or_null($t['travel_allowance'] ?? null), to_int_or_null($t['daily_deduction_rate'] ?? null), normalize_date($t['joining_date'] ?? ''), $t['status'] ?? 'Active', $t['address'] ?? '', $photoPath, $t['assigned_classes'] ?? '', $t['assigned_periods'] ?? '']);
-                          $savedTeacherId = (int)$pdo->lastInsertId();
-                    }
-                    if ($localId !== null) {
-                        $syncedIds['teachers'][] = $localId;
-                        if ($savedTeacherId) $serverIds['teachers'][(string)$localId] = $savedTeacherId;
-                    }
-                } catch (Exception $e) {
-                    write_log("SQL Error in Teacher Sync: " . $e->getMessage());
-                    $syncErrors[] = $e->getMessage();
-                }
-            }
-        }
-        
-        // Attendance Teachers
-        if (!empty($input['attendance_teachers']) && is_array($input['attendance_teachers'])) {
-            foreach ($input['attendance_teachers'] as $a) {
-                $localId = to_int_or_null($a['id'] ?? null);
-                try {
-                    $teacher_id = to_int_or_null($a['teacher_id'] ?? null);
-                    if (!$teacher_id) continue;
-                    
-                    $date = normalize_date($a['date'] ?? '');
-                    if (empty($date)) continue;
-
-                    $status = $a['status'] ?? 'P';
-                    $late = to_int_or_null($a['late_minutes'] ?? null) ?: 0;
-                    $remarks = $a['remarks'] ?? '';
-
-                    $stmt = $pdo->prepare("INSERT INTO attendance_teachers (teacher_id, date, status, late_minutes, remarks) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), late_minutes = VALUES(late_minutes), remarks = VALUES(remarks)");
-                    $stmt->execute([$teacher_id, $date, $status, $late, $remarks]);
-                    if ($localId !== null) $syncedIds['attendance_teachers'][] = $localId;
-                } catch (Exception $e) {
-                    write_log("SQL Error in Attendance Teachers Sync: " . $e->getMessage());
-                    $syncErrors[] = $e->getMessage();
-                }
-            }
-        }
-        
-        // Attendance
-        if (!empty($input['attendance_entries']) && is_array($input['attendance_entries'])) {
-            foreach ($input['attendance_entries'] as $a) {
-                $localId = to_int_or_null($a['id'] ?? null);
-                try {
-                    $date = normalize_date($a['date'] ?? ''); $studentId = $a['student_id'] ?? null;
-                    if (!$date || !$studentId) continue;
-
-                    // Permission check
-                    if ($userRole !== 'admin' && $userRole !== 'nazim') {
-                        $aClsStmt = $pdo->prepare("SELECT class FROM students WHERE id = ? LIMIT 1");
-                        $aClsStmt->execute([$studentId]);
-                        $aCls = $aClsStmt->fetchColumn();
-                        if ($aCls && !in_array($aCls, $allowed_class_names_up)) {
-                            write_log("Sync Up: attendance_entries - user not allowed for class $aCls");
-                            if ($localId !== null) $syncedIds['attendance_entries'][] = $localId;
-                            continue;
-                        }
-                    }
-
-                    $shift = normalize_shift($a['shift'] ?? '1');
-                    $statusCol = "status_{$shift}"; $lateCol = "late_{$shift}";
-                    $check = $pdo->prepare("SELECT id FROM attendance WHERE date = ? AND student_id = ?");
-                    $check->execute([$date, $studentId]);
-                    if ($check->rowCount() > 0) {
-                        $pdo->prepare("UPDATE attendance SET $statusCol = ?, $lateCol = ? WHERE id = ?")->execute([normalize_status_code($a['status'] ?? 'P'), (int)($a['delay_minutes'] ?? 0), $check->fetchColumn()]);
-                    } else {
-                        $pdo->prepare("INSERT INTO attendance (date, student_id, $statusCol, $lateCol) VALUES (?, ?, ?, ?)")->execute([$date, $studentId, normalize_status_code($a['status'] ?? 'P'), (int)($a['delay_minutes'] ?? 0)]);
-                    }
-                    
-                    // Auto SMS Hook for Absent/Leave
-                    $statusCode = normalize_status_code($a['status'] ?? 'P');
-                    if ($statusCode === 'A' || $statusCode === 'L') { // A = Absent, L = Leave
-                        $st = $pdo->prepare("SELECT name, contact_number FROM students WHERE id = ?");
-                        $st->execute([$studentId]);
-                        $s_data = $st->fetch();
-                        if ($s_data && !empty($s_data['contact_number'])) {
-                            $statusText = ($statusCode === 'A') ? "غیر حاضر" : "چھٹی پر";
-                            $msg = "اطلاع: محترم والدین، آپ کا بچہ " . $s_data['name'] . " آج مدرسہ سے " . $statusText . " ہے۔";
-                            try {
-                                require_once __DIR__ . '/send_sms.php';
-                                send_sms($s_data['contact_number'], $msg);
-                            } catch (Throwable $e) {
-                                write_log("Attendance SMS Error: " . $e->getMessage());
-                            }
-                        }
-                    }
-
-                    if ($localId !== null) $syncedIds['attendance_entries'][] = $localId;
-                } catch (Exception $e) {
-                    write_log("SQL Error in Sync (Attendance): " . $e->getMessage());
-                    $syncErrors[] = $e->getMessage();
-                }
-            }
-        }
-        // Finance
-        if (!empty($input['finance_entries']) && is_array($input['finance_entries'])) {
-            foreach ($input['finance_entries'] as $f) {
-                $localId = to_int_or_null($f['id'] ?? null);
-                $serverId = to_int_or_null($f['server_id'] ?? null);
-                try {
-                    if ((int)($f['is_deleted'] ?? 0) === 1) {
-                        $deletedServerId = $serverId;
-                        if ($serverId) {
-                            $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ?")->execute([$serverId]);
-                            finance_accounting_delete_voucher($pdo, $serverId);
-                        } else {
-                            $findDeleted = $pdo->prepare("SELECT id FROM finance WHERE date = ? AND type = ? AND amount = ? AND description = ? LIMIT 1");
-                            $findDeleted->execute([normalize_date($f['date'] ?? ''), trim($f['type'] ?? ''), (float)($f['amount'] ?? 0), $f['description'] ?? '']);
-                            $deletedServerId = to_int_or_null($findDeleted->fetchColumn());
-                            if ($deletedServerId) {
-                                $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ?")->execute([$deletedServerId]);
-                                finance_accounting_delete_voucher($pdo, $deletedServerId);
-                            }
-                        }
-                        if ($localId !== null) {
-                            $syncedIds['finance_entries'][] = $localId;
-                            if ($deletedServerId) $serverIds['finance_entries'][(string)$localId] = (int)$deletedServerId;
-                        }
-                        continue;
-                    }
-                    $date = normalize_date($f['date'] ?? '');
-                    $type = trim($f['type'] ?? '');
-                    $amount = (float)($f['amount'] ?? 0);
-                    $desc = $f['description'] ?? '';
-                    $uid = to_int_or_null($f['user_id'] ?? null) ?: 1;
-                    $headId = to_int_or_null($f['head_id'] ?? null);
-                    if (!$headId) {
-                        $headId = ensure_head_id($pdo, strtolower($type) === 'expense' ? 'expense' : 'income');
-                    }
-                    if ($serverId) {
-                        $check = $pdo->prepare("SELECT id FROM finance WHERE id = ? LIMIT 1");
-                        $check->execute([$serverId]);
-                        $existingId = $check->fetchColumn();
-                    } else {
-                        $existingId = null;
-                    }
-                    $userName = trim($f['user_name'] ?? 'Admin');
-                    
-                    $computer_receipt_no = to_int_or_null($f['computer_receipt_no'] ?? null);
-                    $savedId = null;
-                    if ($existingId) {
-                        $savedId = (int)$existingId;
-                        if ($type === 'Income') {
-                            $existingNo = $pdo->prepare("SELECT computer_receipt_no FROM finance WHERE id = ?");
-                            $existingNo->execute([$existingId]);
-                            $computer_receipt_no = next_user_receipt_no($pdo, $uid, $computer_receipt_no ?: $existingNo->fetchColumn(), $existingId);
-                        } else {
-                            $computer_receipt_no = null;
-                        }
-                        $pdo->prepare("UPDATE finance SET date = ?, type = ?, amount = ?, description = ?, head_id = ?, manual_receipt_no = ?, donor_name = ?, donor_address = ?, computer_receipt_no = ?, user_id = ?, user_name = ?, is_deleted = 0 WHERE id = ?")
-                            ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName, $existingId]);
-                        finance_accounting_post($pdo, $savedId);
-                    } else {
-                        $computer_receipt_no = ($type === 'Income') ? next_user_receipt_no($pdo, $uid, $computer_receipt_no) : null;
-                        $pdo->prepare("INSERT INTO finance (date, type, amount, description, head_id, manual_receipt_no, donor_name, donor_address, computer_receipt_no, user_id, user_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                            ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName]);
-                        $savedId = (int)$pdo->lastInsertId();
-                        finance_accounting_post($pdo, $savedId);
-                    }
-                    if ($localId !== null) {
-                        $syncedIds['finance_entries'][] = $localId;
-                        if ($savedId) $serverIds['finance_entries'][(string)$localId] = (int)$savedId;
-                    }
-                } catch (Exception $e) {
-                    write_log("SQL Error in Sync (Finance): " . $e->getMessage());
-                    $syncErrors[] = $e->getMessage();
-                }
-            }
-        }
-        // Masjid Finance Entries
-        if (!empty($input['masjid_finance_entries']) && is_array($input['masjid_finance_entries'])) {
-            foreach ($input['masjid_finance_entries'] as $f) {
-                $localId = to_int_or_null($f['id'] ?? null);
-                $serverId = to_int_or_null($f['server_id'] ?? null);
-                try {
-                    if ((int)($f['is_deleted'] ?? 0) === 1) {
-                        $deletedServerId = $serverId;
-                        if ($serverId) {
-                            $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ? AND system_type = 'Masjid'")->execute([$serverId]);
-                        } else {
-                            $findDeleted = $pdo->prepare("SELECT id FROM finance WHERE date = ? AND type = ? AND amount = ? AND description = ? AND system_type = 'Masjid' LIMIT 1");
-                            $findDeleted->execute([normalize_date($f['date'] ?? ''), trim($f['type'] ?? ''), (float)($f['amount'] ?? 0), $f['description'] ?? '']);
-                            $deletedServerId = to_int_or_null($findDeleted->fetchColumn());
-                            if ($deletedServerId) {
-                                $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ?")->execute([$deletedServerId]);
-                            }
-                        }
-                        if ($localId !== null) {
-                            $syncedIds['masjid_finance_entries'][] = $localId;
-                            if ($deletedServerId) $serverIds['finance_entries'][(string)$localId] = (int)$deletedServerId;
-                        }
-                        continue;
-                    }
-                    $date = normalize_date($f['date'] ?? '');
-                    $type = trim($f['type'] ?? '');
-                    $amount = (float)($f['amount'] ?? 0);
-                    $desc = $f['description'] ?? '';
-                    $uid = to_int_or_null($f['user_id'] ?? null) ?: 1;
-                    $headId = to_int_or_null($f['head_id'] ?? null);
-                    if (!$headId) {
-                        $headId = ensure_head_id($pdo, strtolower($type) === 'expense' ? 'expense' : 'income');
-                    }
-                    $computer_receipt_no = to_int_or_null($f['computer_receipt_no'] ?? null);
-                    $userName = trim($f['user_name'] ?? 'Admin');
-                    $savedId = null;
-                    if ($serverId) {
-                        $check = $pdo->prepare("SELECT id FROM finance WHERE id = ? AND system_type = 'Masjid' LIMIT 1");
-                        $check->execute([$serverId]);
-                        $existingId = $check->fetchColumn();
-                    } else {
-                        $existingId = null;
-                    }
-                    if ($existingId) {
-                        $savedId = (int)$existingId;
-                        $pdo->prepare("UPDATE finance SET date = ?, type = ?, amount = ?, description = ?, head_id = ?, manual_receipt_no = ?, donor_name = ?, donor_address = ?, computer_receipt_no = ?, user_id = ?, user_name = ?, system_type = 'Masjid', is_deleted = 0 WHERE id = ?")
-                            ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName, $existingId]);
-                    } else {
-                        $pdo->prepare("INSERT INTO finance (date, type, amount, description, head_id, manual_receipt_no, donor_name, donor_address, computer_receipt_no, user_id, user_name, system_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Masjid')")
-                            ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName]);
-                        $savedId = (int)$pdo->lastInsertId();
-                    }
-                    if ($localId !== null) {
-                        $syncedIds['masjid_finance_entries'][] = $localId;
-                        if ($savedId) $serverIds['finance_entries'][(string)$localId] = (int)$savedId;
-                    }
-                } catch (Exception $e) {
-                    write_log("SQL Error in Sync (Masjid Finance): " . $e->getMessage());
-                    $syncErrors[] = $e->getMessage();
-                }
-            }
-        }
-        // Others
-        foreach (['teacher_period_attendance', 'heads', 'complaints', 'parent_complaints', 'notices', 'leave_applications', 'fee_submissions', 'exams', 'qaida_records', 'exam_results', 'classes', 'departments', 'acc_chart_of_accounts', 'acc_vouchers', 'acc_ledger_entries', 'acc_payroll', 'acc_invoices'] as $key) {
-            if (!empty($input[$key]) && is_array($input[$key])) {
-                foreach ($input[$key] as $item) {
-                    $localId = to_int_or_null($item['id'] ?? null);
-                    try {
-
-                        if ($key == 'teacher_period_attendance') {
-                            $teacherId = to_int_or_null($item['teacher_id'] ?? null);
-                            $dateVal = normalize_date($item['date'] ?? '');
-                            $periodNo = to_int_or_null($item['period_no'] ?? null);
-                            if (!$teacherId || !$dateVal || !$periodNo) continue;
-                            $classId = to_int_or_null($item['class_id'] ?? null);
-                            $className = trim((string)($item['class_name'] ?? ''));
-                            if (!$classId && $className !== '') {
-                                $classStmt = $pdo->prepare("SELECT id FROM classes WHERE name = ? LIMIT 1");
-                                $classStmt->execute([$className]);
-                                $classId = to_int_or_null($classStmt->fetchColumn());
-                            }
-                            if (!$classId) continue;
-                            $status = $item['status'] ?? 'P';
-                            $late = to_int_or_null($item['late_minutes'] ?? null) ?: 0;
-                            $remarks = $item['remarks'] ?? '';
-                            $check = $pdo->prepare("SELECT id FROM teacher_period_attendance WHERE teacher_id = ? AND class_id = ? AND date = ? AND period_no = ? LIMIT 1");
-                            $check->execute([$teacherId, $classId, $dateVal, $periodNo]);
-                            $existing = $check->fetchColumn();
-                            if ($existing) {
-                                $pdo->prepare("UPDATE teacher_period_attendance SET status = ?, late_minutes = ?, remarks = ? WHERE id = ?")
-                                    ->execute([$status, $late, $remarks, $existing]);
-                            } else {
-                                $pdo->prepare("INSERT INTO teacher_period_attendance (teacher_id, class_id, date, period_no, status, late_minutes, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                                    ->execute([$teacherId, $classId, $dateVal, $periodNo, $status, $late, $remarks]);
-                            }
-                            // Keep daily teacher attendance summary in sync for legacy pages/payroll.
-                            $daily = $pdo->prepare("SELECT id FROM attendance_teachers WHERE teacher_id = ? AND date = ? LIMIT 1");
-                            $daily->execute([$teacherId, $dateVal]);
-                            $dailyId = $daily->fetchColumn();
-                            if ($dailyId) {
-                                $pdo->prepare("UPDATE attendance_teachers SET status = ?, late_minutes = GREATEST(COALESCE(late_minutes,0), ?), remarks = ? WHERE id = ?")
-                                    ->execute([$status, $late, $remarks, $dailyId]);
-                            } else {
-                                $pdo->prepare("INSERT INTO attendance_teachers (teacher_id, date, status, late_minutes, remarks) VALUES (?, ?, ?, ?, ?)")
-                                    ->execute([$teacherId, $dateVal, $status, $late, $remarks]);
-                            }
-                            if ($localId !== null) $syncedIds['teacher_period_attendance'][] = $localId;
-                            continue;
-                        }
-
-                        if ($key == 'heads') {
-                            $name = trim($item['name'] ?? '');
-                            $type = trim($item['type'] ?? '');
-                            $serverId = to_int_or_null($item['id'] ?? null);
-                            $isDeleted = (int)($item['is_deleted'] ?? 0);
-                            if ($name === '') {
-                                continue;
-                            }
-                            if ($serverId) {
-                                $check = $pdo->prepare("SELECT id FROM heads WHERE id = ? LIMIT 1");
-                                $check->execute([$serverId]);
-                            } else {
-                                $check = $pdo->prepare("SELECT id FROM heads WHERE name = ? AND type = ? LIMIT 1");
-                                $check->execute([$name, $type]);
-                            }
-                            $existingId = $check->fetchColumn();
-                            if ($isDeleted === 1) {
-                                if ($existingId) {
-                                    try { $pdo->prepare("UPDATE heads SET is_deleted = 1 WHERE id = ?")->execute([$existingId]); }
-                                    catch (Exception $e) { $pdo->prepare("DELETE FROM heads WHERE id = ?")->execute([$existingId]); }
-                                }
-                                if ($localId !== null) $syncedIds['heads'][] = $localId;
-                                continue;
-                            }
-                            if ($existingId) {
-                                try { $pdo->prepare("UPDATE heads SET name = ?, type = ?, is_deleted = 0 WHERE id = ?")->execute([$name, $type, $existingId]); }
-                                catch (Exception $e) { $pdo->prepare("UPDATE heads SET name = ?, type = ? WHERE id = ?")->execute([$name, $type, $existingId]); }
-                            } else {
-                                $pdo->prepare("INSERT INTO heads (name, type) VALUES (?, ?)")->execute([$name, $type]);
-                            }
-                            if ($localId !== null) $syncedIds['heads'][] = $localId;
-                            continue;
-                        }
-
-                        if ($key == 'departments') {
-                            $name = trim($item['name'] ?? '');
-                            if ($name === '') {
-                                continue;
-                            }
-                            $check = $pdo->prepare("SELECT id FROM departments WHERE name = ? LIMIT 1");
-                            $check->execute([$name]);
-                            if ($check->rowCount() > 0) {
-                                $existing = $check->fetch();
-                                $pdo->prepare("UPDATE departments SET description = ?, status = ? WHERE id = ?")
-                                    ->execute([$item['description'] ?? '', $item['status'] ?? 'Active', $existing['id']]);
-                            } else {
-                                $pdo->prepare("INSERT INTO departments (name, description, status) VALUES (?, ?, ?)")
-                                    ->execute([$name, $item['description'] ?? '', $item['status'] ?? 'Active']);
-                            }
-                            if ($localId !== null) $syncedIds['departments'][] = $localId;
-                            continue;
-                        }
-
-                        if ($key == 'acc_chart_of_accounts') {
-                            $code = trim($item['code'] ?? '');
-                            $name = trim($item['name'] ?? '');
-                            $serverId = to_int_or_null($item['id'] ?? null);
-                            $isDeleted = (int)($item['is_deleted'] ?? 0);
-                            
-                            $existing = false;
-                            if ($serverId) {
-                                $check = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE id = ? LIMIT 1");
-                                $check->execute([$serverId]);
-                                $existing = $check->fetch();
-                            } elseif ($code !== '') {
-                                $check = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE code = ? LIMIT 1");
-                                $check->execute([$code]);
-                                $existing = $check->fetch();
-                            }
-                            
-                            if ($isDeleted === 1) {
-                                if ($existing) {
-                                    $pdo->prepare("UPDATE acc_chart_of_accounts SET is_deleted = 1 WHERE id = ?")
-                                        ->execute([$existing['id']]);
-                                }
-                                if ($localId !== null) $syncedIds['acc_chart_of_accounts'][] = $localId;
-                                continue;
-                            }
-                            
-                            if ($name === '') {
-                                continue;
-                            }
-                            
-                            if ($existing) {
-                                $pdo->prepare("UPDATE acc_chart_of_accounts SET name = ?, type = ?, code = ?, is_deleted = 0 WHERE id = ?")
-                                    ->execute([$name, $item['type'] ?? '', $code, $existing['id']]);
-                            } else {
-                                if ($code === '') $code = 'ACC-' . time() . rand(10,99);
-                                $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted) VALUES (?, ?, ?, 0)")
-                                    ->execute([$code, $name, $item['type'] ?? '']);
-                            }
-                            if ($localId !== null) $syncedIds['acc_chart_of_accounts'][] = $localId;
-                            continue;
-                        }
-
-                        if ($key == 'acc_vouchers') {
-                            $voucherNo = trim($item['voucher_no'] ?? '');
-                            if ($voucherNo === '') {
-                                continue;
-                            }
-                            $check = $pdo->prepare("SELECT id FROM acc_vouchers WHERE voucher_no = ? LIMIT 1");
-                            $check->execute([$voucherNo]);
-                            $item_is_deleted = (int)($item['is_deleted'] ?? 0);
-                            if ($item_is_deleted == 1) {
-                                if ($check->rowCount() > 0) {
-                                    $existing = $check->fetch();
-                                    $pdo->prepare("DELETE FROM acc_vouchers WHERE id = ?")->execute([$existing['id']]);
-                                }
-                                if ($localId !== null) $syncedIds['acc_vouchers'][] = $localId;
-                                continue;
-                            }
-                            
-                            $payload = [
-                                normalize_date($item['date'] ?? ''),
-                                $item['type'] ?? 'Journal',
-                                $item['reference'] ?? '',
-                                $item['description'] ?? '',
-                                to_int_or_null($item['department_id'] ?? null),
-                                $item['status'] ?? 'Pending',
-                                to_int_or_null($item['created_by'] ?? null) ?: $user['id'],
-                            ];
-                            if ($check->rowCount() > 0) {
-                                $existing = $check->fetch();
-                                // DO NOT overwrite status if it was approved/rejected on server unless we really want to?
-                                // Let's just update all
-                                $pdo->prepare("UPDATE acc_vouchers SET date = ?, type = ?, reference = ?, description = ?, department_id = ?, status = ?, created_by = ? WHERE id = ?")
-                                    ->execute([...$payload, $existing['id']]);
-                            } else {
-                                $pdo->prepare("INSERT INTO acc_vouchers (voucher_no, date, type, reference, description, department_id, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-                                    ->execute([$voucherNo, ...$payload]);
-                            }
-                            if ($localId !== null) $syncedIds['acc_vouchers'][] = $localId;
-                            continue;
-                        }
-
-                        if ($key == 'acc_ledger_entries') {
-                            $voucherId = to_int_or_null($item['voucher_id'] ?? null);
-                            $voucherNo = trim($item['voucher_no'] ?? '');
-                            if ($voucherNo !== '') {
-                                $voucherStmt = $pdo->prepare("SELECT id FROM acc_vouchers WHERE voucher_no = ? LIMIT 1");
-                                $voucherStmt->execute([$voucherNo]);
-                                $serverVoucherId = $voucherStmt->fetchColumn();
-                                if ($serverVoucherId) {
-                                    $voucherId = (int)$serverVoucherId;
-                                }
-                            }
-                            $accountId = to_int_or_null($item['account_id'] ?? null);
-                            $accountCode = trim($item['account_code'] ?? '');
-                            if ($accountCode !== '') {
-                                $accountStmt = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE code = ? LIMIT 1");
-                                $accountStmt->execute([$accountCode]);
-                                $serverAccountId = $accountStmt->fetchColumn();
-                                if ($serverAccountId) {
-                                    $accountId = (int)$serverAccountId;
-                                }
-                            }
-                            if (!$voucherId || !$accountId) {
-                                continue;
-                            }
-                            $debit = (float)($item['debit'] ?? 0);
-                            $credit = (float)($item['credit'] ?? 0);
-                            $check = $pdo->prepare("SELECT id FROM acc_ledger_entries WHERE voucher_id = ? AND account_id = ? AND debit = ? AND credit = ? LIMIT 1");
-                            $check->execute([$voucherId, $accountId, $debit, $credit]);
-                            if ($check->rowCount() > 0) {
-                                $existing = $check->fetch();
-                                $pdo->prepare("UPDATE acc_ledger_entries SET department_id = ? WHERE id = ?")
-                                    ->execute([to_int_or_null($item['department_id'] ?? null), $existing['id']]);
-                            } else {
-                                $pdo->prepare("INSERT INTO acc_ledger_entries (voucher_id, account_id, debit, credit, department_id) VALUES (?, ?, ?, ?, ?)")
-                                    ->execute([$voucherId, $accountId, $debit, $credit, to_int_or_null($item['department_id'] ?? null)]);
-                            }
-                            if ($localId !== null) $syncedIds['acc_ledger_entries'][] = $localId;
-                            continue;
-                        }
-
-                        if ($key == 'acc_payroll') {
-                            $check = $pdo->prepare("SELECT id FROM acc_payroll WHERE teacher_id = ? AND month_year = ?");
-                            $check->execute([$item['teacher_id'], $item['month_year']]);
-                            if ($check->rowCount() > 0) {
-                                $existing = $check->fetch();
-                                $pdo->prepare("UPDATE acc_payroll SET basic_salary = ?, allowances = ?, deductions = ?, status = ?, payment_date = ? WHERE id = ?")->execute([$item['basic_salary'] ?? 0, $item['allowances'] ?? 0, $item['deductions'] ?? 0, $item['status'] ?? 'Unpaid', $item['payment_date'] ?? null, $existing['id']]);
-                                payroll_accounting_post($pdo, (int)$existing['id']);
-                                $syncedIds['acc_payroll'][] = $item['id'];
-                            } else {
-                                $pdo->prepare("INSERT INTO acc_payroll (teacher_id, month_year, basic_salary, allowances, deductions, status, payment_date) VALUES (?, ?, ?, ?, ?, ?, ?)")->execute([$item['teacher_id'], $item['month_year'], $item['basic_salary'] ?? 0, $item['allowances'] ?? 0, $item['deductions'] ?? 0, $item['status'] ?? 'Unpaid', $item['payment_date'] ?? null]);
-                                payroll_accounting_post($pdo, (int)$pdo->lastInsertId());
-                                $syncedIds['acc_payroll'][] = $item['id'];
-                            }
-                        }
-                        if ($key == 'acc_invoices') {
-                            $check = $pdo->prepare("SELECT id FROM acc_invoices WHERE student_id = ? AND month_year = ?");
-                            $check->execute([$item['student_id'], $item['month_year']]);
-                            if ($check->rowCount() > 0) {
-                                $existing = $check->fetch();
-                                $pdo->prepare("UPDATE acc_invoices SET amount = ?, status = ? WHERE id = ?")->execute([$item['amount'] ?? 0, $item['status'] ?? 'Unpaid', $existing['id']]);
-                                $syncedIds['acc_invoices'][] = $item['id'];
-                            } else {
-                                $pdo->prepare("INSERT INTO acc_invoices (student_id, invoice_no, month_year, amount, status) VALUES (?, ?, ?, ?, ?)")->execute([$item['student_id'], $item['invoice_no'] ?? '', $item['month_year'], $item['amount'] ?? 0, $item['status'] ?? 'Unpaid']);
-                                $syncedIds['acc_invoices'][] = $item['id'];
-                            }
-                        }
-
-                        if ($key == 'complaints') {
-                            $check = $pdo->prepare("SELECT id FROM complaints WHERE student_id = ? AND date = ? AND complaint = ?");
-                            $check->execute([$item['student_id'], normalize_date($item['date']), $item['complaint']]);
-                            if ($check->rowCount() == 0) {
-                                $pdo->prepare("INSERT INTO complaints (student_id, date, complaint) VALUES (?, ?, ?)")->execute([$item['student_id'], normalize_date($item['date']), $item['complaint']]);
-                            }
-                        }
-                        if ($key == 'parent_complaints') {
-                            $ev = $uploadImage($item['evidence'] ?? '', 'complaint');
-                            if ((int)($item['is_deleted'] ?? 0) === 1) {
-                                $serverId = to_int_or_null($item['id'] ?? null);
-                                if ($serverId) {
-                                    $pdo->prepare("DELETE FROM parent_complaints WHERE id = ?")->execute([$serverId]);
-                                }
-                                if ($localId !== null) $syncedIds['parent_complaints'][] = $localId;
-                                continue;
-                            }
-                            $check = $pdo->prepare("SELECT id FROM parent_complaints WHERE student_id = ? AND date = ? AND description = ?");
-                            $check->execute([$item['student_id'], normalize_date($item['date']), $item['description']]);
-                            $existing = $check->fetch();
-                            if (!$existing) {
-                                $pdo->prepare("INSERT INTO parent_complaints (student_id, date, category, description, evidence, status) VALUES (?, ?, ?, ?, ?, ?)")->execute([$item['student_id'], normalize_date($item['date']), $item['category'] ?? '', $item['description'], $ev, $item['status'] ?? 'Pending']);
-                            } else {
-                                // Update status if already exists
-                                $pdo->prepare("UPDATE parent_complaints SET status = ? WHERE id = ?")->execute([$item['status'] ?? 'Pending', $existing['id']]);
-                            }
-                        }
-                        if ($key == 'classes') {
-                            $serverId = to_int_or_null($item['id'] ?? null);
-                            if ((int)($item['is_deleted'] ?? 0) === 1) {
-                                if ($serverId) {
-                                    $pdo->prepare("DELETE FROM classes WHERE id = ?")->execute([$serverId]);
-                                }
-                                if ($localId !== null) $syncedIds['classes'][] = $localId;
-                                continue;
-                            }
-                            $check = $serverId
-                                ? $pdo->prepare("SELECT id FROM classes WHERE id = ?")
-                                : $pdo->prepare("SELECT id FROM classes WHERE name = ? AND COALESCE(section, '') = ?");
-                            $check->execute($serverId ? [$serverId] : [$item['name'], $item['section'] ?? '']);
-                            if ($check->rowCount() > 0) {
-                                $pdo->prepare("UPDATE classes SET name=?, section=?, status=?, class_type=?, main_teacher_ids=?, p1_name=?, p2_name=?, p3_name=?, p4_name=?, p5_name=?, p6_name=?, subjects_list=? WHERE id=?")
-                                    ->execute([$item['name'], $item['section'] ?? '', $item['status'] ?? 'Active', $item['class_type'] ?? 'Regular', $item['main_teacher_ids'] ?? '[]', $item['p1_name'] ?? 'Period 1', $item['p2_name'] ?? 'Period 2', $item['p3_name'] ?? 'Period 3', $item['p4_name'] ?? 'Period 4', $item['p5_name'] ?? 'Period 5', $item['p6_name'] ?? 'Period 6', $item['subjects_list'] ?? null, $check->fetchColumn()]);
-                            } else {
-                                $pdo->prepare("INSERT INTO classes (name, section, status, class_type, main_teacher_ids, p1_name, p2_name, p3_name, p4_name, p5_name, p6_name, subjects_list) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                                    ->execute([$item['name'], $item['section'] ?? '', $item['status'] ?? 'Active', $item['class_type'] ?? 'Regular', $item['main_teacher_ids'] ?? '[]', $item['p1_name'] ?? 'Period 1', $item['p2_name'] ?? 'Period 2', $item['p3_name'] ?? 'Period 3', $item['p4_name'] ?? 'Period 4', $item['p5_name'] ?? 'Period 5', $item['p6_name'] ?? 'Period 6', $item['subjects_list'] ?? null]);
-                            }
-                        }
-                        if ($key == 'notices') {
-                            $serverId = to_int_or_null($item['server_id'] ?? null);
-                            $clientId = to_int_or_null($item['id'] ?? null);
-                            $noticeDate = normalize_date($item['date'] ?? null);
-                            if ((int)($item['is_deleted'] ?? 0) === 1) {
-                                if (!$serverId && $clientId) {
-                                    $serverId = $clientId;
-                                }
-                                if ($serverId) {
-                                    $pdo->prepare("UPDATE notices SET is_deleted = 1 WHERE id = ?")->execute([$serverId]);
-                                } else {
-                                    $pdo->prepare("UPDATE notices SET is_deleted = 1 WHERE title = ? AND date = ?")
-                                        ->execute([$item['title'] ?? '', $noticeDate]);
-                                }
-                                if ($localId !== null) $syncedIds['notices'][] = $localId;
-                                continue;
-                            }
-                            if ($serverId) {
-                                $pdo->prepare("UPDATE notices SET title = ?, message = ?, date = ?, is_deleted = 0 WHERE id = ?")
-                                    ->execute([$item['title'] ?? '', $item['message'] ?? '', $noticeDate, $serverId]);
-                                $savedNoticeId = $serverId;
-                            } else {
-                                $check = $pdo->prepare("SELECT id FROM notices WHERE title = ? AND date = ? LIMIT 1");
-                                $check->execute([$item['title'] ?? '', $noticeDate]);
-                                $existingId = to_int_or_null($check->fetchColumn());
-                                if ($existingId) {
-                                    $pdo->prepare("UPDATE notices SET message = ?, is_deleted = 0 WHERE id = ?")
-                                        ->execute([$item['message'] ?? '', $existingId]);
-                                    $savedNoticeId = $existingId;
-                                } else {
-                                    $pdo->prepare("INSERT INTO notices (title, message, date) VALUES (?, ?, ?)")
-                                        ->execute([$item['title'] ?? '', $item['message'] ?? '', $noticeDate]);
-                                    $savedNoticeId = (int)$pdo->lastInsertId();
-                                }
-                            }
-                            if ($localId !== null && !empty($savedNoticeId)) {
-                                $serverIds['notices'][(string)$localId] = (int)$savedNoticeId;
-                            }
-                        }
-                        if ($key == 'leave_applications') {
-                            $photo = $uploadImage($item['application_photo'] ?? '', 'leave');
-                            if ((int)($item['is_deleted'] ?? 0) === 1) {
-                                $serverId = to_int_or_null($item['id'] ?? null);
-                                if ($serverId) {
-                                    $pdo->prepare("DELETE FROM leave_applications WHERE id = ?")->execute([$serverId]);
-                                }
-                                if ($localId !== null) $syncedIds['leave_applications'][] = $localId;
-                                continue;
-                            }
-                            $serverId = to_int_or_null($item['id'] ?? null);
-                            if ($serverId) {
-                                $check = $pdo->prepare("SELECT id FROM leave_applications WHERE id = ? LIMIT 1");
-                                $check->execute([$serverId]);
-                            } else {
-                                $check = $pdo->prepare("SELECT id FROM leave_applications WHERE student_id = ? AND date_from = ? AND date_to = ? AND reason = ? LIMIT 1");
-                                $check->execute([$item['student_id'], $item['date_from'], $item['date_to'], $item['reason'] ?? '']);
-                            }
-                            $existingId = $check->fetchColumn();
-                            if ($existingId) {
-                                $pdo->prepare("UPDATE leave_applications SET date_from = ?, date_to = ?, reason = ?, application_photo = COALESCE(NULLIF(?, ''), application_photo), status = ? WHERE id = ?")
-                                    ->execute([$item['date_from'], $item['date_to'], $item['reason'], $photo, $item['status'] ?? 'Pending', $existingId]);
-                            } else {
-                                $pdo->prepare("INSERT INTO leave_applications (student_id, date_from, date_to, reason, application_photo, status) VALUES (?, ?, ?, ?, ?, ?)")->execute([$item['student_id'], $item['date_from'], $item['date_to'], $item['reason'], $photo, $item['status'] ?? 'Pending']);
-                                $existingId = $pdo->lastInsertId();
-                            }
-                            if ($localId !== null) $syncedIds['leave_applications'][] = $localId;
-                        }
-                        if ($key == 'fee_submissions') {
-                            $shot = $uploadImage($item['screenshot'] ?? '', 'fee');
-                            if ((int)($item['is_deleted'] ?? 0) === 1) {
-                                $serverId = to_int_or_null($item['id'] ?? null);
-                                if ($serverId) {
-                                    $pdo->prepare("DELETE FROM fee_submissions WHERE id = ?")->execute([$serverId]);
-                                }
-                                if ($localId !== null) $syncedIds['fee_submissions'][] = $localId;
-                                continue;
-                            }
-                            $serverId = to_int_or_null($item['id'] ?? null);
-                            if ($serverId) {
-                                $check = $pdo->prepare("SELECT id, finance_id FROM fee_submissions WHERE id = ? LIMIT 1");
-                                $check->execute([$serverId]);
-                            } else {
-                                $check = $pdo->prepare("SELECT id, finance_id FROM fee_submissions WHERE student_id = ? AND amount = ? AND submission_date = ? LIMIT 1");
-                                $check->execute([$item['student_id'], $item['amount'], $item['submission_date']]);
-                            }
-                            $existing = $check->fetch(PDO::FETCH_ASSOC);
-                            $financeId = to_int_or_null($existing['finance_id'] ?? null);
-                            $status = $item['status'] ?? 'Pending';
-
-                            if ($status === 'Approved' && !$financeId) {
-                                $studentStmt = $pdo->prepare("SELECT name FROM students WHERE id = ? LIMIT 1");
-                                $studentStmt->execute([$item['student_id']]);
-                                $studentName = $studentStmt->fetchColumn() ?: '';
-                                $desc = !empty($item['description']) ? $item['description'] . " (تعاؤن ID: " . ($existing['id'] ?? 'mobile') . ")" : "Online Cooperation/Fee";
-                                
-                                $adminName = 'Admin';
-                                $adminId = 1;
-                                if (!empty($user['id'])) {
-                                    $adminId = (int)$user['id'];
-                                    $adminStmt = $pdo->prepare("SELECT name FROM admins WHERE id = ? LIMIT 1");
-                                    $adminStmt->execute([$adminId]);
-                                    $adminName = $adminStmt->fetchColumn() ?: 'Admin';
-                                }
-                                $compNo = next_user_receipt_no($pdo, $adminId);
-
-                                $stmt = $pdo->prepare("INSERT INTO finance (date, type, amount, description, donor_name, head_id, computer_receipt_no, user_id, user_name) VALUES (?, 'Income', ?, ?, ?, ?, ?, ?, ?)");
-                                $stmt->execute([date('Y-m-d'), $item['amount'], $desc, $studentName, to_int_or_null($item['head_id'] ?? null), $compNo, $adminId, $adminName]);
-                                $financeId = (int)$pdo->lastInsertId();
-                                
-                                require_once 'finance_accounting_bridge.php';
-                                finance_accounting_post($pdo, $financeId);
-                            }
-
-                            if ($existing) {
-                                $pdo->prepare("UPDATE fee_submissions SET amount = ?, submission_date = ?, screenshot = COALESCE(NULLIF(?, ''), screenshot), status = ?, head_id = ?, description = ?, finance_id = ? WHERE id = ?")
-                                    ->execute([$item['amount'], $item['submission_date'], $shot, $status, to_int_or_null($item['head_id'] ?? null), $item['description'] ?? '', $financeId, $existing['id']]);
-                            } else {
-                                $pdo->prepare("INSERT INTO fee_submissions (student_id, amount, submission_date, screenshot, status, head_id, description, finance_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")->execute([$item['student_id'], $item['amount'], $item['submission_date'], $shot, $status, to_int_or_null($item['head_id'] ?? null), $item['description'] ?? '', $financeId]);
-                            }
-                            if ($localId !== null) $syncedIds['fee_submissions'][] = $localId;
-                            
-                            // Auto SMS Hook for Fee Received
-                            $st = $pdo->prepare("SELECT name, contact_number FROM students WHERE id = ?");
-                            $st->execute([$item['student_id']]);
-                            $s_data = $st->fetch();
-                            if ($status === 'Approved' && $s_data && !empty($s_data['contact_number'])) {
-                                $msg = "اطلاع: محترم والدین، آپ کے بچے " . $s_data['name'] . " کی فیس مبلغ " . $item['amount'] . " روپے موصول ہو گئی ہے۔ شکریہ۔";
-                                try {
-                                    require_once __DIR__ . '/send_sms.php';
-                                    send_sms($s_data['contact_number'], $msg);
-                                } catch (Throwable $e) {
-                                    write_log("Fee SMS Error: " . $e->getMessage());
-                                }
-                            }
-                        }
-                        if ($key == 'exams') {
-                            $check = $pdo->prepare("SELECT id FROM exams WHERE exam_name = ? AND exam_date = ?");
-                            $check->execute([$item['exam_name'], normalize_date($item['exam_date'])]);
-                            if ($check->rowCount() > 0) {
-                                $existingId = $check->fetchColumn();
-                                $pdo->prepare("UPDATE exams SET total_marks = ?, passing_marks = ? WHERE id = ?")
-                                    ->execute([(int)($item['total_marks'] ?? 100), (int)($item['passing_marks'] ?? 33), $existingId]);
-                            } else {
-                                $pdo->prepare("INSERT INTO exams (exam_name, exam_date, total_marks, passing_marks) VALUES (?, ?, ?, ?)")
-                                    ->execute([$item['exam_name'], normalize_date($item['exam_date']), (int)($item['total_marks'] ?? 100), (int)($item['passing_marks'] ?? 33)]);
-                            }
-                        }
-                        if ($key == 'exam_results') {
-                            // Permission check for exam_results
-                            if ($userRole !== 'admin' && $userRole !== 'nazim') {
-                                $erStudentId = $item['student_id'] ?? null;
-                                if ($erStudentId) {
-                                    $erClsStmt = $pdo->prepare("SELECT class FROM students WHERE id = ? LIMIT 1");
-                                    $erClsStmt->execute([$erStudentId]);
-                                    $erCls = $erClsStmt->fetchColumn();
-                                    if ($erCls && !in_array($erCls, $allowed_class_names_up)) {
-                                        write_log("Sync Up: exam_results - user not allowed for class $erCls");
-                                        continue;
-                                    }
-                                }
-                            }
-                            $check = $pdo->prepare("SELECT id FROM exam_results WHERE exam_id = ? AND student_id = ? AND subject = ?");
-                            $check->execute([$item['exam_id'], $item['student_id'], $item['subject'] ?? 'Quran']);
-                            if ($check->rowCount() > 0) {
-                                $pdo->prepare("UPDATE exam_results SET marks_obtained=?, total_marks=?, grade=?, status=?, remarks=?, pukhtagi=?, tajweed=?, lahja=?, masail=?, miqdar_khwandgi=?, p1=?, p2=?, p3=?, p4=?, p5=?, p6=?, subjects_marks=? WHERE id=?")
-                                    ->execute([$item['marks_obtained'] ?? 0, $item['total_marks'] ?? 100, $item['grade'] ?? '', $item['status'] ?? 'Pass', $item['remarks'] ?? '', $item['pukhtagi'] ?? 0, $item['tajweed'] ?? 0, $item['lahja'] ?? 0, $item['masail'] ?? 0, $item['miqdar_khwandgi'] ?? '', $item['p1'] ?? 0, $item['p2'] ?? 0, $item['p3'] ?? 0, $item['p4'] ?? 0, $item['p5'] ?? 0, $item['p6'] ?? 0, $item['subjects_marks'] ?? null, $check->fetchColumn()]);
-                            } else {
-                                $pdo->prepare("INSERT INTO exam_results (exam_id, student_id, subject, marks_obtained, total_marks, grade, status, remarks, pukhtagi, tajweed, lahja, masail, miqdar_khwandgi, p1, p2, p3, p4, p5, p6, subjects_marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                                    ->execute([$item['exam_id'], $item['student_id'], $item['subject'] ?? 'Quran', $item['marks_obtained'] ?? 0, $item['total_marks'] ?? 100, $item['grade'] ?? '', $item['status'] ?? 'Pass', $item['remarks'] ?? '', $item['pukhtagi'] ?? 0, $item['tajweed'] ?? 0, $item['lahja'] ?? 0, $item['masail'] ?? 0, $item['miqdar_khwandgi'] ?? '', $item['p1'] ?? 0, $item['p2'] ?? 0, $item['p3'] ?? 0, $item['p4'] ?? 0, $item['p5'] ?? 0, $item['p6'] ?? 0, $item['subjects_marks'] ?? null]);
-                            }
-                        }
-                        if ($key == 'qaida_records') {
-                            $isDeleted = (int)($item['is_deleted'] ?? 0);
-                            $dateVal = normalize_date($item['date'] ?? '');
-                            $studentId = $item['student_id'] ?? null;
-                            if (!$dateVal || !$studentId) continue;
-
-                            // Check student's class permission
-                            if ($userRole !== 'admin' && $userRole !== 'nazim') {
-                                $stdClsStmt = $pdo->prepare("SELECT class FROM students WHERE id = ? LIMIT 1");
-                                $stdClsStmt->execute([$studentId]);
-                                $stdCls = $stdClsStmt->fetchColumn();
-                                if ($stdCls && !in_array($stdCls, $allowed_class_names_up)) {
-                                    write_log("Sync Up: qaida_records - user not allowed for class $stdCls");
-                                    if ($localId !== null) $syncedIds[$key][] = $localId;
-                                    continue;
-                                }
-                            }
-                            
-                            $check = $pdo->prepare("SELECT id FROM qaida_records WHERE student_id = ? AND date = ? LIMIT 1");
-                            $check->execute([$studentId, $dateVal]);
-                            $existingId = $check->fetchColumn();
-                            
-                            if ($isDeleted === 1) {
-                                if ($existingId) {
-                                    $pdo->prepare("UPDATE qaida_records SET is_deleted = 1 WHERE id = ?")->execute([$existingId]);
-                                }
-                            } else {
-                                $dataArgs = [
-                                    $item['sabaq_1'] ?? '', $item['grade_1'] ?? '', $item['qty_1'] ?? '',
-                                    $item['sabaq_2'] ?? '', $item['grade_2'] ?? '', $item['qty_2'] ?? '',
-                                    $item['sabaq_3'] ?? '', $item['grade_3'] ?? '', $item['qty_3'] ?? '',
-                                    $item['sabaq_4'] ?? '', $item['grade_4'] ?? '', $item['qty_4'] ?? '',
-                                    $item['lesson_type'] ?? 'نورانی قاعدہ', $item['hearing_time'] ?? ''
-                                ];
-                                if ($existingId) {
-                                    $pdo->prepare("UPDATE qaida_records SET sabaq_1=?, grade_1=?, qty_1=?, sabaq_2=?, grade_2=?, qty_2=?, sabaq_3=?, grade_3=?, qty_3=?, sabaq_4=?, grade_4=?, qty_4=?, lesson_type=?, hearing_time=?, is_deleted=0 WHERE id=?")
-                                        ->execute([...$dataArgs, $existingId]);
-                                } else {
-                                    $pdo->prepare("INSERT INTO qaida_records (student_id, date, sabaq_1, grade_1, qty_1, sabaq_2, grade_2, qty_2, sabaq_3, grade_3, qty_3, sabaq_4, grade_4, qty_4, lesson_type, hearing_time, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)")
-                                        ->execute([$studentId, $dateVal, ...$dataArgs]);
-                                }
-                            }
-                        }
-                        if ($localId !== null) $syncedIds[$key][] = $localId;
-                    } catch (Exception $e) { $syncErrors[] = "$key: " . $e->getMessage(); }
-                }
-            }
-        }
-        $response = ['status' => empty($syncErrors) ? 'success' : 'partial_success', 'synced_ids' => $syncedIds, 'server_ids' => $serverIds, 'errors' => $syncErrors];
+        $response = SyncController::syncUp($pdo, $user);
+    } elseif ($action == 'request_otp') {
+        $response = AuthController::requestOtp($pdo, $input);
+    } elseif ($action == 'verify_otp_and_reset' || $action == 'reset_password_otp') {
+        $response = AuthController::verifyOtpAndReset($pdo, $input);
     } elseif ($action == 'reset_password') {
-        $response = ['status' => 'error', 'message' => 'Password reset requires admin approval. Please contact the madrasa office.'];
+        $response = ['status' => 'error', 'message' => 'Password reset requires OTP verification or admin approval. Please use action=request_otp.'];
     } elseif ($action == 'change_password') {
         $user = require_user();
-        $input = json_decode(file_get_contents("php://input"), true) ?: $_POST;
-        $old_pass = (string)($input['old_password'] ?? '');
-        $new_pass = $input['new_password'] ?? '';
-        if (!$old_pass || !$new_pass) {
-            $response = ['status' => 'error', 'message' => 'Missing required fields'];
-        } elseif ($user['role'] === 'student' || $user['role'] === 'parent') {
-            $stmt = $user['role'] === 'parent'
-                ? $pdo->prepare("SELECT password FROM parents WHERE id = ? AND is_active = 1")
-                : $pdo->prepare("SELECT password FROM students WHERE id = ? AND is_deleted = 0");
-            $stmt->execute([$user['id']]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($row && verify_pass($old_pass, $row['password'])) {
-                $hashed = hash_pass($new_pass);
-                if ($user['role'] === 'parent') {
-                    $pdo->prepare("UPDATE parents SET password = ? WHERE id = ?")->execute([$hashed, $user['id']]);
-                } else {
-                    $pdo->prepare("UPDATE students SET password = ? WHERE id = ?")->execute([$hashed, $user['id']]);
-                }
-                $response = ['status' => 'success', 'message' => 'Password updated'];
-            } else {
-                $response = ['status' => 'error', 'message' => 'Old password is incorrect'];
-            }
+        $response = AuthController::changePassword($pdo, $user, $input);
+    } elseif ($action == 'add_notice') {
+        $user = require_user(['admin', 'nazim']);
+        $title = trim((string)($input['title'] ?? ''));
+        $message = trim((string)($input['message'] ?? ($input['body'] ?? '')));
+        $date = trim((string)($input['date'] ?? date('Y-m-d')));
+        $sys = $user['system_type'] ?? ($input['system_type'] ?? 'Madrasa');
+
+        if (!empty($title)) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS notices (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                message TEXT,
+                date DATE,
+                system_type VARCHAR(50) DEFAULT 'Madrasa',
+                is_deleted TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            $stmt = $pdo->prepare("INSERT INTO notices (title, message, date, system_type) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$title, $message, $date, $sys]);
+
+            // FCM: تمام اساتذہ اور admins کو نوٹیفیکیشن
+            $noticeTitle = $title ?: 'نیا اعلان';
+            send_fcm_to_role($pdo, 'teacher', '📢 نیا اعلان', $noticeTitle, ['type' => 'notice']);
+            send_fcm_to_role($pdo, 'admin', '📢 نیا اعلان', $noticeTitle, ['type' => 'notice']);
+
+            $response = ['status' => 'success', 'message' => 'Notice added'];
         } else {
-            $stmt = $pdo->prepare("SELECT password FROM admins WHERE id = ? LIMIT 1");
-            $stmt->execute([$user['id']]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($row && verify_pass($old_pass, $row['password'])) {
-                $hashed = hash_pass($new_pass);
-                $pdo->prepare("UPDATE admins SET password = ? WHERE id = ?")->execute([$hashed, $user['id']]);
-                $response = ['status' => 'success', 'message' => 'Password updated'];
-            } else {
-                $response = ['status' => 'error', 'message' => 'Old password is incorrect'];
-            }
+            $response = ['status' => 'error', 'message' => 'Notice title is required'];
+        }
+    } elseif ($action == 'update_fcm_token') {
+        $user = require_user();
+        $token = trim((string)($input['token'] ?? ($input['fcm_token'] ?? '')));
+        $userId = intval($input['user_id'] ?? $user['id']);
+        $role = strtolower(trim((string)($input['role'] ?? $user['role'])));
+
+        if (!empty($token) && $userId > 0) {
+            $table = in_array($role, ['admin', 'nazim', 'superadmin'], true) ? 'admins' : ($role === 'teacher' ? 'teachers' : 'students');
+            ensure_column($pdo, $table, 'fcm_token', 'VARCHAR(255) DEFAULT NULL');
+            $stmt = $pdo->prepare("UPDATE {$table} SET fcm_token = ? WHERE id = ?");
+            $stmt->execute([$token, $userId]);
+
+            try {
+                $pdo->exec("CREATE TABLE IF NOT EXISTS user_fcm_tokens (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    role VARCHAR(50) NOT NULL,
+                    fcm_token VARCHAR(255) NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY user_role_token_unique (user_id, role, fcm_token)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                $stmtToken = $pdo->prepare("INSERT INTO user_fcm_tokens (user_id, role, fcm_token) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP");
+                $stmtToken->execute([$userId, $role, $token]);
+            } catch (Exception $e) {}
+
+            $response = ['status' => 'success', 'message' => 'FCM token updated successfully'];
+        } else {
+            $response = ['status' => 'error', 'message' => 'Token and valid user ID are required'];
         }
     } elseif ($action == 'update_settings') {
-        require_user('admin');
-        $input = json_decode(file_get_contents("php://input"), true) ?: [];
-        $fields = ['madrasa_name', 'phone', 'current_hijri_year', 'week_start_day', 'ai_provider', 'gemini_api_key', 'groq_api_key', 'whatsapp_api_key', 'sms_api_key', 'auto_notify_day', 'auto_notify_time'];
+        $user = require_user('admin');
+        $tenantId = (int)($user['tenant_id'] ?? get_current_tenant_id());
+        $input = json_decode(file_get_contents("php://input"), true) ?: $_POST;
+        
+        $uploadDir = __DIR__ . '/uploads/branding/';
+        if (!is_dir($uploadDir)) @mkdir($uploadDir, 0777, true);
+
+        // 1. Handle base64 images from Mobile
+        $base64Map = [
+            'logo_base64' => 'logo_path',
+            'signature_stamp_base64' => 'signature_stamp_path',
+            'receipt_bg_base64' => 'receipt_bg',
+            'masjid_receipt_bg_base64' => 'masjid_receipt_bg',
+            'id_card_bg_base64' => 'id_card_bg',
+            'sanad_bg_base64' => 'sanad_bg',
+            'masjid_logo_base64' => 'masjid_logo_path'
+        ];
+        foreach ($base64Map as $bKey => $targetCol) {
+            if (!empty($input[$bKey])) {
+                $raw = preg_replace('#^data:image/\w+;base64,#i', '', $input[$bKey]);
+                $binary = base64_decode($raw);
+                if ($binary) {
+                    $fn = $targetCol . '_' . $tenantId . '_' . time() . '.png';
+                    if (file_put_contents($uploadDir . $fn, $binary)) {
+                        $input[$targetCol] = 'uploads/branding/' . $fn;
+                    }
+                }
+            }
+        }
+
+        // 2. Handle multipart $_FILES from Web / Mobile Form
+        $fileMap = [
+            'logo_file' => 'logo_path',
+            'signature_stamp_file' => 'signature_stamp_path',
+            'receipt_bg_file' => 'receipt_bg',
+            'masjid_receipt_bg_file' => 'masjid_receipt_bg',
+            'id_card_bg_file' => 'id_card_bg',
+            'sanad_bg_file' => 'sanad_bg',
+            'masjid_logo_file' => 'masjid_logo_path'
+        ];
+        foreach ($fileMap as $fKey => $targetCol) {
+            if (isset($_FILES[$fKey]) && $_FILES[$fKey]['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES[$fKey]['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['png', 'jpg', 'jpeg', 'webp', 'svg'])) {
+                    $fn = $targetCol . '_' . $tenantId . '_' . time() . '.' . $ext;
+                    if (move_uploaded_file($_FILES[$fKey]['tmp_name'], $uploadDir . $fn)) {
+                        $input[$targetCol] = 'uploads/branding/' . $fn;
+                    }
+                }
+            }
+        }
+
+        $fields = ['madrasa_name', 'phone', 'address', 'tagline', 'current_hijri_year', 'week_start_day', 'ai_provider', 'gemini_api_key', 'groq_api_key', 'whatsapp_api_key', 'sms_api_key', 'auto_notify_day', 'auto_notify_time', 'logo_path', 'receipt_bg', 'masjid_receipt_bg', 'id_card_bg', 'sanad_bg', 'signature_stamp_path', 'masjid_name', 'masjid_logo_path', 'sanad_layout_json'];
         $up = []; $val = [];
         foreach ($fields as $f) { if (isset($input[$f])) { $up[] = "$f = ?"; $val[] = $input[$f]; } }
-        if ($up) { $pdo->prepare("UPDATE settings SET " . implode(", ", $up) . " WHERE id = 1")->execute($val); $response = ['status' => 'success']; }
-        else $response = ['status' => 'error'];
+        if ($up) { 
+            // Ensure row exists for this tenant
+            $chk = $pdo->prepare("SELECT id FROM settings WHERE tenant_id = ? LIMIT 1");
+            $chk->execute([$tenantId]);
+            $sId = $chk->fetchColumn();
+            if (!$sId) {
+                $mName = $input['madrasa_name'] ?? 'جامعہ دارالعلوم';
+                $pdo->prepare("INSERT INTO settings (tenant_id, madrasa_name) VALUES (?, ?)")->execute([$tenantId, $mName]);
+                $sId = $pdo->lastInsertId();
+            }
+            $val[] = $sId;
+            $val[] = $tenantId;
+            $pdo->prepare("UPDATE settings SET " . implode(", ", $up) . " WHERE id = ? AND tenant_id = ?")->execute($val);
+
+            // Also update tenants table name if madrasa_name changed
+            if (!empty($input['madrasa_name'])) {
+                try {
+                    $pdo->prepare("UPDATE tenants SET name = ? WHERE id = ?")->execute([$input['madrasa_name'], $tenantId]);
+                } catch (Throwable $e) {}
+            }
+
+            $st = $pdo->prepare("SELECT madrasa_name, phone, address, tagline, current_hijri_year, week_start_day, ai_provider, auto_notify_day, auto_notify_time, logo_path, receipt_bg, masjid_receipt_bg, id_card_bg, sanad_bg, signature_stamp_path, masjid_name, masjid_logo_path, sanad_layout_json FROM settings WHERE id = ?");
+            $st->execute([$sId]);
+            $updatedSettings = $st->fetch(PDO::FETCH_ASSOC);
+            $response = ['status' => 'success', 'message' => 'Settings updated successfully', 'settings' => $updatedSettings]; 
+        } else {
+            $response = ['status' => 'error', 'message' => 'No settings changed'];
+        }
     } elseif ($action == 'delete_account') {
         $user = require_user();
         // اکاؤنٹ حذف کرنے کا عمل (Soft Delete)
@@ -2258,7 +1237,7 @@ try {
         require_user(['admin', 'nazim'], 'manage_admissions');
         // داخلہ درخواستیں لیں (Admin موبائل کے لیے)
         $filterStatus = trim($_GET['filter'] ?? 'all');
-        $allowedFilters = ['all', 'pending', 'approved', 'rejected'];
+        $allowedFilters = ['all', 'pending', 'interview', 'approved', 'rejected'];
         if (!in_array(strtolower($filterStatus), $allowedFilters)) $filterStatus = 'all';
         
         if ($filterStatus === 'all') {
@@ -2269,7 +1248,7 @@ try {
             $apps = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
         $countStmt = $pdo->query("SELECT status, COUNT(*) as c FROM admission_applications GROUP BY status");
-        $counts = ['pending' => 0, 'approved' => 0, 'rejected' => 0];
+        $counts = ['pending' => 0, 'interview' => 0, 'approved' => 0, 'rejected' => 0];
         foreach ($countStmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
             $counts[strtolower($c['status'])] = (int)$c['c'];
         }
@@ -2283,41 +1262,81 @@ try {
         $test_date = trim((string)($input['test_date'] ?? ''));
         $test_time = trim((string)($input['test_time'] ?? ''));
         $admin_note = trim((string)($input['admin_note'] ?? ''));
-        $allowedStatuses = ['Approved', 'rejected'];
-        if (!$app_id || !in_array($new_status, $allowedStatuses)) {
+        $raw_status = strtolower($new_status);
+        if ($raw_status === 'approved') $normalized_status = 'Approved';
+        elseif ($raw_status === 'rejected') $normalized_status = 'rejected';
+        elseif ($raw_status === 'interview' || $raw_status === 'interviewed') $normalized_status = 'interview';
+        else $normalized_status = '';
+
+        if (!$app_id || empty($normalized_status)) {
             $response = ['status' => 'error', 'message' => 'Invalid parameters'];
         } else {
             $pdo->prepare("UPDATE admission_applications SET status=?, test_date=?, test_time=?, admin_note=? WHERE id=?")
-                ->execute([$new_status, $test_date ?: null, $test_time ?: null, $admin_note, $app_id]);
+                ->execute([$normalized_status, $test_date ?: null, $test_time ?: null, $admin_note, $app_id]);
 
             $smsResult = ['success' => false, 'message' => 'SMS not required'];
-            if ($new_status === 'Approved') {
-                $appStmt = $pdo->prepare("SELECT * FROM admission_applications WHERE id = ? LIMIT 1");
-                $appStmt->execute([$app_id]);
-                $app = $appStmt->fetch(PDO::FETCH_ASSOC);
-                $mobile = $app ? trim((string)($app['mobile_number'] ?? ($app['mobile_no'] ?? ''))) : '';
-                if ($app && $mobile !== '') {
-                    require_once __DIR__ . '/send_sms.php';
-                    $smsMessage = "محترم " . ($app['student_name'] ?? '') . "، آپ کی درخواست داخلہ منظور ہو گئی ہے۔ ٹیسٹ کی تاریخ: " . ($test_date ?: '-') . " وقت: " . ($test_time ?: '-') . ($admin_note ? "۔ نوٹ: $admin_note" : "");
-                    $smsResult = send_sms($mobile, $smsMessage);
+            $appStmt = $pdo->prepare("SELECT * FROM admission_applications WHERE id = ? LIMIT 1");
+            $appStmt->execute([$app_id]);
+            $app = $appStmt->fetch(PDO::FETCH_ASSOC);
+            $mobile = $app ? trim((string)($app['mobile_number'] ?? ($app['mobile_no'] ?? ''))) : '';
 
-                    try {
-                        $hasSmsSentColumn = $pdo->query("SHOW COLUMNS FROM admission_applications LIKE 'sms_sent'")->fetch();
-                        if ($hasSmsSentColumn) {
-                            $pdo->prepare("UPDATE admission_applications SET sms_sent = ? WHERE id = ?")
-                                ->execute([!empty($smsResult['success']) ? 1 : 0, $app_id]);
-                        }
-                    } catch (Throwable $e) {
-                        // Older deployments may not have sms_sent yet; approval should still complete.
-                    }
-                } else {
-                    $smsResult = ['success' => false, 'message' => 'Mobile number missing'];
+            if ($app && $mobile !== '') {
+                require_once __DIR__ . '/send_sms.php';
+                if ($normalized_status === 'Approved') {
+                    $smsMessage = "محترم " . ($app['student_name'] ?? '') . "، آپ کا داخلہ باقاعدہ منظور ہو گیا ہے۔ جامعہ اشرف المدارس میں خوش آمدید۔";
+                    $smsResult = send_sms($mobile, $smsMessage);
+                } elseif ($normalized_status === 'interview') {
+                    $smsMessage = "محترم " . ($app['student_name'] ?? '') . "، آپ کی داخلہ درخواست پر ٹیسٹ و انٹرویو مقرر کیا گیا ہے۔ تاریخ: " . ($test_date ?: '-') . " وقت: " . ($test_time ?: '-') . ($admin_note ? "۔ نوٹ: $admin_note" : "");
+                    $smsResult = send_sms($mobile, $smsMessage);
                 }
+
+                try {
+                    $hasSmsSentColumn = $pdo->query("SHOW COLUMNS FROM admission_applications LIKE 'sms_sent'")->fetch();
+                    if ($hasSmsSentColumn) {
+                        $pdo->prepare("UPDATE admission_applications SET sms_sent = ? WHERE id = ?")
+                            ->execute([!empty($smsResult['success']) ? 1 : 0, $app_id]);
+                    }
+                } catch (Throwable $e) {}
+            }
+
+            // Also if Approved, enroll into students or maktab_students if not yet enrolled
+            if ($normalized_status === 'Approved' && $app) {
+                try {
+                    $dept = strtolower(trim((string)($app['department'] ?? '')));
+                    $isMaktab = (strpos($dept, 'مکتب') !== false || strpos($dept, 'maktab') !== false);
+                    $targetTable = $isMaktab ? 'maktab_students' : 'students';
+
+                    // Check if already in targetTable
+                    $checkAdm = $pdo->prepare("SELECT id FROM $targetTable WHERE name = ? AND father_name = ? LIMIT 1");
+                    $checkAdm->execute([$app['student_name'], $app['father_name']]);
+                    if (!$checkAdm->fetch()) {
+                        $current_hijri = $app['hijri_year'] ?? '1447';
+                        $maxId = $pdo->query("SELECT MAX(id) FROM $targetTable")->fetchColumn() ?: 0;
+                        $admNo = $current_hijri . "-" . str_pad($maxId + 1, 3, "0", STR_PAD_LEFT);
+                        $today = date('Y-m-d');
+
+                        $insStmt = $pdo->prepare("INSERT INTO $targetTable 
+                            (name, father_name, admission_number, class, class_name, contact_number, address, status, admission_date, photo, system_type, residence_status) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, 'residential_aided')");
+                        $insStmt->execute([
+                            $app['student_name'],
+                            $app['father_name'],
+                            $admNo,
+                            $app['department'] ?: 'حفظ',
+                            $app['department'] ?: 'حفظ',
+                            $mobile,
+                            $app['address'] ?? '',
+                            $today,
+                            $app['photo'] ?? '',
+                            $isMaktab ? 'Masjid' : 'Madrasa'
+                        ]);
+                    }
+                } catch (Throwable $e) {}
             }
 
             $response = [
                 'status' => 'success',
-                'message' => "Application $new_status" . ($new_status === 'Approved' ? (!empty($smsResult['success']) ? ' and SMS sent' : ' but SMS not sent: ' . ($smsResult['message'] ?? 'Unknown error')) : ''),
+                'message' => "درخواست کی حالت تبدیل ہو گئی ($normalized_status)" . (!empty($smsResult['success']) ? ' اور SMS بھیج دیا گیا' : ''),
                 'sms' => $smsResult
             ];
         }
@@ -2385,27 +1404,182 @@ try {
                 $stmt = $pdo->prepare("UPDATE admins SET name=?, username=?, role=?, permissions=?, allowed_classes=? WHERE id=?");
                 $stmt->execute([$name, $username, $role, $permissions, $allowed_classes, $id]);
             }
+            if (function_exists('finance_ensure_user_canonical_accounts')) {
+                finance_ensure_user_canonical_accounts($pdo, $id, $name, $username, 1);
+            }
             $response = ['status' => 'success', 'message' => "User updated successfully"];
         } else { // insert
             $hashed = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("INSERT INTO admins (name, username, password, role, permissions, allowed_classes) VALUES (?, ?, ?, ?, ?, ?)");
             $stmt->execute([$name, $username, $hashed, $role, $permissions, $allowed_classes]);
-            $response = ['status' => 'success', 'message' => "User added successfully"];
+            $newUid = (int)$pdo->lastInsertId();
+            if (function_exists('finance_ensure_user_canonical_accounts')) {
+                finance_ensure_user_canonical_accounts($pdo, $newUid, $name, $username, 1);
+            }
+            $response = ['status' => 'success', 'message' => "User added successfully with canonical accounts"];
         }
     } elseif ($action == 'delete_user') {
         require_user('admin');
         $id = intval($_GET['id'] ?? 0);
-        if ($id > 0) {
+        if ($id === 1) {
+            $response = ['status' => 'error', 'message' => 'مرکزی ایڈمن اکاؤنٹ (تنزیل الرحمن) کو حذف نہیں کیا جا سکتا۔'];
+        } elseif ($id > 0) {
             $pdo->prepare("DELETE FROM admins WHERE id=?")->execute([$id]);
             $response = ['status' => 'success', 'message' => 'User deleted successfully'];
         } else {
             $response = ['status' => 'error', 'message' => 'Invalid ID'];
         }
+    } elseif ($action == 'update_fcm_token') {
+        $token = trim((string)($input['fcm_token'] ?? ($input['token'] ?? ($_POST['token'] ?? ($_GET['token'] ?? '')))));
+        $currentUser = current_user();
+        $userId = intval($input['user_id'] ?? ($_POST['user_id'] ?? ($_GET['user_id'] ?? ($currentUser['id'] ?? 0))));
+        $role = trim((string)($input['role'] ?? ($_POST['role'] ?? ($_GET['role'] ?? ($currentUser['role'] ?? 'admin')))));
+
+        if (!empty($token) && $userId > 0) {
+            try {
+                $pdo->exec("CREATE TABLE IF NOT EXISTS user_fcm_tokens (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    role VARCHAR(50) NOT NULL,
+                    fcm_token VARCHAR(255) NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_user_role (user_id, role)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+                $stmt = $pdo->prepare("INSERT INTO user_fcm_tokens (user_id, role, fcm_token) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE fcm_token = VALUES(fcm_token)");
+                $stmt->execute([$userId, $role, $token]);
+
+                $table = in_array($role, ['admin', 'teacher', 'nazim']) ? 'admins' : 'students';
+                ensure_column($pdo, $table, 'fcm_token', 'VARCHAR(255) DEFAULT NULL');
+                $pdo->prepare("UPDATE {$table} SET fcm_token = ? WHERE id = ?")->execute([$token, $userId]);
+            } catch (Exception $e) {
+                write_log("update_fcm_token error: " . $e->getMessage());
+            }
+
+            $response = ['status' => 'success', 'message' => 'FCM token updated'];
+        } else {
+            $response = ['status' => 'error', 'message' => 'Token or user missing'];
+        }
+    } elseif ($action == 'toggle_smart_alert_read') {
+        require_user();
+        $alert_id = trim($_POST['alert_id'] ?? '');
+        $status = trim($_POST['status'] ?? ''); // 'read' or 'unread'
+        $user_id = $_SESSION['user_id'];
+        
+        if (empty($alert_id) || !in_array($status, ['read', 'unread'])) {
+            $response = ['status' => 'error', 'message' => 'Invalid parameters'];
+        } else {
+            if ($status === 'read') {
+                $stmt = $pdo->prepare("INSERT INTO smart_notification_reads (alert_id, user_id, is_deleted) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE is_deleted=0");
+                $stmt->execute([$alert_id, $user_id]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE smart_notification_reads SET is_deleted=1 WHERE alert_id=? AND user_id=?");
+                $stmt->execute([$alert_id, $user_id]);
+            }
+            $response = ['status' => 'success', 'message' => 'Status updated'];
+        }
+    } elseif ($action == 'send_push_notification') {
+        require_user('admin');
+        require_once 'notifications.php';
+        $title = trim($_POST['title'] ?? 'اطلاع');
+        $body = trim($_POST['body'] ?? '');
+        $type = trim($_POST['type'] ?? 'general');
+        $targetUserId = isset($_POST['target_user_id']) ? intval($_POST['target_user_id']) : null;
+        $targetRole = isset($_POST['target_role']) ? trim($_POST['target_role']) : null;
+
+        sendPushNotificationFCM($pdo, $title, $body, $type, $targetUserId, $targetRole);
+        $response = ['status' => 'success', 'message' => 'Push notification dispatched'];
+    } elseif ($action == 'request_finance_edit_otp') {
+        $user = current_user();
+        if (!$user) {
+            $uId = (int)($input['user_id'] ?? ($_POST['user_id'] ?? 0));
+            $tId = (int)($input['tenant_id'] ?? ($_POST['tenant_id'] ?? 1));
+            if ($uId > 0) {
+                $uStmt = $pdo->prepare("SELECT id, username, name, role FROM admins WHERE id = ? LIMIT 1");
+                $uStmt->execute([$uId]);
+                $uRow = $uStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$uRow) {
+                    $uStmt = $pdo->prepare("SELECT id, name, username FROM teachers WHERE id = ? LIMIT 1");
+                    $uStmt->execute([$uId]);
+                    $uRow = $uStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($uRow) $uRow['role'] = 'teacher';
+                }
+                if ($uRow) {
+                    $user = [
+                        'id' => (int)$uRow['id'],
+                        'name' => $uRow['name'] ?? $uRow['username'],
+                        'username' => $uRow['username'] ?? '',
+                        'role' => $uRow['role'] ?? 'teacher',
+                        'tenant_id' => $tId,
+                    ];
+                }
+            }
+        }
+        if (!$user) {
+            $user = require_user();
+        }
+        $response = FinanceController::requestEditOtp($pdo, $user, $input);
+    } elseif ($action == 'verify_finance_edit_otp') {
+        $user = current_user();
+        if (!$user) {
+            $uId = (int)($input['user_id'] ?? ($_POST['user_id'] ?? 0));
+            $tId = (int)($input['tenant_id'] ?? ($_POST['tenant_id'] ?? 1));
+            if ($uId > 0) {
+                $user = ['id' => $uId, 'tenant_id' => $tId];
+            }
+        }
+        if (!$user) {
+            $user = require_user();
+        }
+        $response = FinanceController::verifyEditOtp($pdo, $user, $input);
+    } elseif ($action == 'check_finance_edit_permission') {
+        $user = current_user();
+        if (!$user) {
+            $uId = (int)($input['user_id'] ?? ($_POST['user_id'] ?? 0));
+            if ($uId > 0) {
+                $uStmt = $pdo->prepare("SELECT id, role FROM admins WHERE id = ? LIMIT 1");
+                $uStmt->execute([$uId]);
+                $uRow = $uStmt->fetch(PDO::FETCH_ASSOC);
+                $user = ['id' => $uId, 'role' => $uRow['role'] ?? 'staff', 'tenant_id' => (int)($input['tenant_id'] ?? 1)];
+            }
+        }
+        if (!$user) {
+            $user = require_user();
+        }
+        $response = FinanceController::checkEditPermission($pdo, $user, $input);
+    } elseif ($action == 'get_admin_pending_otps') {
+        $user = current_user();
+        if (!$user) {
+            $uId = (int)($_GET['user_id'] ?? ($input['user_id'] ?? 0));
+            $tId = (int)($_GET['tenant_id'] ?? ($input['tenant_id'] ?? 1));
+            if ($uId > 0) {
+                $aStmt = $pdo->prepare("SELECT id, role FROM admins WHERE id = ? LIMIT 1");
+                $aStmt->execute([$uId]);
+                $aRow = $aStmt->fetch(PDO::FETCH_ASSOC);
+                if ($aRow && in_array(strtolower($aRow['role']), ['admin', 'superadmin', 'super_admin', 'administrator'])) {
+                    $user = ['id' => $uId, 'role' => 'admin', 'tenant_id' => $tId];
+                }
+            }
+        }
+        if (!$user) {
+            $user = require_user(['admin', 'superadmin', 'super_admin', 'administrator']);
+        }
+        $response = FinanceController::getPendingOtps($pdo, $user, $input);
+    } elseif ($action == 'upload_finance_bill') {
+        $user = require_user();
+        $response = FinanceController::uploadBill($pdo, $user, $input);
     } else { $response = ['status' => 'error', 'message' => 'Invalid Action']; }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     write_log("API Error: " . $e->getMessage());
-    // پروڈکشن میں اصل خرابی ظاہر نہیں کرتے
-    $response = ['status' => 'error', 'message' => 'An internal server error occurred. Please try again.'];
+    error_log("Madrasa API Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+    $err_msg = $e->getMessage();
+    $is_admin = (isset($user) && is_array($user) && ($user['role'] ?? '') === 'admin');
+    $show_detail = !IS_PRODUCTION || $is_admin || isset($_GET['debug']) || isset($_POST['debug']);
+    $response = [
+        'status' => 'error',
+        'message' => $show_detail ? ("Server Error: " . $err_msg . " (in " . basename($e->getFile()) . ":" . $e->getLine() . ")") : 'An internal server error occurred. Please try again.',
+        'detail' => $err_msg
+    ];
 }
 
 echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);

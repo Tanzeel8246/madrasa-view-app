@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../db_helper.dart';
+import '../utils/system_type_global.dart';
 
 class QaidaEntryPage extends StatefulWidget {
   final String selectedClass;
-  const QaidaEntryPage({Key? key, required this.selectedClass}) : super(key: key);
+  const QaidaEntryPage({super.key, required this.selectedClass});
   @override
   _QaidaEntryPageState createState() => _QaidaEntryPageState();
 }
@@ -26,8 +27,10 @@ class _QaidaEntryPageState extends State<QaidaEntryPage> {
     setState(() => _isLoading = true);
     try {
       final db = await dbHelper.database;
-      final allStudents = await db.query('students', where: "class_name = ? AND status IN ('Active', 'Present', 'حاضر') AND (is_deleted = 0 OR is_deleted IS NULL)", whereArgs: [widget.selectedClass]);
-      final allRecords = await db.query('qaida_records', where: "date = ? AND (is_deleted = 0 OR is_deleted IS NULL)", whereArgs: [_selectedDate]);
+      final sysType = SystemTypeGlobal.currentSystemType.value;
+      final sysCond = sysType == 'Masjid' ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+      final allStudents = await db.query('students', where: "(class_name = ? OR class = ?) AND status IN ('Active', 'Present', 'حاضر', '') AND (is_deleted = 0 OR is_deleted IS NULL) AND $sysCond", whereArgs: [widget.selectedClass, widget.selectedClass]);
+      final allRecords = await db.query('qaida_records', where: "date = ? AND (is_deleted = 0 OR is_deleted IS NULL) AND $sysCond", whereArgs: [_selectedDate]);
       
       Map<String, Map<String, dynamic>> recMap = {};
       for (var r in allRecords) {
@@ -75,11 +78,11 @@ class _QaidaEntryPageState extends State<QaidaEntryPage> {
       return (val != null && val.isNotEmpty) ? val : null;
     });
     
-    TimeOfDay? _selectedTime;
+    TimeOfDay? selectedTime;
     if (record != null && record['hearing_time'] != null && record['hearing_time'].toString().isNotEmpty) {
       try {
         final parts = record['hearing_time'].toString().split(':');
-        _selectedTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+        selectedTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
       } catch (_) {}
     }
 
@@ -105,10 +108,12 @@ class _QaidaEntryPageState extends State<QaidaEntryPage> {
                 children: [
                   DropdownButtonFormField<String>(
                     value: lessonType,
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(color: Colors.black87, fontSize: 14),
                     decoration: const InputDecoration(labelText: 'شعبہ منتخب کریں'),
                     items: const [
-                      DropdownMenuItem(value: 'نورانی قاعدہ', child: Text('نورانی قاعدہ')),
-                      DropdownMenuItem(value: 'نماز حنفی', child: Text('نماز حنفی')),
+                      DropdownMenuItem(value: 'نورانی قاعدہ', child: Text('نورانی قاعدہ', style: TextStyle(color: Colors.black87))),
+                      DropdownMenuItem(value: 'نماز حنفی', child: Text('نماز حنفی', style: TextStyle(color: Colors.black87))),
                     ],
                     onChanged: (val) {
                       setStateDialog(() {
@@ -130,22 +135,22 @@ class _QaidaEntryPageState extends State<QaidaEntryPage> {
                           onPressed: () async {
                             final TimeOfDay? picked = await showTimePicker(
                               context: context,
-                              initialTime: _selectedTime ?? TimeOfDay.now(),
+                              initialTime: selectedTime ?? TimeOfDay.now(),
                             );
                             if (picked != null) {
-                              setStateDialog(() => _selectedTime = picked);
+                              setStateDialog(() => selectedTime = picked);
                             }
                           },
                           icon: const Icon(Icons.access_time),
-                          label: Text(_selectedTime == null
+                          label: Text(selectedTime == null
                               ? 'وقت منتخب کریں'
-                              : _selectedTime!.format(context)),
+                              : selectedTime!.format(context)),
                         ),
                       ),
-                      if (_selectedTime != null)
+                      if (selectedTime != null)
                         IconButton(
                           icon: const Icon(Icons.clear),
-                          onPressed: () => setStateDialog(() => _selectedTime = null),
+                          onPressed: () => setStateDialog(() => selectedTime = null),
                         )
                     ],
                   ),
@@ -161,8 +166,10 @@ class _QaidaEntryPageState extends State<QaidaEntryPage> {
                           DropdownButtonFormField<String>(
                             value: sabaqs[i],
                             isExpanded: true,
+                            dropdownColor: Colors.white,
+                            style: const TextStyle(color: Colors.black87, fontSize: 13),
                             decoration: const InputDecoration(labelText: 'تفصیل (تختی/صفحہ)'),
-                            items: sabaqOptions.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
+                            items: sabaqOptions.map((opt) => DropdownMenuItem(value: opt, child: Text(opt, style: const TextStyle(color: Colors.black87)))).toList(),
                             onChanged: (val) => setStateDialog(() => sabaqs[i] = val),
                           ),
                           TextField(
@@ -171,15 +178,18 @@ class _QaidaEntryPageState extends State<QaidaEntryPage> {
                           ),
                           DropdownButtonFormField<String>(
                             value: grades[i],
+                            dropdownColor: Colors.white,
+                            style: const TextStyle(color: Colors.black87, fontSize: 13),
                             decoration: const InputDecoration(labelText: 'کیفیت / درجہ'),
                             items: const [
-                              DropdownMenuItem(value: 'بہت اچھا', child: Text('بہت اچھا (Excellent)')),
-                              DropdownMenuItem(value: 'اچھا', child: Text('اچھا (Good)')),
-                              DropdownMenuItem(value: 'درمیانہ', child: Text('درمیانہ (Average)')),
-                              DropdownMenuItem(value: 'کمزور', child: Text('کمزور (Weak)')),
-                              DropdownMenuItem(value: 'ناغہ', child: Text('ناغہ (Naagha)')),
-                              DropdownMenuItem(value: 'غیر حاضر', child: Text('غیر حاضر (Absent)')),
-                              DropdownMenuItem(value: 'رخصت', child: Text('رخصت (Leave)')),
+                              DropdownMenuItem(value: 'بہت اچھا', child: Text('بہت اچھا (Excellent)', style: TextStyle(color: Colors.black87))),
+                              DropdownMenuItem(value: 'اچھا', child: Text('اچھا (Good)', style: TextStyle(color: Colors.black87))),
+                              DropdownMenuItem(value: 'درمیانہ', child: Text('درمیانہ (Average)', style: TextStyle(color: Colors.black87))),
+                              DropdownMenuItem(value: 'کمزور', child: Text('کمزور (Weak)', style: TextStyle(color: Colors.black87))),
+                              DropdownMenuItem(value: 'سبق نہیں سنایا', child: Text('سبق نہیں سنایا (Not Recited)', style: TextStyle(color: Colors.black87))),
+                              DropdownMenuItem(value: 'ناغہ', child: Text('ناغہ (Naagha)', style: TextStyle(color: Colors.black87))),
+                              DropdownMenuItem(value: 'غیر حاضر', child: Text('غیر حاضر (Absent)', style: TextStyle(color: Colors.black87))),
+                              DropdownMenuItem(value: 'رخصت', child: Text('رخصت (Leave)', style: TextStyle(color: Colors.black87))),
                             ],
                             onChanged: (val) => setStateDialog(() => grades[i] = val),
                           ),
@@ -196,10 +206,10 @@ class _QaidaEntryPageState extends State<QaidaEntryPage> {
                 onPressed: () async {
                   final db = await dbHelper.database;
                   String hearingTimeStr = '';
-                  if (_selectedTime != null) {
-                    hearingTimeStr = '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00';
+                  if (selectedTime != null) {
+                    hearingTimeStr = '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}:00';
                   }
-                  Map<String, dynamic> data = {
+                    Map<String, dynamic> data = {
                     'student_id': student['id'],
                     'date': _selectedDate,
                     'lesson_type': lessonType,
@@ -208,6 +218,7 @@ class _QaidaEntryPageState extends State<QaidaEntryPage> {
                     'sabaq_2': sabaqs[1] ?? '', 'qty_2': qtyControllers[1].text, 'grade_2': grades[1] ?? '',
                     'sabaq_3': sabaqs[2] ?? '', 'qty_3': qtyControllers[2].text, 'grade_3': grades[2] ?? '',
                     'sabaq_4': sabaqs[3] ?? '', 'qty_4': qtyControllers[3].text, 'grade_4': grades[3] ?? '',
+                    'system_type': SystemTypeGlobal.currentSystemType.value,
                     'is_synced': 0,
                   };
                   if (record != null) {

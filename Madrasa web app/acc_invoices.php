@@ -2,24 +2,34 @@
 require_once 'db.php';
 session_start();
 
-if (!isset($_SESSION['user_id']) || !app_has_perm('manage_erp')) {
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_erp')) {
     header("Location: dashboard.php");
     exit;
 }
 $role = $_SESSION['role'] ?? '';
 $user = ['id' => $_SESSION['user_id'], 'role' => $role];
 
+$cur_tenant_id = get_current_tenant_id($pdo);
+
 // Create table if not exists
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS acc_invoices (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL DEFAULT 1,
         student_id INT NOT NULL,
         invoice_no VARCHAR(50),
         month_year VARCHAR(20),
         amount DECIMAL(15,2),
         status ENUM('Unpaid', 'Paid', 'Cancelled') DEFAULT 'Unpaid',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        created_by INT
+        created_by INT,
+        INDEX (tenant_id)
     )");
 } catch (Exception $e) {}
 
@@ -30,34 +40,51 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['generate_invoices'])) 
     $uid = $_SESSION['user_id'];
     
     if ($amount > 0) {
-        $students = $pdo->query("SELECT id, name FROM students WHERE status = 'Active' AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchAll(PDO::FETCH_ASSOC);
+        $st_stmt = $pdo->prepare("SELECT id, name FROM students WHERE status = 'Active' AND (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ?");
+        $st_stmt->execute([$cur_tenant_id]);
+        $students = $st_stmt->fetchAll(PDO::FETCH_ASSOC);
+
         foreach ($students as $st) {
-            $check = $pdo->prepare("SELECT id FROM acc_invoices WHERE student_id = ? AND month_year = ?");
-            $check->execute([$st['id'], $month_year]);
+            $check = $pdo->prepare("SELECT id FROM acc_invoices WHERE student_id = ? AND month_year = ? AND tenant_id = ?");
+            $check->execute([$st['id'], $month_year, $cur_tenant_id]);
             if ($check->rowCount() == 0) {
+                // Check active hostel allocation
+                $hostel_fee = 0.0;
+                try {
+                    $hStmt = $pdo->prepare("SELECT a.*, r.monthly_fee, r.room_number FROM hostel_allocations a JOIN hostel_rooms r ON a.room_id = r.id WHERE a.student_id = ? AND a.tenant_id = ? AND a.status = 'Occupied' AND (a.is_deleted = 0 OR a.is_deleted IS NULL) LIMIT 1");
+                    $hStmt->execute([$st['id'], $cur_tenant_id]);
+                    $hRoom = $hStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($hRoom && !empty($hRoom['monthly_fee'])) {
+                        $hostel_fee = (float)$hRoom['monthly_fee'];
+                    }
+                } catch (Exception $e) {}
+
+                $final_amount = $amount + $hostel_fee;
                 $inv_no = "INV-" . date('ym') . "-" . rand(1000, 9999);
-                $stmt = $pdo->prepare("INSERT INTO acc_invoices (student_id, invoice_no, month_year, amount, status, created_by) VALUES (?, ?, ?, ?, 'Unpaid', ?)");
-                $stmt->execute([$st['id'], $inv_no, $month_year, $amount, $uid]);
+                $stmt = $pdo->prepare("INSERT INTO acc_invoices (student_id, invoice_no, month_year, amount, status, created_by, tenant_id) VALUES (?, ?, ?, ?, 'Unpaid', ?, ?)");
+                $stmt->execute([$st['id'], $inv_no, $month_year, $final_amount, $uid, $cur_tenant_id]);
             }
         }
-        $msg = "Invoices generated successfully for $month_year!";
+        $msg = "Invoices generated successfully for $month_year (Hostel charges auto-included where applicable)!";
     }
 }
 
 // Update Status
 if (isset($_GET['mark_paid']) && is_numeric($_GET['mark_paid'])) {
-    $pdo->prepare("UPDATE acc_invoices SET status = 'Paid' WHERE id = ?")->execute([$_GET['mark_paid']]);
+    $pdo->prepare("UPDATE acc_invoices SET status = 'Paid' WHERE id = ? AND tenant_id = ?")->execute([$_GET['mark_paid'], $cur_tenant_id]);
     header("Location: acc_invoices.php");
     exit;
 }
 
-$invoices = $pdo->query("
+$inv_stmt = $pdo->prepare("
     SELECT i.*, s.name as student_name, s.admission_number 
     FROM acc_invoices i
     JOIN students s ON i.student_id = s.id
-    WHERE (s.is_deleted = 0 OR s.is_deleted IS NULL)
+    WHERE (s.is_deleted = 0 OR s.is_deleted IS NULL) AND i.tenant_id = ? AND s.tenant_id = ?
     ORDER BY i.id DESC LIMIT 100
-")->fetchAll(PDO::FETCH_ASSOC);
+");
+$inv_stmt->execute([$cur_tenant_id, $cur_tenant_id]);
+$invoices = $inv_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $title = "Fee Invoices - ERP";
 include 'header.php';

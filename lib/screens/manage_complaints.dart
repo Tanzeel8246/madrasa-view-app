@@ -25,12 +25,14 @@ class _ManageComplaintsPageState extends State<ManageComplaintsPage> {
     setState(() => _isLoading = true);
     final db = DBHelper();
     final allComplaints = await db.getComplaints();
-    final students = await db.getStudents();
+    final students = await db.getStudentsForUser();
+    final allowedStudentIds = students.map((s) => s['id']).toSet();
     
     // Join with student names
     List<Map<String, dynamic>> enriched = [];
     for (var c in allComplaints) {
       if (c['is_deleted'] == 1) continue;
+      if (!allowedStudentIds.contains(c['student_id'])) continue;
       final st = students.firstWhere((s) => s['id'] == c['student_id'], orElse: () => {});
       final stName = st['name'] ?? 'Unknown';
       enriched.add({

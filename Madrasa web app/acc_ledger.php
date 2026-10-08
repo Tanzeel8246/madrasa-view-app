@@ -2,12 +2,22 @@
 require_once 'db.php';
 session_start();
 
-if (!isset($_SESSION['user_id']) || !app_has_perm('manage_erp')) {
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_erp')) {
     header("Location: dashboard.php");
     exit;
 }
 $role = $_SESSION['role'] ?? '';
 $user = ['id' => $_SESSION['user_id'], 'role' => $role];
+
+$cur_tenant_id = get_current_tenant_id($pdo);
+$tenant_settings = get_tenant_settings($pdo, $cur_tenant_id);
+$inst_name = !empty($tenant_settings['madrasa_name']) ? $tenant_settings['madrasa_name'] : 'مدرسہ پورٹل';
 
 $account_id = isset($_GET['account_id']) ? (int)$_GET['account_id'] : 0;
 $from_date = $_GET['from'] ?? date('Y-m-01');
@@ -17,23 +27,28 @@ $entries = [];
 $opening_balance = 0;
 $selected_account = null;
 
-$accounts_list = $pdo->query("SELECT id, code, name FROM acc_chart_of_accounts WHERE is_deleted = 0 ORDER BY code")->fetchAll(PDO::FETCH_ASSOC);
+$acc_list_stmt = $pdo->prepare("SELECT id, code, name FROM acc_chart_of_accounts WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? ORDER BY code");
+$acc_list_stmt->execute([$cur_tenant_id]);
+$accounts_list = $acc_list_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 if ($account_id > 0) {
-    // Get account info
-    $stmt = $pdo->prepare("SELECT * FROM acc_chart_of_accounts WHERE id = ?");
-    $stmt->execute([$account_id]);
+    // Get account info scoped by tenant
+    $stmt = $pdo->prepare("SELECT * FROM acc_chart_of_accounts WHERE id = ? AND tenant_id = ?");
+    $stmt->execute([$account_id, $cur_tenant_id]);
     $selected_account = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($selected_account) {
-        // Calculate opening balance (Before from_date)
+        $sys = $_SESSION['system_type'] ?? 'Madrasa';
+        $sys_cond = ($sys === 'Masjid') ? "v.system_type = 'Masjid'" : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
+
+        // Calculate opening balance (Before from_date) scoped by tenant
         $ob_stmt = $pdo->prepare("
             SELECT SUM(e.debit) as total_dr, SUM(e.credit) as total_cr 
             FROM acc_ledger_entries e 
             JOIN acc_vouchers v ON e.voucher_id = v.id 
-            WHERE e.account_id = ? AND v.date < ? AND (v.status IS NULL OR v.status != 'Rejected') AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+            WHERE e.account_id = ? AND e.tenant_id = ? AND v.tenant_id = ? AND v.date < ? AND (v.status IS NULL OR v.status != 'Rejected') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $sys_cond
         ");
-        $ob_stmt->execute([$account_id, $from_date]);
+        $ob_stmt->execute([$account_id, $cur_tenant_id, $cur_tenant_id, $from_date]);
         $ob = $ob_stmt->fetch(PDO::FETCH_ASSOC);
         
         $dr = (float)($ob['total_dr'] ?? 0);
@@ -42,15 +57,15 @@ if ($account_id > 0) {
         $is_dr_normal = in_array($selected_account['type'], ['Asset', 'Expense']);
         $opening_balance = $is_dr_normal ? ($dr - $cr) : ($cr - $dr);
 
-        // Fetch entries in date range
+        // Fetch entries in date range scoped by tenant
         $entries_stmt = $pdo->prepare("
             SELECT e.*, v.date, v.voucher_no, v.description as v_desc, v.type as v_type
             FROM acc_ledger_entries e
             JOIN acc_vouchers v ON e.voucher_id = v.id
-            WHERE e.account_id = ? AND v.date BETWEEN ? AND ? AND (v.status IS NULL OR v.status != 'Rejected') AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+            WHERE e.account_id = ? AND e.tenant_id = ? AND v.tenant_id = ? AND v.date BETWEEN ? AND ? AND (v.status IS NULL OR v.status != 'Rejected') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $sys_cond
             ORDER BY v.date ASC, v.id ASC
         ");
-        $entries_stmt->execute([$account_id, $from_date, $to_date]);
+        $entries_stmt->execute([$account_id, $cur_tenant_id, $cur_tenant_id, $from_date, $to_date]);
         $entries = $entries_stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
@@ -65,7 +80,7 @@ include 'header.php';
         <form method="GET" class="row g-2 align-items-end">
             <div class="col-md-4">
                 <label class="fw-bold">Account</label>
-                <select name="account_id" class="form-select select2" required>
+                <select name="account_id" class="form-select select2" onchange="if(this.value) this.form.submit();" required>
                     <option value="">-- Select Account --</option>
                     <?php foreach($accounts_list as $a): ?>
                     <option value="<?php echo $a['id']; ?>" <?php echo $account_id == $a['id'] ? 'selected' : ''; ?>>
@@ -76,11 +91,11 @@ include 'header.php';
             </div>
             <div class="col-md-3">
                 <label class="fw-bold">From Date</label>
-                <input type="date" name="from" class="form-control" value="<?php echo e($from_date); ?>" required>
+                <input type="date" name="from" id="accLedgerFrom" class="form-control" value="<?php echo e($from_date); ?>" onchange="if(this.value && document.getElementById('accLedgerTo').value && document.querySelector('[name=account_id]').value) this.form.submit();" required>
             </div>
             <div class="col-md-3">
                 <label class="fw-bold">To Date</label>
-                <input type="date" name="to" class="form-control" value="<?php echo e($to_date); ?>" required>
+                <input type="date" name="to" id="accLedgerTo" class="form-control" value="<?php echo e($to_date); ?>" onchange="if(this.value && document.getElementById('accLedgerFrom').value && document.querySelector('[name=account_id]').value) this.form.submit();" required>
             </div>
             <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100 mb-1"><?php echo t('view_ledger'); ?></button>
@@ -92,7 +107,7 @@ include 'header.php';
     <?php if($selected_account): ?>
     <div id="printableArea" class="bg-white p-4 border rounded shadow-sm">
         <div class="text-center border-bottom border-2 border-dark mb-4 pb-2">
-            <h3 class="fw-bold text-success m-0">مدرسہ اشرف المدارس</h3>
+            <h3 class="fw-bold text-success m-0"><?php echo htmlspecialchars($inst_name); ?></h3>
             <h5 class="mt-2 text-uppercase fw-bold">General Ledger Account</h5>
             <p class="mb-1 fw-bold fs-5 text-primary">
                 <?php echo e($selected_account['code'] . ' - ' . $selected_account['name']); ?> 

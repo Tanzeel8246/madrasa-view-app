@@ -1,7 +1,10 @@
     </div>
     <footer class="text-center py-3 bg-light border-top mt-5">
         <div class="container small">
-            <span class="text-muted">© 2026 مدرسہ اشرف المدارس۔ جملہ حقوق محفوظ ہیں۔</span>
+            <?php 
+            $footer_org_name = !empty($header_current_name) ? $header_current_name : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : 'نظامِ مدارس و مساجد');
+            ?>
+            <span class="text-muted">© <?php echo date('Y'); ?> <?php echo htmlspecialchars($footer_org_name); ?>۔ جملہ حقوق محفوظ ہیں۔</span>
             <div class="mt-2">
                 <a href="privacy.php" class="text-decoration-none text-secondary mx-2">پرائیسی پالیسی</a> |
                 <a href="terms.php" class="text-decoration-none text-secondary mx-2">شرائط و ضوابط</a> |
@@ -14,17 +17,72 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
-    // مینیو ٹوگل
+    // مینیو ٹوگل و آؤٹ سائیڈ ٹچ سے بند ہونا (Sidebar toggle and outside tap to close)
     var el = document.getElementById("wrapper");
     var toggleButton = document.getElementById("menu-toggle");
-    toggleButton.onclick = function () {
-        el.classList.toggle("toggled");
-        document.body.classList.toggle("active-nav");
-    };
+    var overlay = document.getElementById("overlay");
 
-    // سلیکٹ 2 (سرچ ایبل ڈراپ ڈاؤن)
+    function closeSidebar() {
+        if (document.body.classList.contains("active-nav")) {
+            document.body.classList.remove("active-nav");
+            if (el) el.classList.remove("toggled");
+        }
+    }
+
+    if (toggleButton && el) {
+        toggleButton.onclick = function (e) {
+            e.stopPropagation();
+            el.classList.toggle("toggled");
+            document.body.classList.toggle("active-nav");
+        };
+    }
+
+    if (overlay) {
+        overlay.addEventListener("click", closeSidebar);
+        overlay.addEventListener("touchstart", closeSidebar, { passive: true });
+    }
+
+    // سائیڈ بار کے باہر کہیں بھی ٹچ یا کلک کرنے پر اسے خودکار بند کریں
+    document.addEventListener("click", function(e) {
+        if (!document.body.classList.contains("active-nav")) return;
+        var sidebar = document.getElementById("sidebar-wrapper");
+        if (sidebar && !sidebar.contains(e.target) && toggleButton && !toggleButton.contains(e.target)) {
+            closeSidebar();
+        }
+    });
+
+    document.addEventListener("touchstart", function(e) {
+        if (!document.body.classList.contains("active-nav")) return;
+        var sidebar = document.getElementById("sidebar-wrapper");
+        if (sidebar && !sidebar.contains(e.target) && toggleButton && !toggleButton.contains(e.target)) {
+            closeSidebar();
+        }
+    }, { passive: true });
+
+    // فعال صفحہ کے ڈراپ ڈاؤن کو خودکار کھلا رکھنا (Keep active dropdown open on refresh/load)
+    ['maktabSubmenu', 'masjidFinanceSubmenu', 'erpSubmenu'].forEach(function(menuId) {
+        var menu = document.getElementById(menuId);
+        if (!menu) return;
+        if (menu.querySelector('.active-link')) {
+            menu.classList.add('show');
+            var btn = document.querySelector('[href="#' + menuId + '"]');
+            if (btn) {
+                btn.classList.remove('collapsed');
+                btn.setAttribute('aria-expanded', 'true');
+            }
+        }
+    });
+
+    // سلیکٹ 2 (سرچ ایبل ڈراپ ڈاؤن) اور خودکار ٹیبل موبائل رسپانسو ریپر
     $(document).ready(function() {
         $('.select2').select2({ width: '100%' });
+
+        // تمام ٹیبلز کو موبائل پر کٹنے سے بچانے کے لیے خودکار رسپانسو ریپر
+        $('table').each(function() {
+            if (!$(this).closest('.table-responsive').length && !$(this).hasClass('no-responsive')) {
+                $(this).wrap('<div class="table-responsive auto-table-responsive"></div>');
+            }
+        });
     });
 
     // ==========================================

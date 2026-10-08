@@ -78,9 +78,36 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
 
   Future<void> _loadData() async {
     final db = DBHelper();
-    final teachers = await db.getTeachers();
-    final classes = await db.getClasses();
+    final allTeachers = await db.getTeachers();
+    final classes = await db.getClassesForUser();
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+    final teachers = allTeachers.where((t) {
+      final joinDate = t['joining_date']?.toString().trim();
+      if (joinDate != null && joinDate.isNotEmpty && joinDate != 'null') {
+        final cleanJoin = joinDate.length >= 10 ? joinDate.substring(0, 10) : joinDate;
+        if (cleanJoin.compareTo(dateStr) > 0) {
+          return false; // استاذ کی تقرری اس تاریخ کے بعد ہوئی تھی
+        }
+      }
+      final status = (t['status'] ?? '').toString().trim().toLowerCase();
+      final statusDate = (t['status_change_date'] ?? t['resignation_date'])?.toString().trim();
+      
+      bool isActiveStatus = status == 'active' || status == 'حاضر' || status == 'فعال' || status.isEmpty;
+      
+      if (!isActiveStatus) {
+        if (statusDate == null || statusDate.isEmpty || statusDate == 'null') {
+           return false; // Exclude unconditionally if no status date is provided and they are inactive.
+        } else {
+           final cleanStatus = statusDate.length >= 10 ? statusDate.substring(0, 10) : statusDate;
+           if (cleanStatus.compareTo(dateStr) <= 0) {
+             return false;
+           }
+        }
+      }
+      return true;
+    }).toList();
+
     final existingRows = await db.getTeacherPeriodAttendanceByDate(dateStr);
     final assignments = buildTeacherPeriodAssignments(
       teachers: teachers,

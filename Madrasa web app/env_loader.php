@@ -1,4 +1,6 @@
 <?php
+$GLOBALS['_MADRASA_ENV'] = [];
+
 function madrasa_load_env($path = null) {
     static $loaded = false;
     if ($loaded) return;
@@ -20,7 +22,7 @@ function madrasa_load_env($path = null) {
         $key = trim($key);
         $value = trim($value);
 
-        if ($key === '' || getenv($key) !== false) {
+        if ($key === '') {
             continue;
         }
 
@@ -32,9 +34,33 @@ function madrasa_load_env($path = null) {
             $value = substr($value, 1, -1);
         }
 
-        putenv($key . '=' . $value);
+        $GLOBALS['_MADRASA_ENV'][$key] = $value;
         $_ENV[$key] = $value;
         $_SERVER[$key] = $value;
+        if (function_exists('putenv')) {
+            @putenv($key . '=' . $value);
+        }
+    }
+}
+
+if (!function_exists('get_env_val')) {
+    function get_env_val($key, $default = '') {
+        if (isset($GLOBALS['_MADRASA_ENV'][$key]) && $GLOBALS['_MADRASA_ENV'][$key] !== '') {
+            return $GLOBALS['_MADRASA_ENV'][$key];
+        }
+        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+        if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+            return $_SERVER[$key];
+        }
+        if (function_exists('getenv')) {
+            $v = @getenv($key);
+            if ($v !== false && $v !== '') {
+                return $v;
+            }
+        }
+        return $default;
     }
 }
 

@@ -1,4 +1,11 @@
-<?php include 'header.php'; ?>
+<?php 
+require_once 'db.php';
+include 'header.php';
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+    http_response_code(403);
+    die("<div class='container mt-5 alert alert-danger'>صرف ایڈمن کو اس صفحے تک رسائی کی اجازت ہے۔</div>");
+}
+?>
 <?php
 if (isset($_POST['save_result'])) {
     $stmt = $pdo->prepare("INSERT INTO results (student_id, exam_id, marks_obtained, total_marks) VALUES (?, ?, ?, ?)");

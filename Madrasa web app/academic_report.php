@@ -1,6 +1,21 @@
 <?php 
-ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_reporting(E_ALL);
-require_once 'db.php'; 
+session_start();
+require_once 'db.php';
+
+$sys_type = $_SESSION['system_type'] ?? 'Madrasa';
+$user_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($user_role, ['admin', 'superadmin', 'administrator'], true);
+$p_needed = ($sys_type === 'Masjid') ? 'manage_masjid_academic_entry' : 'manage_academic_entry';
+$p_alt1 = ($sys_type === 'Masjid') ? 'manage_masjid_academic_dashboard' : 'manage_academic_dashboard';
+$p_alt2 = ($sys_type === 'Masjid') ? 'manage_masjid_academics' : 'manage_academics';
+$p_alt3 = ($sys_type === 'Masjid') ? 'manage_masjid_hifz' : 'manage_hifz';
+if (!$is_admin && !app_has_perm($p_needed) && !app_has_perm($p_alt1) && !app_has_perm($p_alt2) && !app_has_perm($p_alt3)) {
+    include 'header.php';
+    echo "<div class='alert alert-danger m-4 text-center fw-bold'>آپ کو تعلیمی رپورٹ اندراج کی اجازت نہیں ہے۔</div>";
+    include 'footer.php';
+    exit;
+}
+
 if (empty($_GET['class']) && empty($_POST['class_name'])) {
     header('Location: academic_entry_dashboard.php');
     exit;
@@ -12,6 +27,7 @@ include 'header.php';
 if (isset($_POST['save_academic'])) {
     try {
         $date = $_POST['date'] ?? date('Y-m-d');
+        $cur_tenant_id = (int)get_current_tenant_id();
         $class_name = $_POST['class_name'] ?? '';
         $subject = $_POST['subject'] ?? '';
         
@@ -23,15 +39,20 @@ if (isset($_POST['save_academic'])) {
             $pdo->beginTransaction();
             foreach ($std_ids as $std_id) {
                 // Remove existing reports for this student, date, and subject
-                $pdo->prepare("DELETE FROM academic_reports WHERE student_id = ? AND date = ? AND subject = ?")->execute([$std_id, $date, $subject]);
+                $pdo->prepare("DELETE FROM academic_reports WHERE student_id = ? AND date = ? AND subject = ? AND tenant_id = ?")->execute([$std_id, $date, $subject, $cur_tenant_id]);
                 
                 $lesson = trim($lessons[$std_id] ?? '');
                 $grade = trim($grades[$std_id] ?? '');
                 
                 // Save if there's any data
                 if ($lesson !== '' || $grade !== '') {
-                    $stmt = $pdo->prepare("INSERT INTO academic_reports (student_id, date, class_name, subject, lesson_details, grade) VALUES (?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([$std_id, $date, $class_name, $subject, $lesson, $grade]);
+                    try {
+                        $stmt = $pdo->prepare("INSERT INTO academic_reports (student_id, date, class_name, subject, lesson_details, grade, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?)");
+                        $stmt->execute([$std_id, $date, $class_name, $subject, $lesson, $grade, $cur_tenant_id]);
+                    } catch (Exception $eIns) {
+                        $stmt = $pdo->prepare("INSERT INTO academic_reports (student_id, date, class_name, subject, lesson_details, grade, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                        $stmt->execute([$std_id, $date, $class_name, $subject, $lesson, $grade, $cur_tenant_id]);
+                    }
                 }
             }
             $pdo->commit();
@@ -47,32 +68,39 @@ if (isset($_POST['save_academic'])) {
 
 
 // 2. فلٹرز کی وصولی
+$cur_tenant_id = (int)get_current_tenant_id();
 $selected_date = $_GET['date'] ?? date('Y-m-d');
 $selected_class = $_GET['class'] ?? '';
 $selected_subject = $_GET['subject'] ?? '';
 
 function academic_normalize_class($value) {
     $value = trim((string)$value);
-    $value = str_replace(['ٰ', 'ى', 'ي', 'ك'], ['', 'ی', 'ی', 'ک'], $value);
+    $value = str_replace(['ٰ', 'ى', 'ي', 'ك', 'آ', 'آ'], ['', 'ی', 'ی', 'ک', 'ا', 'ا'], $value);
     $value = preg_replace('/\s+/u', '', $value);
     return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
 }
 
 // 3. کلاسز لانا
-$classes_data = get_allowed_classes($pdo);
+$classes_data = get_allowed_classes($pdo, 'id ASC', null, null, $sys_type);
+$allowed_class_names = array_values(array_filter(array_unique(array_column($classes_data, 'name'))));
+
+// Verify selected_class against allowed classes for non-admin
+if (!$is_admin && !empty($selected_class) && !in_array($selected_class, $allowed_class_names, true)) {
+    $selected_class = !empty($allowed_class_names) ? $allowed_class_names[0] : '';
+}
 
 // منتخب کلاس کے مضامین نکالنا
 $available_subjects = [];
 if ($selected_class) {
-    $stmt = $pdo->prepare("SELECT * FROM classes WHERE name = ?");
-    $stmt->execute([$selected_class]);
+    $stmt = $pdo->prepare("SELECT * FROM classes WHERE name = ? AND tenant_id = ?");
+    $stmt->execute([$selected_class, $cur_tenant_id]);
     $c = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($c) {
         $is_hifz = ($c['class_type'] == 'Hifz/Nazira');
         
-        $stmt_p = $pdo->prepare("SELECT books FROM class_periods WHERE class_id = ? AND books IS NOT NULL AND books != ''");
-        $stmt_p->execute([$c['id']]);
+        $stmt_p = $pdo->prepare("SELECT books FROM class_periods WHERE class_id = ? AND tenant_id = ? AND books IS NOT NULL AND books != ''");
+        $stmt_p->execute([$c['id'], $cur_tenant_id]);
         $periods = $stmt_p->fetchAll(PDO::FETCH_ASSOC);
         
         if (!empty($periods)) {
@@ -105,18 +133,56 @@ if ($selected_class) {
 $students = [];
 $existing_reports = [];
 if ($selected_class && $selected_subject) {
+    $sys_type = $_SESSION['system_type'] ?? 'Madrasa';
+    $sys_cond = ($sys_type === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+
     $studentColumns = $pdo->query("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN);
     $classExpr = in_array('class_name', $studentColumns, true)
         ? "COALESCE(NULLIF(class, ''), NULLIF(class_name, ''))"
         : "class";
-    $stmt = $pdo->query("SELECT id, name, father_name, admission_number, $classExpr AS student_class FROM students WHERE (LOWER(TRIM(status)) IN ('active', 'present', '') OR status='حاضر' OR status IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY admission_number ASC");
-    $students = array_values(array_filter($stmt->fetchAll(PDO::FETCH_ASSOC), function($student) use ($selected_class) {
-        return academic_normalize_class($student['student_class'] ?? '') === academic_normalize_class($selected_class);
+    $sel_date_esc = $pdo->quote($selected_date);
+    $stmt = $pdo->query("SELECT id, name, father_name, admission_number, admission_date, graduation_date, status, alumni_category, leaving_reason, $classExpr AS student_class FROM students WHERE tenant_id = $cur_tenant_id AND $sys_cond AND (
+        (LOWER(TRIM(status)) IN ('active', 'present', '') OR status='حاضر' OR status IS NULL)
+        OR (status='Alumni' AND (graduation_date >= $sel_date_esc OR graduation_date IS NULL OR graduation_date = '' OR graduation_date >= DATE_SUB($sel_date_esc, INTERVAL 6 MONTH)))
+        OR (id IN (SELECT student_id FROM academic_reports WHERE date = $sel_date_esc AND tenant_id = $cur_tenant_id))
+        OR (id IN (SELECT student_id FROM attendance WHERE date = $sel_date_esc AND tenant_id = $cur_tenant_id))
+        OR (id IN (SELECT student_id FROM period_attendance WHERE date = $sel_date_esc AND tenant_id = $cur_tenant_id))
+    ) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY admission_number ASC");
+    $students = array_values(array_filter($stmt->fetchAll(PDO::FETCH_ASSOC), function($student) use ($selected_class, $selected_date) {
+        if (academic_normalize_class($student['student_class'] ?? '') !== academic_normalize_class($selected_class)) return false;
+        if (is_student_inactive($student, $selected_date)) return false;
+        $adm = !empty($student['admission_date']) ? substr($student['admission_date'], 0, 10) : '';
+        if ($adm && $selected_date < $adm) return false;
+        $grad = !empty($student['graduation_date']) ? substr($student['graduation_date'], 0, 10) : '';
+        if ($grad && $selected_date > $grad) return false;
+        return true;
     }));
+
+    if (empty($students)) {
+        try {
+            $m_stmt = $pdo->query("SELECT id, name, father_name, admission_number, admission_date, graduation_date, status, alumni_category, leaving_reason, $classExpr AS student_class FROM maktab_students WHERE tenant_id = $cur_tenant_id AND (
+                (LOWER(TRIM(status)) IN ('active', 'present', '') OR status='حاضر' OR status IS NULL)
+                OR (status='Alumni' AND (graduation_date >= $sel_date_esc OR graduation_date IS NULL OR graduation_date = '' OR graduation_date >= DATE_SUB($sel_date_esc, INTERVAL 6 MONTH)))
+                OR (id IN (SELECT student_id FROM academic_reports WHERE date = $sel_date_esc AND tenant_id = $cur_tenant_id))
+                OR (id IN (SELECT student_id FROM attendance WHERE date = $sel_date_esc AND tenant_id = $cur_tenant_id))
+                OR (id IN (SELECT student_id FROM period_attendance WHERE date = $sel_date_esc AND tenant_id = $cur_tenant_id))
+            ) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY admission_number ASC");
+            $students = array_values(array_filter($m_stmt->fetchAll(PDO::FETCH_ASSOC), function($student) use ($selected_class, $selected_date) {
+                if (academic_normalize_class($student['student_class'] ?? '') !== academic_normalize_class($selected_class)) return false;
+                if (is_student_inactive($student, $selected_date)) return false;
+                $adm = !empty($student['admission_date']) ? substr($student['admission_date'], 0, 10) : '';
+                if ($adm && $selected_date < $adm) return false;
+                $grad = !empty($student['graduation_date']) ? substr($student['graduation_date'], 0, 10) : '';
+                if ($grad && $selected_date > $grad) return false;
+                return true;
+            }));
+        } catch (Exception $e) {}
+    }
     
     // پہلے سے موجود رپورٹ لانا
-    $stmt = $pdo->prepare("SELECT student_id, lesson_details, grade FROM academic_reports WHERE class_name = ? AND subject = ? AND date = ?");
-    $stmt->execute([$selected_class, $selected_subject, $selected_date]);
+    $clean_cls = str_replace(' ', '', $selected_class);
+    $stmt = $pdo->prepare("SELECT student_id, lesson_details, grade FROM academic_reports WHERE (class_name = ? OR REPLACE(class_name, ' ', '') = ?) AND subject = ? AND date = ? AND tenant_id = ?");
+    $stmt->execute([$selected_class, $clean_cls, $selected_subject, $selected_date, $cur_tenant_id]);
     $reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach($reports as $r) {
         $existing_reports[$r['student_id']] = $r;

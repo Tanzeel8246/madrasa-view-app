@@ -49,6 +49,8 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
   Map<String, Map<String, Map<String, Map<String, String>>>> teacherAttData =
       {};
   Map<String, String> teacherNameById = {};
+  Map<String, Map<String, dynamic>> teacherInfoById = {};
+  Map<String, String> teacherLastAttDate = {};
   Map<String, Set<String>> assignedTeacherIdsByClass = {};
 
   int grandTotalSlots = 0;
@@ -57,6 +59,7 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
   int grandTotalA = 0;
   int grandTotalL = 0;
   String? selectedStudentId;
+  final Map<String, DateTime> _selectedSummaryDateByClass = {};
 
   @override
   void initState() {
@@ -97,6 +100,20 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
 
   String _dateKey(DateTime date) => intl.DateFormat('yyyy-MM-dd').format(date);
 
+  String? _cleanDateStr(dynamic val) {
+    if (val == null) return null;
+    final s = val.toString().trim();
+    if (s.isEmpty || s == 'null') return null;
+    if (s.length >= 10 && RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(s)) {
+      return s.substring(0, 10);
+    }
+    final parsed = DateTime.tryParse(s);
+    if (parsed != null) {
+      return intl.DateFormat('yyyy-MM-dd').format(parsed);
+    }
+    return null;
+  }
+
   String get _reportTitle {
     if (isMonthMode) {
       final m = int.parse(displayMonth!);
@@ -117,18 +134,42 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
         int.tryParse(settings['hijri_offset']?.toString() ?? '0') ?? 0;
 
     // Load Students
-    final allStudents = await db.getStudents();
+    final allStudents = await db.getStudentsForUser(includeInactive: true);
     _allStudents = allStudents.where((s) {
+      final isDeleted = s['is_deleted'] == 1 || s['is_deleted'] == '1';
+      if (isDeleted) return false;
       final st = (s['status'] ?? '').toString().trim().toLowerCase();
-      return st == 'active' || st == '' || st == 'present';
+      final gradDate = s['graduation_date']?.toString().trim();
+      return st == 'active' ||
+          st == '' ||
+          st == 'present' ||
+          st == 'alumni' ||
+          st == 'graduated' ||
+          st == 'left' ||
+          (gradDate != null && gradDate.isNotEmpty);
     }).toList();
 
     final allAttendance = await db.getAttendance();
     final allTeachers = await db.getTeachers();
+    teacherInfoById = {
+      for (final t in allTeachers) t['id'].toString(): t
+    };
     teacherNameById = {
       for (final t in allTeachers)
         t['id'].toString(): t['name']?.toString() ?? ''
     };
+
+    try {
+      final dbSqlite = await db.database;
+      final lastAttRows = await dbSqlite.rawQuery(
+        "SELECT teacher_id, MAX(date) as last_date FROM teacher_period_attendance WHERE (is_deleted = 0 OR is_deleted IS NULL) GROUP BY teacher_id"
+      );
+      teacherLastAttDate = {
+        for (final r in lastAttRows)
+          if (r['teacher_id'] != null && r['last_date'] != null)
+            r['teacher_id'].toString(): r['last_date'].toString()
+      };
+    } catch (_) {}
     assignedTeacherIdsByClass = {};
     final assignments = buildTeacherPeriodAssignments(
       teachers: allTeachers,
@@ -587,47 +628,234 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
       ...(assignedTeacherIdsByClass[className] ?? <String>{}),
       ...(classRows?.keys ?? <String>{}),
     };
-    final teacherIds = rawTeacherIds.where((tid) => teacherNameById.containsKey(tid)).toSet();
+    final teacherIds = rawTeacherIds.where((tid) => teacherNameById.containsKey(tid)).toList();
     if (teacherIds.isEmpty) return const [];
 
-    return teacherIds.map((teacherId) {
+    final reportYm = reportDates.isNotEmpty
+        ? reportDates.first.toIso8601String().substring(0, 7)
+        : '';
+
+    teacherIds.sort((a, b) {
+      final tA = teacherInfoById[a] ?? {};
+      final tB = teacherInfoById[b] ?? {};
+      final stA = (tA['status'] ?? 'Active').toString().trim().toLowerCase();
+      final stB = (tB['status'] ?? 'Active').toString().trim().toLowerCase();
+      final statusDateA = _cleanDateStr(tA['status_change_date']) ?? _cleanDateStr(tA['resignation_date']);
+      final statusDateB = _cleanDateStr(tB['status_change_date']) ?? _cleanDateStr(tB['resignation_date']);
+      final statusAYm = statusDateA != null && statusDateA.length >= 7 ? statusDateA.substring(0, 7) : '';
+      final statusBYm = statusDateB != null && statusDateB.length >= 7 ? statusDateB.substring(0, 7) : '';
+
+      final inactA = stA != 'active' && stA != 'حاضر' && stA != 'فعال' && stA.isNotEmpty && (statusAYm.isEmpty || reportYm.compareTo(statusAYm) >= 0);
+      final inactB = stB != 'active' && stB != 'حاضر' && stB != 'فعال' && stB.isNotEmpty && (statusBYm.isEmpty || reportYm.compareTo(statusBYm) >= 0);
+      if (!inactA && inactB) return -1;
+      if (inactA && !inactB) return 1;
+      return (teacherNameById[a] ?? '').compareTo(teacherNameById[b] ?? '');
+    });
+
+    final rows = <pw.Widget>[];
+
+    for (final teacherId in teacherIds) {
+      final tInfo = teacherInfoById[teacherId] ?? {};
+      final tStatus = (tInfo['status'] ?? 'Active').toString().trim();
+      final isInactive = tStatus.toLowerCase() != 'active' &&
+          tStatus != 'حاضر' &&
+          tStatus != 'فعال' &&
+          tStatus.isNotEmpty;
+
+      final joinDate = _cleanDateStr(tInfo['joining_date']);
+      final joinYm = joinDate != null && joinDate.length >= 7 ? joinDate.substring(0, 7) : null;
+
+      String? statusDate = _cleanDateStr(tInfo['status_change_date']) ?? _cleanDateStr(tInfo['resignation_date']);
+      if (statusDate == null && isInactive) {
+        final lastAtt = teacherLastAttDate[teacherId];
+        if (lastAtt != null && lastAtt.isNotEmpty) {
+          statusDate = _cleanDateStr(lastAtt);
+        }
+      }
+      final statusYm = statusDate != null && statusDate.length >= 7 ? statusDate.substring(0, 7) : null;
+
+      // کیا استاذ اس رپورٹ کے مہینے میں غیر فعال تھا؟
+      final isInactiveForReport = isInactive && (statusYm == null || reportYm.isEmpty || reportYm.compareTo(statusYm) >= 0);
+
+      bool hasAttInMonth = false;
+      for (final date in reportDates) {
+        final dayKey = _dateKey(date);
+        final periods = classRows?[teacherId]?[dayKey];
+        if (periods != null && periods.values.any((v) => v.isNotEmpty)) {
+          hasAttInMonth = true;
+          break;
+        }
+      }
+
+      if (joinYm != null && reportYm.isNotEmpty && reportYm.compareTo(joinYm) < 0) {
+        continue;
+      }
+
+      if (isInactive && statusYm != null && reportYm.isNotEmpty && reportYm.compareTo(statusYm) > 0 && !hasAttInMonth) {
+        continue;
+      }
+
       final teacherName = teacherNameById[teacherId]?.trim().isNotEmpty == true
           ? teacherNameById[teacherId]!
           : 'استاد $teacherId';
+
+      String statusLabel = "غیر فعال";
+      PdfColor statusColor = PdfColors.red800;
+      PdfColor statusBg = PdfColors.red50;
+
+      if (tStatus.contains('Terminated') || tStatus.contains('برطرف') || tStatus.contains('فارغ')) {
+        statusLabel = "برطرف / فارغ";
+        statusColor = PdfColors.red800;
+        statusBg = PdfColors.red50;
+      } else if (tStatus.contains('On Leave') || tStatus.contains('رخصت')) {
+        statusLabel = "رخصت پر";
+        statusColor = PdfColors.orange800;
+        statusBg = PdfColors.orange50;
+      } else if (tStatus.contains('مستعفی') || tStatus.contains('استعفی') || tStatus.toLowerCase().contains('resigned')) {
+        statusLabel = "مستعفی";
+        statusColor = PdfColors.grey700;
+        statusBg = PdfColors.grey100;
+      }
+      final statusReason = (tInfo['status_reason'] ?? '').toString().trim();
+      if (statusReason.isNotEmpty) {
+        statusLabel += " ($statusReason)";
+      }
+
+      final showFullStatusBanner = (isInactiveForReport && !hasAttInMonth) ||
+          (isInactive && statusYm != null && reportYm.isNotEmpty && reportYm.compareTo(statusYm) > 0);
+
       int present = 0, absent = 0, leave = 0;
       final periodKeys = _periodKeysForClass(className);
       final dayCells = <pw.Widget>[];
 
-      for (final date in reportDates) {
-        final dayKey = _dateKey(date);
-        final periods = classRows?[teacherId]?[dayKey];
-        if (periods != null && periods.isNotEmpty) {
-          for (final st in periods.values) {
-            if (st == 'P' || st == 'Late') {
-              present++;
-            } else if (st == 'A') {
-              absent++;
-            } else if (st == 'L') {
-              leave++;
-            }
-          }
-          dayCells.add(pw.Container(
-            width: 17,
+      if (showFullStatusBanner) {
+        final totalWidth = reportDates.length * 17.0;
+        final displayLabel = statusDate != null ? "$statusLabel (مورخہ: $statusDate)" : statusLabel;
+        dayCells.add(
+          pw.Container(
+            width: totalWidth,
             height: 28,
             decoration: pw.BoxDecoration(
-                color: PdfColors.green50,
-                border: pw.Border.all(color: PdfColors.grey400, width: 0.3)),
+              color: statusBg,
+              border: pw.Border.all(color: statusColor, width: 0.5),
+            ),
             alignment: pw.Alignment.center,
-            child: _buildPdfPeriodDotGrid(periods, periodKeys),
-          ));
-        } else {
-          dayCells.add(pw.Container(
+            child: pw.Text(
+              displayLabel,
+              style: pw.TextStyle(
+                font: ttf,
+                fontSize: 6.5,
+                fontWeight: pw.FontWeight.bold,
+                color: statusColor,
+              ),
+            ),
+          ),
+        );
+      } else {
+        for (int dIdx = 0; dIdx < reportDates.length; dIdx++) {
+          final date = reportDates[dIdx];
+          final isFri = date.weekday == DateTime.friday;
+          final dateStr = _dateKey(date);
+
+          if (isFri) {
+            dayCells.add(
+              pw.Container(
+                width: 17,
+                height: 28,
+                decoration: const pw.BoxDecoration(
+                  color: PdfColors.red50,
+                  border: pw.Border(
+                    left: pw.BorderSide(color: PdfColors.red200, width: 0.4),
+                    right: pw.BorderSide(color: PdfColors.red200, width: 0.4),
+                  ),
+                ),
+                alignment: pw.Alignment.center,
+                child: pw.Text("جمعہ",
+                  style: pw.TextStyle(
+                    font: ttf,
+                    fontSize: 6.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.red800,
+                  ),
+                ),
+              ),
+            );
+            continue;
+          }
+
+          if (joinDate != null && dateStr.compareTo(joinDate) < 0) {
+            dayCells.add(
+              pw.Container(
+                width: 17,
+                height: 28,
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400, width: 0.3),
+                  color: PdfColors.grey100,
+                ),
+                alignment: pw.Alignment.center,
+                child: pw.Text("-", style: pw.TextStyle(font: ttf, fontSize: 6.5, color: PdfColors.grey600)),
+              ),
+            );
+            continue;
+          }
+
+          if (isInactiveForReport && statusDate != null && dateStr.compareTo(statusDate) >= 0) {
+            final remCount = reportDates.length - dIdx;
+            final remWidth = remCount * 17.0;
+            final displayLabel = "$statusLabel (مورخہ: $statusDate)";
+            dayCells.add(
+              pw.Container(
+                width: remWidth,
+                height: 28,
+                decoration: pw.BoxDecoration(
+                  color: statusBg,
+                  border: pw.Border.all(color: statusColor, width: 0.5),
+                ),
+                alignment: pw.Alignment.center,
+                child: pw.Text(
+                  displayLabel,
+                  style: pw.TextStyle(
+                    font: ttf,
+                    fontSize: 6.0,
+                    fontWeight: pw.FontWeight.bold,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            );
+            break;
+          }
+
+          final dayKey = dateStr;
+          final periods = classRows?[teacherId]?[dayKey];
+          if (periods != null && periods.isNotEmpty) {
+            for (final st in periods.values) {
+              if (st == 'P' || st == 'Late') {
+                present++;
+              } else if (st == 'A') {
+                absent++;
+              } else if (st == 'L') {
+                leave++;
+              }
+            }
+            dayCells.add(pw.Container(
               width: 17,
               height: 28,
               decoration: pw.BoxDecoration(
                   color: PdfColors.green50,
-                  border:
-                      pw.Border.all(color: PdfColors.grey300, width: 0.3))));
+                  border: pw.Border.all(color: PdfColors.grey400, width: 0.3)),
+              alignment: pw.Alignment.center,
+              child: _buildPdfPeriodDotGrid(periods, periodKeys),
+            ));
+          } else {
+            dayCells.add(pw.Container(
+                width: 17,
+                height: 28,
+                decoration: pw.BoxDecoration(
+                    color: PdfColors.green50,
+                    border:
+                        pw.Border.all(color: PdfColors.grey300, width: 0.3))));
+          }
         }
       }
 
@@ -636,7 +864,8 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
           fontSize: 8,
           color: PdfColor.fromHex('#284D3D'),
           fontWeight: pw.FontWeight.bold);
-      return pw.Row(children: [
+
+      rows.add(pw.Row(children: [
         _attCellR('استاد', 18,
             ttf: ttf, bgColor: PdfColors.green50, bold: true),
         _attCellR(teacherName, 88,
@@ -649,16 +878,19 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
             bgColor: PdfColors.green50,
             color: PdfColor.fromHex('#284D3D')),
         ...dayCells,
-        _attCell(present.toString(), 26,
+        _attCell((present > 0 || !isInactiveForReport) ? present.toString() : '-', 26,
             style: teacherStyle, bgColor: PdfColors.green50),
-        _attCell(absent.toString(), 26,
+        _attCell((absent > 0 || !isInactiveForReport) ? absent.toString() : '-', 26,
             style: teacherStyle.copyWith(color: PdfColors.red),
             bgColor: PdfColors.green50),
-        _attCell(leave.toString(), 26,
+        _attCell((leave > 0 || !isInactiveForReport) ? leave.toString() : '-', 26,
             style: teacherStyle.copyWith(color: PdfColors.amber),
             bgColor: PdfColors.green50),
-      ]);
-    }).toList();
+      ]));
+    }
+
+    return rows;
+
   }
 
   Future<void> _printAttendancePdf() async {
@@ -734,7 +966,72 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
 
             for (var entry in grouped.entries) {
               String className = entry.key;
-              List<Map<String, dynamic>> students = entry.value;
+              List<Map<String, dynamic>> students = List<Map<String, dynamic>>.from(entry.value);
+              final reportYm = reportDates.isNotEmpty
+                  ? reportDates.first.toIso8601String().substring(0, 7)
+                  : '';
+
+              students.sort((a, b) {
+                final aGradDateStr = a['graduation_date']?.toString().trim() ?? '';
+                final bGradDateStr = b['graduation_date']?.toString().trim() ?? '';
+                final aGradYm = aGradDateStr.length >= 7 ? aGradDateStr.substring(0, 7) : '';
+                final bGradYm = bGradDateStr.length >= 7 ? bGradDateStr.substring(0, 7) : '';
+
+                final aStatus = (a['status'] ?? '').toString().trim().toLowerCase();
+                final bStatus = (b['status'] ?? '').toString().trim().toLowerCase();
+
+                final aInactiveInThisMonth = (aStatus == 'alumni' || aStatus == 'graduated' || aStatus == 'left' || aStatus.contains('خارج') || aGradDateStr.isNotEmpty)
+                    && (aGradYm.isEmpty || reportYm.compareTo(aGradYm) >= 0);
+                final bInactiveInThisMonth = (bStatus == 'alumni' || bStatus == 'graduated' || bStatus == 'left' || bStatus.contains('خارج') || bGradDateStr.isNotEmpty)
+                    && (bGradYm.isEmpty || reportYm.compareTo(bGradYm) >= 0);
+
+                if (!aInactiveInThisMonth && bInactiveInThisMonth) return -1;
+                if (aInactiveInThisMonth && !bInactiveInThisMonth) return 1;
+
+                final admA = int.tryParse(a['admission_number']?.toString() ?? a['roll_number']?.toString() ?? '0') ?? 0;
+                final admB = int.tryParse(b['admission_number']?.toString() ?? b['roll_number']?.toString() ?? '0') ?? 0;
+                return admA.compareTo(admB);
+              });
+
+              students = students.where((s) {
+                final admDateStr = _cleanDateStr(s['admission_date']);
+                final admYm = (admDateStr != null && admDateStr.length >= 7) ? admDateStr.substring(0, 7) : null;
+                if (admYm != null && reportYm.isNotEmpty && reportYm.compareTo(admYm) < 0) {
+                  return false;
+                }
+
+                final sStatus = (s['status'] ?? 'Active').toString().trim();
+                final gradDateStr = s['graduation_date']?.toString().trim() ?? '';
+                final isInactive = sStatus.toLowerCase() == 'alumni' ||
+                    sStatus.toLowerCase() == 'graduated' ||
+                    sStatus.toLowerCase() == 'left' ||
+                    sStatus.contains('خارج') ||
+                    gradDateStr.isNotEmpty;
+
+                if (!isInactive) return true;
+
+                final sid = s['id'].toString();
+                bool hasAtt = false;
+                for (final date in reportDates) {
+                  final dk = _dateKey(date);
+                  final sm = attData[sid]?[dk];
+                  if (sm != null && sm.values.any((v) => v.isNotEmpty)) {
+                    hasAtt = true;
+                    break;
+                  }
+                }
+                if (hasAtt) return true;
+
+                if (gradDateStr.isNotEmpty) {
+                  final gradYm = gradDateStr.length >= 7 ? gradDateStr.substring(0, 7) : gradDateStr;
+                  if (reportYm.isNotEmpty && reportYm.compareTo(gradYm) > 0) {
+                    return false;
+                  }
+                  return true;
+                }
+                return false;
+              }).toList();
+
 
               // Class Header
               allRows.add(pw.Container(
@@ -753,60 +1050,53 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
               List<pw.Widget> hdr = [
                 _attCell("#", 18, style: boldStyle.copyWith(fontSize: 7)),
                 _attCellR(
-                    "\u0646\u0627\u0645 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
+                    isUrduGlobal.value
+                        ? "\u0646\u0627\u0645 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645"
+                        : "Student Name",
                     88,
                     ttf: ttf,
-                    bold: true),
-                _attCellR("\u0648\u0644\u062f\u06cc\u062a", 68,
-                    ttf: ttf, bold: true),
-              ];
-              for (final date in reportDates) {
-                Map<String, int> hd = getHijriDateLoop(date, hijriOffset);
-                hdr.add(pw.Container(
-                  width: 17,
-                  height: 30,
-                  decoration: pw.BoxDecoration(
-                      color: PdfColor.fromHex('#284D3D'),
-                      border:
-                          pw.Border.all(color: PdfColors.white, width: 0.2)),
-                  alignment: pw.Alignment.center,
-                  child: pw.Column(
-                      mainAxisAlignment: pw.MainAxisAlignment.center,
-                      children: [
-                        pw.Text(date.day.toString(),
-                            style: pw.TextStyle(
-                                font: ttf,
-                                fontSize: 6.5,
-                                color: PdfColors.white,
-                                fontWeight: pw.FontWeight.bold)),
-                        pw.Text(hd['d'].toString(),
-                            style: pw.TextStyle(
-                                font: ttf,
-                                fontSize: 5.5,
-                                color: PdfColors.greenAccent200)),
-                      ]),
-                ));
-              }
-              hdr.addAll([
-                _attCell("\u062d\u0627\u0636\u0631", 26,
-                    style: pw.TextStyle(
-                        font: ttf,
-                        fontSize: 7,
-                        color: PdfColors.green800,
-                        fontWeight: pw.FontWeight.bold)),
-                _attCell("\u063a.\u062d", 26,
-                    style: pw.TextStyle(
-                        font: ttf,
-                        fontSize: 7,
-                        color: PdfColors.red,
-                        fontWeight: pw.FontWeight.bold)),
-                _attCell("\u0631\u062e\u0635\u062a", 26,
-                    style: pw.TextStyle(
+                    style: boldStyle.copyWith(fontSize: 7)),
+                _attCellR(
+                    isUrduGlobal.value
+                        ? "\u0648\u0644\u062f\u06cc\u062a"
+                        : "Father Name",
+                    68,
+                    ttf: ttf,
+                    style: boldStyle.copyWith(fontSize: 7)),
+                ...reportDates.map((d) {
+                  final isFri = d.weekday == DateTime.friday;
+                  return pw.Container(
+                    width: 17,
+                    height: 18,
+                    decoration: pw.BoxDecoration(
+                        color: isFri ? PdfColors.red50 : PdfColors.grey200,
+                        border: pw.Border.all(
+                            color: PdfColors.grey400, width: 0.3)),
+                    alignment: pw.Alignment.center,
+                    child: pw.Text(d.day.toString(),
+                        style: pw.TextStyle(
+                            font: ttf,
+                            fontSize: 7,
+                            fontWeight: pw.FontWeight.bold,
+                            color: isFri ? PdfColors.red800 : PdfColors.black)),
+                  );
+                }),
+                _attCell(
+                    isUrduGlobal.value ? "\u062d\u0627\u0636\u0631" : "P", 26,
+                    style: boldStyle.copyWith(
+                        font: ttf, fontSize: 7, color: PdfColors.green800)),
+                _attCell(
+                    isUrduGlobal.value ? "\u063a\u06cc\u0631" : "A", 26,
+                    style: boldStyle.copyWith(
+                        font: ttf, fontSize: 7, color: PdfColors.red)),
+                _attCell(
+                    isUrduGlobal.value ? "\u0631\u062e\u0635\u062a" : "L", 26,
+                    style: boldStyle.copyWith(
                         font: ttf,
                         fontSize: 7,
                         color: PdfColors.amber,
                         fontWeight: pw.FontWeight.bold)),
-              ]);
+              ];
               allRows.add(pw.Row(children: hdr));
 
               // Teacher rows
@@ -818,9 +1108,105 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
               for (var s in students) {
                 String sid = s['id'].toString();
                 int mp = 0, ma = 0, ml = 0;
+
+                final sStatus = (s['status'] ?? 'Active').toString().trim();
+                final gradDateStr = s['graduation_date']?.toString().trim() ?? '';
+                final gradYm = gradDateStr.length >= 7 ? gradDateStr.substring(0, 7) : '';
+
+                // کیا طالب علم اس رپورٹ کے مہینے میں ان ایکٹو تھا؟
+                final isInactiveForThisReport = (sStatus.toLowerCase() == 'alumni' ||
+                    sStatus.toLowerCase() == 'graduated' ||
+                    sStatus.toLowerCase() == 'left' ||
+                    sStatus.contains('خارج') ||
+                    gradDateStr.isNotEmpty) && (gradYm.isEmpty || reportYm.compareTo(gradYm) >= 0);
+
+                final leavingReason = (s['leaving_reason'] ?? '').toString().trim();
+                final alumniCat = (s['alumni_category'] ?? '').toString().trim();
+
+                String statusLabel = "تعلیم مکمل ہو گئی";
+                PdfColor statusBorderColor = PdfColors.green800;
+                PdfColor statusBgColor = PdfColors.green50;
+                PdfColor statusTextColor = PdfColors.green900;
+
+                if (leavingReason.contains('خارج') || sStatus.contains('خارج') || alumniCat.contains('خارج')) {
+                  statusLabel = "خارج کر دیا گیا";
+                  statusBorderColor = PdfColors.red800;
+                  statusBgColor = PdfColors.red50;
+                  statusTextColor = PdfColors.red900;
+                } else if (leavingReason.contains('چھوڑ') || leavingReason.contains('شوقیہ') || sStatus.toLowerCase().contains('left')) {
+                  statusLabel = "چھوڑ گیا";
+                  statusBorderColor = PdfColors.orange800;
+                  statusBgColor = PdfColors.orange50;
+                  statusTextColor = PdfColors.orange900;
+                } else if (alumniCat.isNotEmpty) {
+                  statusLabel = alumniCat;
+                } else if (leavingReason.isNotEmpty) {
+                  statusLabel = leavingReason;
+                }
+
+                final admDateStr = _cleanDateStr(s['admission_date']);
                 List<pw.Widget> dcs = [];
-                for (final date in reportDates) {
+                for (int dIdx = 0; dIdx < reportDates.length; dIdx++) {
+                  final date = reportDates[dIdx];
+                  final isFri = date.weekday == DateTime.friday;
                   String dayKey = _dateKey(date);
+
+                  if (isFri) {
+                    dcs.add(pw.Container(
+                      width: 17,
+                      height: 28,
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.red50,
+                        border: pw.Border(
+                          left: pw.BorderSide(color: PdfColors.red200, width: 0.4),
+                          right: pw.BorderSide(color: PdfColors.red200, width: 0.4),
+                        ),
+                      ),
+                      alignment: pw.Alignment.center,
+                      child: pw.Text("جمعہ",
+                        style: pw.TextStyle(
+                          font: ttf,
+                          fontSize: 6.5,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.red800,
+                        ),
+                      ),
+                    ));
+                    continue;
+                  }
+
+                  if (admDateStr != null && dayKey.compareTo(admDateStr) < 0) {
+                    dcs.add(pw.Container(
+                      width: 17,
+                      height: 28,
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(color: PdfColors.grey400, width: 0.3),
+                        color: PdfColors.grey100,
+                      ),
+                      alignment: pw.Alignment.center,
+                      child: pw.Text("-", style: pw.TextStyle(font: ttf, fontSize: 6.5, color: PdfColors.grey600)),
+                    ));
+                    continue;
+                  }
+
+                  if (isInactiveForThisReport && gradDateStr.isNotEmpty && dayKey.compareTo(gradDateStr) >= 0) {
+                    final remainingDays = reportDates.length - dIdx;
+                    final width = remainingDays * 17.0;
+                    final gradDisplay = gradDateStr.isNotEmpty ? " ($gradDateStr)" : "";
+                    dcs.add(pw.Container(
+                      width: width,
+                      height: 28,
+                      decoration: pw.BoxDecoration(
+                        color: statusBgColor,
+                        border: pw.Border.all(color: statusBorderColor, width: 0.5),
+                      ),
+                      alignment: pw.Alignment.center,
+                      child: pw.Text(statusLabel + gradDisplay,
+                          style: pw.TextStyle(font: ttf, fontSize: 6.5, color: statusTextColor, fontWeight: pw.FontWeight.bold)),
+                    ));
+                    break;
+                  }
+
                   Map<String, String>? shiftsMap = attData[sid]?[dayKey];
                   PdfColor bg =
                       sr % 2 == 0 ? PdfColors.grey100 : PdfColors.white;
@@ -864,21 +1250,21 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
                   _attCellR(s['father_name']?.toString() ?? '', 68,
                       ttf: ttf, bgColor: rowBg, color: PdfColors.grey700),
                   ...dcs,
-                  _attCell(mp.toString(), 26,
+                  _attCell((mp > 0 || !isInactiveForThisReport) ? mp.toString() : '-', 26,
                       style: pw.TextStyle(
                           font: ttf,
                           fontSize: 8,
                           color: PdfColors.green800,
                           fontWeight: pw.FontWeight.bold),
                       bgColor: rowBg),
-                  _attCell(ma.toString(), 26,
+                  _attCell((ma > 0 || !isInactiveForThisReport) ? ma.toString() : '-', 26,
                       style: pw.TextStyle(
                           font: ttf,
                           fontSize: 8,
                           color: PdfColors.red,
                           fontWeight: pw.FontWeight.bold),
                       bgColor: rowBg),
-                  _attCell(ml.toString(), 26,
+                  _attCell((ml > 0 || !isInactiveForThisReport) ? ml.toString() : '-', 26,
                       style: pw.TextStyle(
                           font: ttf,
                           fontSize: 8,
@@ -888,6 +1274,8 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
                 ]));
                 sr++;
               }
+              // Class Period Summary in PDF
+              allRows.addAll(_buildPdfClassPeriodSummaryPanel(students, className, reportDates, attData, ttf));
               allRows.add(pw.SizedBox(height: 10));
             }
             return allRows;
@@ -924,7 +1312,8 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
           {required pw.Font ttf,
           PdfColor? bgColor,
           bool bold = false,
-          PdfColor? color}) =>
+          PdfColor? color,
+          pw.TextStyle? style}) =>
       pw.Container(
           width: w,
           height: 28,
@@ -935,11 +1324,108 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
               border: pw.Border.all(color: PdfColors.grey600, width: 0.4)),
           child: pw.Text(text,
               maxLines: 1,
-              style: pw.TextStyle(
-                  font: ttf,
-                  fontSize: 8,
-                  fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-                  color: color ?? PdfColors.black)));
+              style: style ??
+                  pw.TextStyle(
+                      font: ttf,
+                      fontSize: 8,
+                      fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+                      color: color ?? PdfColors.black)));
+
+  List<pw.Widget> _buildPdfClassPeriodSummaryPanel(
+    List<Map<String, dynamic>> students,
+    String className,
+    List<DateTime> reportDates,
+    Map<String, Map<String, Map<String, String>>> attData,
+    pw.Font ttf,
+  ) {
+    if (reportDates.isEmpty) return [];
+
+    final selectedDate = _selectedSummaryDateByClass[className] ?? reportDates.last;
+    final periodKeys = _periodKeysForClass(className);
+    final dk = _dateKey(selectedDate);
+
+    final Map<String, Map<String, int>> periodStats = {};
+    for (final pKey in periodKeys) {
+      periodStats[pKey] = {'p': 0, 'late': 0, 'a': 0, 'l': 0};
+    }
+
+    for (final s in students) {
+      final sid = s['id'].toString();
+      final sm = attData[sid]?[dk];
+      if (sm != null) {
+        for (final pKey in periodKeys) {
+          final st = sm[pKey] ?? '';
+          if (st == 'P') {
+            periodStats[pKey]!['p'] = (periodStats[pKey]!['p'] ?? 0) + 1;
+          } else if (st == 'Late') {
+            periodStats[pKey]!['late'] = (periodStats[pKey]!['late'] ?? 0) + 1;
+          } else if (st == 'A') {
+            periodStats[pKey]!['a'] = (periodStats[pKey]!['a'] ?? 0) + 1;
+          } else if (st == 'L') {
+            periodStats[pKey]!['l'] = (periodStats[pKey]!['l'] ?? 0) + 1;
+          }
+        }
+      }
+    }
+
+    final dateLabel = intl.DateFormat('MMM-yy-dd').format(selectedDate);
+
+    return [
+      pw.SizedBox(height: 6),
+      pw.Container(
+        padding: const pw.EdgeInsets.all(6),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.white,
+          border: pw.Border.all(color: PdfColors.grey600, width: 0.5),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+                  ),
+                  child: pw.Text(dateLabel, style: pw.TextStyle(font: ttf, fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.Text("پیریڈ وائز حاضری سمری", style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold)),
+              ],
+            ),
+            pw.SizedBox(height: 4),
+            pw.Divider(thickness: 0.5, color: PdfColors.grey400),
+            pw.SizedBox(height: 4),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+              children: periodKeys.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final pKey = entry.value;
+                final pTitle = "سبق ${idx + 1}";
+                final stats = periodStats[pKey] ?? {'p': 0, 'late': 0, 'a': 0, 'l': 0};
+
+                return pw.Container(
+                  padding: const pw.EdgeInsets.all(4),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey400, width: 0.4),
+                  ),
+                  child: pw.Column(
+                    children: [
+                      pw.Text(pTitle, style: pw.TextStyle(font: ttf, fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                      pw.SizedBox(height: 2),
+                      pw.Text("ح:${stats['p']} ت:${stats['late']} غ:${stats['a']} ر:${stats['l']}",
+                          style: pw.TextStyle(font: ttf, fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
 
   pw.Widget _attDot(String status) {
     PdfColor c = PdfColors.grey200;
@@ -975,8 +1461,12 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        Navigator.pushReplacement(
-            context, MaterialPageRoute(builder: (c) => const DashboardPage()));
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.pushReplacement(
+              context, MaterialPageRoute(builder: (c) => const DashboardPage()));
+        }
       },
       child: Scaffold(
         backgroundColor: bgColor,
@@ -1004,15 +1494,15 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: SegmentedButton<bool>(
-                      segments: const [
+                      segments: [
                         ButtonSegment(
                             value: true,
-                            label: Text("ماہانہ"),
-                            icon: Icon(Icons.calendar_month)),
+                            label: Text(isUrduGlobal.value ? "ماہانہ" : "Monthly"),
+                            icon: const Icon(Icons.calendar_month)),
                         ButtonSegment(
                             value: false,
-                            label: Text("کسٹم رینج"),
-                            icon: Icon(Icons.date_range)),
+                            label: Text(isUrduGlobal.value ? "تاریخ کے لحاظ سے" : "By Date"),
+                            icon: const Icon(Icons.date_range)),
                       ],
                       selected: {isMonthMode},
                       onSelectionChanged: (value) {
@@ -1028,11 +1518,11 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
                           child: DropdownButtonFormField<String>(
                             isExpanded: true,
                             value: displayMonth,
-                            decoration: const InputDecoration(
-                                labelText: "ماہ / Month",
-                                border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                                labelText: isUrduGlobal.value ? "مہینہ منتخب کریں" : "Select Month",
+                                border: const OutlineInputBorder(),
                                 contentPadding:
-                                    EdgeInsets.symmetric(horizontal: 10)),
+                                    const EdgeInsets.symmetric(horizontal: 10)),
                             items: List.generate(12, (index) {
                               int m = index + 1;
                               return DropdownMenuItem(
@@ -1050,11 +1540,11 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
                           child: DropdownButtonFormField<String>(
                             isExpanded: true,
                             value: displayYear,
-                            decoration: const InputDecoration(
-                                labelText: "سال / Year",
-                                border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                                labelText: isUrduGlobal.value ? "سال منتخب کریں" : "Select Year",
+                                border: const OutlineInputBorder(),
                                 contentPadding:
-                                    EdgeInsets.symmetric(horizontal: 10)),
+                                    const EdgeInsets.symmetric(horizontal: 10)),
                             items: List.generate(5, (index) {
                               int y = DateTime.now().year - 2 + index;
                               return DropdownMenuItem(
@@ -1215,54 +1705,248 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
       ...(assignedTeacherIdsByClass[className] ?? <String>{}),
       ...(classRows?.keys ?? <String>{}),
     };
-    final teacherIds = rawTeacherIds.where((tid) => teacherNameById.containsKey(tid)).toSet();
+    final teacherIds = rawTeacherIds.where((tid) => teacherNameById.containsKey(tid)).toList();
     if (teacherIds.isEmpty) return const [];
 
-    return teacherIds.map((teacherId) {
+    final reportYm = reportDates.isNotEmpty
+        ? reportDates.first.toIso8601String().substring(0, 7)
+        : '';
+
+    teacherIds.sort((a, b) {
+      final tA = teacherInfoById[a] ?? {};
+      final tB = teacherInfoById[b] ?? {};
+      final stA = (tA['status'] ?? 'Active').toString().trim().toLowerCase();
+      final stB = (tB['status'] ?? 'Active').toString().trim().toLowerCase();
+      final statusDateA = _cleanDateStr(tA['status_change_date']) ?? _cleanDateStr(tA['resignation_date']);
+      final statusDateB = _cleanDateStr(tB['status_change_date']) ?? _cleanDateStr(tB['resignation_date']);
+      final statusAYm = statusDateA != null && statusDateA.length >= 7 ? statusDateA.substring(0, 7) : '';
+      final statusBYm = statusDateB != null && statusDateB.length >= 7 ? statusDateB.substring(0, 7) : '';
+
+      final inactA = stA != 'active' && stA != 'حاضر' && stA != 'فعال' && stA.isNotEmpty && (statusAYm.isEmpty || reportYm.compareTo(statusAYm) >= 0);
+      final inactB = stB != 'active' && stB != 'حاضر' && stB != 'فعال' && stB.isNotEmpty && (statusBYm.isEmpty || reportYm.compareTo(statusBYm) >= 0);
+      if (!inactA && inactB) return -1;
+      if (inactA && !inactB) return 1;
+      return (teacherNameById[a] ?? '').compareTo(teacherNameById[b] ?? '');
+    });
+
+    final widgets = <Widget>[];
+
+    for (final teacherId in teacherIds) {
+      final tInfo = teacherInfoById[teacherId] ?? {};
+      final tStatus = (tInfo['status'] ?? 'Active').toString().trim();
+      final isInactive = tStatus.toLowerCase() != 'active' &&
+          tStatus != 'حاضر' &&
+          tStatus != 'فعال' &&
+          tStatus.isNotEmpty;
+
+      final joinDate = _cleanDateStr(tInfo['joining_date']);
+      final joinYm = joinDate != null && joinDate.length >= 7 ? joinDate.substring(0, 7) : null;
+
+      String? statusDate = _cleanDateStr(tInfo['status_change_date']) ?? _cleanDateStr(tInfo['resignation_date']);
+      if (statusDate == null && isInactive) {
+        final lastAtt = teacherLastAttDate[teacherId];
+        if (lastAtt != null && lastAtt.isNotEmpty) {
+          statusDate = _cleanDateStr(lastAtt);
+        }
+      }
+      final statusYm = statusDate != null && statusDate.length >= 7 ? statusDate.substring(0, 7) : null;
+
+      // کیا استاذ اس رپورٹ کے مہینے میں غیر فعال تھا؟
+      final isInactiveForReport = isInactive && (statusYm == null || reportYm.isEmpty || reportYm.compareTo(statusYm) >= 0);
+
+      bool hasAttInMonth = false;
+      for (final date in reportDates) {
+        final dayKey = _dateKey(date);
+        final periods = classRows?[teacherId]?[dayKey];
+        if (periods != null && periods.values.any((v) => v.isNotEmpty)) {
+          hasAttInMonth = true;
+          break;
+        }
+      }
+
+      if (joinYm != null && reportYm.isNotEmpty && reportYm.compareTo(joinYm) < 0) {
+        continue;
+      }
+
+      if (isInactive && statusYm != null && reportYm.isNotEmpty && reportYm.compareTo(statusYm) > 0 && !hasAttInMonth) {
+        continue;
+      }
+
       final teacherName = teacherNameById[teacherId]?.trim().isNotEmpty == true
           ? teacherNameById[teacherId]!
           : 'استاد $teacherId';
+
+      String statusLabel = "غیر فعال";
+      Color statusColor = const Color(0xFFDC2626);
+      Color statusBg = const Color(0xFFFDE8E8);
+
+      if (tStatus.contains('Terminated') || tStatus.contains('برطرف') || tStatus.contains('فارغ')) {
+        statusLabel = "برطرف / فارغ";
+        statusColor = const Color(0xFFDC2626);
+        statusBg = const Color(0xFFFDE8E8);
+      } else if (tStatus.contains('On Leave') || tStatus.contains('رخصت')) {
+        statusLabel = "رخصت پر";
+        statusColor = const Color(0xFFFD7E14);
+        statusBg = const Color(0xFFFFF3CD);
+      } else if (tStatus.contains('مستعفی') || tStatus.contains('استعفی') || tStatus.toLowerCase().contains('resigned')) {
+        statusLabel = "مستعفی";
+        statusColor = const Color(0xFF6C757D);
+        statusBg = const Color(0xFFF8F9FA);
+      }
+      final statusReason = (tInfo['status_reason'] ?? '').toString().trim();
+      if (statusReason.isNotEmpty) {
+        statusLabel += " ($statusReason)";
+      }
+
+      final showFullStatusBanner = (isInactiveForReport && !hasAttInMonth) ||
+          (isInactive && statusYm != null && reportYm.isNotEmpty && reportYm.compareTo(statusYm) > 0);
+
       int monthP = 0, monthA = 0, monthL = 0;
       final periodKeys = _periodKeysForClass(className);
       final dayCells = <Widget>[];
 
-      for (final date in reportDates) {
-        final dayKey = _dateKey(date);
-        final periods = classRows?[teacherId]?[dayKey];
-        if (periods != null && periods.isNotEmpty) {
-          for (final st in periods.values) {
-            if (st == 'P' || st == 'Late') {
-              monthP++;
-            } else if (st == 'A') {
-              monthA++;
-            } else if (st == 'L') {
-              monthL++;
-            }
+      if (showFullStatusBanner) {
+        final totalWidth = reportDates.length * 25.0;
+        final displayLabel = statusDate != null ? "$statusLabel (مورخہ: $statusDate)" : statusLabel;
+        dayCells.add(
+          Container(
+            width: totalWidth,
+            height: 28,
+            decoration: BoxDecoration(
+              color: statusBg,
+              border: Border.all(color: statusColor.withOpacity(0.4)),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              displayLabel,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: statusColor,
+              ),
+            ),
+          ),
+        );
+      } else {
+        for (int dIdx = 0; dIdx < reportDates.length; dIdx++) {
+          final date = reportDates[dIdx];
+          final isFri = date.weekday == DateTime.friday;
+          final dateStr = _dateKey(date);
+
+          if (isFri) {
+            dayCells.add(
+              Container(
+                width: 25.0,
+                height: 28.0,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF1F2),
+                  border: Border(
+                    left: BorderSide(color: Colors.red.shade300, width: 0.8),
+                    right: BorderSide(color: Colors.red.shade300, width: 0.8),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  "جمعہ",
+                  style: TextStyle(
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade700,
+                  ),
+                ),
+              ),
+            );
+            continue;
           }
-          dayCells
-              .add(_cellCustom(_buildPeriodDotGrid(periods, periodKeys), 25));
-        } else {
-          dayCells.add(_cellText('', 25));
+
+          if (joinDate != null && dateStr.compareTo(joinDate) < 0) {
+            dayCells.add(
+              Container(
+                width: 25.0,
+                height: 28,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade100,
+                ),
+                alignment: Alignment.center,
+                child: Text("-", style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
+              ),
+            );
+            continue;
+          }
+
+          if (isInactiveForReport && statusDate != null && dateStr.compareTo(statusDate) >= 0) {
+            final remCount = reportDates.length - dIdx;
+            final remWidth = remCount * 25.0;
+            final displayLabel = "$statusLabel (مورخہ: $statusDate)";
+            dayCells.add(
+              Container(
+                width: remWidth,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: statusBg,
+                  border: Border.all(color: statusColor.withOpacity(0.4)),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  displayLabel,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            );
+            break;
+          }
+
+          final dayKey = dateStr;
+          final periods = classRows?[teacherId]?[dayKey];
+          if (periods != null && periods.isNotEmpty) {
+            for (final st in periods.values) {
+              if (st == 'P' || st == 'Late') {
+                monthP++;
+              } else if (st == 'A') {
+                monthA++;
+              } else if (st == 'L') {
+                monthL++;
+              }
+            }
+            dayCells
+                .add(_cellCustom(_buildPeriodDotGrid(periods, periodKeys), 25));
+          } else {
+            dayCells.add(_cellText('', 25));
+          }
         }
       }
 
       final totalSlots = monthP + monthA + monthL;
-      final status = totalSlots == 0
-          ? '-'
-          : '${((monthP / totalSlots) * 100).toStringAsFixed(0)}% حاضر';
-      return Row(children: [
+      String status = "-";
+      Color currentStatusColor = primaryGreen;
+      if (isInactiveForReport && (totalSlots == 0 || showFullStatusBanner)) {
+        status = statusLabel;
+        currentStatusColor = statusColor;
+      } else if (totalSlots > 0) {
+        status = '${((monthP / totalSlots) * 100).toStringAsFixed(0)}% حاضر';
+      }
+
+      widgets.add(Row(children: [
         _cellText('استاد', 30, bold: true, textColor: primaryGreen),
         _cellText('', 60),
         _cellText(teacherName, 150, bold: true, textColor: primaryGreen),
         _cellText('استاد', 90, textColor: primaryGreen),
         ...dayCells,
-        _cellText(monthP.toString(), 35, textColor: Colors.green),
-        _cellText(monthA.toString(), 35, textColor: Colors.red),
-        _cellText(monthL.toString(), 35, textColor: Colors.amber.shade800),
-        _cellText(status, 60, bold: true, textColor: primaryGreen),
-      ]);
-    }).toList();
+        _cellText((monthP > 0 || !isInactiveForReport) ? monthP.toString() : '-', 35, textColor: Colors.green),
+        _cellText((monthA > 0 || !isInactiveForReport) ? monthA.toString() : '-', 35, textColor: Colors.red),
+        _cellText((monthL > 0 || !isInactiveForReport) ? monthL.toString() : '-', 35, textColor: Colors.amber.shade800),
+        _cellText(status, 60, bold: true, textColor: currentStatusColor, fontSize: (isInactiveForReport && (totalSlots == 0 || showFullStatusBanner)) ? 9 : 11),
+      ]));
+    }
+
+    return widgets;
   }
+
 
   Widget _buildReportBody() {
     final reportDates = _reportDates;
@@ -1303,130 +1987,328 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (var entry in grouped.entries) ...[
-                      // Class Header
-                      Container(
-                        width: 1000,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 4, horizontal: 8),
-                        color: Colors.grey.shade200,
-                        child: Text("کلاس: ${entry.key}",
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 13)),
-                      ),
-                      // Table Header
-                      IntrinsicHeight(
-                        child: Row(
-                          children: [
-                            _cellText("#", 30,
-                                bgColor: Colors.grey.shade200, bold: true),
-                            _cellText("رول نمبر", 60,
-                                bgColor: Colors.grey.shade200, bold: true),
-                            _cellText("نام طالب علم", 150,
-                                bgColor: Colors.grey.shade200, bold: true),
-                            _cellText("ولدیت", 90,
-                                bgColor: Colors.grey.shade100, bold: true),
-                            ...reportDates.map((date) {
-                              String dateStr =
-                                  date.toIso8601String().split('T')[0];
-                              Map<String, dynamic> hInfo =
-                                  _getHijriDateMap(dateStr, hijriOffset);
-                              return Container(
-                                width: 25,
-                                decoration: BoxDecoration(
-                                    border: Border.all(
-                                        color: Colors.grey.shade400,
-                                        width: 0.5),
-                                    color: Colors.grey.shade100),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text("${date.day}",
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold)),
-                                    Text("${hInfo['d']}",
-                                        style: const TextStyle(
-                                            fontSize: 8, color: Colors.green)),
-                                  ],
-                                ),
-                              );
-                            }),
-                            _cellText("حاضر", 35,
-                                bgColor: Colors.grey.shade100, bold: true),
-                            _cellText("غیر", 35,
-                                bgColor: Colors.grey.shade100, bold: true),
-                            _cellText("رخصت", 35,
-                                bgColor: Colors.grey.shade100, bold: true),
-                            _cellText("کیفیت", 60,
-                                bgColor: Colors.grey.shade100, bold: true),
-                          ],
-                        ),
-                      ),
-                      // Teacher rows
-                      ..._buildTeacherReportRows(entry.key, reportDates),
-                      // Student rows
-                      ...entry.value.asMap().entries.map((studentEntry) {
-                        int idx = studentEntry.key;
-                        var s = studentEntry.value;
-                        String sid = s['id'].toString();
-                        int monthP = 0, monthA = 0, monthL = 0;
-                        final periodKeys = _periodKeysForClass(entry.key);
-                        List<Widget> dayCells = [];
+                    for (var entry in grouped.entries) ...() {
+                      final reportYm = reportDates.isNotEmpty
+                          ? reportDates.first.toIso8601String().substring(0, 7)
+                          : '';
+
+                      final sortedList = List<Map<String, dynamic>>.from(entry.value);
+                      sortedList.sort((a, b) {
+                        final aGradDateStr = a['graduation_date']?.toString().trim() ?? '';
+                        final bGradDateStr = b['graduation_date']?.toString().trim() ?? '';
+                        final aGradYm = aGradDateStr.length >= 7 ? aGradDateStr.substring(0, 7) : '';
+                        final bGradYm = bGradDateStr.length >= 7 ? bGradDateStr.substring(0, 7) : '';
+
+                        final aStatus = (a['status'] ?? '').toString().trim().toLowerCase();
+                        final bStatus = (b['status'] ?? '').toString().trim().toLowerCase();
+
+                        final aInactiveInThisMonth = (aStatus == 'alumni' || aStatus == 'graduated' || aStatus == 'left' || aStatus.contains('خارج') || aGradDateStr.isNotEmpty)
+                            && (aGradYm.isEmpty || reportYm.compareTo(aGradYm) >= 0);
+                        final bInactiveInThisMonth = (bStatus == 'alumni' || bStatus == 'graduated' || bStatus == 'left' || bStatus.contains('خارج') || bGradDateStr.isNotEmpty)
+                            && (bGradYm.isEmpty || reportYm.compareTo(bGradYm) >= 0);
+
+                        if (!aInactiveInThisMonth && bInactiveInThisMonth) return -1;
+                        if (aInactiveInThisMonth && !bInactiveInThisMonth) return 1;
+
+                        final admA = int.tryParse(a['admission_number']?.toString() ?? a['roll_number']?.toString() ?? '0') ?? 0;
+                        final admB = int.tryParse(b['admission_number']?.toString() ?? b['roll_number']?.toString() ?? '0') ?? 0;
+                        return admA.compareTo(admB);
+                      });
+
+                      final filteredClassStudents = sortedList.where((s) {
+                        final admDateStr = _cleanDateStr(s['admission_date']);
+                        final admYm = (admDateStr != null && admDateStr.length >= 7) ? admDateStr.substring(0, 7) : null;
+                        if (admYm != null && reportYm.isNotEmpty && reportYm.compareTo(admYm) < 0) {
+                          return false;
+                        }
+
+                        final sStatus = (s['status'] ?? 'Active').toString().trim();
+                        final gradDateStr = s['graduation_date']?.toString().trim() ?? '';
+                        final isInactive = sStatus.toLowerCase() == 'alumni' ||
+                            sStatus.toLowerCase() == 'graduated' ||
+                            sStatus.toLowerCase() == 'left' ||
+                            sStatus.contains('خارج') ||
+                            gradDateStr.isNotEmpty;
+
+                        if (!isInactive) return true;
+
+                        final sid = s['id'].toString();
+                        bool hasAtt = false;
                         for (final date in reportDates) {
-                          String dk = _dateKey(date);
-                          Map<String, String>? sm = attData[sid]?[dk];
-                          if (sm != null) {
-                            for (final key in periodKeys) {
-                              final st = sm[key] ?? '';
-                              if (st == 'P' || st == 'Late') {
-                                monthP++;
-                              } else if (st == 'A') {
-                                monthA++;
-                              } else if (st == 'L') {
-                                monthL++;
-                              }
-                            }
-                            dayCells.add(_cellCustom(
-                                _buildPeriodDotGrid(sm, periodKeys), 25));
-                          } else {
-                            dayCells.add(_cellText("", 25));
+                          final dk = _dateKey(date);
+                          final sm = attData[sid]?[dk];
+                          if (sm != null && sm.values.any((v) => v.isNotEmpty)) {
+                            hasAtt = true;
+                            break;
                           }
                         }
-                        return Row(children: [
-                          _cellText((idx + 1).toString(), 30),
-                          _cellText(
-                              s['roll_number']?.toString() ??
-                                  s['admission_number']?.toString() ??
-                                  '',
-                              60),
-                          _cellText(s['name'] ?? '', 150, bold: true),
-                          _cellText(s['father_name'] ?? '', 90),
-                          ...dayCells,
-                          _cellText(monthP.toString(), 35),
-                          _cellText(monthA.toString(), 35),
-                          _cellText(monthL.toString(), 35),
-                          Builder(builder: (context) {
-                            int totalSlots = monthP + monthA + monthL;
-                            String status = "-";
-                            if (totalSlots > 0) {
-                              double perc = (monthP / totalSlots) * 100;
-                              if (perc >= 100) {
-                                status = "مکمل حاضر";
-                              } else {
-                                status = "${perc.toStringAsFixed(0)}% حاضر";
-                              }
+                        if (hasAtt) return true;
+
+                        if (gradDateStr.isNotEmpty) {
+                          final gradYm = gradDateStr.length >= 7 ? gradDateStr.substring(0, 7) : gradDateStr;
+                          if (reportYm.isNotEmpty && reportYm.compareTo(gradYm) > 0) {
+                            return false;
+                          }
+                          return true;
+                        }
+                        return false;
+                      }).toList();
+
+
+                      return [
+                        // Class Header
+                        Container(
+                          width: 1000,
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 4, horizontal: 8),
+                          color: Colors.grey.shade200,
+                          child: Text("کلاس: ${entry.key}",
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                        // Table Header
+                        IntrinsicHeight(
+                          child: Row(
+                            children: [
+                              _cellText("#", 30,
+                                  bgColor: Colors.grey.shade200, bold: true),
+                              _cellText("رول نمبر", 60,
+                                  bgColor: Colors.grey.shade200, bold: true),
+                              _cellText("نام طالب علم", 150,
+                                  bgColor: Colors.grey.shade200, bold: true),
+                              _cellText("ولدیت", 90,
+                                  bgColor: Colors.grey.shade100, bold: true),
+                              ...reportDates.map((date) {
+                                final isFri = date.weekday == DateTime.friday;
+                                String dateStr =
+                                    date.toIso8601String().split('T')[0];
+                                Map<String, dynamic> hInfo =
+                                    _getHijriDateMap(dateStr, hijriOffset);
+                                return Container(
+                                  width: 25,
+                                  decoration: BoxDecoration(
+                                      border: Border.all(
+                                          color: isFri
+                                              ? Colors.red.shade300
+                                              : Colors.grey.shade400,
+                                          width: 0.5),
+                                      color: isFri
+                                          ? const Color(0xFFFFE4E6)
+                                          : Colors.grey.shade100),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                          isFri ? "جمعہ" : "${date.day}",
+                                          style: TextStyle(
+                                              fontSize: isFri ? 8.5 : 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: isFri
+                                                  ? Colors.red.shade800
+                                                  : Colors.black)),
+                                      Text("${hInfo['d']}",
+                                          style: TextStyle(
+                                              fontSize: 8,
+                                              color: isFri
+                                                  ? Colors.red.shade700
+                                                  : Colors.green)),
+                                    ],
+                                  ),
+                                );
+                              }),
+                              _cellText("حاضر", 35,
+                                  bgColor: Colors.grey.shade100, bold: true),
+                              _cellText("غیر", 35,
+                                  bgColor: Colors.grey.shade100, bold: true),
+                              _cellText("رخصت", 35,
+                                  bgColor: Colors.grey.shade100, bold: true),
+                              _cellText("کیفیت", 60,
+                                  bgColor: Colors.grey.shade100, bold: true),
+                            ],
+                          ),
+                        ),
+                        // Teacher rows
+                        ..._buildTeacherReportRows(entry.key, reportDates),
+                        // Student rows
+                        ...filteredClassStudents.asMap().entries.map((studentEntry) {
+                          int idx = studentEntry.key;
+                          var s = studentEntry.value;
+                          String sid = s['id'].toString();
+                          int monthP = 0, monthA = 0, monthL = 0;
+                          final periodKeys = _periodKeysForClass(entry.key);
+
+                          final sStatus = (s['status'] ?? 'Active').toString().trim();
+                          final gradDateStr = s['graduation_date']?.toString().trim() ?? '';
+                          final gradYm = gradDateStr.length >= 7 ? gradDateStr.substring(0, 7) : '';
+
+                          // کیا طالب علم اس رپورٹ کے مہینے میں ان ایکٹو تھا؟
+                          final isInactiveForThisReport = (sStatus.toLowerCase() == 'alumni' ||
+                              sStatus.toLowerCase() == 'graduated' ||
+                              sStatus.toLowerCase() == 'left' ||
+                              sStatus.contains('خارج') ||
+                              gradDateStr.isNotEmpty) && (gradYm.isEmpty || reportYm.compareTo(gradYm) >= 0);
+
+                          final leavingReason = (s['leaving_reason'] ?? '').toString().trim();
+                          final alumniCat = (s['alumni_category'] ?? '').toString().trim();
+
+                          String statusLabel = "تعلیم مکمل ہو گئی";
+                          Color statusColor = const Color(0xFF198754);
+                          Color statusBg = const Color(0xFFE8F5E9);
+
+                          if (leavingReason.contains('خارج') || sStatus.contains('خارج') || alumniCat.contains('خارج')) {
+                            statusLabel = "خارج کر دیا گیا";
+                            statusColor = const Color(0xFFDC2626);
+                            statusBg = const Color(0xFFFDE8E8);
+                          } else if (leavingReason.contains('چھوڑ') || leavingReason.contains('شوقیہ') || sStatus.toLowerCase().contains('left')) {
+                            statusLabel = "چھوڑ گیا";
+                            statusColor = const Color(0xFFFD7E14);
+                            statusBg = const Color(0xFFFFF3CD);
+                          } else if (alumniCat.isNotEmpty) {
+                            statusLabel = alumniCat;
+                          } else if (leavingReason.isNotEmpty) {
+                            statusLabel = leavingReason;
+                          }
+
+                          final admDateStr = _cleanDateStr(s['admission_date']);
+                          List<Widget> dayCells = [];
+                          for (int dIdx = 0; dIdx < reportDates.length; dIdx++) {
+                            final date = reportDates[dIdx];
+                            final isFri = date.weekday == DateTime.friday;
+                            final dk = _dateKey(date);
+
+                            if (isFri) {
+                              dayCells.add(
+                                Container(
+                                  width: 25.0,
+                                  height: 28.0,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF1F2),
+                                    border: Border(
+                                      left: BorderSide(color: Colors.red.shade300, width: 0.8),
+                                      right: BorderSide(color: Colors.red.shade300, width: 0.8),
+                                      top: idx == 0 ? BorderSide(color: Colors.red.shade300, width: 0.8) : BorderSide.none,
+                                      bottom: idx == filteredClassStudents.length - 1 ? BorderSide(color: Colors.red.shade300, width: 0.8) : BorderSide.none,
+                                    ),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: RotatedBox(
+                                    quarterTurns: 3,
+                                    child: Text(
+                                      "جمعہ",
+                                      style: TextStyle(
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.red.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                              continue;
                             }
-                            return _cellText(status, 60,
-                                bold: true,
-                                textColor: status == "مکمل حاضر"
-                                    ? Colors.green
-                                    : Colors.blue);
-                          }),
-                        ]);
-                      }),
-                      const SizedBox(height: 15),
-                    ]
+
+                            if (admDateStr != null && dk.compareTo(admDateStr) < 0) {
+                              dayCells.add(
+                                Container(
+                                  width: 25.0,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey.shade300),
+                                    color: Colors.grey.shade100,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text("-", style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
+                                ),
+                              );
+                              continue;
+                            }
+
+                            if (isInactiveForThisReport && gradDateStr.isNotEmpty && dk.compareTo(gradDateStr) >= 0) {
+                              dayCells.add(
+                                Container(
+                                  width: 25.0,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: statusBg,
+                                    border: Border.all(color: statusColor.withOpacity(0.4)),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    "-",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: statusColor,
+                                    ),
+                                  ),
+                                ),
+                              );
+                              continue;
+                            }
+
+                            Map<String, String>? sm = attData[sid]?[dk];
+                            if (sm != null) {
+                              for (final key in periodKeys) {
+                                final st = sm[key] ?? '';
+                                if (st == 'P' || st == 'Late') {
+                                  monthP++;
+                                } else if (st == 'A') {
+                                  monthA++;
+                                } else if (st == 'L') {
+                                  monthL++;
+                                }
+                              }
+                              dayCells.add(_cellCustom(
+                                  _buildPeriodDotGrid(sm, periodKeys), 25));
+                            } else {
+                              dayCells.add(_cellText("", 25));
+                            }
+                          }
+
+                          return Row(children: [
+                            _cellText((idx + 1).toString(), 30),
+                            _cellText(
+                                s['roll_number']?.toString() ??
+                                    s['admission_number']?.toString() ??
+                                    '',
+                                60),
+                            _cellText(s['name'] ?? '', 150, bold: true),
+                            _cellText(s['father_name'] ?? '', 90),
+                            ...dayCells,
+                            _cellText((monthP > 0 || !isInactiveForThisReport) ? monthP.toString() : '-', 35),
+                            _cellText((monthA > 0 || !isInactiveForThisReport) ? monthA.toString() : '-', 35),
+                            _cellText((monthL > 0 || !isInactiveForThisReport) ? monthL.toString() : '-', 35),
+                            Builder(builder: (context) {
+                              int totalSlots = monthP + monthA + monthL;
+                              if (isInactiveForThisReport && totalSlots == 0) {
+                                return _cellText(statusLabel, 60,
+                                    bold: true,
+                                    textColor: statusColor,
+                                    fontSize: 9);
+                              }
+                              String status = "-";
+                              if (totalSlots > 0) {
+                                double perc = (monthP / totalSlots) * 100;
+                                if (perc >= 100) {
+                                  status = "مکمل حاضر";
+                                } else {
+                                  status = "${perc.toStringAsFixed(0)}% حاضر";
+                                }
+                              }
+                              return _cellText(status, 60,
+                                  bold: true,
+                                  textColor: status == "مکمل حاضر"
+                                      ? Colors.green
+                                      : Colors.blue);
+                            }),
+                          ]);
+
+                        }),
+                        // Period-wise Attendance Summary Panel below class table
+                        _buildClassPeriodSummaryPanel(filteredClassStudents, entry.key, reportDates, attData),
+                        const SizedBox(height: 15),
+                      ];
+                    }(),
                   ],
                 ),
               ),
@@ -1436,4 +2318,401 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
       ),
     );
   }
+
+  Widget _buildClassPeriodSummaryPanel(
+    List<Map<String, dynamic>> students,
+    String className,
+    List<DateTime> reportDates,
+    Map<String, Map<String, Map<String, String>>> attData,
+  ) {
+    if (reportDates.isEmpty) return const SizedBox.shrink();
+
+    DateTime? latestWithAtt;
+    for (final d in reportDates.reversed) {
+      final dk = _dateKey(d);
+      bool hasAny = false;
+      for (final s in students) {
+        final sid = s['id'].toString();
+        final sm = attData[sid]?[dk];
+        if (sm != null && sm.values.any((v) => v.isNotEmpty)) {
+          hasAny = true;
+          break;
+        }
+      }
+      if (hasAny) {
+        latestWithAtt = d;
+        break;
+      }
+    }
+
+    DateTime selectedDate = _selectedSummaryDateByClass[className] ?? (latestWithAtt ?? reportDates.last);
+    if (!reportDates.contains(selectedDate)) {
+      selectedDate = latestWithAtt ?? reportDates.last;
+    }
+
+    final periodKeys = _periodKeysForClass(className);
+    final dk = _dateKey(selectedDate);
+
+    final Map<String, Map<String, int>> periodStats = {};
+    for (final pKey in periodKeys) {
+      periodStats[pKey] = {'p': 0, 'late': 0, 'a': 0, 'l': 0};
+    }
+
+    for (final s in students) {
+      final sid = s['id'].toString();
+      final sm = attData[sid]?[dk];
+      if (sm != null) {
+        for (final pKey in periodKeys) {
+          final st = sm[pKey] ?? '';
+          if (st == 'P') {
+            periodStats[pKey]!['p'] = (periodStats[pKey]!['p'] ?? 0) + 1;
+          } else if (st == 'Late') {
+            periodStats[pKey]!['late'] = (periodStats[pKey]!['late'] ?? 0) + 1;
+          } else if (st == 'A') {
+            periodStats[pKey]!['a'] = (periodStats[pKey]!['a'] ?? 0) + 1;
+          } else if (st == 'L') {
+            periodStats[pKey]!['l'] = (periodStats[pKey]!['l'] ?? 0) + 1;
+          }
+        }
+      }
+    }
+
+    return Container(
+      width: 1000,
+      margin: const EdgeInsets.only(top: 12, bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<DateTime>(
+                    value: selectedDate,
+                    isDense: true,
+                    icon: const Icon(Icons.keyboard_arrow_down, size: 20, color: Colors.black87),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
+                    items: reportDates.reversed.map((d) {
+                      final label = intl.DateFormat('MMM-yy-dd').format(d);
+                      return DropdownMenuItem<DateTime>(
+                        value: d,
+                        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      );
+                    }).toList(),
+                    onChanged: (DateTime? newDate) {
+                      if (newDate != null) {
+                        setState(() {
+                          _selectedSummaryDateByClass[className] = newDate;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ),
+              Text(
+                isUrduGlobal.value ? "پیریڈ وائز حاضری سمری" : "Period-wise Attendance Summary",
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          const SizedBox(height: 10),
+          Directionality(
+            textDirection: TextDirection.rtl,
+            child: Row(
+              children: periodKeys.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final pKey = entry.value;
+                final pTitle = "سبق ${idx + 1}";
+                final stats = periodStats[pKey] ?? {'p': 0, 'late': 0, 'a': 0, 'l': 0};
+
+                return Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          pTitle,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                final matching = students.where((s) {
+                                  final sid = s['id'].toString();
+                                  final sm = attData[sid]?[dk];
+                                  return sm != null && sm[pKey] == 'P';
+                                }).toList();
+                                _showPeriodStudentsDialog(
+                                  className: className,
+                                  periodTitle: pTitle,
+                                  categoryLabel: "حاضر طلبہ",
+                                  themeColor: const Color(0xFF0D9488),
+                                  selectedDate: selectedDate,
+                                  matchingStudents: matching,
+                                );
+                              },
+                              child: Text(
+                                "ح: ${stats['p']}",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Color(0xFF0D9488),
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () {
+                                final matching = students.where((s) {
+                                  final sid = s['id'].toString();
+                                  final sm = attData[sid]?[dk];
+                                  return sm != null && sm[pKey] == 'Late';
+                                }).toList();
+                                _showPeriodStudentsDialog(
+                                  className: className,
+                                  periodTitle: pTitle,
+                                  categoryLabel: "تاخیر والے طلبہ",
+                                  themeColor: const Color(0xFFEA580C),
+                                  selectedDate: selectedDate,
+                                  matchingStudents: matching,
+                                );
+                              },
+                              child: Text(
+                                "ت: ${stats['late']}",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Color(0xFFEA580C),
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () {
+                                final matching = students.where((s) {
+                                  final sid = s['id'].toString();
+                                  final sm = attData[sid]?[dk];
+                                  return sm != null && sm[pKey] == 'A';
+                                }).toList();
+                                _showPeriodStudentsDialog(
+                                  className: className,
+                                  periodTitle: pTitle,
+                                  categoryLabel: "غیر حاضر طلبہ",
+                                  themeColor: const Color(0xFFDC2626),
+                                  selectedDate: selectedDate,
+                                  matchingStudents: matching,
+                                );
+                              },
+                              child: Text(
+                                "غ: ${stats['a']}",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Color(0xFFDC2626),
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () {
+                                final matching = students.where((s) {
+                                  final sid = s['id'].toString();
+                                  final sm = attData[sid]?[dk];
+                                  return sm != null && sm[pKey] == 'L';
+                                }).toList();
+                                _showPeriodStudentsDialog(
+                                  className: className,
+                                  periodTitle: pTitle,
+                                  categoryLabel: "رخصت والے طلبہ",
+                                  themeColor: const Color(0xFFCA8A04),
+                                  selectedDate: selectedDate,
+                                  matchingStudents: matching,
+                                );
+                              },
+                              child: Text(
+                                "ر: ${stats['l']}",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Color(0xFFCA8A04),
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPeriodStudentsDialog({
+    required String className,
+    required String periodTitle,
+    required String categoryLabel,
+    required Color themeColor,
+    required DateTime selectedDate,
+    required List<Map<String, dynamic>> matchingStudents,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final dateStr = intl.DateFormat('dd-MMM-yyyy').format(selectedDate);
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            titlePadding: EdgeInsets.zero,
+            title: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: themeColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.people, color: Colors.white, size: 22),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "فہرست $categoryLabel ($periodTitle)",
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            content: SizedBox(
+              width: 500,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("کلاس: $className", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text("تاریخ: $dateStr", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (matchingStudents.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Text("اس کیٹیگری میں کوئی طالب علم نہیں ہے", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                      ),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 350),
+                      child: SingleChildScrollView(
+                        child: Table(
+                          border: TableBorder.all(color: Colors.grey.shade300),
+                          columnWidths: const {
+                            0: FixedColumnWidth(35),
+                            1: FixedColumnWidth(70),
+                            2: FlexColumnWidth(2),
+                            3: FlexColumnWidth(2),
+                            4: FixedColumnWidth(80),
+                          },
+                          children: [
+                            TableRow(
+                              decoration: BoxDecoration(color: Colors.grey.shade200),
+                              children: const [
+                                Padding(padding: EdgeInsets.all(6), child: Text("#", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                                Padding(padding: EdgeInsets.all(6), child: Text("رول نمبر", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                                Padding(padding: EdgeInsets.all(6), child: Text("نام طالب علم", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                                Padding(padding: EdgeInsets.all(6), child: Text("ولدیت", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                                Padding(padding: EdgeInsets.all(6), child: Text("کیفیت", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                              ],
+                            ),
+                            ...matchingStudents.asMap().entries.map((e) {
+                              final idx = e.key;
+                              final st = e.value;
+                              return TableRow(
+                                children: [
+                                  Padding(padding: const EdgeInsets.all(6), child: Text("${idx + 1}", textAlign: TextAlign.center, style: const TextStyle(fontSize: 11))),
+                                  Padding(padding: const EdgeInsets.all(6), child: Text("${st['roll_number'] ?? st['admission_number'] ?? '-'}", textAlign: TextAlign.center, style: const TextStyle(fontSize: 11))),
+                                  Padding(padding: const EdgeInsets.all(6), child: Text("${st['name'] ?? '-'}", textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                                  Padding(padding: const EdgeInsets.all(6), child: Text("${st['father_name'] ?? '-'}", textAlign: TextAlign.right, style: const TextStyle(fontSize: 11, color: Colors.black54))),
+                                  Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                      decoration: BoxDecoration(color: themeColor.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                      child: Text(categoryLabel, textAlign: TextAlign.center, style: TextStyle(color: themeColor, fontWeight: FontWeight.bold, fontSize: 10)),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("بند کریں", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
 }

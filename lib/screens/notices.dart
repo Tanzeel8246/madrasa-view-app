@@ -178,9 +178,12 @@ class _NoticesPageState extends State<NoticesPage> {
                   ),
                 ],
               ),
-              body: Padding(
-                padding: const EdgeInsets.all(15.0),
-                child: Column(
+              body: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1100),
+                  child: Padding(
+                    padding: const EdgeInsets.all(15.0),
+                    child: Column(
                   children: [
                     NeoBox(
                       padding: 15,
@@ -325,6 +328,8 @@ class _NoticesPageState extends State<NoticesPage> {
                   ],
                 ),
               ),
+            ),
+          ),
             ),
           ),
         );

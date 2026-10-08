@@ -32,6 +32,7 @@ function translateDateUrduFull($dateStr) {
 function cleanUrduStr($str) {
     if(!$str) return '-';
     $str = str_replace(['(3/4)','(1/2)','(1/4)','(1)','((', '))', 'پارہ '], ['', '', '', '', '(', ')', ''], $str);
+    $str = preg_replace('/(\d|[\x{0600}-\x{06FF}])\(/u', '$1 (', $str);
     return trim($str);
 }
 function translateStatusClean($status) {
@@ -48,23 +49,67 @@ function translateQtyClean($str) {
     return trim($str);
 }
 
+$cur_tenant_id = (int)get_current_tenant_id();
+$sys_type = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys_type === 'Masjid') ? "(system_type = 'Masjid' OR admission_number LIKE 'M-%' OR COALESCE(roll_number, '') LIKE 'M-%')" : "((system_type = 'Madrasa' OR system_type IS NULL OR system_type = '') AND (admission_number NOT LIKE 'M-%' AND COALESCE(roll_number, '') NOT LIKE 'M-%'))";
+
 // Fetch all students of this class
-$sql_students = "SELECT id, name, father_name, roll_number, admission_number FROM students WHERE class = ? AND (is_deleted = 0 OR is_deleted IS NULL) AND status = 'Active'";
+$sql_students = "SELECT id, name, father_name, roll_number, admission_number FROM students 
+                 WHERE (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) 
+                 AND (class = ? OR class_name = ?) 
+                 AND (is_deleted = 0 OR is_deleted IS NULL) 
+                 AND $sys_cond
+                 AND (status = 'Active' OR status = 'active' OR status = 'حاضر' OR status IS NULL OR status = '')";
 $stmt = $pdo->prepare($sql_students);
-$stmt->execute([$selected_class]);
+$stmt->execute([$cur_tenant_id, $selected_class, $selected_class]);
 $all_students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+if (empty($all_students)) {
+    // Try without tenant restriction
+    $sql_students_fb = "SELECT id, name, father_name, roll_number, admission_number FROM students 
+                        WHERE (class = ? OR class_name = ?) 
+                        AND (is_deleted = 0 OR is_deleted IS NULL) 
+                        AND $sys_cond
+                        AND (status = 'Active' OR status = 'active' OR status = 'حاضر' OR status IS NULL OR status = '')";
+    $stmt_fb = $pdo->prepare($sql_students_fb);
+    $stmt_fb->execute([$selected_class, $selected_class]);
+    $all_students = $stmt_fb->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Fallback to maktab_students ONLY if system_type is Masjid
+if (empty($all_students) && $sys_type === 'Masjid') {
+    try {
+        $m_stmt = $pdo->prepare("SELECT id, name, father_name, roll_number, admission_number FROM maktab_students WHERE (is_deleted = 0 OR is_deleted IS NULL) AND (class = ? OR class_name = ?)");
+        $m_stmt->execute([$selected_class, $selected_class]);
+        $all_students = $m_stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $eM) {}
+}
+$all_student_ids = array_column($all_students, 'id');
+
 // Fetch Hifz records
-$sql = "SELECT d.* FROM daily_hifz d JOIN students s ON d.student_id = s.id 
-        WHERE d.date BETWEEN ? AND ? AND (s.is_deleted = 0 OR s.is_deleted IS NULL) AND s.class = ?";
-$stmt = $pdo->prepare($sql);
-$stmt->execute([$start_date, $end_date, $selected_class]);
-$hifz_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$hifz_records = [];
+if (!empty($all_student_ids)) {
+    $in_ids = implode(',', array_map('intval', $all_student_ids));
+    $sql = "SELECT d.* FROM daily_hifz d 
+            WHERE d.tenant_id = $cur_tenant_id AND d.student_id IN ($in_ids)";
+    $stmt = $pdo->query($sql);
+    $raw_hifz = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $start_ts = strtotime($start_date);
+    $end_ts = strtotime($end_date . ' 23:59:59');
+    foreach ($raw_hifz as $rh) {
+        $norm_d = normalize_date($rh['date'] ?? '');
+        $r_ts = strtotime($norm_d);
+        if ($r_ts >= $start_ts && $r_ts <= $end_ts) {
+            $rh['date'] = $norm_d;
+            $hifz_records[] = $rh;
+        }
+    }
+}
 
 // Fetch Complaints
-$c_sql = "SELECT student_id, date, complaint as description FROM complaints WHERE date BETWEEN ? AND ?";
+$c_sql = "SELECT student_id, date, complaint as description FROM complaints WHERE tenant_id = ? AND date BETWEEN ? AND ?";
 $stmt = $pdo->prepare($c_sql);
-$stmt->execute([$start_date, $end_date]);
+$stmt->execute([$cur_tenant_id, $start_date, $end_date]);
 $complaints_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $complaints_map = [];
 foreach($complaints_data as $cd) {
@@ -112,9 +157,10 @@ foreach($all_students as $s) {
 $att_map_filter = []; // sid => ['s1'=>'A/L/P', 's2'=>, 's3'=>]
 if ($needs_att_filter && !empty($filter_date)) {
     try {
-        $att_stmt = $pdo->prepare("SELECT student_id, status, status_1, status_2, status_3 FROM attendance WHERE date LIKE ?");
-        $att_stmt->execute([$filter_date . '%']);
+        $norm_filter_date = normalize_date($filter_date);
+        $att_stmt = $pdo->query("SELECT student_id, date, status, status_1, status_2, status_3 FROM attendance WHERE tenant_id = $cur_tenant_id");
         foreach ($att_stmt->fetchAll(PDO::FETCH_ASSOC) as $a) {
+            if (normalize_date($a['date'] ?? '') !== $norm_filter_date) continue;
             $parseS = function($val, $fallback = '') {
                 $s = strtoupper(trim($val ?? $fallback));
                 if (strpos($s, 'ABSENT') !== false || strpos($s, 'غیر حاضر') !== false || strpos($s, 'غائب') !== false || $s === 'A') return 'A';
@@ -132,8 +178,8 @@ if ($needs_att_filter && !empty($filter_date)) {
             ];
         }
         
-        $pa_stmt = $pdo->prepare("SELECT student_id, period_num, status FROM period_attendance WHERE date LIKE ?");
-        $pa_stmt->execute([$filter_date . '%']);
+        $pa_stmt = $pdo->prepare("SELECT student_id, period_num, status FROM period_attendance WHERE tenant_id = ? AND date LIKE ?");
+        $pa_stmt->execute([$cur_tenant_id, $filter_date . '%']);
         foreach ($pa_stmt->fetchAll(PDO::FETCH_ASSOC) as $pa) {
             $sid = (int)$pa['student_id'];
             $pnum = (int)$pa['period_num'];
@@ -244,7 +290,13 @@ if (!empty($filter_date)) {
 ?>
 
 <style>
-    .table th, .table td { white-space: nowrap; }
+    .table th, .table td { 
+        white-space: normal !important; 
+        line-height: 1.25 !important; 
+        vertical-align: middle !important; 
+        word-break: normal !important; 
+        overflow-wrap: break-word !important; 
+    }
     @media print {
         @page { size: A4 landscape; margin: 5mm; }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -269,22 +321,22 @@ if (!empty($filter_date)) {
     </div>
 
     <div class="table-responsive" style="width: 100%; overflow-x: auto;">
-        <table class="table table-bordered border-dark text-center table-sm align-middle" style="font-size: 13px; min-width: 1200px;">
+        <table class="table table-bordered border-dark text-center table-sm align-middle" style="font-size: 10.5px; min-width: 1520px; table-layout: fixed;">
             <thead class="table-light">
                 <tr>
-                    <th rowspan="2" style="width: 3%;">#</th>
-                    <th rowspan="2" style="width: 5%;">رول نمبر</th>
-                    <th rowspan="2" style="width: 12%;"><?php echo t('student'); ?></th>
-                    <th rowspan="2" style="width: 8%;">تاریخ</th>
+                    <th rowspan="2" style="width: 2.5%;">#</th>
+                    <th rowspan="2" style="width: 3.5%;">رول نمبر</th>
+                    <th rowspan="2" style="width: 12.5%;"><?php echo t('student'); ?></th>
+                    <th rowspan="2" style="width: 8.5%;">تاریخ</th>
                     <th colspan="3" class="bg-success text-white">سبق</th>
                     <th colspan="4" class="bg-primary text-white">سبقی</th>
                     <th colspan="4" class="bg-warning text-dark">منزل</th>
-                    <th rowspan="2" style="width: 12%;" class="bg-danger text-white">شکایات</th>
+                    <th rowspan="2" style="width: 8.5%;" class="bg-danger text-white">شکایات</th>
                 </tr>
                 <tr>
-                    <th style="width: 4%;">پارہ</th><th style="width: 4%;">لائنیں</th><th style="width: 5%;">کیفیت</th>
-                    <th style="width: 7%;">تفصیل</th><th style="width: 5%;">مقدار</th><th style="width: 5%;">کیفیت</th><th style="width: 8%;">سننے والا</th>
-                    <th style="width: 14%;">تفصیل</th><th style="width: 5%;">مقدار</th><th style="width: 5%;">کیفیت</th><th style="width: 8%;">سننے والا</th>
+                    <th style="width: 3.5%;">پارہ</th><th style="width: 3.5%;">لائنیں</th><th style="width: 5.5%;">کیفیت</th>
+                    <th style="width: 10.5%;">تفصیل</th><th style="width: 4%;">مقدار</th><th style="width: 5.5%;">کیفیت</th><th style="width: 9.5%;">سننے والا</th>
+                    <th style="width: 13%;">تفصیل</th><th style="width: 4%;">مقدار</th><th style="width: 5.5%;">کیفیت</th><th style="width: 9.5%;">سننے والا</th>
                 </tr>
             </thead>
             <tbody>
@@ -366,14 +418,23 @@ if (!empty($filter_date)) {
                             $comp_key = $sid . '_' . $d;
                             $complaints_html = isset($complaints_map[$comp_key]) ? implode('<br><hr class="my-1 border-danger">', $complaints_map[$comp_key]) : '-';
                             
+                            $f_disp = !empty($student['father_name']) ? "<br><small class='text-muted fw-normal'>ولد " . htmlspecialchars($student['father_name']) . "</small>" : "";
+                            $st_roll_val = '';
+                            foreach (['roll_number', 'admission_number', 'roll_no', 'admission_no', 'gr_number', 'serial_no'] as $rk) {
+                                if (!empty($student[$rk]) && trim((string)$student[$rk]) !== '-' && trim((string)$student[$rk]) !== '0') {
+                                    $st_roll_val = trim((string)$student[$rk]);
+                                    break;
+                                }
+                            }
+                            $st_roll = !empty($st_roll_val) ? htmlspecialchars($st_roll_val) : '-';
                             echo "<tr>
                                 <td>$sr_no</td>
-                                <td>{$student['roll_number']}</td>
-                                <td class='fw-bold'>{$student['name']}</td>
+                                <td>{$st_roll}</td>
+                                <td class='fw-bold text-start ps-2'>{$student['name']} {$f_disp}</td>
                                 <td class='text-muted' style='font-size:11px;' dir='ltr'>{$formatted_date}</td>
                                 <td>{$sabaq_parah}</td><td>{$sabaq_lines}</td><td>{$sabaq_status}</td>
-                                <td style='font-size:11px;'>{$sabqi_parah}</td><td>{$sabqi_amount}</td><td>{$sabqi_status}</td><td class='small text-muted'>{$sabqi_listener}</td>
-                                <td class='text-start ps-1' style='font-size:11px;'>{$manzil_parah}</td><td>{$manzil_amount}</td><td>{$manzil_status}</td><td class='small text-muted'>{$manzil_listener}</td>
+                                <td style='font-size:10.5px;'>{$sabqi_parah}</td><td>{$sabqi_amount}</td><td>{$sabqi_status}</td><td class='small text-muted'>{$sabqi_listener}</td>
+                                <td class='text-start ps-1' style='font-size:10.5px;'>{$manzil_parah}</td><td>{$manzil_amount}</td><td>{$manzil_status}</td><td class='small text-muted'>{$manzil_listener}</td>
                                 <td class='small text-start text-danger' style='font-size:11px;'>{$complaints_html}</td>
                             </tr>";
                         }

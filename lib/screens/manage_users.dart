@@ -48,6 +48,11 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
             setState(() {
               users = data['users'];
               isLoading = false;
+              final curName = (currentUserName.value ?? '').toLowerCase();
+              if (currentUserId.value == 3 &&
+                  (curName.contains('tanzeel') || curName.contains('تنزیل'))) {
+                currentUserId.value = 1;
+              }
             });
           }
         } else {
@@ -66,6 +71,19 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
   }
 
   Future<void> deleteUser(String id) async {
+    if (id == '1') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isUrduGlobal.value
+                ? 'مرکزی ایڈمن اکاؤنٹ (تنزیل الرحمن) کو حذف نہیں کیا جا سکتا۔'
+                : 'Main Admin account cannot be deleted.'),
+          ),
+        );
+      }
+      return;
+    }
+
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -144,12 +162,13 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       } catch (_) {}
     }
 
-    final Map<String, String> allPerms = {
+    final Map<String, String> madrasaPerms = {
       'manage_classes': isUrdu ? 'کلاسز کا انتظام' : 'Manage Classes',
       'manage_students': isUrdu ? 'طلباء کا ریکارڈ' : 'Manage Students',
       'manage_teachers': isUrdu ? 'اساتذہ کا ریکارڈ' : 'Manage Teachers',
       'manage_attendance': isUrdu ? 'طالب علموں کی حاضری' : 'Student Attendance',
       'manage_teacher_attendance': isUrdu ? 'اساتذہ کی حاضری' : 'Teacher Attendance',
+      'manage_attendance_report': isUrdu ? 'حاضری تفصیلی رپورٹ' : 'Attendance Detailed Report',
       'manage_hifz': isUrdu ? 'حفظ (روزانہ اندراج و رپورٹ)' : 'Manage Hifz',
       'manage_hifz_daily': isUrdu ? 'حفظ (روزانہ اندراج)' : 'Hifz Daily Entry',
       'manage_hifz_report': isUrdu ? 'حفظ (تعلیمی رپورٹ)' : 'Hifz Report',
@@ -158,22 +177,73 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       'manage_academic_view': isUrdu ? 'تعلیمی کارکردگی (رپورٹ دیکھیں)' : 'Academic View',
       'manage_academics': isUrdu ? 'تعلیمی رپورٹ (جنرل)' : 'General Academics',
       'manage_exams': isUrdu ? 'امتحانات و نتائج' : 'Exams & Results',
-      'manage_finance': isUrdu ? 'آمدن و خرچ (سادہ فنانس)' : 'Simple Finance',
+      'manage_finance': isUrdu ? 'آمدن و خرچ (سادہ فنانس - تمام)' : 'Simple Finance (All)',
+      'manage_finance_entry': isUrdu ? 'آمدن و خرچ اندراج' : 'Finance Entry',
+      'manage_finance_report': isUrdu ? 'مالیاتی رپورٹ' : 'Finance Report',
+      'manage_financial_reports': isUrdu ? 'مالیاتی تفصیلی گوشوارے و سالانہ رپورٹ' : 'Detailed Financial Reports',
+      'manage_fee_defaulters': isUrdu ? 'فیس و واجبات / نادہندگان' : 'Fee Reminders & Defaulters',
+      'manage_loans': isUrdu ? 'ایڈوانس و قرض مینیجمنٹ' : 'Loans & Advance',
+      'manage_stipends': isUrdu ? 'وظائف مینیجمنٹ' : 'Staff Stipends',
+      'manage_assets': isUrdu ? 'اثاثہ جات (مدرسہ)' : 'Assets (Madrasa)',
+      'manage_in_kind_donations': isUrdu ? 'اشیاء و عطیات (مدرسہ)' : 'In-Kind Donations (Madrasa)',
+      'manage_petty_cash': isUrdu ? 'پیٹی کیش رجسٹر' : 'Petty Cash Register',
       'manage_erp': isUrdu ? 'ای آر پی اکاؤنٹس (ERP Accounting)' : 'ERP Accounting',
       'manage_admissions': isUrdu ? 'داخلہ درخواستیں' : 'Admission Requests',
       'manage_notices': isUrdu ? 'نوٹس بورڈ / اعلانات' : 'Notice Board',
       'manage_requests': isUrdu ? 'درخواستیں و شکایات' : 'Requests & Complaints',
       'add_complaint': isUrdu ? 'شکایت اندراج' : 'Add Complaint',
       'manage_complaints': isUrdu ? 'شکایات ریکارڈ' : 'Manage Complaints',
+      'manage_library': isUrdu ? 'لائبریری مینیجمنٹ' : 'Library Management',
+      'manage_inventory': isUrdu ? 'سکول شاپ و انونٹری' : 'School Shop & Inventory',
+      'manage_hostel': isUrdu ? 'ہاسٹل مینیجمنٹ' : 'Hostel Management',
+      'manage_recruitment': isUrdu ? 'بھرتی و ملازمت پائپ لائن' : 'Jobs & Recruitment',
+      'manage_website': isUrdu ? 'ویب سائٹ و سوشل CMS' : 'Website CMS',
+      'manage_saas': isUrdu ? 'سپر ایڈمن پورٹل (SaaS)' : 'Super Admin Portal (SaaS)',
       'manage_users': isUrdu ? 'یوزرز کا انتظام' : 'User Management',
     };
+
+    final Map<String, String> masjidPerms = {
+      'manage_masjid_classes': isUrdu ? 'مسجد: کلاسز کا انتظام' : 'Masjid: Manage Classes',
+      'manage_masjid_students': isUrdu ? 'مسجد: طلباء کا ریکارڈ' : 'Masjid: Manage Students',
+      'manage_masjid_teachers': isUrdu ? 'مسجد: اساتذہ کا ریکارڈ' : 'Masjid: Manage Teachers',
+      'manage_masjid_attendance': isUrdu ? 'مسجد: طالب علموں کی حاضری' : 'Masjid: Student Attendance',
+      'manage_masjid_teacher_attendance': isUrdu ? 'مسجد: اساتذہ کی حاضری' : 'Masjid: Teacher Attendance',
+      'manage_masjid_attendance_report': isUrdu ? 'مسجد: حاضری تفصیلی رپورٹ' : 'Masjid: Attendance Detailed Report',
+      'manage_masjid_hifz': isUrdu ? 'مسجد: حفظ (روزانہ اندراج و رپورٹ)' : 'Masjid: Manage Hifz',
+      'manage_masjid_hifz_daily': isUrdu ? 'مسجد: حفظ (روزانہ اندراج)' : 'Masjid: Hifz Daily Entry',
+      'manage_masjid_hifz_report': isUrdu ? 'مسجد: حفظ (تعلیمی رپورٹ)' : 'Masjid: Hifz Report',
+      'manage_masjid_academic_dashboard': isUrdu ? 'مسجد: تعلیمی کارکردگی (اندراج ڈیش بورڈ)' : 'Masjid: Academic Entry Dashboard',
+      'manage_masjid_academic_entry': isUrdu ? 'مسجد: تعلیمی رپورٹ (اندراج)' : 'Masjid: Academic Entry',
+      'manage_masjid_academic_view': isUrdu ? 'مسجد: تعلیمی کارکردگی (رپورٹ دیکھیں)' : 'Masjid: Academic View',
+      'manage_masjid_academics': isUrdu ? 'مسجد: تعلیمی رپورٹ (جنرل)' : 'Masjid: General Academics',
+      'manage_masjid_exams': isUrdu ? 'مسجد: امتحانات و نتائج' : 'Masjid: Exams & Results',
+      'manage_masjid_finance': isUrdu ? 'مسجد: آمدن و خرچ (سادہ فنانس - تمام)' : 'Masjid: Simple Finance (All)',
+      'manage_masjid_finance_entry': isUrdu ? 'مسجد: آمدن و خرچ اندراج' : 'Masjid: Finance Entry',
+      'manage_masjid_finance_report': isUrdu ? 'مسجد: مالیاتی رپورٹ' : 'Masjid: Finance Report',
+      'manage_masjid_financial_reports': isUrdu ? 'مسجد: مالیاتی تفصیلی گوشوارے' : 'Masjid: Detailed Financial Reports',
+      'manage_masjid_fee_defaulters': isUrdu ? 'مسجد: فیس و واجبات' : 'Masjid: Fee Reminders & Defaulters',
+      'manage_masjid_loans': isUrdu ? 'مسجد: ایڈوانس و قرض مینیجمنٹ' : 'Masjid: Loans & Advance',
+      'manage_masjid_stipends': isUrdu ? 'مسجد: وظائف مینیجمنٹ' : 'Masjid: Staff Stipends',
+      'manage_masjid_assets': isUrdu ? 'مسجد: اثاثہ جات' : 'Masjid: Assets',
+      'manage_masjid_in_kind_donations': isUrdu ? 'مسجد: اشیاء و عطیات' : 'Masjid: In-Kind Donations',
+      'manage_masjid_petty_cash': isUrdu ? 'مسجد: پیٹی کیش رجسٹر' : 'Masjid: Petty Cash Register',
+      'manage_masjid_itikaf': isUrdu ? 'مسجد: اعتکاف' : 'Masjid: Itikaf',
+    };
+
+    final Map<String, String> allPerms = {...madrasaPerms, ...masjidPerms};
 
     showDialog(
       context: context,
       builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final isDark = theme.brightness == Brightness.dark;
+        final dBg = theme.dialogBackgroundColor;
+        final cBg = theme.cardColor;
+        final bColor = isDark ? Colors.grey.shade700 : Colors.grey.shade300;
+
         return StatefulBuilder(builder: (context, setStateDialog) {
           return AlertDialog(
-            backgroundColor: bgColor,
+            backgroundColor: dBg,
             title: Text(
                 isUrdu
                     ? (user == null ? 'نیا یوزر شامل کریں' : 'یوزر اپڈیٹ کریں')
@@ -229,23 +299,34 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                       },
                     ),
                     const SizedBox(height: 15),
+
+                    // SECTION 1: Madrasa Permissions
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(isUrdu ? 'پرمیشنز' : 'Permissions',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, color: primaryGreen)),
+                        Row(
+                          children: [
+                            const Icon(Icons.school, size: 18, color: Colors.green),
+                            const SizedBox(width: 6),
+                            Text(isUrdu ? 'مدرسہ پرمیشنز' : 'Madrasa Permissions',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, color: primaryGreen)),
+                          ],
+                        ),
                         TextButton(
                           onPressed: () {
                             setStateDialog(() {
-                              if (currentPerms.length == allPerms.length) {
-                                currentPerms.clear();
+                              final allMadrasaKeys = madrasaPerms.keys.toSet();
+                              final currentMadrasa = currentPerms.where((p) => allMadrasaKeys.contains(p)).toSet();
+                              if (currentMadrasa.length == allMadrasaKeys.length) {
+                                currentPerms.removeWhere((p) => allMadrasaKeys.contains(p));
                               } else {
-                                currentPerms = allPerms.keys.toList();
+                                currentPerms.addAll(allMadrasaKeys);
+                                currentPerms = currentPerms.toSet().toList();
                               }
                             });
                           },
-                          child: Text(isUrdu ? 'سب منتخب / ختم کریں' : 'Toggle All',
+                          child: Text(isUrdu ? 'سب منتخب / ختم' : 'Toggle All',
                               style: const TextStyle(fontSize: 12)),
                         ),
                       ],
@@ -254,12 +335,13 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                     Container(
                       constraints: const BoxConstraints(maxHeight: 180),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade400),
-                        borderRadius: BorderRadius.circular(5),
+                        color: cBg,
+                        border: Border.all(color: bColor),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: ListView(
                         shrinkWrap: true,
-                        children: allPerms.entries.map((e) {
+                        children: madrasaPerms.entries.map((e) {
                           return CheckboxListTile(
                             dense: true,
                             title: Text(e.value, style: const TextStyle(fontSize: 13)),
@@ -282,12 +364,20 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                       ),
                     ),
                     const SizedBox(height: 15),
+
+                    // SECTION 2: Allowed Classes
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(isUrdu ? 'متعلقہ کلاسز (Allowed Classes)' : 'Allowed Classes',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, color: primaryGreen)),
+                        Row(
+                          children: [
+                            const Icon(Icons.class_, size: 18, color: Colors.blue),
+                            const SizedBox(width: 6),
+                            Text(isUrdu ? 'متعلقہ کلاسز' : 'Allowed Classes',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, color: primaryGreen)),
+                          ],
+                        ),
                         TextButton(
                           onPressed: () {
                             setStateDialog(() {
@@ -301,7 +391,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                               }
                             });
                           },
-                          child: Text(isUrdu ? 'سب منتخب / ختم کریں' : 'Toggle All',
+                          child: Text(isUrdu ? 'سب منتخب / ختم' : 'Toggle All',
                               style: const TextStyle(fontSize: 12)),
                         ),
                       ],
@@ -310,8 +400,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                     Container(
                       constraints: const BoxConstraints(maxHeight: 160),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade400),
-                        borderRadius: BorderRadius.circular(5),
+                        color: cBg,
+                        border: Border.all(color: bColor),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: ListView(
                         shrinkWrap: true,
@@ -334,6 +425,71 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                       } else {
                                         currentAllowedClasses.remove(clsId);
                                         currentAllowedClasses.remove(clsId.toString());
+                                      }
+                                    });
+                                  },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+
+                    // SECTION 3: Masjid Permissions
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.mosque, size: 18, color: Colors.amber),
+                            const SizedBox(width: 6),
+                            Text(isUrdu ? 'مسجد پرمیشنز' : 'Masjid Permissions',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, color: primaryGreen)),
+                          ],
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setStateDialog(() {
+                              final allMasjidKeys = masjidPerms.keys.toSet();
+                              final currentMasjid = currentPerms.where((p) => allMasjidKeys.contains(p)).toSet();
+                              if (currentMasjid.length == allMasjidKeys.length) {
+                                currentPerms.removeWhere((p) => allMasjidKeys.contains(p));
+                              } else {
+                                currentPerms.addAll(allMasjidKeys);
+                                currentPerms = currentPerms.toSet().toList();
+                              }
+                            });
+                          },
+                          child: Text(isUrdu ? 'سب منتخب / ختم' : 'Toggle All',
+                              style: const TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      decoration: BoxDecoration(
+                        color: cBg,
+                        border: Border.all(color: bColor),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: masjidPerms.entries.map((e) {
+                          return CheckboxListTile(
+                            dense: true,
+                            title: Text(e.value, style: const TextStyle(fontSize: 13)),
+                            value: role == 'admin'
+                                ? true
+                                : currentPerms.contains(e.key),
+                            onChanged: role == 'admin'
+                                ? null
+                                : (bool? val) {
+                                    setStateDialog(() {
+                                      if (val == true) {
+                                        currentPerms.add(e.key);
+                                      } else {
+                                        currentPerms.remove(e.key);
                                       }
                                     });
                                   },
@@ -515,7 +671,28 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                           color: Colors.blue),
                                       onPressed: () => openUserDialog(user: u),
                                     ),
-                                    if (u['id'].toString() !=
+                                    if (u['id'].toString() == '1')
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          border: Border.all(
+                                              color: Colors.red.shade200),
+                                        ),
+                                        child: Text(
+                                          isUrduGlobal.value
+                                              ? 'مین اکاؤنٹ'
+                                              : 'Main Admin',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.red.shade800),
+                                        ),
+                                      )
+                                    else if (u['id'].toString() !=
                                         currentUserId.value?.toString())
                                       IconButton(
                                         icon: const Icon(Icons.delete,

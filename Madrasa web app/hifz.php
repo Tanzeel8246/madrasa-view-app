@@ -1,5 +1,4 @@
 <?php 
-ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_reporting(E_ALL);
 require_once 'db.php'; 
 $selected_class = $_GET['class'] ?? '';
 if (empty($selected_class)) {
@@ -22,67 +21,94 @@ if (isset($_POST['save_hifz'])) {
         $std_id = $_POST['std_id'];
         
         // Sabaq
-        $s_parah = $_POST['sabaq_p'] ?? '';
-        $s_lines = $_POST['sabaq_l'] ?? '';
-        $s_status = $_POST['sabaq_s'] ?? '';
-        $s_time = $_POST['sabaq_time'] ?? '';
+        $sabaq_not_recited = isset($_POST['sabaq_not_recited']);
+        if ($sabaq_not_recited) {
+            $s_parah = 'نہیں سنایا';
+            $s_lines = trim($_POST['sabaq_not_recited_reason'] ?? '') ?: 'بغیر وجہ';
+            $s_status = 'نہیں سنایا';
+            $s_time = '';
+        } else {
+            $s_parah = $_POST['sabaq_p'] ?? '';
+            $s_lines = $_POST['sabaq_l'] ?? '';
+            $s_status = $_POST['sabaq_s'] ?? '';
+            $s_time = $_POST['sabaq_time'] ?? '';
+        }
         
         // Sabqi
-        $sq_parah = $_POST['sabqi_p'] ?? '';
-        $sq_amt = $_POST['sabqi_amt'] ?? '';
-        $sq_status = $_POST['sabqi_s'] ?? '';
-        $sq_list = $_POST['sabqi_listener'] ?? ''; 
-        $sq_time = $_POST['sabqi_time'] ?? '';
-        if (isset($_POST['sabqi_listener_jaiza'])) $sq_list .= " (جائزہ)";
+        $sabqi_not_recited = isset($_POST['sabqi_not_recited']);
+        if ($sabqi_not_recited) {
+            $sq_parah = 'نہیں سنائی';
+            $sq_amt = trim($_POST['sabqi_not_recited_reason'] ?? '') ?: 'بغیر وجہ';
+            $sq_status = 'نہیں سنائی';
+            $sq_list = '';
+            $sq_time = '';
+        } else {
+            $sq_parah = $_POST['sabqi_p'] ?? '';
+            $sq_amt = $_POST['sabqi_amt'] ?? '';
+            $sq_status = $_POST['sabqi_s'] ?? '';
+            $sq_list = $_POST['sabqi_listener'] ?? ''; 
+            $sq_time = $_POST['sabqi_time'] ?? '';
+            if (isset($_POST['sabqi_listener_jaiza'])) $sq_list .= " (جائزہ)";
 
-        if ($sq_amt === 'جائزہ' && isset($_POST['sabqi_review_parah']) && is_array($_POST['sabqi_review_parah'])) {
-            $review_details = [];
-            $review_parahs = $_POST['sabqi_review_parah'];
-            $review_types = $_POST['sabqi_review_type'] ?? [];
-            for($i=0; $i<count($review_parahs); $i++) {
-                if(!empty($review_parahs[$i])) {
-                    $type_text = $review_types[$i] ?? 'مکمل';
-                    $review_details[] = $review_parahs[$i] . " (" . $type_text . ")";
+            if ($sq_amt === 'جائزہ' && isset($_POST['sabqi_review_parah']) && is_array($_POST['sabqi_review_parah'])) {
+                $review_details = [];
+                $review_parahs = $_POST['sabqi_review_parah'];
+                $review_types = $_POST['sabqi_review_type'] ?? [];
+                for($i=0; $i<count($review_parahs); $i++) {
+                    if(!empty($review_parahs[$i])) {
+                        $type_text = $review_types[$i] ?? 'مکمل';
+                        $review_details[] = $review_parahs[$i] . " (" . $type_text . ")";
+                    }
                 }
-            }
-            if (!empty($review_details)) {
-                $sq_parah = implode(", ", $review_details);
-                $sq_amt = "صرف جائزہ (" . count($review_details) . " پارے)";
+                if (!empty($review_details)) {
+                    $sq_parah = implode(", ", $review_details);
+                    $sq_amt = "صرف جائزہ (" . count($review_details) . " پارے)";
+                }
             }
         }
         
         // Manzil
-        $m_total_amt = $_POST['manzil_total_amt'] ?? ''; 
-        $m_status = $_POST['manzil_s'] ?? '';
-        $m_list = $_POST['manzil_listener'] ?? ''; 
-        $m_time = $_POST['manzil_time'] ?? '';
-        if (isset($_POST['manzil_listener_jaiza'])) $m_list .= " (جائزہ)";
+        $manzil_not_recited = isset($_POST['manzil_not_recited']);
+        if ($manzil_not_recited) {
+            $m_parah_final = 'نہیں سنائی';
+            $m_total_amt = trim($_POST['manzil_not_recited_reason'] ?? '') ?: 'بغیر وجہ';
+            $m_status = 'نہیں سنائی';
+            $m_list = '';
+            $m_time = '';
+        } else {
+            $m_total_amt = $_POST['manzil_total_amt'] ?? ''; 
+            $m_status = $_POST['manzil_s'] ?? '';
+            $m_list = $_POST['manzil_listener'] ?? ''; 
+            $m_time = $_POST['manzil_time'] ?? '';
+            if (isset($_POST['manzil_listener_jaiza'])) $m_list .= " (جائزہ)";
 
-        $m_details_arr = [];
-        if(isset($_POST['m_parah_num']) && is_array($_POST['m_parah_num'])) {
-            $p_nums = $_POST['m_parah_num'];
-            $p_types = $_POST['m_parah_type']; 
-            for($i=0; $i<count($p_nums); $i++) {
-                if(!empty($p_nums[$i])) {
-                    $type_text = $p_types[$i] ?? 'مکمل';
-                    $m_details_arr[] = $p_nums[$i] . " (" . $type_text . ")";
+            $m_details_arr = [];
+            if(isset($_POST['m_parah_num']) && is_array($_POST['m_parah_num'])) {
+                $p_nums = $_POST['m_parah_num'];
+                $p_types = $_POST['m_parah_type']; 
+                for($i=0; $i<count($p_nums); $i++) {
+                    if(!empty($p_nums[$i])) {
+                        $type_text = $p_types[$i] ?? 'مکمل';
+                        $m_details_arr[] = $p_nums[$i] . " (" . $type_text . ")";
+                    }
                 }
             }
-        }
-        $m_parah_final = implode(", ", $m_details_arr);
-        if ($m_total_amt === 'جائزہ' && !empty($m_details_arr)) {
-            $m_total_amt = "صرف جائزہ (" . count($m_details_arr) . " پارے)";
+            $m_parah_final = implode(", ", $m_details_arr);
+            if ($m_total_amt === 'جائزہ' && !empty($m_details_arr)) {
+                $m_total_amt = "صرف جائزہ (" . count($m_details_arr) . " پارے)";
+            }
         }
 
-        if ($sq_amt === 'جائزہ') {
+        if (!$sabqi_not_recited && $sq_amt === 'جائزہ') {
             throw new Exception(t('sabaq') . 'ی جائزہ کے لیے کم از کم ایک پارہ شامل کریں۔');
         }
-        if ($m_total_amt === 'جائزہ') {
+        if (!$manzil_not_recited && $m_total_amt === 'جائزہ') {
             throw new Exception(t('manzil') . ' جائزہ کے لیے کم از کم ایک پارہ شامل کریں۔');
         }
 
-        $exist = $pdo->prepare("SELECT * FROM daily_hifz WHERE student_id = ? AND date = ?");
-        $exist->execute([$std_id, $date]);
+        $cur_tenant_id = (int)get_current_tenant_id();
+        $exist = $pdo->prepare("SELECT * FROM daily_hifz WHERE student_id = ? AND date = ? AND tenant_id = ?");
+        $exist->execute([$std_id, $date, $cur_tenant_id]);
         $row = $exist->fetch();
 
         if ($row) {
@@ -102,11 +128,11 @@ if (isset($_POST['save_hifz'])) {
             $s_time = $keepOld($s_time, $row['sabaq_time'] ?? '');
             $sq_time = $keepOld($sq_time, $row['sabqi_time'] ?? '');
             $m_time = $keepOld($m_time, $row['manzil_time'] ?? '');
-            $sql = "UPDATE daily_hifz SET sabaq_parah=?, sabaq_lines=?, sabaq_status=?, sabqi_parah=?, sabqi_amount=?, sabqi_status=?, sabqi_listener=?, manzil_parah=?, manzil_amount=?, manzil_status=?, manzil_listener=?, sabaq_time=?, sabqi_time=?, manzil_time=? WHERE id=?";
-            $pdo->prepare($sql)->execute([$s_parah, $s_lines, $s_status, $sq_parah, $sq_amt, $sq_status, $sq_list, $m_parah_final, $m_total_amt, $m_status, $m_list, $s_time, $sq_time, $m_time, $row['id']]);
+            $sql = "UPDATE daily_hifz SET sabaq_parah=?, sabaq_lines=?, sabaq_status=?, sabqi_parah=?, sabqi_amount=?, sabqi_status=?, sabqi_listener=?, manzil_parah=?, manzil_amount=?, manzil_status=?, manzil_listener=?, sabaq_time=?, sabqi_time=?, manzil_time=? WHERE id=? AND tenant_id=?";
+            $pdo->prepare($sql)->execute([$s_parah, $s_lines, $s_status, $sq_parah, $sq_amt, $sq_status, $sq_list, $m_parah_final, $m_total_amt, $m_status, $m_list, $s_time, $sq_time, $m_time, $row['id'], $cur_tenant_id]);
         } else {
-            $sql = "INSERT INTO daily_hifz (student_id, date, sabaq_parah, sabaq_lines, sabaq_status, sabqi_parah, sabqi_amount, sabqi_status, sabqi_listener, manzil_parah, manzil_amount, manzil_status, manzil_listener, sabaq_time, sabqi_time, manzil_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $pdo->prepare($sql)->execute([$std_id, $date, $s_parah, $s_lines, $s_status, $sq_parah, $sq_amt, $sq_status, $sq_list, $m_parah_final, $m_total_amt, $m_status, $m_list, $s_time, $sq_time, $m_time]);
+            $sql = "INSERT INTO daily_hifz (student_id, date, sabaq_parah, sabaq_lines, sabaq_status, sabqi_parah, sabqi_amount, sabqi_status, sabqi_listener, manzil_parah, manzil_amount, manzil_status, manzil_listener, sabaq_time, sabqi_time, manzil_time, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $pdo->prepare($sql)->execute([$std_id, $date, $s_parah, $s_lines, $s_status, $sq_parah, $sq_amt, $sq_status, $sq_list, $m_parah_final, $m_total_amt, $m_status, $m_list, $s_time, $sq_time, $m_time, $cur_tenant_id]);
         }
         
         echo "<div class='alert alert-success text-center fw-bold shadow mt-2' id='alert_msg'>✅ حفظ کا ریکارڈ محفوظ / اپڈیٹ ہو گیا!</div>";
@@ -117,17 +143,25 @@ if (isset($_POST['save_hifz'])) {
 
 
 // طلباء اور اساتذہ کا ڈیٹا لانا (صرف حفظ کے طلباء)
+$cur_tenant_id = (int)get_current_tenant_id();
+$sys_type = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys_type === 'Masjid') ? "s.system_type = 'Masjid'" : "(s.system_type = 'Madrasa' OR s.system_type IS NULL OR s.system_type = '')";
+$t_sys_cond = ($sys_type === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+
 $stmt = $pdo->prepare("
     SELECT s.* FROM students s
-    LEFT JOIN classes c ON s.class = c.name
-    WHERE (LOWER(s.status) = 'active' OR s.status = 'حاضر' OR s.status = 'Present') 
+    WHERE s.tenant_id = ?
+      AND $sys_cond
+      AND (LOWER(s.status) = 'active' OR s.status = 'حاضر' OR s.status = 'Present' OR s.status IS NULL OR s.status = '') 
       AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
-      AND s.class = ?
+      AND (s.class = ? OR s.class_name = ?)
     ORDER BY s.admission_number ASC
 ");
-$stmt->execute([$selected_class]);
+$stmt->execute([$cur_tenant_id, $selected_class, $selected_class]);
 $students_data = $stmt->fetchAll();
-$teachers = $pdo->query("SELECT name FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL)")->fetchAll(PDO::FETCH_COLUMN); 
+$t_stmt = $pdo->prepare("SELECT name FROM teachers WHERE tenant_id = ? AND $t_sys_cond AND (is_deleted = 0 OR is_deleted IS NULL)");
+$t_stmt->execute([$cur_tenant_id]);
+$teachers = $t_stmt->fetchAll(PDO::FETCH_COLUMN); 
 if(empty($teachers)) $teachers = ['قاری صاحب'];
 
 $manzil_total_opts = [
@@ -169,11 +203,14 @@ function parahDropdown($name, $id) {
         <div class="row mb-4 bg-light p-3 rounded mx-0 border">
             <div class="col-md-6">
                 <label class="fw-bold"><?php echo t('select_student'); ?>:</label>
-                <select name="std_id" id="std_id" class="form-select fw-bold select2" required>
+                <select name="std_id" id="std_id" class="form-select fw-bold select2" required onchange="onStudentSelectChange(this)">
                     <option value="">-- تلاش کریں --</option>
                     <?php foreach($students_data as $s) {
-                        $label = trim(($s['name'] ?? '') . ' - ' . ($s['father_name'] ?? '') . ' | داخلہ: ' . ($s['admission_number'] ?? '') . ' | کلاس: ' . ($s['class'] ?? ''));
-                        echo "<option value='{$s['id']}'>" . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . "</option>";
+                        $isManzil = (($s['hifz_section'] ?? '') === 'manzil_gardan');
+                        $secBadge = $isManzil ? ' | ⭐ [منزل/گردان]' : '';
+                        $label = trim(($s['name'] ?? '') . ' - ' . ($s['father_name'] ?? '') . ' | داخلہ: ' . ($s['admission_number'] ?? '') . ' | کلاس: ' . ($s['class'] ?? '') . $secBadge);
+                        $secAttr = $isManzil ? 'manzil_gardan' : 'regular';
+                        echo "<option value='{$s['id']}' data-section='$secAttr'>" . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . "</option>";
                     } ?>
                 </select>
             </div>
@@ -183,26 +220,52 @@ function parahDropdown($name, $id) {
             </div>
         </div>
 
+        <div id="manzil_gardan_notice" class="alert alert-warning py-2 mb-3 fw-bold" style="display:none;">
+            <i class="fas fa-info-circle me-1"></i> یہ طالب علم <strong>منزل / گردان (پارٹ ٹائم)</strong> سیکشن میں ہے۔ صرف منزل / گردان سنانا لازمی ہے، نیا سبق اختیاری ہے اور غیر حاضری کے بغیر نیا سبق نہ ہونے پر ناغہ نہیں بنے گا۔
+        </div>
+
+        <script>
+        function onStudentSelectChange(sel) {
+            const opt = sel.options[sel.selectedIndex];
+            const sec = opt ? opt.getAttribute('data-section') : '';
+            const notice = document.getElementById('manzil_gardan_notice');
+            if (notice) {
+                notice.style.display = (sec === 'manzil_gardan') ? 'block' : 'none';
+            }
+        }
+        </script>
+
         <div id="hifz_section">
             <div class="row g-0 border rounded overflow-hidden mb-3">
                 <!-- <?php echo t('sabaq'); ?> -->
                 <div class="col-md-4 p-3 border-start section-box" id="box_sabaq">
                     <h5 class="text-white text-center bg-success p-2 rounded mb-3 shadow-sm"><?php echo t('sabaq'); ?></h5>
-                    <div class="mb-3"><label class="small fw-bold">پارہ نمبر</label><?php echo parahDropdown('sabaq_p', 'sabaq_p'); ?></div>
-                    <div class="mb-3"><label class="small fw-bold">لائنیں</label><input type="number" name="sabaq_l" id="sabaq_l" class="form-control fw-bold text-center"></div>
-                    <div class="row mb-3">
-                        <div class="col-6">
-                            <label class="small fw-bold"><?php echo t('status_ur'); ?></label>
-                            <select name="sabaq_s" id="sabaq_s" class="form-select status-select" onchange="colorStatus(this)">
-                                <option value="">--</option>
-                                <option value="بہترین">بہترین</option>
-                                <option value="بہتر">بہتر</option>
-                                <option value="کمزور">کمزور</option>
-                            </select>
-                        </div>
-                        <div class="col-6">
-                            <label class="small fw-bold">ٹائم</label>
-                            <input type="time" name="sabaq_time" id="sabaq_time" class="form-control text-center" onchange="updateSabaqTime()">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="sabaq_not_recited" id="sabaq_not_recited" onchange="toggleNotRecited('sabaq')">
+                        <label class="form-check-label fw-bold text-danger" for="sabaq_not_recited">سبق نہیں سنایا</label>
+                    </div>
+                    <div id="sabaq_reason_div" class="mb-3" style="display:none;">
+                        <label class="small fw-bold text-danger">نہ سنانے کی مختصر وجہ لکھیں:</label>
+                        <input type="text" name="sabaq_not_recited_reason" id="sabaq_not_recited_reason" class="form-control border-danger" placeholder="مثلاً: یاد نہیں تھا، وغیرہ">
+                    </div>
+                    <div id="sabaq_fields_div">
+                        <div class="mb-3"><label class="small fw-bold">پارہ نمبر</label><?php echo parahDropdown('sabaq_p', 'sabaq_p'); ?></div>
+                        <div class="mb-3"><label class="small fw-bold">لائنیں</label><input type="number" name="sabaq_l" id="sabaq_l" class="form-control fw-bold text-center"></div>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="small fw-bold"><?php echo t('status_ur'); ?></label>
+                                <select name="sabaq_s" id="sabaq_s" class="form-select status-select" onchange="colorStatus(this)">
+                                    <option value="">--</option>
+                                    <option value="بہترین">بہترین</option>
+                                    <option value="بہتر">بہتر</option>
+                                    <option value="کمزور">کمزور</option>
+                                    <option value="کچا">کچا</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="small fw-bold">ٹائم</label>
+                                <input type="time" name="sabaq_time" id="sabaq_time" class="form-control text-center" onchange="updateSabaqTime()">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -210,42 +273,53 @@ function parahDropdown($name, $id) {
                 <!-- <?php echo t('sabaq'); ?>ی -->
                 <div class="col-md-4 p-3 border-start section-box" id="box_sabqi">
                     <h5 class="text-white text-center bg-primary p-2 rounded mb-3 shadow-sm"><?php echo t('sabaq'); ?>ی</h5>
-                    <div class="mb-3"><label class="small fw-bold">پارہ نمبر</label><?php echo parahDropdown('sabqi_p', 'sabqi_p'); ?></div>
-                    <div class="mb-3"><label class="small fw-bold">مقدار</label>
-                        <select name="sabqi_amt" id="sabqi_amt" class="form-select fw-bold text-primary" onchange="checkSabqiJaiza()">
-                            <option value="">--</option>
-                            <?php foreach($sabqi_opts as $k=>$v) echo "<option value='$k'>$v</option>"; ?>
-                        </select>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="sabqi_not_recited" id="sabqi_not_recited" onchange="toggleNotRecited('sabqi')">
+                        <label class="form-check-label fw-bold text-danger" for="sabqi_not_recited">سبقی نہیں سنائی</label>
                     </div>
-                    <div id="sabqi_review_rows" class="mb-3" style="display:none;">
-                        <label class="small fw-bold text-primary">جائزہ کی تفصیل (کون سے پارے):</label>
-                        <div id="sabqi_review_rows_container"></div>
-                        <button type="button" class="btn btn-sm btn-outline-primary w-100 fw-bold mt-1" onclick="addSabqiReviewRow();">
-                            <i class="fas fa-plus"></i> جائزہ پارہ شامل کریں
-                        </button>
+                    <div id="sabqi_reason_div" class="mb-3" style="display:none;">
+                        <label class="small fw-bold text-danger">نہ سنانے کی مختصر وجہ لکھیں:</label>
+                        <input type="text" name="sabqi_not_recited_reason" id="sabqi_not_recited_reason" class="form-control border-danger" placeholder="مثلاً: یاد نہیں تھا، وغیرہ">
                     </div>
-                    <div class="row mb-3">
-                        <div class="col-6">
-                            <label class="small fw-bold"><?php echo t('status_ur'); ?></label>
-                            <select name="sabqi_s" id="sabqi_s" class="form-select status-select" onchange="colorStatus(this)">
+                    <div id="sabqi_fields_div">
+                        <div class="mb-3"><label class="small fw-bold">پارہ نمبر</label><?php echo parahDropdown('sabqi_p', 'sabqi_p'); ?></div>
+                        <div class="mb-3"><label class="small fw-bold">مقدار</label>
+                            <select name="sabqi_amt" id="sabqi_amt" class="form-select fw-bold text-primary" onchange="checkSabqiJaiza()">
                                 <option value="">--</option>
-                                <option value="بہترین">بہترین</option>
-                                <option value="بہتر">بہتر</option>
-                                <option value="کمزور">کمزور</option>
+                                <?php foreach($sabqi_opts as $k=>$v) echo "<option value='$k'>$v</option>"; ?>
                             </select>
                         </div>
-                        <div class="col-6">
-                            <label class="small fw-bold">ٹائم</label>
-                            <input type="time" name="sabqi_time" id="sabqi_time" class="form-control text-center" onchange="updateSabqiTime()">
+                        <div id="sabqi_review_rows" class="mb-3" style="display:none;">
+                            <label class="small fw-bold text-primary">جائزہ کی تفصیل (کون سے پارے):</label>
+                            <div id="sabqi_review_rows_container"></div>
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100 fw-bold mt-1" onclick="addSabqiReviewRow();">
+                                <i class="fas fa-plus"></i> جائزہ پارہ شامل کریں
+                            </button>
                         </div>
-                    </div>
-                    <div class="mb-3" id="sabqi_listener_div">
-                        <label class="small fw-bold text-muted">سننے والا</label>
-                        <div class="input-group input-group-sm">
-                            <input list="teachers_list" name="sabqi_listener" id="sabqi_listener" class="form-control">
-                            <div class="input-group-text bg-white border-start-0">
-                                <input class="form-check-input mt-0 me-1" type="checkbox" name="sabqi_listener_jaiza" id="sabqi_listener_jaiza">
-                                <label for="sabqi_listener_jaiza" class="small mb-0 ms-1 fw-bold text-primary">جائزہ</label>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="small fw-bold"><?php echo t('status_ur'); ?></label>
+                                <select name="sabqi_s" id="sabqi_s" class="form-select status-select" onchange="colorStatus(this)">
+                                    <option value="">--</option>
+                                    <option value="بہترین">بہترین</option>
+                                    <option value="بہتر">بہتر</option>
+                                    <option value="کمزور">کمزور</option>
+                                    <option value="کچا">کچا</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="small fw-bold">ٹائم</label>
+                                <input type="time" name="sabqi_time" id="sabqi_time" class="form-control text-center" onchange="updateSabqiTime()">
+                            </div>
+                        </div>
+                        <div class="mb-3" id="sabqi_listener_div">
+                            <label class="small fw-bold text-muted">سننے والا</label>
+                            <div class="input-group input-group-sm">
+                                <input list="teachers_list" name="sabqi_listener" id="sabqi_listener" class="form-control">
+                                <div class="input-group-text bg-white border-start-0">
+                                    <input class="form-check-input mt-0 me-1" type="checkbox" name="sabqi_listener_jaiza" id="sabqi_listener_jaiza">
+                                    <label for="sabqi_listener_jaiza" class="small mb-0 ms-1 fw-bold text-primary">جائزہ</label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -254,49 +328,59 @@ function parahDropdown($name, $id) {
                 <!-- <?php echo t('manzil'); ?> -->
                 <div class="col-md-4 p-3 bg-light section-box" id="box_manzil">
                     <h5 class="text-dark text-center bg-warning p-2 rounded mb-3 shadow-sm"><?php echo t('manzil'); ?></h5>
-                    
-                    <div class="mb-3">
-                        <label class="small fw-bold text-danger">کل مقدار / جائزہ</label>
-                        <select name="manzil_total_amt" id="manzil_total_amt" class="form-select fw-bold border-danger text-danger" onchange="autoGenerateRows(); updateRealTimeCalc(); checkManzilJaiza();">
-                            <option value="">-- منتخب کریں --</option>
-                            <?php foreach($manzil_total_opts as $k=>$v) echo "<option value='$k'>$v</option>"; ?>
-                        </select>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="manzil_not_recited" id="manzil_not_recited" onchange="toggleNotRecited('manzil')">
+                        <label class="form-check-label fw-bold text-danger" for="manzil_not_recited">منزل نہیں سنائی</label>
                     </div>
-
-                    <div id="calc_display" class="alert alert-secondary py-1 px-2 mb-2 text-center" style="display:none; font-size: 13px;">
-                        <span id="calc_status" class="fw-bold"></span>
+                    <div id="manzil_reason_div" class="mb-3" style="display:none;">
+                        <label class="small fw-bold text-danger">نہ سنانے کی مختصر وجہ لکھیں:</label>
+                        <input type="text" name="manzil_not_recited_reason" id="manzil_not_recited_reason" class="form-control border-danger" placeholder="مثلاً: یاد نہیں تھا، وغیرہ">
                     </div>
-
-                    <div class="mb-2">
-                        <label class="small fw-bold">تفصیل (پارہ وار):</label>
-                        <div id="manzil_rows_container" onchange="updateRealTimeCalc()"></div>
-                        <button type="button" class="btn btn-sm btn-outline-success w-100 fw-bold mt-1" onclick="addManzilRow(); updateRealTimeCalc();">
-                            <i class="fas fa-plus"></i> مزید لائن شامل کریں
-                        </button>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-6">
-                            <label class="small fw-bold"><?php echo t('status_ur'); ?></label>
-                            <select name="manzil_s" id="manzil_s" class="form-select status-select" onchange="colorStatus(this)">
-                                <option value="">--</option>
-                                <option value="بہترین">بہترین</option>
-                                <option value="بہتر">بہتر</option>
-                                <option value="کمزور">کمزور</option>
+                    <div id="manzil_fields_div">
+                        <div class="mb-3">
+                            <label class="small fw-bold text-danger">کل مقدار / جائزہ</label>
+                            <select name="manzil_total_amt" id="manzil_total_amt" class="form-select fw-bold border-danger text-danger" onchange="autoGenerateRows(); updateRealTimeCalc(); checkManzilJaiza();">
+                                <option value="">-- منتخب کریں --</option>
+                                <?php foreach($manzil_total_opts as $k=>$v) echo "<option value='$k'>$v</option>"; ?>
                             </select>
                         </div>
-                        <div class="col-6">
-                            <label class="small fw-bold">ٹائم</label>
-                            <input type="time" name="manzil_time" id="manzil_time" class="form-control text-center" onchange="updateManzilTime()">
+
+                        <div id="calc_display" class="alert alert-secondary py-1 px-2 mb-2 text-center" style="display:none; font-size: 13px;">
+                            <span id="calc_status" class="fw-bold"></span>
                         </div>
-                    </div>
-                    <div class="mb-3" id="manzil_listener_div">
-                        <label class="small fw-bold text-muted">سننے والا</label>
-                        <div class="input-group input-group-sm">
-                            <input list="teachers_list" name="manzil_listener" id="manzil_listener" class="form-control">
-                            <div class="input-group-text bg-white border-start-0">
-                                <input class="form-check-input mt-0 me-1" type="checkbox" name="manzil_listener_jaiza" id="manzil_listener_jaiza">
-                                <label for="manzil_listener_jaiza" class="small mb-0 ms-1 fw-bold text-warning text-darken">جائزہ</label>
+
+                        <div class="mb-2">
+                            <label class="small fw-bold">تفصیل (پارہ وار):</label>
+                            <div id="manzil_rows_container" onchange="updateRealTimeCalc()"></div>
+                            <button type="button" class="btn btn-sm btn-outline-success w-100 fw-bold mt-1" onclick="addManzilRow(); updateRealTimeCalc();">
+                                <i class="fas fa-plus"></i> مزید لائن شامل کریں
+                            </button>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="small fw-bold"><?php echo t('status_ur'); ?></label>
+                                <select name="manzil_s" id="manzil_s" class="form-select status-select" onchange="colorStatus(this)">
+                                    <option value="">--</option>
+                                    <option value="بہترین">بہترین</option>
+                                    <option value="بہتر">بہتر</option>
+                                    <option value="کمزور">کمزور</option>
+                                    <option value="کچا">کچا</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="small fw-bold">ٹائم</label>
+                                <input type="time" name="manzil_time" id="manzil_time" class="form-control text-center" onchange="updateManzilTime()">
+                            </div>
+                        </div>
+                        <div class="mb-3" id="manzil_listener_div">
+                            <label class="small fw-bold text-muted">سننے والا</label>
+                            <div class="input-group input-group-sm">
+                                <input list="teachers_list" name="manzil_listener" id="manzil_listener" class="form-control">
+                                <div class="input-group-text bg-white border-start-0">
+                                    <input class="form-check-input mt-0 me-1" type="checkbox" name="manzil_listener_jaiza" id="manzil_listener_jaiza">
+                                    <label for="manzil_listener_jaiza" class="small mb-0 ms-1 fw-bold text-warning text-darken">جائزہ</label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -323,6 +407,19 @@ const qtyMap = {
 };
 
 const rowValueMap = { 'مکمل': 1.0, 'نصف اول': 0.5, 'نصف آخر': 0.5, 'پاؤ': 0.25 };
+
+function toggleNotRecited(type) {
+    const isChecked = document.getElementById(type + '_not_recited').checked;
+    const reasonDiv = document.getElementById(type + '_reason_div');
+    const fieldsDiv = document.getElementById(type + '_fields_div');
+    if (isChecked) {
+        reasonDiv.style.display = 'block';
+        fieldsDiv.style.display = 'none';
+    } else {
+        reasonDiv.style.display = 'none';
+        fieldsDiv.style.display = 'block';
+    }
+}
 
 function colorStatus(sel) {
     if(sel.value == 'بہترین') sel.style.backgroundColor = '#d1e7dd';

@@ -1,101 +1,105 @@
 <?php
-require_once __DIR__ . '/env_loader.php';
-// Global Configuration
-define('IS_PRODUCTION', filter_var(getenv('MADRASA_IS_PRODUCTION') ?: 'true', FILTER_VALIDATE_BOOLEAN));
+/**
+ * Central Database Orchestrator & Legacy Compatibility Bridge
+ * 
+ * Modularized for Phase 5 Architecture Refactor.
+ * Maintains 100% backwards compatibility for all 200+ dependent web pages.
+ */
 
-if (IS_PRODUCTION) {
-    ini_set('display_errors', 0);
-    error_reporting(0);
-} else {
-    ini_set('display_errors', 1);
-    error_reporting(E_ALL);
+// 1. Database Configuration & Connection
+require_once __DIR__ . '/config/database.php';
+
+// 2. Multi-Tenant SaaS Middleware & Core Helpers
+require_once __DIR__ . '/middleware/tenant.php';
+require_once __DIR__ . '/middleware/SafeTenantPDO.php';
+
+// Schema self-healing available via function or on explicit request
+if (isset($_GET['migrate_tenant_schema']) && $_GET['migrate_tenant_schema'] === '1') {
+    ensure_tenant_isolation_schema($pdo, true);
 }
 
-// db.php
-$host = getenv('MADRASA_DB_HOST') ?: 'localhost';
-$port = getenv('MADRASA_DB_PORT') ?: '';
-$dbname = getenv('MADRASA_DB_NAME') ?: 'mamfss_madrasa';
-$username = getenv('MADRASA_DB_USER') ?: 'mamfss_madrasa';
-$password = getenv('MADRASA_DB_PASSWORD') ?: '';
+// 3. Authentication, Permissions & Access Control Middleware
+require_once __DIR__ . '/middleware/auth.php';
 
-if ($password === '') {
-    die('Database password is not configured.');
+// Auto-heal and restore session from persistent auth cookie across entire application
+if (function_exists('madrasa_ensure_session_started')) {
+    madrasa_ensure_session_started();
+}
+if (isset($pdo) && function_exists('madrasa_restore_session_from_cookie')) {
+    madrasa_restore_session_from_cookie($pdo);
 }
 
-try {
-    $dsn = "mysql:host=$host;" . ($port !== '' ? "port=$port;" : '') . "dbname=$dbname;charset=utf8mb4";
-    $pdo = new PDO($dsn, $username, $password, [
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-    ]);
-} catch (PDOException $e) {
-    if (strpos($_SERVER['REQUEST_URI'] ?? '', 'api.php') !== false) {
-        header('Content-Type: application/json');
-        die(json_encode(['status' => 'error', 'message' => 'Database connection failed.']));
-    } else {
-        die(IS_PRODUCTION ? "Database connection failed." : "Database connection failed: " . $e->getMessage());
+if (!function_exists('format_urdu_month_year')) {
+    function format_urdu_month_year($my) {
+        if (empty($my)) return '';
+        $parts = explode('-', trim((string)$my));
+        if (count($parts) < 2) return (string)$my;
+        $year = $parts[0];
+        $month = (int)$parts[1];
+        $urduMonths = [
+            1 => 'جنوری', 2 => 'فروری', 3 => 'مارچ', 4 => 'اپریل',
+            5 => 'مئی', 6 => 'جون', 7 => 'جولائی', 8 => 'اگست',
+            9 => 'ستمبر', 10 => 'اکتوبر', 11 => 'نومبر', 12 => 'دسمبر'
+        ];
+        $mName = $urduMonths[$month] ?? $parts[1];
+        return $mName . ' ' . $year;
     }
 }
 
-try {
-    // Auto-update schema for roles and permissions
-    $pdo->exec("ALTER TABLE admins ADD COLUMN role VARCHAR(50) DEFAULT 'admin', ADD COLUMN permissions TEXT");
-} catch (PDOException $e) {
-    // Ignored if columns already exist
-}
+if (!function_exists('resolve_alumni_category')) {
+    function resolve_alumni_category($s) {
+        $cat = strtolower(trim((string)($s['alumni_category'] ?? '')));
+        $reason = trim((string)($s['leaving_reason'] ?? ''));
+        $status = strtolower(trim((string)($s['status'] ?? '')));
 
-try {
-    $pdo->exec("ALTER TABLE admins ADD COLUMN allowed_classes TEXT NULL");
-} catch (PDOException $e) {
-    // Ignored if column already exists
-}
-
-if (!function_exists('get_allowed_classes')) {
-    function get_allowed_classes($pdo, $orderBy = 'id ASC', $apiRole = null, $apiUserId = null) {
-        $role = $apiRole !== null ? $apiRole : ($_SESSION['role'] ?? '');
-        $userId = $apiUserId !== null ? $apiUserId : ($_SESSION['user_id'] ?? 0);
-        
-        if (!$role) return [];
-        if ($role === 'admin') {
-            $sys = $_SESSION['system_type'] ?? 'Madrasa';
-return $pdo->query("SELECT * FROM classes WHERE system_type = '$sys' ORDER BY $orderBy")->fetchAll(PDO::FETCH_ASSOC);
+        // 1. Direct category match
+        if ($cat === 'expelled' || strpos($cat, 'خارج') !== false || strpos($cat, 'اخراج') !== false) {
+            return 'expelled';
         }
+        if ($cat === 'dropped' || strpos($cat, 'چھوڑ') !== false || strpos($cat, 'ترک') !== false || strpos($cat, 'شوقیہ') !== false) {
+            return 'dropped';
+        }
+
+        // 2. Reason or status indicators
+        if (strpos($reason, 'خارج') !== false || strpos($reason, 'اخراج') !== false || strpos($status, 'خارج') !== false || strpos($status, 'struck off') !== false || strpos($status, 'expelled') !== false) {
+            return 'expelled';
+        }
+        if (strpos($reason, 'چھوڑ') !== false || strpos($reason, 'شوقیہ') !== false || strpos($reason, 'ترک') !== false || strpos($status, 'left') !== false || strpos($status, 'dropped') !== false) {
+            return 'dropped';
+        }
+
+        return 'completed';
+    }
+}
+
+if (!function_exists('is_student_inactive')) {
+    function is_student_inactive($s, $check_date = null) {
+        if (empty($s) || !is_array($s)) return false;
         
-        if (!$userId) return [];
-        $stmt = $pdo->prepare("SELECT allowed_classes FROM admins WHERE id = ?");
-        $stmt->execute([$userId]);
-        $admin_row = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        $allowed_ids = [];
-        if ($admin_row && !empty($admin_row['allowed_classes'])) {
-            $decoded = json_decode($admin_row['allowed_classes'], true);
-            if (is_array($decoded)) {
-                $allowed_ids = $decoded;
+        $status = strtolower(trim((string)($s['status'] ?? '')));
+        $reason = strtolower(trim((string)($s['leaving_reason'] ?? '')));
+
+        // If explicitly active or present, student is ACTIVE
+        if (in_array($status, ['active', 'present', 'حاضر'], true) || $status === '') {
+            return false;
+        }
+
+        // 1. Status indicates left / alumni / expelled
+        $inactive_statuses = [
+            'alumni', 'left', 'struck off', 'dropped', 'expelled', 'graduated', 'inactive',
+            'خارج', 'فارغ', 'فارغ التحصیل', 'چھوڑ دیا', 'ترک تعلیم'
+        ];
+        if (in_array($status, $inactive_statuses, true)) return true;
+        if (strpos($status, 'خارج') !== false || strpos($status, 'فارغ') !== false || strpos($status, 'چھوڑ') !== false || strpos($status, 'ترک') !== false) return true;
+
+        // 2. Leaving reason
+        if (!empty($reason)) {
+            if (strpos($reason, 'خارج') !== false || strpos($reason, 'چھوڑ') !== false || strpos($reason, 'ترک') !== false || strpos($reason, 'اخراج') !== false || strpos($reason, 'فارغ') !== false) {
+                return true;
             }
         }
-        
-        if (empty($allowed_ids)) {
-            return [];
-        }
-        
-        $placeholders = implode(',', array_fill(0, count($allowed_ids), '?'));
-        $sys = $_SESSION['system_type'] ?? 'Madrasa';
-$stmt = $pdo->prepare("SELECT * FROM classes WHERE id IN ($placeholders) AND system_type = '$sys' ORDER BY $orderBy");
-        $stmt->execute($allowed_ids);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-}
 
-if (!function_exists('app_has_perm')) {
-    function app_has_perm($perm) {
-        if (!isset($_SESSION['role'])) return false;
-        if ($_SESSION['role'] === 'admin') return true;
-        $perms = $_SESSION['permissions'] ?? [];
-        if (is_string($perms)) {
-            $decoded = json_decode($perms, true);
-            $perms = is_array($decoded) ? $decoded : [];
-        }
-        return in_array($perm, $perms, true);
+        return false;
     }
 }
 
@@ -103,6 +107,16 @@ if (!function_exists('get_period_date_range')) {
     function get_period_date_range($period = 'current_week', $custom_from = null, $custom_to = null, $week_start_day = 6) {
         $today = date('Y-m-d');
         switch ($period) {
+            case 'all':
+                // تمام تاریخیں / تمام ریکارڈز
+                $from = '2000-01-01';
+                $to = date('Y-m-d', strtotime('+5 years'));
+                break;
+            case 'this_month':
+                // رواں مہینہ
+                $from = date('Y-m-01');
+                $to = $today;
+                break;
             case 'weekly':
                 // آخری 7 دن
                 $from = date('Y-m-d', strtotime('-6 days'));
@@ -148,10 +162,20 @@ if (!function_exists('get_period_date_range')) {
     }
 }
 
-// Auto-create new tables for Hifz/Attendance features
-try {
-    $pdo->exec("ALTER TABLE acc_chart_of_accounts ADD COLUMN parent_id INTEGER NULL");
-} catch (PDOException $e) {}
+// Auto-create new tables for Hifz/Attendance features (only on explicit migration request)
+if (!function_exists('ensure_legacy_feature_tables')) {
+    function ensure_legacy_feature_tables(PDO $pdo) {
+        try {
+            $pdo->exec("ALTER TABLE acc_chart_of_accounts ADD COLUMN parent_id INTEGER NULL");
+        } catch (PDOException $e) {}
+try { $pdo->exec("ALTER TABLE finance ADD COLUMN account_id INT DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE finance ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash'"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE finance ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE acc_payroll ADD COLUMN payment_account_id INT DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE acc_payroll ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash'"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE acc_payroll ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE heads ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
 
 try {
     $pdo->exec("
@@ -219,6 +243,18 @@ try {
       UNIQUE KEY `unique_student_period_attendance` (`student_id`, `date`, `period_num`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ");
+
+    $pdo->exec("
+    CREATE TABLE IF NOT EXISTS `smart_notification_reads` (
+      `id` int(11) NOT NULL AUTO_INCREMENT,
+      `alert_id` varchar(100) NOT NULL,
+      `user_id` int(11) NOT NULL,
+      `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+      `is_deleted` tinyint(1) DEFAULT 0,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `unique_user_alert` (`alert_id`, `user_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ");
 } catch (PDOException $e) {
     // Ignored
 }
@@ -256,6 +292,12 @@ try {
 try { $pdo->exec("ALTER TABLE class_periods ADD COLUMN books TEXT NULL"); } catch (PDOException $e) {}
 try { $pdo->exec("ALTER TABLE class_periods ADD COLUMN teacher_id INT NULL"); } catch (PDOException $e) {}
 try { $pdo->exec("ALTER TABLE class_periods ADD COLUMN teacher_ids JSON NULL"); } catch (PDOException $e) {}
+try { $pdo->exec("ALTER TABLE finance ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE finance ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE finance ADD COLUMN computer_receipt_no INT DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE heads ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE acc_chart_of_accounts ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE acc_chart_of_accounts ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
 
 
     $examCols = [
@@ -299,6 +341,23 @@ try { $pdo->exec("ALTER TABLE class_periods ADD COLUMN teacher_ids JSON NULL"); 
         }
     }
 
+    $studentAlumniCols = [
+        'alumni_category' => "VARCHAR(50) DEFAULT 'completed'",
+        'wifaq_exam' => "TINYINT(1) DEFAULT 0",
+        'wifaq_marks' => "VARCHAR(50) DEFAULT NULL",
+        'mehrab_recitation' => "VARCHAR(50) DEFAULT NULL",
+        'quran_edition' => "VARCHAR(50) DEFAULT '16 سطری'",
+        'hifz_sequence' => "VARCHAR(50) DEFAULT 'reverse'",
+    ];
+    foreach ($studentAlumniCols as $col => $def) {
+        try {
+            $pdo->exec("ALTER TABLE students ADD COLUMN $col $def");
+        } catch (PDOException $e) {}
+        try {
+            $pdo->exec("ALTER TABLE maktab_students ADD COLUMN $col $def");
+        } catch (PDOException $e) {}
+    }
+
     try {
         $pdo->exec("CREATE TABLE IF NOT EXISTS departments (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -308,9 +367,14 @@ try { $pdo->exec("ALTER TABLE class_periods ADD COLUMN teacher_ids JSON NULL"); 
             is_deleted TINYINT DEFAULT 0,
             is_synced TINYINT DEFAULT 1
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    } catch (PDOException $e) {
-        // Ignored if table creation is not permitted here
+        } catch (PDOException $e) {
+            // Ignored if table creation is not permitted here
+        }
     }
+}
+if (isset($_GET['migrate_legacy_schema']) && $_GET['migrate_legacy_schema'] === '1') {
+    ensure_legacy_feature_tables($pdo);
+}
 
 /**
  * XSS Protection Helper
@@ -320,21 +384,8 @@ function e($value) {
 }
 
 /**
- * Password Hashing Helpers
+ * Password Hashing Helpers are defined in middleware/auth.php
  */
-function hash_pass($password) {
-    return password_hash($password, PASSWORD_BCRYPT);
-}
-
-function verify_pass($password, $hash) {
-    if (empty($hash)) return false;
-    $hash = trim($hash);
-    if ($password === $hash) return true;
-    if (password_verify($password, $hash)) return true;
-    if (md5($password) === strtolower($hash) || md5($password) === $hash) return true;
-    if (sha1($password) === strtolower($hash) || sha1($password) === $hash) return true;
-    return false;
-}
 
 // =================================================================
 
@@ -890,45 +941,942 @@ function translateDate($dateStr) {
     $ur_month = $months[$en_month] ?? $en_month;
     return date('d', $timestamp) . ' ' . $ur_month . ' ' . date('Y', $timestamp);
 }
-function sync_all_heads_with_chart_and_departments(PDO $pdo) {
+
+if (!function_exists('ensure_column')) {
+    function ensure_column(PDO $pdo, $table, $column, $definition) {
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM `$table` LIKE ?");
+            $stmt->execute([$column]);
+            if (!$stmt->fetch()) {
+                $pdo->exec("ALTER TABLE `$table` ADD COLUMN `$column` $definition");
+            }
+        } catch (Throwable $e) {}
+    }
+}
+
+if (!function_exists('get_next_chart_code')) {
+    function get_next_chart_code(PDO $pdo, $type, $tenant_id = null) {
+        if ($tenant_id === null) $tenant_id = (int)get_current_tenant_id();
+        $rawType = ucfirst(strtolower(trim((string)$type)));
+        $prefix = 5;
+        $start = 5001;
+        if ($rawType === 'Asset') {
+            $prefix = 1;
+            $start = 1001;
+        } elseif ($rawType === 'Liability') {
+            $prefix = 2;
+            $start = 2001;
+        } elseif ($rawType === 'Equity') {
+            $prefix = 3;
+            $start = 3001;
+        } elseif ($rawType === 'Revenue' || $rawType === 'Income') {
+            $prefix = 4;
+            $start = 4001;
+        } elseif ($rawType === 'Expense') {
+            $prefix = 5;
+            $start = 5001;
+        }
+
+        $min = $prefix * 1000;
+        $max = ($prefix * 1000) + 998;
+        try {
+            $stmt = $pdo->prepare("
+                SELECT MAX(CAST(code AS UNSIGNED)) as max_code 
+                FROM acc_chart_of_accounts 
+                WHERE (is_deleted = 0 OR is_deleted IS NULL)
+                AND tenant_id = ?
+                AND code REGEXP '^[0-9]+$' 
+                AND CAST(code AS UNSIGNED) >= ? 
+                AND CAST(code AS UNSIGNED) <= ?
+            ");
+            $stmt->execute([$tenant_id, $min, $max]);
+            $val = $stmt->fetchColumn();
+            if ($val && (int)$val >= $start) {
+                return (string)((int)$val + 1);
+            }
+        } catch (Throwable $e) {}
+        return (string)$start;
+    }
+}
+
+if (!function_exists('resequence_chart_of_accounts')) {
+    function resequence_chart_of_accounts(PDO $pdo, $tenant_id = null) {
+        if ($tenant_id === null) $tenant_id = (int)get_current_tenant_id();
+        try {
+            $types = [
+                'Asset' => ['start' => 1001],
+                'Liability' => ['start' => 2001],
+                'Equity' => ['start' => 3001],
+                'Revenue' => ['start' => 4001],
+                'Expense' => ['start' => 5001]
+            ];
+            
+            foreach ($types as $type => $conf) {
+                $stmt = $pdo->prepare("
+                    SELECT id, code, name 
+                    FROM acc_chart_of_accounts 
+                    WHERE (is_deleted = 0 OR is_deleted IS NULL)
+                    AND tenant_id = ?
+                    AND (type = ? OR (type = 'Income' AND ? = 'Revenue'))
+                    AND code != '3999'
+                    ORDER BY 
+                        CASE 
+                            WHEN code REGEXP '^[0-9]+$' THEN CAST(code AS UNSIGNED) 
+                            ELSE 999999 
+                        END ASC, id ASC
+                ");
+                $stmt->execute([$tenant_id, $type, $type]);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $curr = $conf['start'];
+                foreach ($rows as $r) {
+                    $newCode = (string)$curr;
+                    if ($r['code'] !== $newCode) {
+                        $up = $pdo->prepare("UPDATE acc_chart_of_accounts SET code = ? WHERE id = ? AND tenant_id = ?");
+                        $up->execute([$newCode, $r['id'], $tenant_id]);
+                    }
+                    $curr++;
+                }
+            }
+        } catch (Throwable $e) {}
+    }
+}
+
+function sync_all_heads_with_chart_and_departments(PDO $pdo, $tenant_id = null) {
+    if ($tenant_id === null) $tenant_id = (int)get_current_tenant_id();
     try {
-        $checkHead = $pdo->prepare("SELECT id FROM heads WHERE name = ? LIMIT 1");
-        $insertHead = $pdo->prepare("INSERT INTO heads (name, type, is_deleted) VALUES (?, ?, 0)");
+        ensure_column($pdo, 'students', 'monthly_fee', 'DECIMAL(10,2) DEFAULT 0');
+        ensure_column($pdo, 'fee_submissions', 'date', 'DATE DEFAULT NULL');
+        ensure_column($pdo, 'fee_submissions', 'submission_date', 'DATE DEFAULT NULL');
 
-        // 1. Sync acc_chart_of_accounts -> heads
-        $chart_stmt = $pdo->query("SELECT name, type FROM acc_chart_of_accounts WHERE is_deleted = 0 OR is_deleted IS NULL");
-        if ($chart_stmt) {
-            $chart_accounts = $chart_stmt->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($chart_accounts as $ca) {
-                $name = trim($ca['name'] ?? '');
-                if (empty($name)) continue;
-                
-                $rawType = strtolower(trim((string)($ca['type'] ?? '')));
-                $type = ($rawType === 'income' || strpos($rawType, 'revenue') !== false) ? 'Income' : 'Expense';
-                
-                $checkHead->execute([$name]);
-                if (!$checkHead->fetch()) {
-                    $insertHead->execute([$name, $type]);
+        // 1. Deduplicate acc_chart_of_accounts by normalized name for this tenant
+        try {
+            $dup_stmt = $pdo->prepare("
+                SELECT LOWER(TRIM(name)) as norm_name, COUNT(*) as cnt, MIN(id) as keep_id 
+                FROM acc_chart_of_accounts 
+                WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND name IS NOT NULL AND TRIM(name) != '' 
+                GROUP BY LOWER(TRIM(name)) 
+                HAVING cnt > 1
+            ");
+            $dup_stmt->execute([$tenant_id]);
+            if ($dup_stmt) {
+                $dups = $dup_stmt->fetchAll(PDO::FETCH_ASSOC);
+                $del_dup = $pdo->prepare("UPDATE acc_chart_of_accounts SET is_deleted = 1 WHERE LOWER(TRIM(name)) = ? AND id != ? AND tenant_id = ?");
+                foreach ($dups as $dup) {
+                    try {
+                        $pdo->prepare("UPDATE acc_ledger_entries SET account_id = ? WHERE tenant_id = ? AND account_id IN (SELECT id FROM (SELECT id FROM acc_chart_of_accounts WHERE LOWER(TRIM(name)) = ? AND id != ? AND tenant_id = ?) AS tmp)")
+                            ->execute([(int)$dup['keep_id'], $tenant_id, $dup['norm_name'], (int)$dup['keep_id'], $tenant_id]);
+                    } catch (Throwable $eMove) {}
+                    $del_dup->execute([$dup['norm_name'], (int)$dup['keep_id'], $tenant_id]);
                 }
             }
-        }
+        } catch (Throwable $e) {}
 
-        // 2. Sync departments -> heads (as Expense)
-        $dept_stmt = $pdo->query("SELECT name FROM departments WHERE status IS NULL OR status = 'Active'");
-        if ($dept_stmt) {
-            $depts = $dept_stmt->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($depts as $d) {
-                $name = trim($d['name'] ?? '');
-                if (empty($name)) continue;
-                
-                $checkHead->execute([$name]);
-                if (!$checkHead->fetch()) {
-                    $insertHead->execute([$name, 'Expense']);
+        // 1b. Repair any ledger entries pointing to soft-deleted accounts that have an active counterpart
+        try {
+            $pdo->prepare("
+                UPDATE acc_ledger_entries e
+                JOIN acc_chart_of_accounts d ON e.account_id = d.id AND d.is_deleted = 1 AND d.tenant_id = ?
+                JOIN acc_chart_of_accounts a ON LOWER(TRIM(d.name)) = LOWER(TRIM(a.name)) AND (a.is_deleted = 0 OR a.is_deleted IS NULL) AND a.tenant_id = ?
+                SET e.account_id = a.id
+                WHERE e.tenant_id = ?
+            ")->execute([$tenant_id, $tenant_id, $tenant_id]);
+        } catch (Throwable $e) {}
+
+        // 2. Deduplicate heads by normalized name for this tenant
+        try {
+            $dup_heads = $pdo->prepare("
+                SELECT LOWER(TRIM(name)) as norm_name, COUNT(*) as cnt, MIN(id) as keep_id 
+                FROM heads 
+                WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND name IS NOT NULL AND TRIM(name) != '' 
+                GROUP BY LOWER(TRIM(name)) 
+                HAVING cnt > 1
+            ");
+            $dup_heads->execute([$tenant_id]);
+            if ($dup_heads) {
+                $dups = $dup_heads->fetchAll(PDO::FETCH_ASSOC);
+                $del_dup_head = $pdo->prepare("UPDATE heads SET is_deleted = 1 WHERE LOWER(TRIM(name)) = ? AND id != ? AND tenant_id = ?");
+                foreach ($dups as $dup) {
+                    $del_dup_head->execute([$dup['norm_name'], (int)$dup['keep_id'], $tenant_id]);
                 }
             }
-        }
-    } catch (Exception $e) {
+        } catch (Throwable $e) {}
+
+        $checkHead = $pdo->prepare("SELECT id FROM heads WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+        $insertHead = $pdo->prepare("INSERT INTO heads (name, type, is_deleted, tenant_id) VALUES (?, ?, 0, ?)");
+
+        $checkChart = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+        $insertChart = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, system_type, is_deleted, tenant_id) VALUES (?, ?, ?, 'Madrasa', 0, ?)");
+
+        // 3. Sync acc_chart_of_accounts -> heads (Only Revenue and Expense accounts)
+        try {
+            $pdo->prepare("UPDATE heads SET is_deleted = 1 WHERE tenant_id = ? AND LOWER(TRIM(name)) IN ('cash in hand', 'bank account', 'accounts receivable (students)', 'accounts payable', 'general fund')")->execute([$tenant_id]);
+        } catch (Throwable $e) {}
+
+        try {
+            $chart_stmt = $pdo->prepare("SELECT name, type FROM acc_chart_of_accounts WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ?");
+            $chart_stmt->execute([$tenant_id]);
+            if ($chart_stmt && $checkHead && $insertHead) {
+                $chart_accounts = $chart_stmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($chart_accounts as $ca) {
+                    $name = trim($ca['name'] ?? '');
+                    if (empty($name)) continue;
+                    
+                    $rawType = strtolower(trim((string)($ca['type'] ?? '')));
+                    $isRev = ($rawType === 'income' || strpos($rawType, 'revenue') !== false);
+                    $isExp = ($rawType === 'expense');
+                    if (!$isRev && !isExp) continue; // Skip Asset, Liability, Equity!
+                    $type = $isRev ? 'Income' : 'Expense';
+                    
+                    $checkHead->execute([$name, $tenant_id]);
+                    if (!$checkHead->fetch()) {
+                        $insertHead->execute([$name, $type, $tenant_id]);
+                    }
+                }
+            }
+        } catch (Throwable $e) {}
+
+        // 4. Sync heads -> acc_chart_of_accounts
+        try {
+            $heads_stmt = $pdo->prepare("SELECT id, name, type FROM heads WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ?");
+            $heads_stmt->execute([$tenant_id]);
+            if ($heads_stmt && $checkChart && $insertChart) {
+                $all_heads = $heads_stmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($all_heads as $h) {
+                    $name = trim($h['name'] ?? '');
+                    if (empty($name)) continue;
+                    
+                    $rawType = strtolower(trim((string)($h['type'] ?? '')));
+                    $isInc = ($rawType === 'income' || strpos($rawType, 'revenue') !== false);
+                    $chartType = $isInc ? 'Revenue' : 'Expense';
+                    
+                    $checkChart->execute([$name, $tenant_id]);
+                    if (!$checkChart->fetch()) {
+                        try {
+                            $seqCode = get_next_chart_code($pdo, $chartType, $tenant_id);
+                            $insertChart->execute([$seqCode, $name, $chartType, $tenant_id]);
+                        } catch (Throwable $e) {}
+                    }
+                }
+            }
+        } catch (Throwable $e) {}
+
+        // 5. Sync departments -> heads & acc_chart_of_accounts (as Expense)
+        try {
+            $dept_stmt = $pdo->prepare("SELECT name FROM departments WHERE (status IS NULL OR status = 'Active') AND tenant_id = ?");
+            $dept_stmt->execute([$tenant_id]);
+            if ($dept_stmt && $checkHead && $insertHead) {
+                $depts = $dept_stmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($depts as $d) {
+                    $name = trim($d['name'] ?? '');
+                    if (empty($name)) continue;
+                    
+                    $checkHead->execute([$name, $tenant_id]);
+                    if (!$checkHead->fetch()) {
+                        try {
+                            $insertHead->execute([$name, 'Expense', $tenant_id]);
+                        } catch (Throwable $e) {}
+                    }
+
+                    if ($checkChart && $insertChart) {
+                        $checkChart->execute([$name, $tenant_id]);
+                        if (!$checkChart->fetch()) {
+                            try {
+                                $seqCode = get_next_chart_code($pdo, 'Expense', $tenant_id);
+                                $insertChart->execute([$seqCode, $name, 'Expense', $tenant_id]);
+                            } catch (Throwable $e) {}
+                        }
+                    }
+                }
+            }
+        } catch (Throwable $e) {}
+
+        // 6. Ensure standard sequence across all accounts
+        resequence_chart_of_accounts($pdo, $tenant_id);
+    } catch (Throwable $e) {
         // Suppress error
     }
 }
-?>
+
+function localize_head_name($name, $lang = null) {
+    if (!$lang) {
+        global $lang;
+        if (!$lang) $lang = $_SESSION['lang'] ?? 'ur';
+    }
+    $name = trim((string)$name);
+    if (empty($name)) return '';
+
+    static $toUr = [
+        'sadaqah' => 'صدقہ',
+        'donation' => 'عطیات',
+        'donation / sadqa' => 'عطیات و صدقات',
+        'fitrana' => 'فطرانہ',
+        'qurbani skin' => 'کھالیں قربانی',
+        'ushr' => 'عشر',
+        'fee' => 'فیس',
+        'fee income' => 'آمدن فیس',
+        'aid' => 'امداد',
+        'zakat' => 'زکوٰۃ',
+        'misc income' => 'متفرق آمدن',
+        'ration' => 'راشن',
+        'electricity bill' => 'بجلی بل',
+        'utility bills' => 'یوٹیلیٹی بلز',
+        'maintenance' => 'مرمت',
+        'construction' => 'تعمیرات',
+        'stipends' => 'وظائف',
+        'teacher salary' => 'اساتذہ کی تنخواہیں',
+        'medical' => 'ادویات',
+        'internet bill' => 'انٹرنیٹ بل',
+        'rewards' => 'انعامات',
+        'hospitality' => 'ضیافت',
+        'mobile package' => 'موبائل پیکیج',
+        'gas bill' => 'گیس بل',
+        'misc expense' => 'متفرق خرچ',
+        'cash in hand' => 'نقد رقم (کیش ان ہینڈ)',
+        'bank account' => 'بینک اکاؤنٹ',
+        'accounts receivable (students)' => 'طلبہ کے ذمہ واجبات',
+        'accounts payable' => 'واجب الادا رقوم',
+        'general fund' => 'جنرل فنڈ',
+    ];
+
+    static $toEn = [
+        'صدقہ' => 'Sadaqah',
+        'عطیات' => 'Donation',
+        'عطیات و صدقات' => 'Donation / Sadqa',
+        'فطرانہ' => 'Fitrana',
+        'کھالیں قربانی' => 'Qurbani Skin',
+        'عشر' => 'Ushr',
+        'فیس' => 'Fee',
+        'آمدن فیس' => 'Fee Income',
+        'امداد' => 'Aid',
+        'زکوٰۃ' => 'Zakat',
+        'متفرق آمدن' => 'Misc Income',
+        'راشن' => 'Ration',
+        'بجلی بل' => 'Electricity Bill',
+        'یوٹیلیٹی بلز' => 'Utility Bills',
+        'مرمت' => 'Maintenance',
+        'تعمیرات' => 'Construction',
+        'وظائف' => 'Stipends',
+        'اساتذہ کی تنخواہیں' => 'Teacher Salary',
+        'ادویات' => 'Medical',
+        'انٹرنیٹ بل' => 'Internet Bill',
+        'انعامات' => 'Rewards',
+        'ضیافت' => 'Hospitality',
+        'موبائل پیکیج' => 'Mobile Package',
+        'گیس بل' => 'Gas Bill',
+        'متفرق خرچ' => 'Misc Expense',
+        'نقد رقم (کیش ان ہینڈ)' => 'Cash in Hand',
+        'بینک اکاؤنٹ' => 'Bank Account',
+        'طلبہ کے ذمہ واجبات' => 'Accounts Receivable (Students)',
+        'واجب الادا رقوم' => 'Accounts Payable',
+        'جنرل فنڈ' => 'General Fund',
+    ];
+
+    if ($lang === 'ur') {
+        $lower = strtolower($name);
+        return $toUr[$lower] ?? $name;
+    } else {
+        return $toEn[$name] ?? ($toEn[strtolower($name)] ?? $name);
+    }
+}
+
+function localize_acc_type($type, $lang = null) {
+    if (!$lang) {
+        global $lang;
+        if (!$lang) $lang = $_SESSION['lang'] ?? 'ur';
+    }
+    $t = trim((string)$type);
+    if ($lang === 'en') return $t;
+
+    $map = [
+        'Asset' => 'اثاثہ جات (Asset)',
+        'Liability' => 'واجبات (Liability)',
+        'Equity' => 'سرمایہ (Equity)',
+        'Revenue' => 'آمدن (Revenue)',
+        'Income' => 'آمدن (Income)',
+        'Expense' => 'اخراجات (Expense)',
+    ];
+    return $map[$t] ?? $t;
+}
+
+if (!function_exists('ensure_phase1_tables')) {
+    function ensure_phase1_tables(PDO $pdo) {
+        try {
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS teacher_leaves (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    teacher_id INT NOT NULL,
+                    leave_type VARCHAR(50) NOT NULL DEFAULT 'اتفاقی',
+                    start_date DATE NOT NULL,
+                    end_date DATE NOT NULL,
+                    reason TEXT,
+                    status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+                    approved_by VARCHAR(100) DEFAULT NULL,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    INDEX (teacher_id),
+                    INDEX (start_date),
+                    INDEX (status),
+                    INDEX (system_type)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+            try { $pdo->exec("ALTER TABLE teacher_leaves ADD COLUMN system_type VARCHAR(20) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
+            try { $pdo->exec("ALTER TABLE teacher_leaves ADD INDEX idx_system_type (system_type)"); } catch (Throwable $e) {}
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS activity_logs (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT DEFAULT NULL,
+                    user_name VARCHAR(100) DEFAULT NULL,
+                    action_type VARCHAR(50) NOT NULL,
+                    description TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX (action_type),
+                    INDEX (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+        } catch (Throwable $e) {}
+    }
+}
+
+if (!function_exists('log_activity')) {
+    function log_activity(PDO $pdo, $action_type, $description, $user_id = null, $user_name = null) {
+        try {
+            ensure_phase1_tables($pdo);
+            if ($user_id === null && isset($_SESSION['user_id'])) {
+                $user_id = (int)$_SESSION['user_id'];
+            }
+            if ($user_name === null) {
+                $user_name = $_SESSION['user_name'] ?? ($_SESSION['name'] ?? ($_SESSION['role'] ?? 'سسٹم'));
+            }
+            $stmt = $pdo->prepare("INSERT INTO activity_logs (user_id, user_name, action_type, description, created_at) VALUES (?, ?, ?, ?, NOW())");
+            $stmt->execute([$user_id, $user_name, $action_type, $description]);
+        } catch (Throwable $e) {}
+    }
+}
+
+if (!function_exists('approve_teacher_leave')) {
+    function approve_teacher_leave(PDO $pdo, $leave_id, $new_status, $approved_by = null) {
+        try {
+            ensure_phase1_tables($pdo);
+            $stmt = $pdo->prepare("SELECT * FROM teacher_leaves WHERE id = ? LIMIT 1");
+            $stmt->execute([$leave_id]);
+            $leave = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$leave) return false;
+
+            if ($approved_by === null) {
+                $approved_by = $_SESSION['user_name'] ?? ($_SESSION['name'] ?? ($_SESSION['role'] ?? 'Admin'));
+            }
+
+            $update = $pdo->prepare("UPDATE teacher_leaves SET status = ?, approved_by = ?, updated_at = NOW() WHERE id = ?");
+            $update->execute([$new_status, $approved_by, $leave_id]);
+
+            $tId = (int)$leave['teacher_id'];
+            $startDate = $leave['start_date'];
+            $endDate = $leave['end_date'];
+            $sysType = $leave['system_type'] ?? 'Madrasa';
+            $tTenantId = (int)($leave['tenant_id'] ?? get_current_tenant_id());
+
+            // Teacher Name
+            $tName = 'استاذ';
+            try {
+                if ($sysType === 'Masjid') {
+                    $tStmt = $pdo->prepare("SELECT name FROM maktab_teachers WHERE id = ? AND tenant_id = ? LIMIT 1");
+                    $tStmt->execute([$tId, $tTenantId]);
+                    $tName = $tStmt->fetchColumn();
+                }
+                if (empty($tName)) {
+                    $tStmt = $pdo->prepare("SELECT name FROM teachers WHERE id = ? AND tenant_id = ? LIMIT 1");
+                    $tStmt->execute([$tId, $tTenantId]);
+                    $tName = $tStmt->fetchColumn() ?: 'استاذ';
+                }
+            } catch (Throwable $e) {}
+
+            if ($new_status === 'Approved') {
+                $current = strtotime($startDate);
+                $last = strtotime($endDate);
+
+                while ($current <= $last) {
+                    $curDate = date('Y-m-d', $current);
+                    
+                    if ($sysType === 'Masjid') {
+                        // 1. Update/Insert in maktab_teacher_attendance
+                        try {
+                            $checkM = $pdo->prepare("SELECT id FROM maktab_teacher_attendance WHERE teacher_id = ? AND date = ? AND tenant_id = ? LIMIT 1");
+                            $checkM->execute([$tId, $curDate, $tTenantId]);
+                            $mAttId = $checkM->fetchColumn();
+                            if ($mAttId) {
+                                $pdo->prepare("UPDATE maktab_teacher_attendance SET status = 'L', is_synced = 0 WHERE id = ? AND tenant_id = ?")->execute([$mAttId, $tTenantId]);
+                            } else {
+                                $pdo->prepare("INSERT INTO maktab_teacher_attendance (teacher_id, date, status, is_synced, tenant_id) VALUES (?, ?, 'L', 0, ?)")->execute([$tId, $curDate, $tTenantId]);
+                            }
+                        } catch (Throwable $eMaktabAtt) {}
+
+                        // 2. Also record in attendance_teachers with system_type = 'Masjid'
+                        $check = $pdo->prepare("SELECT id FROM attendance_teachers WHERE teacher_id = ? AND date = ? AND tenant_id = ? LIMIT 1");
+                        $check->execute([$tId, $curDate, $tTenantId]);
+                        $attId = $check->fetchColumn();
+                        if ($attId) {
+                            $pdo->prepare("UPDATE attendance_teachers SET status = 'L', remarks = 'منظور شدہ رخصت' WHERE id = ? AND tenant_id = ?")->execute([$attId, $tTenantId]);
+                        } else {
+                            $pdo->prepare("INSERT INTO attendance_teachers (teacher_id, date, status, late_minutes, remarks, system_type, tenant_id) VALUES (?, ?, 'L', 0, 'منظور شدہ رخصت', 'Masjid', ?)")->execute([$tId, $curDate, $tTenantId]);
+                        }
+                    } else {
+                        // 1. Update/Insert in attendance_teachers (Madrasa)
+                        $check = $pdo->prepare("SELECT id FROM attendance_teachers WHERE teacher_id = ? AND date = ? AND tenant_id = ? LIMIT 1");
+                        $check->execute([$tId, $curDate, $tTenantId]);
+                        $attId = $check->fetchColumn();
+                        if ($attId) {
+                            $pdo->prepare("UPDATE attendance_teachers SET status = 'L', remarks = 'منظور شدہ رخصت' WHERE id = ? AND tenant_id = ?")->execute([$attId, $tTenantId]);
+                        } else {
+                            $pdo->prepare("INSERT INTO attendance_teachers (teacher_id, date, status, late_minutes, remarks, system_type, tenant_id) VALUES (?, ?, 'L', 0, 'منظور شدہ رخصت', 'Madrasa', ?)")->execute([$tId, $curDate, $tTenantId]);
+                        }
+
+                        // 2. Update in teacher_period_attendance if records exist
+                        try {
+                            $pdo->prepare("UPDATE teacher_period_attendance SET status = 'L', remarks = 'منظور شدہ رخصت' WHERE teacher_id = ? AND date = ? AND tenant_id = ?")->execute([$tId, $curDate, $tTenantId]);
+                        } catch (Throwable $ePeriod) {}
+                    }
+
+                    $current = strtotime('+1 day', $current);
+                }
+
+                log_activity($pdo, 'leave', "استاذ محترم {$tName} کی رخصت منظور کی گئی ({$sysType} - از {$startDate} تا {$endDate})", null, $approved_by);
+            } else if ($new_status === 'Rejected') {
+                log_activity($pdo, 'leave', "استاذ محترم {$tName} کی رخصت کی درخواست مسترد کی گئی ({$sysType})", null, $approved_by);
+            }
+            return true;
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+}
+
+if (!function_exists('ensure_phase2_tables')) {
+    function ensure_phase2_tables(PDO $pdo) {
+        try {
+            // 1. Admission Inquiries (Pipeline)
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS admission_inquiries (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    student_name VARCHAR(150) NOT NULL,
+                    father_name VARCHAR(150) NOT NULL,
+                    phone VARCHAR(50) DEFAULT '',
+                    class_applied VARCHAR(100) DEFAULT '',
+                    gender VARCHAR(20) DEFAULT 'Male',
+                    address TEXT,
+                    status VARCHAR(30) NOT NULL DEFAULT 'Pending',
+                    interview_date DATE DEFAULT NULL,
+                    interview_notes TEXT,
+                    admin_notes TEXT,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    converted_student_id INT DEFAULT NULL,
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (status),
+                    INDEX (system_type),
+                    INDEX (interview_date),
+                    INDEX (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 2. Library Books Catalog
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS lib_books (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    book_title VARCHAR(255) NOT NULL,
+                    author VARCHAR(150) DEFAULT '',
+                    category VARCHAR(100) DEFAULT 'عام',
+                    isbn VARCHAR(100) DEFAULT '',
+                    rack_number VARCHAR(50) DEFAULT '',
+                    total_copies INT DEFAULT 1,
+                    available_copies INT DEFAULT 1,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (category),
+                    INDEX (system_type),
+                    INDEX (is_deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 3. Library Issue & Return Register
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS lib_issues (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    book_id INT NOT NULL,
+                    borrower_type VARCHAR(50) DEFAULT 'student',
+                    borrower_id INT NOT NULL,
+                    borrower_name VARCHAR(150) DEFAULT '',
+                    borrower_contact VARCHAR(50) DEFAULT '',
+                    issue_date DATE NOT NULL,
+                    due_date DATE NOT NULL,
+                    return_date DATE DEFAULT NULL,
+                    status VARCHAR(30) NOT NULL DEFAULT 'Issued',
+                    fine_amount DECIMAL(10,2) DEFAULT 0.00,
+                    remarks TEXT,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (book_id),
+                    INDEX (borrower_id),
+                    INDEX (status),
+                    INDEX (due_date),
+                    INDEX (system_type)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // Columns for Quran edition and full admission fields
+            ensure_column($pdo, 'students', 'quran_edition', "VARCHAR(30) DEFAULT '16 سطری'");
+            ensure_column($pdo, 'maktab_students', 'quran_edition', "VARCHAR(30) DEFAULT '16 سطری'");
+            ensure_column($pdo, 'admission_inquiries', 'quran_edition', "VARCHAR(30) DEFAULT '16 سطری'");
+            ensure_column($pdo, 'admission_inquiries', 'admission_number', "VARCHAR(50) DEFAULT ''");
+            ensure_column($pdo, 'admission_inquiries', 'admission_date', "DATE DEFAULT NULL");
+            ensure_column($pdo, 'admission_inquiries', 'graduation_date', "DATE DEFAULT NULL");
+            ensure_column($pdo, 'admission_inquiries', 'duration', "VARCHAR(50) DEFAULT ''");
+            ensure_column($pdo, 'admission_inquiries', 'residence_status', "VARCHAR(50) DEFAULT ''");
+            ensure_column($pdo, 'admission_inquiries', 'photo', "VARCHAR(255) DEFAULT ''");
+        } catch (Throwable $e) {}
+    }
+}
+
+if (!function_exists('issue_library_book')) {
+    function issue_library_book(PDO $pdo, $book_id, $borrower_type, $borrower_id, $borrower_name, $borrower_contact, $due_date, $remarks = '', $system_type = 'Madrasa', $tenant_id = null) {
+        if ($tenant_id === null) $tenant_id = (int)get_current_tenant_id();
+        try {
+            ensure_phase2_tables($pdo);
+            $bStmt = $pdo->prepare("SELECT book_title, available_copies FROM lib_books WHERE id = ? AND tenant_id = ?");
+            $bStmt->execute([$book_id, $tenant_id]);
+            $book = $bStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$book || (int)$book['available_copies'] <= 0) {
+                return ['success' => false, 'message' => 'یہ کتاب فی الوقت دستیاب نہیں ہے!'];
+            }
+
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare("INSERT INTO lib_issues (book_id, borrower_type, borrower_id, borrower_name, borrower_contact, issue_date, due_date, status, remarks, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, CURDATE(), ?, 'Issued', ?, ?, ?)");
+            $stmt->execute([$book_id, $borrower_type, $borrower_id, $borrower_name, $borrower_contact, $due_date, $remarks, $system_type, $tenant_id]);
+            $issueId = $pdo->lastInsertId();
+
+            $pdo->prepare("UPDATE lib_books SET available_copies = GREATEST(0, available_copies - 1) WHERE id = ? AND tenant_id = ?")->execute([$book_id, $tenant_id]);
+            $pdo->commit();
+
+            log_activity($pdo, 'library', "کتاب '{$book['book_title']}' جاری کی گئی برائے {$borrower_name} (واپسی تاریخ: {$due_date})");
+            return ['success' => true, 'issue_id' => $issueId];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+}
+
+if (!function_exists('return_library_book')) {
+    function return_library_book(PDO $pdo, $issue_id, $fine = 0, $remarks = '', $tenant_id = null) {
+        if ($tenant_id === null) $tenant_id = (int)get_current_tenant_id();
+        try {
+            ensure_phase2_tables($pdo);
+            $iStmt = $pdo->prepare("SELECT i.*, b.book_title FROM lib_issues i JOIN lib_books b ON i.book_id = b.id WHERE i.id = ? AND i.tenant_id = ?");
+            $iStmt->execute([$issue_id, $tenant_id]);
+            $issue = $iStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$issue) return ['success' => false, 'message' => 'ریکارڈ نہیں ملا!'];
+
+            $pdo->beginTransaction();
+            $pdo->prepare("UPDATE lib_issues SET status = 'Returned', return_date = CURDATE(), fine_amount = ?, remarks = CONCAT(IFNULL(remarks,''), ' | ', ?) WHERE id = ? AND tenant_id = ?")
+                ->execute([$fine, $remarks, $issue_id, $tenant_id]);
+            $pdo->prepare("UPDATE lib_books SET available_copies = LEAST(total_copies, available_copies + 1) WHERE id = ? AND tenant_id = ?")->execute([$issue['book_id'], $tenant_id]);
+            $pdo->commit();
+
+            log_activity($pdo, 'library', "کتاب '{$issue['book_title']}' واپس جمع کر لی گئی از {$issue['borrower_name']}");
+            return ['success' => true];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+}
+
+if (!function_exists('ensure_phase3_4_tables')) {
+    function ensure_phase3_4_tables(PDO $pdo) {
+        try {
+            // 1. Inventory Items
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS inventory_items (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    item_code VARCHAR(50) NOT NULL,
+                    name VARCHAR(200) NOT NULL,
+                    category VARCHAR(100) DEFAULT 'عام',
+                    unit_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    purchase_price DECIMAL(10,2) DEFAULT 0.00,
+                    current_stock INT NOT NULL DEFAULT 0,
+                    alert_threshold INT DEFAULT 5,
+                    unit VARCHAR(30) DEFAULT 'عدد',
+                    description TEXT,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (category),
+                    INDEX (system_type),
+                    INDEX (is_deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 2. Inventory Sales
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS inventory_sales (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    sale_no VARCHAR(50) NOT NULL,
+                    item_id INT NOT NULL,
+                    item_name VARCHAR(200) NOT NULL,
+                    student_id INT DEFAULT NULL,
+                    customer_name VARCHAR(150) DEFAULT '',
+                    quantity INT NOT NULL DEFAULT 1,
+                    unit_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                    payment_mode VARCHAR(50) DEFAULT 'Cash',
+                    voucher_id INT DEFAULT NULL,
+                    date DATE NOT NULL,
+                    remarks TEXT,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    created_by INT DEFAULT NULL,
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (item_id),
+                    INDEX (student_id),
+                    INDEX (date),
+                    INDEX (system_type)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 3. Hostel Rooms
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS hostel_rooms (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    room_number VARCHAR(50) NOT NULL,
+                    room_name VARCHAR(150) DEFAULT '',
+                    capacity_beds INT NOT NULL DEFAULT 4,
+                    monthly_fee DECIMAL(10,2) DEFAULT 0.00,
+                    status VARCHAR(30) DEFAULT 'Active',
+                    remarks TEXT,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (system_type),
+                    INDEX (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 4. Hostel Allocations
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS hostel_allocations (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    room_id INT NOT NULL,
+                    student_id INT NOT NULL,
+                    student_name VARCHAR(150) DEFAULT '',
+                    bed_number VARCHAR(20) DEFAULT '',
+                    allocation_date DATE NOT NULL,
+                    vacating_date DATE DEFAULT NULL,
+                    status VARCHAR(30) DEFAULT 'Occupied',
+                    remarks TEXT,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (room_id),
+                    INDEX (student_id),
+                    INDEX (status),
+                    INDEX (system_type)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 5. Job Postings
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS job_postings (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    title VARCHAR(200) NOT NULL,
+                    department VARCHAR(100) DEFAULT '',
+                    job_type VARCHAR(50) DEFAULT 'Full-time',
+                    requirements TEXT,
+                    salary_range VARCHAR(100) DEFAULT '',
+                    deadline DATE DEFAULT NULL,
+                    status VARCHAR(30) DEFAULT 'Open',
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (status),
+                    INDEX (system_type)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 6. Job Applicants
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS job_applicants (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    job_id INT NOT NULL,
+                    applicant_name VARCHAR(150) NOT NULL,
+                    father_name VARCHAR(150) DEFAULT '',
+                    phone VARCHAR(50) DEFAULT '',
+                    email VARCHAR(100) DEFAULT '',
+                    qualification VARCHAR(200) DEFAULT '',
+                    experience VARCHAR(200) DEFAULT '',
+                    resume_path VARCHAR(255) DEFAULT '',
+                    status VARCHAR(50) DEFAULT 'Pending',
+                    interview_date DATE DEFAULT NULL,
+                    interview_notes TEXT,
+                    notes TEXT,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    converted_teacher_id INT DEFAULT NULL,
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (job_id),
+                    INDEX (status),
+                    INDEX (system_type)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 7. Web Pages
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS web_pages (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    page_slug VARCHAR(100) NOT NULL UNIQUE,
+                    title VARCHAR(255) NOT NULL,
+                    content_html MEDIUMTEXT,
+                    meta_description TEXT,
+                    status VARCHAR(30) DEFAULT 'Published',
+                    sort_order INT DEFAULT 0,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (status),
+                    INDEX (system_type)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 8. Announcements
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS announcements (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    body TEXT,
+                    image_url VARCHAR(255) DEFAULT '',
+                    category VARCHAR(50) DEFAULT 'خبر',
+                    is_public TINYINT(1) DEFAULT 1,
+                    target_audience VARCHAR(50) DEFAULT 'All',
+                    publish_date DATE NOT NULL,
+                    system_type VARCHAR(20) DEFAULT 'Madrasa',
+                    is_deleted TINYINT(1) DEFAULT 0,
+                    is_synced TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (publish_date),
+                    INDEX (system_type),
+                    INDEX (is_deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+        } catch (Throwable $e) {}
+    }
+}
+
+if (!function_exists('record_inventory_sale_with_voucher')) {
+    function record_inventory_sale_with_voucher(PDO $pdo, $item_id, $quantity, $student_id = null, $customer_name = '', $payment_mode = 'Cash', $remarks = '', $system_type = 'Madrasa', $created_by = null, $tenant_id = null) {
+        if ($tenant_id === null) $tenant_id = (int)get_current_tenant_id();
+        try {
+            ensure_phase3_4_tables($pdo);
+            $stmt = $pdo->prepare("SELECT * FROM inventory_items WHERE id = ? AND tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
+            $stmt->execute([$item_id, $tenant_id]);
+            $item = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$item) return ['success' => false, 'message' => 'آئٹم نہیں ملا!'];
+
+            $avail = (int)$item['current_stock'];
+            if ($avail < $quantity) {
+                return ['success' => false, 'message' => "موجودہ اسٹاک ناکافی ہے۔ دستیاب: $avail"];
+            }
+
+            $uPrice = (float)$item['unit_price'];
+            $totalAmount = $uPrice * $quantity;
+            $saleNo = 'SALE-' . date('ymd') . '-' . rand(100, 999);
+            $today = date('Y-m-d');
+
+            $pdo->beginTransaction();
+
+            // 1. Create Sale Record
+            $sStmt = $pdo->prepare("
+                INSERT INTO inventory_sales (sale_no, item_id, item_name, student_id, customer_name, quantity, unit_price, total_amount, payment_mode, date, remarks, system_type, created_by, tenant_id, is_deleted, is_synced)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+            ");
+            $sStmt->execute([
+                $saleNo, $item_id, $item['name'], $student_id, $customer_name,
+                $quantity, $uPrice, $totalAmount, $payment_mode, $today, $remarks,
+                $system_type, $created_by, $tenant_id
+            ]);
+            $saleId = $pdo->lastInsertId();
+
+            // 2. Reduce Stock
+            $pdo->prepare("UPDATE inventory_items SET current_stock = GREATEST(0, current_stock - ?), updated_at = NOW() WHERE id = ? AND tenant_id = ?")->execute([$quantity, $item_id, $tenant_id]);
+
+            // 3. Double-Entry Accounting Voucher Integration
+            $voucherId = null;
+            try {
+                // Ensure Cash Account (1001) and Shop Revenue Account (4005) exist
+                $cashAcc = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = '1001' AND tenant_id = $tenant_id LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                $shopAcc = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE (code = '4005' OR name LIKE '%شاپ%' OR name LIKE '%Shop%') AND tenant_id = $tenant_id LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+
+                if (!$shopAcc) {
+                    $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_active, tenant_id) VALUES ('4005', 'آمدنی سکول شاپ / انونٹری', 'Revenue', 1, ?)")->execute([$tenant_id]);
+                    $shopAccId = $pdo->lastInsertId();
+                } else {
+                    $shopAccId = $shopAcc['id'];
+                }
+
+                if ($cashAcc && $shopAccId) {
+                    $cashAccId = $cashAcc['id'];
+                    $vNo = 'RV-' . date('ymd') . '-' . rand(1000, 9999);
+                    $desc = "سکول شاپ سیل: {$item['name']} x $quantity ($customer_name)";
+                    $vStmt = $pdo->prepare("INSERT INTO acc_vouchers (voucher_no, date, type, reference, description, status, created_by, tenant_id) VALUES (?, ?, 'Receipt', ?, ?, 'Approved', ?, ?)");
+                    $vStmt->execute([$vNo, $today, $saleNo, $desc, $created_by, $tenant_id]);
+                    $voucherId = $pdo->lastInsertId();
+
+                    // Ledger Lines: Debit Cash, Credit Shop Revenue
+                    $lStmt = $pdo->prepare("INSERT INTO acc_ledger_entries (voucher_id, account_id, debit, credit, tenant_id) VALUES (?, ?, ?, ?, ?)");
+                    $lStmt->execute([$voucherId, $cashAccId, $totalAmount, 0, $tenant_id]);
+                    $lStmt->execute([$voucherId, $shopAccId, 0, $totalAmount, $tenant_id]);
+
+                    $pdo->prepare("UPDATE inventory_sales SET voucher_id = ? WHERE id = ? AND tenant_id = ?")->execute([$voucherId, $saleId, $tenant_id]);
+                }
+            } catch (Throwable $e) {}
+
+            $pdo->commit();
+            log_activity($pdo, 'shop', "سکول شاپ سے '{$item['name']}' کی فروخت x $quantity (مبلغ: $totalAmount روپے)", null, $created_by);
+            return ['success' => true, 'sale_id' => $saleId, 'sale_no' => $saleNo];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+}
+
+if (isset($_GET['migrate_phases_schema']) && $_GET['migrate_phases_schema'] === '1') {
+    try {
+        ensure_phase1_tables($pdo);
+        ensure_phase2_tables($pdo);
+        ensure_phase3_4_tables($pdo);
+    } catch (Throwable $e) {}
+}

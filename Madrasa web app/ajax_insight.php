@@ -31,27 +31,6 @@ try {
     $weekly_entries = $pdo->query("SELECT COUNT(*) FROM daily_hifz WHERE date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
     $weekly_complaints = $pdo->query("SELECT COUNT(*) FROM complaints WHERE date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
 
-
-$settings = $pdo->query("SELECT * FROM settings WHERE id=1")->fetch();
-$provider = $settings['ai_provider'] ?? 'gemini';
-$gemini_key = $settings['gemini_api_key'] ?? '';
-$groq_key = $settings['groq_api_key'] ?? '';
-$week_start_day = $settings['week_start_day'] ?? 6;
-
-try {
-    $total_students = $pdo->query("SELECT COUNT(*) FROM students WHERE status='Active'")->fetchColumn();
-    
-    $now = new DateTime();
-    $current_day_num = (int)$now->format('w');
-    $days_since_start = ($current_day_num - $week_start_day + 7) % 7;
-    $start_date = $now->modify("-$days_since_start days")->format('Y-m-d');
-    $end_date = date('Y-m-d');
-
-    $weekly_excellent = $pdo->query("SELECT COUNT(*) FROM daily_hifz WHERE (sabaq_status='Excellent' OR manzil_status='Excellent' OR sabaq_status='ممتاز' OR manzil_status='ممتاز') AND date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
-    $weekly_weak = $pdo->query("SELECT COUNT(*) FROM daily_hifz WHERE (sabaq_status='Weak' OR manzil_status='Weak' OR sabaq_status='کمزور' OR manzil_status='کمزور') AND date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
-    $weekly_entries = $pdo->query("SELECT COUNT(*) FROM daily_hifz WHERE date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
-    $weekly_complaints = $pdo->query("SELECT COUNT(*) FROM complaints WHERE date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
-
     $complaint_context = ($weekly_complaints > 0) ? "There are $weekly_complaints complaints this week regarding student behavior/discipline. Emphasize that Tarbiyat (upbringing/discipline) is equally important as Taleem (education), and advise teachers to focus on resolving these complaints." : "There are no complaints this week, behavior is good.";
 
     $prompt = "You are an educational and management advisor for a Quran Madrasa. Week Stats: Students: $total_students, Hifz Entries: $weekly_entries, Excellent: $weekly_excellent, Weak: $weekly_weak. Context: $complaint_context. Provide a 2-line strategic and reformative advice in URDU for the ADMIN and TEACHERS. Just Urdu text.";

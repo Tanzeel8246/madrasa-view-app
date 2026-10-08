@@ -13,21 +13,27 @@ if (!isset($_GET['id'])) {
 
 $id = (int)$_GET['id'];
 
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond_p = ($sys === 'Masjid') 
+    ? "p.system_type = 'Masjid'" 
+    : "(p.system_type = 'Madrasa' OR p.system_type IS NULL OR p.system_type = '')";
+
+$cur_tenant_id = (int)get_current_tenant_id();
 $query = $pdo->prepare("
     SELECT p.*, t.name as teacher_name, t.phone 
     FROM acc_payroll p 
     JOIN teachers t ON p.teacher_id = t.id 
-    WHERE p.id = ?
+    WHERE p.id = ? AND p.tenant_id = ? AND t.tenant_id = ? AND $sys_cond_p
 ");
-$query->execute([$id]);
+$query->execute([$id, $cur_tenant_id, $cur_tenant_id]);
 $slip = $query->fetch(PDO::FETCH_ASSOC);
 
 if (!$slip) {
     die("Slip not found");
 }
 
-$settings = $pdo->query("SELECT * FROM settings WHERE id=1")->fetch();
-$app_name = $settings['app_name'] ?? 'Madrasa Management System';
+$settings = get_tenant_settings($pdo, $cur_tenant_id);
+$app_name = !empty($settings['madrasa_name']) ? $settings['madrasa_name'] : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : 'Madrasa Management System');
 
 function numberToUrdu($num) {
     return number_format($num) . " روپے صرف";
@@ -121,7 +127,7 @@ function numberToUrdu($num) {
     <div class="header">
         <h1><?php echo htmlspecialchars($app_name); ?></h1>
         <h4 class="text-muted mt-2">پے رول / سیلری سلپ (Salary Slip)</h4>
-        <h5>مہینہ: <span dir="ltr"><?php echo date('F Y', strtotime($slip['month_year'] . '-01')); ?></span></h5>
+        <h5>مہینہ: <span><?php echo function_exists('format_urdu_month_year') ? format_urdu_month_year($slip['month_year']) : date('F Y', strtotime($slip['month_year'] . '-01')); ?></span></h5>
     </div>
 
     <table class="info-table">

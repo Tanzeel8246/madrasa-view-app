@@ -5,7 +5,13 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once 'db.php';
 require_once 'finance_accounting_bridge.php';
 
-if (!isset($_SESSION['user_id']) || (!app_has_perm('manage_erp') && !app_has_perm('manage_finance'))) {
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_erp') && !app_has_perm('manage_finance')) {
     header("Location: dashboard.php");
     exit;
 }

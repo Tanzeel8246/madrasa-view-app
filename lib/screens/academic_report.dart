@@ -5,6 +5,7 @@ import '../db_helper.dart';
 import '../utils/globals.dart';
 import '../widgets/app_drawer.dart';
 import '../utils/sync_service.dart';
+import '../utils/performance_helper.dart';
 import 'dashboard.dart';
 
 class AcademicReportPage extends StatefulWidget {
@@ -34,7 +35,13 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
 
   final FocusNode _subjectFocus = FocusNode();
 
-  final List<String> grades = ["بہترین", "بہتر", "رعایتی پاس", "کچا"];
+  final List<String> grades = [
+    "بہترین",
+    "بہتر",
+    "رعایتی پاس",
+    "کچا",
+    "سبق نہیں سنایا"
+  ];
 
   @override
   void initState() {
@@ -73,14 +80,7 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
   }
 
   bool _isActiveStudent(Map<String, dynamic> student) {
-    final status = (student['status'] ?? '').toString().trim().toLowerCase();
-    final isDeleted =
-        int.tryParse(student['is_deleted']?.toString() ?? '0') ?? 0;
-    return isDeleted == 0 &&
-        (status == 'active' ||
-            status == 'present' ||
-            status == 'حاضر' ||
-            status.isEmpty);
+    return PerformanceCalculator.isStudentActive(student);
   }
 
   bool _studentBelongsToSelectedClass(Map<String, dynamic> student) {
@@ -92,8 +92,8 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
   }
 
   void _loadData() async {
-    final data = await DBHelper().getStudents();
-    final classesData = await DBHelper().getClasses();
+    final data = await DBHelper().getStudentsForUser(includeInactive: true);
+    final classesData = await DBHelper().getClassesForUser();
     setState(() {
       _classes = classesData.map((c) => c['name'].toString()).toList();
       _allStudents = data.where((s) {
@@ -266,8 +266,12 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
           canPop: false,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
-            Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (c) => const DashboardPage()));
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (c) => const DashboardPage()));
+            }
           },
           child: Directionality(
             textDirection: isUrdu ? ui.TextDirection.rtl : ui.TextDirection.ltr,
@@ -395,6 +399,8 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
                   child: DropdownButtonFormField<String>(
                     isExpanded: true,
                     value: _selectedClass,
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(color: Colors.black87, fontSize: 14),
                     decoration: InputDecoration(
                       labelText: isUrdu ? 'کلاس' : 'Class',
                       border: const OutlineInputBorder(),
@@ -405,12 +411,12 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
                       DropdownMenuItem<String>(
                         value: null,
                         child: Text(isUrdu ? "منتخب کریں" : "Select Class",
-                            style: const TextStyle(fontSize: 13)),
+                            style: const TextStyle(fontSize: 13, color: Colors.black87)),
                       ),
                       ..._classes.map((c) => DropdownMenuItem<String>(
                           value: c,
                           child:
-                              Text(c, style: const TextStyle(fontSize: 13)))),
+                              Text(c, style: const TextStyle(fontSize: 13, color: Colors.black87)))),
                     ],
                     onChanged: (val) async {
                       setState(() => _selectedClass = val);
@@ -525,8 +531,10 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
                           child: DropdownButton<String>(
                             isExpanded: true,
                             value: _selectedGrades[sId],
+                            dropdownColor: Colors.white,
+                            style: const TextStyle(color: Colors.black87, fontSize: 13),
                             hint: Text(isUrdu ? "گریڈ" : "Grade",
-                                style: const TextStyle(fontSize: 13)),
+                                style: const TextStyle(fontSize: 13, color: Colors.black54)),
                             items: [
                               DropdownMenuItem<String>(
                                 value: null,
@@ -536,7 +544,7 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
                               ...grades.map((g) => DropdownMenuItem(
                                   value: g,
                                   child: Text(g,
-                                      style: const TextStyle(fontSize: 13))))
+                                      style: const TextStyle(fontSize: 13, color: Colors.black87))))
                             ],
                             onChanged: (val) {
                               setState(() => _selectedGrades[sId] = val);

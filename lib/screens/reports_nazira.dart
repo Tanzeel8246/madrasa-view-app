@@ -1,5 +1,6 @@
 // ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously, deprecated_member_use
 import 'package:flutter/material.dart';
+import '../utils/performance_helper.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:pdf/pdf.dart';
@@ -11,8 +12,22 @@ import '../utils/ai_service.dart';
 import '../widgets/app_drawer.dart';
 import '../utils/sync_service.dart';
 import '../widgets/neo_box.dart';
-import '../utils/performance_helper.dart';
 import 'dashboard.dart';
+import 'student_report.dart';
+
+class DateChunk {
+  final int pageIndex;
+  final DateTime startDate;
+  final DateTime endDate;
+  final String label;
+
+  DateChunk({
+    required this.pageIndex,
+    required this.startDate,
+    required this.endDate,
+    required this.label,
+  });
+}
 
 class ReportsNaziraPage extends StatefulWidget {
   final String? className;
@@ -30,9 +45,18 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
   List<Map<String, dynamic>> _students = [];
   List<Map<String, dynamic>> _complaints = [];
   bool isLoading = true;
+  String _loadingStep = '';
+  String? _errorMessage;
+
+  List<DateChunk> _dateChunks = [];
+  int _selectedChunkIndex = 0;
+  List<Map<String, dynamic>> _cachedRawNazira = [];
+  List<Map<String, dynamic>> _cachedRawAtt = [];
+
   String? fromDate;
   String? toDate;
   String? selectedStudentId;
+  String selectedPeriod = 'current_week';
 
   Map<String, dynamic>? _weeklyStats;
   String _aiInsight = "";
@@ -41,31 +65,87 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
   final _fromDateController = TextEditingController();
   final _toDateController = TextEditingController();
 
+  Map<String, Map<String, dynamic>> _allStudentMap = {};
+
+  Future<void> _updateDatesForPeriod(String period) async {
+    if (period == 'custom') return;
+    final db = DBHelper();
+    final settings = await db.getSettings();
+    int weekStartDay = int.tryParse(settings['week_start_day']?.toString() ?? '6') ?? 6;
+    final boundaries = PerformanceCalculator.getPeriodBoundaries(period, weekStartDay);
+    setState(() {
+      fromDate = intl.DateFormat('dd/MM/yyyy').format(boundaries['start']!);
+      toDate = intl.DateFormat('dd/MM/yyyy').format(boundaries['end']!);
+      _fromDateController.text = fromDate!;
+      _toDateController.text = toDate!;
+      _selectedChunkIndex = -1;
+    });
+    _loadData();
+  }
+
   @override
   void initState() {
     super.initState();
     _loadData();
   }
 
+  String _normalizeClassName(dynamic value) {
+    return (value?.toString() ?? '')
+        .trim()
+        .replaceAll('ٰ', '')
+        .replaceAll('ى', 'ی')
+        .replaceAll('ي', 'ی')
+        .replaceAll('ك', 'ک')
+        .replaceAll(RegExp(r'\s+'), '')
+        .toLowerCase();
+  }
+
   Future<void> _loadData() async {
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      _errorMessage = null;
+      _loadingStep = isUrduGlobal.value
+          ? "ڈیٹا لوڈ کیا جا رہا ہے..."
+          : "Loading data...";
+    });
     try {
       final db = DBHelper();
-      final allStudents = await db.getStudents();
+      final allStudents = await db.getStudentsForUser(includeInactive: true);
+      List<Map<String, dynamic>> extraMaktabStudents = [];
+      try {
+        extraMaktabStudents = await db.getMaktabStudentsForUser(includeInactive: true);
+      } catch (_) {}
+      final combinedStudents = [...allStudents, ...extraMaktabStudents];
+
+      _allStudentMap = {
+        for (var s in combinedStudents) s['id']?.toString() ?? '': s
+      };
       final Set<String> seenIds = {};
       final List<Map<String, dynamic>> validStudents = [];
-      for (var s in allStudents) {
-        bool isActive = s['status'] == 'Active' &&
-            (s['is_deleted'] == 0 || s['is_deleted'] == null);
+      for (var s in combinedStudents) {
+        bool isEligible = PerformanceCalculator.isStudentActive(s);
+
         String cName =
             (s['class_name']?.toString() ?? s['class']?.toString() ?? '')
                 .toLowerCase();
-        bool isHifz = cName.contains('ناظرہ') ||
-            cName.contains('حسن صوت') ||
-            cName.contains('گردان');
+        String normCName = _normalizeClassName(s['class_name'] ?? s['class']);
+        
+        bool isClassMatch = true;
+        if (widget.className != null && widget.className!.trim().isNotEmpty) {
+          String reqClass = widget.className!.trim().toLowerCase();
+          String normReqClass = _normalizeClassName(widget.className);
+          isClassMatch = (normCName == normReqClass ||
+              cName == reqClass ||
+              (s['class_name']?.toString().trim() == widget.className?.trim()) ||
+              (s['class']?.toString().trim() == widget.className?.trim()));
+        } else {
+          isClassMatch = cName.contains('ناظرہ') ||
+              cName.contains('حسن صوت') ||
+              cName.contains('گردان');
+        }
 
         final idStr = s['id']?.toString();
-        if (isActive && isHifz && idStr != null && !seenIds.contains(idStr)) {
+        if (isEligible && isClassMatch && idStr != null && !seenIds.contains(idStr)) {
           seenIds.add(idStr);
           validStudents.add(s);
         }
@@ -74,13 +154,8 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
       if (selectedStudentId != null && !seenIds.contains(selectedStudentId)) {
         selectedStudentId = null;
       }
-            final allComplaints = await db.getComplaints();
+      final allComplaints = await db.getComplaints();
       _complaints = allComplaints;
-      final allHifz = await db.getNaziraRecords();
-      final allAttendance =
-          await db.database.then((d) => d.query('attendance'));
-
-      List<Map<String, dynamic>> filtered = [];
 
       final settings = await db.getSettings();
       int weekStartDay =
@@ -88,28 +163,169 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
 
       if (fromDate == null || toDate == null) {
         final boundaries =
-            PerformanceCalculator.getWeekBoundaries(weekStartDay);
+            PerformanceCalculator.getPeriodBoundaries(selectedPeriod, weekStartDay);
         fromDate = intl.DateFormat('dd/MM/yyyy').format(boundaries['start']!);
         toDate = intl.DateFormat('dd/MM/yyyy').format(boundaries['end']!);
         _fromDateController.text = fromDate!;
         _toDateController.text = toDate!;
       }
 
-      DateTime sDate = _parseRobust(fromDate!);
-      DateTime eDate = _parseRobust(toDate!);
+      DateTime sDateRaw = _parseRobust(fromDate!);
+      DateTime eDateRaw = _parseRobust(toDate!);
+      DateTime sDate = DateTime(sDateRaw.year, sDateRaw.month, sDateRaw.day, 0, 0, 0);
+      DateTime eDate = DateTime(eDateRaw.year, eDateRaw.month, eDateRaw.day, 23, 59, 59, 999);
 
-      for (var h in allHifz) {
+      if (eDate.isBefore(sDate)) {
+        final tmp = sDate;
+        sDate = eDate;
+        eDate = tmp;
+      }
+
+      // 10-Day Chunk Generation
+      List<DateChunk> chunks = [];
+      final totalDays = eDate.difference(sDate).inDays + 1;
+      if (totalDays <= 10) {
+        final startStr = intl.DateFormat('dd/MM/yyyy').format(sDate);
+        final endStr = intl.DateFormat('dd/MM/yyyy').format(eDate);
+        chunks.add(DateChunk(
+          pageIndex: 1,
+          startDate: sDate,
+          endDate: eDate,
+          label: isUrduGlobal.value ? "مرحلہ 1 ($startStr تا $endStr)" : "Phase 1 ($startStr to $endStr)",
+        ));
+      } else {
+        DateTime cur = sDate;
+        int pIndex = 1;
+        while (!cur.isAfter(eDate)) {
+          DateTime chunkEnd = cur.add(const Duration(days: 9));
+          if (chunkEnd.isAfter(eDate)) chunkEnd = eDate;
+          final startStr = intl.DateFormat('dd/MM/yyyy').format(cur);
+          final endStr = intl.DateFormat('dd/MM/yyyy').format(chunkEnd);
+          chunks.add(DateChunk(
+            pageIndex: pIndex,
+            startDate: DateTime(cur.year, cur.month, cur.day, 0, 0, 0),
+            endDate: DateTime(chunkEnd.year, chunkEnd.month, chunkEnd.day, 23, 59, 59, 999),
+            label: isUrduGlobal.value ? "مرحلہ $pIndex ($startStr تا $endStr)" : "Phase $pIndex ($startStr to $endStr)",
+          ));
+          cur = chunkEnd.add(const Duration(days: 1));
+          pIndex++;
+        }
+      }
+      _dateChunks = chunks;
+      if (_selectedChunkIndex >= _dateChunks.length || _selectedChunkIndex < 0) {
+        _selectedChunkIndex = _dateChunks.length - 1; // Default to latest phase
+      }
+
+      if (mounted) {
+        setState(() {
+          _loadingStep = isUrduGlobal.value
+              ? "ڈیٹا بیس سے ریکارڈز حاصل کیے جا رہے ہیں..."
+              : "Loading records from database...";
+        });
+      }
+      await Future.delayed(const Duration(milliseconds: 20));
+
+      final database = await db.database;
+      final studentIdSet = _students.map((s) => s['id']?.toString() ?? '').where((id) => id.isNotEmpty).toSet();
+      final sidsList = studentIdSet.map((s) => int.tryParse(s) ?? 0).where((i) => i > 0).toList();
+
+      List<Map<String, dynamic>> allNazira = [];
+      List<Map<String, dynamic>> extraMaktabNazira = [];
+      List<Map<String, dynamic>> attRows = [];
+      List<Map<String, dynamic>> extraAtt = [];
+
+      if (sidsList.isNotEmpty) {
+        final placeholders = List.filled(sidsList.length, '?').join(',');
+        allNazira = await database.query(
+          'nazira_record',
+          where: 'student_id IN ($placeholders) AND (is_deleted = 0 OR is_deleted IS NULL)',
+          whereArgs: sidsList,
+        );
+        try {
+          extraMaktabNazira = await database.query(
+            'maktab_nazira_record',
+            where: 'student_id IN ($placeholders) AND (is_deleted = 0 OR is_deleted IS NULL)',
+            whereArgs: sidsList,
+          );
+        } catch (_) {}
+
+        attRows = await database.query(
+          'attendance',
+          where: 'student_id IN ($placeholders) AND (is_deleted = 0 OR is_deleted IS NULL)',
+          whereArgs: sidsList,
+        );
+        try {
+          extraAtt = await database.query(
+            'maktab_attendance',
+            where: 'student_id IN ($placeholders) AND (is_deleted = 0 OR is_deleted IS NULL)',
+            whereArgs: sidsList,
+          );
+        } catch (_) {}
+      } else {
+        allNazira = await db.getNaziraRecords();
+        attRows = await database.query('attendance', limit: 200);
+      }
+      _cachedRawNazira = [...allNazira, ...extraMaktabNazira];
+      _cachedRawAtt = [...attRows, ...extraAtt];
+
+      await _processActiveChunk();
+    } catch (e, stack) {
+      debugPrint("Load Nazira Report Error: $e\n$stack");
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          _loadingStep = '';
+          _errorMessage = isUrduGlobal.value
+              ? "ڈیٹا لوڈ کرنے میں خرابی پیش آئی: ${e.toString()}"
+              : "Error loading data: ${e.toString()}";
+        });
+      }
+    }
+  }
+
+  Future<void> _processActiveChunk() async {
+    if (_dateChunks.isEmpty) {
+      if (mounted) setState(() => isLoading = false);
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      isLoading = true;
+      _loadingStep = isUrduGlobal.value
+          ? "مرحلہ ${_selectedChunkIndex + 1} از ${_dateChunks.length} کا تجزیہ جاری ہے..."
+          : "Analyzing Phase ${_selectedChunkIndex + 1} of ${_dateChunks.length}...";
+    });
+    await Future.delayed(const Duration(milliseconds: 20));
+
+    try {
+      final activeChunk = _dateChunks[_selectedChunkIndex];
+      final DateTime sDate = activeChunk.startDate;
+      final DateTime eDate = activeChunk.endDate;
+      final studentIdSet = _students.map((s) => s['id']?.toString() ?? '').toSet();
+
+      // Only attendance within active 10-day chunk
+      final relevantAttendance = _cachedRawAtt.where((a) {
+        String sid = a['student_id']?.toString() ?? '';
+        if (!studentIdSet.contains(sid)) return false;
+        try {
+          DateTime d = _parseRobust(a['date']?.toString() ?? '');
+          return !d.isBefore(sDate) && !d.isAfter(eDate);
+        } catch (_) {
+          return true;
+        }
+      }).toList();
+
+      // Only nazira records within active 10-day chunk
+      List<Map<String, dynamic>> filtered = [];
+      for (var h in _cachedRawNazira) {
         if (selectedStudentId != null &&
             h['student_id'].toString() != selectedStudentId) {
           continue;
         }
-
         if (selectedStudentId == null) {
-          bool isStudentValid = _students
-              .any((s) => s['id'].toString() == h['student_id'].toString());
+          bool isStudentValid = studentIdSet.contains(h['student_id']?.toString());
           if (!isStudentValid) continue;
         }
-
         try {
           DateTime fDate = _parseRobust(h['date'] ?? '');
           if (fDate.isBefore(sDate) || fDate.isAfter(eDate)) continue;
@@ -120,9 +336,11 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
       }
 
       if (selectedStudentId != null) {
+        final settings = await DBHelper().getSettings();
+        int weekStartDay = int.tryParse(settings['week_start_day']?.toString() ?? '6') ?? 6;
         _weeklyStats = PerformanceCalculator.calculateWeeklyPerformance(
           hifzRecords: <Map<String, dynamic>>[],
-          attendanceRecords: allAttendance
+          attendanceRecords: _cachedRawAtt
               .where((a) => a['student_id'].toString() == selectedStudentId)
               .toList(),
           weekStartDay: weekStartDay,
@@ -133,6 +351,9 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
         _aiInsight = "";
       }
 
+      filtered = PerformanceCalculator.injectMissingAttendanceRecords(
+          filtered, relevantAttendance, _students, 'nazira');
+      
       filtered.sort((a, b) {
         DateTime dA = _parseRobust(a['date'] ?? '');
         DateTime dB = _parseRobust(b['date'] ?? '');
@@ -144,24 +365,208 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
       });
 
       _naziraRecords = filtered;
-    } catch (e) {
-      debugPrint("Load Hifz Report Error: $e");
+      _errorMessage = null;
+    } catch (e, stack) {
+      debugPrint("Process Active Nazira Chunk Error: $e\n$stack");
+      _errorMessage = isUrduGlobal.value
+          ? "ریکارڈز کے تجزیے میں مسئلہ پیش آیا: ${e.toString()}"
+          : "Failed to process records: ${e.toString()}";
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          _loadingStep = '';
+        });
+      }
     }
   }
 
+  void _switchChunk(int newIndex) {
+    if (newIndex < 0 || newIndex >= _dateChunks.length) return;
+    setState(() {
+      _selectedChunkIndex = newIndex;
+    });
+    _processActiveChunk();
+  }
+
+  Widget _build10DayPaginationBar() {
+    if (_dateChunks.length <= 1) return const SizedBox.shrink();
+    final currentChunk = _dateChunks[_selectedChunkIndex];
+    final hasPrev = _selectedChunkIndex > 0;
+    final hasNext = _selectedChunkIndex < _dateChunks.length - 1;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: primaryGreen.withOpacity(0.3)),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              ElevatedButton.icon(
+                onPressed: hasPrev ? () => _switchChunk(_selectedChunkIndex - 1) : null,
+                icon: const Icon(Icons.arrow_back, size: 16),
+                label: Text(isUrduGlobal.value ? "سابقہ 10 دن" : "Prev 10 Days"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    "${isUrduGlobal.value ? '10 روزہ مرحلہ' : '10-Day Phase'} ${_selectedChunkIndex + 1} / ${_dateChunks.length}\n${intl.DateFormat('dd/MM/yyyy').format(currentChunk.startDate)} تا ${intl.DateFormat('dd/MM/yyyy').format(currentChunk.endDate)}",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: primaryGreen,
+                    ),
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: hasNext ? () => _switchChunk(_selectedChunkIndex + 1) : null,
+                icon: const Icon(Icons.arrow_forward, size: 16),
+                label: Text(isUrduGlobal.value ? "اگلے 10 دن" : "Next 10 Days"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1EFE7),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade400),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _selectedChunkIndex,
+                isExpanded: true,
+                isDense: true,
+                items: _dateChunks.asMap().entries.map((e) {
+                  final c = e.value;
+                  final sStr = intl.DateFormat('dd/MM').format(c.startDate);
+                  final eStr = intl.DateFormat('dd/MM').format(c.endDate);
+                  return DropdownMenuItem<int>(
+                    value: e.key,
+                    child: Text(
+                      "${c.label} ($sStr - $eStr)",
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) _switchChunk(val);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingWidget() {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: primaryGreen, strokeWidth: 3.5),
+            const SizedBox(height: 20),
+            Text(
+              _loadingStep.isNotEmpty
+                  ? _loadingStep
+                  : (isUrduGlobal.value ? "ناظرہ تعلیمی ریکارڈز کا جائزہ لیا جا رہا ہے..." : "Processing Nazira records..."),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: primaryGreen,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isUrduGlobal.value
+                  ? "براہ کرم انتظار فرمائیں، ڈیٹا مرحلہ وار لوڈ ہو رہا ہے"
+                  : "Please wait, data is loading in 10-day stages",
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage ?? (isUrduGlobal.value ? "ایک خرابی پیش آگئی" : "An error occurred"),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => _loadData(),
+              icon: const Icon(Icons.refresh),
+              label: Text(isUrduGlobal.value ? "دوبارہ کوشش کریں" : "Retry"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryGreen,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   DateTime _parseRobust(String dateStr) {
-    if (dateStr.isEmpty) return DateTime.now();
-    try {
-      return intl.DateFormat('d/M/yyyy').parse(dateStr);
-    } catch (_) {
-      try {
-        return DateTime.parse(dateStr);
-      } catch (_) {
-        return DateTime.now();
-      }
-    }
+    return PerformanceCalculator.parseDateRobust(dateStr);
   }
 
   Future<void> _fetchAIInsight() async {
@@ -210,6 +615,8 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
           toDate = formatted;
           _toDateController.text = formatted;
         }
+        selectedPeriod = 'custom';
+        _selectedChunkIndex = -1;
       });
       _loadData();
     }
@@ -217,21 +624,27 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
 
   String _getStudentName(String sid) {
     if (sid.isEmpty) return "Unknown";
-    var match = _students.where((s) => s['id'].toString() == sid);
-    if (match.isNotEmpty) {
-      final s = match.first;
-      return "${s['name']} - ${s['father_name'] ?? ''}";
+    final s = _students.firstWhere(
+      (st) => st['id'].toString() == sid,
+      orElse: () => _allStudentMap[sid] ?? <String, dynamic>{},
+    );
+    if (s.isNotEmpty && s['name'] != null && s['name'].toString().isNotEmpty) {
+      String fName = s['father_name']?.toString().trim() ?? '';
+      return fName.isNotEmpty ? "${s['name']} ($fName)" : "${s['name']}";
     }
     return "ID: $sid";
   }
 
   String translateStatusClean(String? status) {
     if (status == null) return '-';
+    if (status == 'جمعہ') return 'جمعہ';
     if (isUrduGlobal.value) {
       if (status == 'Excellent') return 'ممتاز';
       if (status == 'Good') return 'بہتر';
       if (status == 'Average') return 'معمولی';
       if (status == 'Weak') return 'کمزور';
+      if (status == 'Absent') return 'غیر حاضر';
+      if (status == 'Leave') return 'رخصت';
     } else {
       return status;
     }
@@ -239,12 +652,15 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
   }
 
   Color getStatusColor(String? status) {
+    if (status == null) return Colors.black;
+    if (status == 'جمعہ') return Colors.indigo.shade700;
     if (status == 'Excellent' || status == 'ممتاز') return Colors.green;
     if (status == 'Good' || status == 'بہتر') return Colors.blue;
     if (status == 'Weak' || status == 'کمزور') return Colors.red;
     if (status == 'Average' || status == 'معمولی') return Colors.orange;
-    if (status == 'غير حاضر' || status == 'Absent') return Colors.red.shade900;
+    if (status == 'غير حاضر' || status == 'غیر حاضر' || status == 'Absent') return Colors.red.shade900;
     if (status == 'رخصت' || status == 'Leave') return Colors.orange.shade800;
+    if (status == 'ناغہ') return Colors.red.shade700;
     return Colors.black;
   }
 
@@ -365,15 +781,22 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
 
   Widget _buildDataRow(Map<String, dynamic> h, int srNo) {
     bool isIndividual = selectedStudentId != null;
+    final sid = h['student_id']?.toString() ?? '';
+    final sObj = _students.firstWhere(
+      (st) => st['id'].toString() == sid,
+      orElse: () => _allStudentMap[sid] ?? <String, dynamic>{},
+    );
+    final rollNo = sObj['roll_number']?.toString() ?? sObj['admission_number']?.toString() ?? '';
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _cell(srNo.toString(), 40, bold: true, bgColor: Colors.grey.shade100),
           if (!isIndividual)
-            _cell(_students.firstWhere((s) => s['id'].toString() == h['student_id'].toString(), orElse: () => {'roll_number': '', 'admission_number': ''})['roll_number']?.toString() ?? _students.firstWhere((s) => s['id'].toString() == h['student_id'].toString(), orElse: () => {'roll_number': '', 'admission_number': ''})['admission_number']?.toString() ?? '', 60),
+            _cell(rollNo, 60),
           if (!isIndividual)
-            _cell(_getStudentName(h['student_id'].toString()), 180,
+            _cell(_getStudentName(sid), 180,
                 textColor: Colors.black87, bgColor: Colors.white),
           _cell(h['date'] ?? '-', 80, bold: true, fontSize: 10),
           Row(
@@ -406,9 +829,21 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
     combinedRecords.addAll(_naziraRecords);
 
     // Identify standalone complaints within date range
-    if (fromDate != null && toDate != null) {
-      DateTime sDate = _parseRobust(fromDate!);
-      DateTime eDate = _parseRobust(toDate!);
+    DateTime? sDate;
+    DateTime? eDate;
+    if (_dateChunks.isNotEmpty && _selectedChunkIndex >= 0 && _selectedChunkIndex < _dateChunks.length) {
+      sDate = _dateChunks[_selectedChunkIndex].startDate;
+      eDate = _dateChunks[_selectedChunkIndex].endDate;
+    } else if (fromDate != null && toDate != null) {
+      sDate = _parseRobust(fromDate!);
+      eDate = _parseRobust(toDate!);
+    }
+
+    if (sDate != null && eDate != null) {
+      final Set<String> existingRecKeys = {
+        for (var h in combinedRecords)
+          "${h['student_id']}_${PerformanceCalculator.normalizeDate(h['date']?.toString() ?? '')}"
+      };
       for (var c in _complaints) {
         String sid = c['student_id'].toString();
         if (selectedStudentId != null && sid != selectedStudentId) continue;
@@ -418,35 +853,61 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
         try { cDate = _parseRobust(c['date'] ?? ''); } catch (_) {}
         if (cDate != null && (cDate.isBefore(sDate) || cDate.isAfter(eDate))) continue;
         
-        String dt = c['date'] ?? '';
-        bool hasHifz = combinedRecords.any((h) => h['student_id'].toString() == sid && h['date'] == dt);
-        if (!hasHifz) {
+        String dt = PerformanceCalculator.normalizeDate(c['date'] ?? '');
+        String key = "${sid}_$dt";
+        if (!existingRecKeys.contains(key)) {
+          existingRecKeys.add(key);
           combinedRecords.add({
             'student_id': sid,
             'date': dt,
             'morning_sabaq': '-', 'morning_status': '-',
             'evening_sabaq': '-', 'evening_status': '-',
+            'is_dummy': 1,
           });
         }
       }
     }
 
-    final studentsWithRecords = combinedRecords.map((r) => r['student_id'].toString()).toSet();
-    final lazyStudents = _students.where((s) {
-      if (selectedStudentId != null && s['id'].toString() != selectedStudentId) return false;
-      return !studentsWithRecords.contains(s['id'].toString());
-    }).toList();
-
-    for (var s in lazyStudents) {
-      combinedRecords.add({
-        'student_id': s['id'], 'date': '-',
-        'morning_sabaq': '-', 'morning_status': '-',
-        'evening_sabaq': '-', 'evening_status': '-',
-      });
+    // Ensure all students in class appear even if no attendance or report exists
+    final existingStudentIds = combinedRecords.map((h) => h['student_id']?.toString() ?? '').toSet();
+    for (var s in _students) {
+      String sid = s['id'].toString();
+      if (selectedStudentId != null && sid != selectedStudentId) continue;
+      if (!existingStudentIds.contains(sid)) {
+        combinedRecords.add({
+          'student_id': s['id'],
+          'date': toDate ?? intl.DateFormat('dd/MM/yyyy').format(DateTime.now()),
+          'morning_sabaq': '-', 'morning_status': '-',
+          'evening_sabaq': '-', 'evening_status': '-',
+          'is_dummy': 1,
+        });
+      }
     }
 
+    // STRICT DE-DUPLICATION: Exactly 1 row per student per date
+    Map<String, Map<String, dynamic>> uniqueCombined = {};
+    for (var r in combinedRecords) {
+      String sid = r['student_id']?.toString() ?? '';
+      String rNorm = PerformanceCalculator.normalizeDate(r['date']?.toString() ?? '');
+      if (sid.isNotEmpty && rNorm.isNotEmpty) {
+        String key = "${sid}_$rNorm";
+        if (!uniqueCombined.containsKey(key)) {
+          var copy = Map<String, dynamic>.from(r);
+          copy['date'] = rNorm;
+          uniqueCombined[key] = copy;
+        } else {
+          if (uniqueCombined[key]!['is_dummy'] == 1 && r['is_dummy'] != 1) {
+            var copy = Map<String, dynamic>.from(r);
+            copy['date'] = rNorm;
+            uniqueCombined[key] = copy;
+          }
+        }
+      }
+    }
+    List<Map<String, dynamic>> sortedRecords = uniqueCombined.values.toList();
+
     // Sort combined records by student first, then date descending
-    combinedRecords.sort((a, b) {
+    sortedRecords.sort((a, b) {
       int sCmp = (a['student_id'] ?? 0).toString().compareTo((b['student_id'] ?? 0).toString());
       if (sCmp != 0) return sCmp;
 
@@ -456,10 +917,19 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
     });
 
     int srNo = 1;
-    for (var origH in combinedRecords) {
+    for (var origH in sortedRecords) {
       var h = Map<String, dynamic>.from(origH);
       String dt = h['date']?.toString() ?? '';
       String sid = h['student_id']?.toString() ?? '';
+      
+      DateTime rowDate = _parseRobust(dt);
+      if (rowDate.weekday == DateTime.friday) {
+        h['morning_status'] = 'جمعہ';
+        h['evening_status'] = 'جمعہ';
+        h['morning_sabaq'] = 'جمعہ';
+        h['evening_sabaq'] = 'جمعہ';
+      }
+
       if (dt != '-') {
         var comps = _complaints.where((c) => c['student_id'].toString() == sid && (c['date'] == dt || dt.contains(c['date'] ?? ''))).toList();
         if (comps.isNotEmpty) {
@@ -656,6 +1126,46 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
               child: Column(
                 children: [
                   DropdownButtonFormField<String>(
+                    value: selectedPeriod,
+                    decoration: InputDecoration(
+                        labelText: isUrduGlobal.value ? "دورانیہ (Period)" : "Period",
+                        border: const OutlineInputBorder(),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                    items: [
+                      DropdownMenuItem(
+                          value: 'all',
+                          child: Text(isUrduGlobal.value ? "تمام تاریخیں / تمام ریکارڈز (All)" : "All Dates (All Records)")),
+                      DropdownMenuItem(
+                          value: 'this_month',
+                          child: Text(isUrduGlobal.value ? "رواں مہینہ (This Month)" : "This Month")),
+                      DropdownMenuItem(
+                          value: 'current_week',
+                          child: Text(isUrduGlobal.value ? "رواں ہفتہ (Current Week)" : "Current Week")),
+                      DropdownMenuItem(
+                          value: 'weekly',
+                          child: Text(isUrduGlobal.value ? "ہفتہ وار (آخری 7 دن)" : "Weekly (Last 7 Days)")),
+                      DropdownMenuItem(
+                          value: 'monthly',
+                          child: Text(isUrduGlobal.value ? "ماہانہ (آخری 30 دن)" : "Monthly (Last 30 Days)")),
+                      DropdownMenuItem(
+                          value: 'quarterly',
+                          child: Text(isUrduGlobal.value ? "سہ ماہی (آخری 90 دن)" : "Quarterly (Last 90 Days)")),
+                      DropdownMenuItem(
+                          value: 'annual',
+                          child: Text(isUrduGlobal.value ? "سالانہ (آخری 365 دن)" : "Annual (Last 365 Days)")),
+                      DropdownMenuItem(
+                          value: 'custom',
+                          child: Text(isUrduGlobal.value ? "مخصوص تاریخیں (Custom)" : "Custom Date Range")),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() => selectedPeriod = v);
+                        _updateDatesForPeriod(v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
                     value: _students
                             .any((s) => s['id'].toString() == selectedStudentId)
                         ? selectedStudentId
@@ -719,30 +1229,49 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
                 ],
               ),
             ),
+            if (!isLoading && _errorMessage == null && selectedStudentId == null)
+              _build10DayPaginationBar(),
             Expanded(
               child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          _buildSmartPerformance(),
-                          Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              physics: const BouncingScrollPhysics(),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildTableHeader(),
-                                  ..._buildTableRows(),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  ? _buildLoadingWidget()
+                  : _errorMessage != null
+                      ? _buildErrorWidget()
+                      : selectedStudentId != null
+                          ? StudentReportPage(
+                              key: ValueKey(selectedStudentId),
+                              forceStudentId: selectedStudentId,
+                              isEmbedded: true,
+                            )
+                          : _naziraRecords.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    isUrduGlobal.value
+                                        ? "کوئی ریکارڈ موجود نہیں ہے۔"
+                                        : "No records found.",
+                                    style: const TextStyle(fontSize: 16, color: Colors.grey),
+                                  ),
+                                )
+                              : SingleChildScrollView(
+                                  child: Column(
+                                    children: [
+                                      _buildSmartPerformance(),
+                                      Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          physics: const BouncingScrollPhysics(),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              _buildTableHeader(),
+                                              ..._buildTableRows(),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
             ),
           ],
         ),
@@ -905,3 +1434,4 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
     return PdfColors.black;
   }
 }
+

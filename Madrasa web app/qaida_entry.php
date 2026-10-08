@@ -1,5 +1,4 @@
 <?php 
-ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_reporting(E_ALL);
 require_once 'db.php'; 
 $selected_class = $_GET['class'] ?? '';
 if (empty($selected_class)) {
@@ -50,16 +49,17 @@ if (isset($_POST['save_qaida'])) {
         try { $pdo->exec("ALTER TABLE qaida_records ADD COLUMN qty_3 VARCHAR(255)"); } catch(PDOException $e) {}
         try { $pdo->exec("ALTER TABLE qaida_records ADD COLUMN qty_4 VARCHAR(255)"); } catch(PDOException $e) {}
 
-        $check = $pdo->prepare("SELECT id FROM qaida_records WHERE student_id = ? AND date = ?");
-        $check->execute([$std_id, $date]);
+        $cur_tenant_id = (int)get_current_tenant_id();
+        $check = $pdo->prepare("SELECT id FROM qaida_records WHERE student_id = ? AND date = ? AND tenant_id = ?");
+        $check->execute([$std_id, $date, $cur_tenant_id]);
         $existing = $check->fetch();
         
         if ($existing) {
-            $stmt = $pdo->prepare("UPDATE qaida_records SET lesson_type=?, hearing_time=?, sabaq_1=?, qty_1=?, grade_1=?, sabaq_2=?, qty_2=?, grade_2=?, sabaq_3=?, qty_3=?, grade_3=?, sabaq_4=?, qty_4=?, grade_4=?, is_deleted=0 WHERE id=?");
-            $stmt->execute([$lesson_type, $hearing_time, $s1, $q1, $g1, $s2, $q2, $g2, $s3, $q3, $g3, $s4, $q4, $g4, $existing['id']]);
+            $stmt = $pdo->prepare("UPDATE qaida_records SET lesson_type=?, hearing_time=?, sabaq_1=?, qty_1=?, grade_1=?, sabaq_2=?, qty_2=?, grade_2=?, sabaq_3=?, qty_3=?, grade_3=?, sabaq_4=?, qty_4=?, grade_4=?, is_deleted=0 WHERE id=? AND tenant_id=?");
+            $stmt->execute([$lesson_type, $hearing_time, $s1, $q1, $g1, $s2, $q2, $g2, $s3, $q3, $g3, $s4, $q4, $g4, $existing['id'], $cur_tenant_id]);
         } else {
-            $stmt = $pdo->prepare("INSERT INTO qaida_records (student_id, date, lesson_type, hearing_time, sabaq_1, qty_1, grade_1, sabaq_2, qty_2, grade_2, sabaq_3, qty_3, grade_3, sabaq_4, qty_4, grade_4, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)");
-            $stmt->execute([$std_id, $date, $lesson_type, $hearing_time, $s1, $q1, $g1, $s2, $q2, $g2, $s3, $q3, $g3, $s4, $q4, $g4]);
+            $stmt = $pdo->prepare("INSERT INTO qaida_records (student_id, date, lesson_type, hearing_time, sabaq_1, qty_1, grade_1, sabaq_2, qty_2, grade_2, sabaq_3, qty_3, grade_3, sabaq_4, qty_4, grade_4, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)");
+            $stmt->execute([$std_id, $date, $lesson_type, $hearing_time, $s1, $q1, $g1, $s2, $q2, $g2, $s3, $q3, $g3, $s4, $q4, $g4, $cur_tenant_id]);
         }
         echo "<script>window.location='qaida_entry.php?class=".urlencode($selected_class)."&date=$date';</script>";
         exit;
@@ -68,14 +68,18 @@ if (isset($_POST['save_qaida'])) {
     }
 }
 
+$cur_tenant_id = (int)get_current_tenant_id();
 $date = $_GET['date'] ?? date('Y-m-d');
-$stmt = $pdo->prepare("SELECT * FROM students WHERE class = ? AND status IN ('Active', 'Present', 'حاضر') AND (is_deleted=0 OR is_deleted IS NULL)");
-$stmt->execute([$selected_class]);
+$sys_type = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys_type === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+
+$stmt = $pdo->prepare("SELECT * FROM students WHERE tenant_id = ? AND $sys_cond AND (class = ? OR class_name = ?) AND (status IS NULL OR status = '' OR status IN ('Active', 'Present', 'حاضر', 'active', 'present')) AND (is_deleted=0 OR is_deleted IS NULL) ORDER BY name ASC");
+$stmt->execute([$cur_tenant_id, $selected_class, $selected_class]);
 $students = $stmt->fetchAll();
 
 $records = [];
-$stmt = $pdo->prepare("SELECT * FROM qaida_records WHERE date = ? AND is_deleted = 0");
-$stmt->execute([$date]);
+$stmt = $pdo->prepare("SELECT * FROM qaida_records WHERE date = ? AND tenant_id = ? AND is_deleted = 0");
+$stmt->execute([$date, $cur_tenant_id]);
 while ($r = $stmt->fetch()) {
     $records[$r['student_id']] = $r;
 }

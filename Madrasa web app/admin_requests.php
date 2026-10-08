@@ -1,17 +1,28 @@
 <?php 
 require_once 'db.php'; 
+require_once 'notifications.php';
 include 'header.php'; 
 
-if (($_SESSION['role'] ?? '') !== 'admin') { 
+if (!isset($_SESSION['user_id']) || (!has_perm('manage_requests') && ($_SESSION['role'] ?? '') !== 'admin')) { 
     echo "<script>window.location='dashboard.php';</script>"; 
     exit; 
 }
 
 function next_user_receipt_no(PDO $pdo, $userId) {
     $userId = max(1, (int)$userId);
-    $minNo = $userId * 100000;
-    $maxNo = ($userId + 1) * 100000;
-    $stmt = $pdo->prepare("SELECT MAX(computer_receipt_no) FROM finance WHERE computer_receipt_no > ? AND computer_receipt_no < ?");
+    if ($userId === 1) {
+        // تنزیل الرحمن (ایڈمن ID 1) کا رسید تسلسل سابقہ 300000 سیریز (300041 آگے) سے جاری رہے
+        $minNo = 300000;
+        $maxNo = 400000;
+    } elseif ($userId === 3) {
+        // قاری سلیم اللہ صاحب (ID 3) کے لیے 700000 بلاک تاکہ تنزیل کے نمبرز سے تصادم نہ ہو
+        $minNo = 700000;
+        $maxNo = 800000;
+    } else {
+        $minNo = $userId * 100000;
+        $maxNo = ($userId + 1) * 100000;
+    }
+    $stmt = $pdo->prepare("SELECT MAX(computer_receipt_no) FROM finance WHERE computer_receipt_no > ? AND computer_receipt_no < ? AND (is_deleted = 0 OR is_deleted IS NULL)");
     $stmt->execute([$minNo, $maxNo]);
     $currentMax = (int)$stmt->fetchColumn();
     $nextNo = ($currentMax > $minNo) ? ($currentMax + 1) : ($minNo + 1);
@@ -23,23 +34,24 @@ function next_user_receipt_no(PDO $pdo, $userId) {
 
 $msg = '';
 $msgType = 'success';
+$cur_tenant_id = (int)get_current_tenant_id();
 
 // --- Deletion Actions ---
 if (isset($_GET['del_fee'])) {
     $delId = (int)$_GET['del_fee'];
-    $pdo->prepare("DELETE FROM fee_submissions WHERE id = ?")->execute([$delId]);
+    $pdo->prepare("DELETE FROM fee_submissions WHERE id = ? AND tenant_id = ?")->execute([$delId, $cur_tenant_id]);
     $msg = "آن لائن فیس/تعاون انٹری کامیابی سے حذف کر دی گئی!";
 }
 
 if (isset($_GET['del_leave'])) {
     $delId = (int)$_GET['del_leave'];
-    $pdo->prepare("DELETE FROM leave_applications WHERE id = ?")->execute([$delId]);
+    $pdo->prepare("DELETE FROM leave_applications WHERE id = ? AND tenant_id = ?")->execute([$delId, $cur_tenant_id]);
     $msg = "چھٹی کی درخواست کامیابی سے حذف کر دی گئی!";
 }
 
 if (isset($_GET['del_complaint'])) {
     $delId = (int)$_GET['del_complaint'];
-    $pdo->prepare("DELETE FROM parent_complaints WHERE id = ?")->execute([$delId]);
+    $pdo->prepare("DELETE FROM parent_complaints WHERE id = ? AND tenant_id = ?")->execute([$delId, $cur_tenant_id]);
     $msg = "والدین کی شکایت کامیابی سے حذف کر دی گئی!";
 }
 
@@ -49,7 +61,7 @@ if (isset($_POST['update_fee'])) {
     $status = $_POST['status'] ?? 'Pending';
     
     if ($status == 'Approved') {
-        $f = $pdo->query("SELECT f.*, s.name FROM fee_submissions f JOIN students s ON f.student_id = s.id WHERE f.id = $id")->fetch();
+        $f = $pdo->query("SELECT f.*, s.name FROM fee_submissions f JOIN students s ON f.student_id = s.id WHERE f.id = $id AND f.tenant_id = $cur_tenant_id AND s.tenant_id = $cur_tenant_id")->fetch();
         if ($f) {
             $adminId = $_SESSION['user_id'] ?? 1;
             $adminName = $_SESSION['name'] ?? 'Admin';
@@ -58,18 +70,21 @@ if (isset($_POST['update_fee'])) {
             $desc = $f['description'] ? $f['description'] . " (تعاون ID: $id)" : "Online Cooperation/Fee (ID: $id)";
             $head_id = $f['head_id'] ? $f['head_id'] : null;
             
-            $stmt = $pdo->prepare("INSERT INTO finance (date, type, amount, description, donor_name, head_id, computer_receipt_no, user_id, user_name) VALUES (?, 'Income', ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([date('Y-m-d'), $f['amount'], $desc, $f['name'], $head_id, $compNo, $adminId, $adminName]);
+            $stmt = $pdo->prepare("INSERT INTO finance (date, type, amount, description, donor_name, head_id, computer_receipt_no, user_id, user_name, tenant_id) VALUES (?, 'Income', ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([date('Y-m-d'), $f['amount'], $desc, $f['name'], $head_id, $compNo, $adminId, $adminName, $cur_tenant_id]);
             $finance_id = $pdo->lastInsertId();
             
             require_once 'finance_accounting_bridge.php';
             finance_accounting_post($pdo, (int)$finance_id);
             
-            $pdo->prepare("UPDATE fee_submissions SET status = ?, finance_id = ? WHERE id = ?")->execute([$status, $finance_id, $id]);
+            $pdo->prepare("UPDATE fee_submissions SET status = ?, finance_id = ? WHERE id = ? AND tenant_id = ?")->execute([$status, $finance_id, $id, $cur_tenant_id]);
             $msg = "آن لائن فیس منظور کر کے آمدن فنانس میں شامل کر دی گئی اور اکاؤنٹنگ جرنل میں درج ہو گئی!";
+
+            // پش نوٹیفکیشن برائے والدین
+            sendPushNotificationFCM($pdo, "آن لائن فیس کی منظوری", "طالب علم {$f['name']} کی فیس مبلغ {$f['amount']} روپے منظور کر لی گئی ہے۔", "fee_approved", (int)$f['student_id'], "parent");
         }
     } else {
-        $pdo->prepare("UPDATE fee_submissions SET status = ? WHERE id = ?")->execute([$status, $id]);
+        $pdo->prepare("UPDATE fee_submissions SET status = ? WHERE id = ? AND tenant_id = ?")->execute([$status, $id, $cur_tenant_id]);
         $msg = "فیس کا سٹیٹس اپڈیٹ ہو گیا!";
     }
 }
@@ -80,18 +95,24 @@ if (isset($_POST['update_leave'])) {
     $status = $_POST['status'] ?? 'Pending';
     $action = $_POST['action_type'] ?? '';
 
-    $pdo->prepare("UPDATE leave_applications SET status = ? WHERE id = ?")->execute([$status, $id]);
+    $pdo->prepare("UPDATE leave_applications SET status = ? WHERE id = ? AND tenant_id = ?")->execute([$status, $id, $cur_tenant_id]);
 
+    $l = $pdo->query("SELECT * FROM leave_applications WHERE id = $id AND tenant_id = $cur_tenant_id")->fetch();
     if ($action == 'AddToReport' && $status == 'Approved') {
-        $l = $pdo->query("SELECT * FROM leave_applications WHERE id = $id")->fetch();
         if ($l) {
             $final_msg = "[چھٹی کی درخواست]: " . $l['reason'] . " (" . $l['date_from'] . " تا " . $l['date_to'] . ")";
-            $pdo->prepare("INSERT INTO complaints (student_id, date, complaint) VALUES (?, ?, ?)")->execute([$l['student_id'], $l['date_from'], $final_msg]);
+            $pdo->prepare("INSERT INTO complaints (student_id, date, complaint, tenant_id) VALUES (?, ?, ?, ?)")->execute([$l['student_id'], $l['date_from'], $final_msg, $cur_tenant_id]);
             $msg = "چھٹی منظور کر لی گئی اور طالب علم کی رپورٹ میں شامل کر دی گئی!";
             $msgType = 'info';
         }
     } else {
         $msg = "چھٹی کا سٹیٹس اپڈیٹ ہو گیا!";
+    }
+
+    // پش نوٹیفکیشن برائے والدین
+    if ($l) {
+        $statusUrdu = ($status === 'Approved') ? 'منظور' : (($status === 'Rejected') ? 'مسترد' : $status);
+        sendPushNotificationFCM($pdo, "رخصت کی درخواست کا فیصلہ", "چھٹی کی درخواست کا سٹیٹس: $statusUrdu", "leave_status", (int)$l['student_id'], "parent");
     }
 }
 
@@ -100,13 +121,13 @@ if (isset($_POST['action_complaint'])) {
     $id = (int)$_POST['id'];
     $action = $_POST['action_type'] ?? 'Viewed';
     
-    $pdo->prepare("UPDATE parent_complaints SET status = 'Viewed' WHERE id = ?")->execute([$id]);
+    $pdo->prepare("UPDATE parent_complaints SET status = 'Viewed' WHERE id = ? AND tenant_id = ?")->execute([$id, $cur_tenant_id]);
 
     if ($action == 'AddToReport') {
-        $pc = $pdo->query("SELECT * FROM parent_complaints WHERE id = $id")->fetch();
+        $pc = $pdo->query("SELECT * FROM parent_complaints WHERE id = $id AND tenant_id = $cur_tenant_id")->fetch();
         if ($pc) {
             $final_msg = "[والدین کی طرف سے]: " . $pc['category'] . " - " . $pc['description'];
-            $pdo->prepare("INSERT INTO complaints (student_id, date, complaint) VALUES (?, ?, ?)")->execute([$pc['student_id'], $pc['date'], $final_msg]);
+            $pdo->prepare("INSERT INTO complaints (student_id, date, complaint, tenant_id) VALUES (?, ?, ?, ?)")->execute([$pc['student_id'], $pc['date'], $final_msg, $cur_tenant_id]);
             $msg = "شکایت پورٹل پر دیکھ لی گئی اور طالب علم کی آفیشل رپورٹ میں ڈال دی گئی!";
         }
     } else {
@@ -114,12 +135,15 @@ if (isset($_POST['action_complaint'])) {
     }
 }
 
-// Fetch Data
-$fees = $pdo->query("SELECT f.*, s.name as student_name, s.father_name, s.class, h.name as head_name FROM fee_submissions f JOIN students s ON f.student_id = s.id LEFT JOIN heads h ON f.head_id = h.id ORDER BY f.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+// Fetch Data with System Type Isolation
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys === 'Masjid') ? "s.system_type = 'Masjid'" : "(s.system_type = 'Madrasa' OR s.system_type IS NULL OR s.system_type = '')";
 
-$leaves = $pdo->query("SELECT l.*, s.name as student_name, s.father_name, s.class FROM leave_applications l JOIN students s ON l.student_id = s.id ORDER BY l.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$fees = $pdo->query("SELECT f.*, s.name as student_name, s.father_name, s.class, h.name as head_name FROM fee_submissions f JOIN students s ON f.student_id = s.id LEFT JOIN heads h ON f.head_id = h.id WHERE (f.is_deleted = 0 OR f.is_deleted IS NULL) AND $sys_cond AND f.tenant_id = $cur_tenant_id AND s.tenant_id = $cur_tenant_id ORDER BY f.id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-$complaints = $pdo->query("SELECT pc.*, s.name as student_name, s.father_name, s.class FROM parent_complaints pc JOIN students s ON pc.student_id = s.id ORDER BY pc.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$leaves = $pdo->query("SELECT l.*, s.name as student_name, s.father_name, s.class FROM leave_applications l JOIN students s ON l.student_id = s.id WHERE (l.is_deleted = 0 OR l.is_deleted IS NULL) AND $sys_cond AND l.tenant_id = $cur_tenant_id AND s.tenant_id = $cur_tenant_id ORDER BY l.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+
+$complaints = $pdo->query("SELECT pc.*, s.name as student_name, s.father_name, s.class FROM parent_complaints pc JOIN students s ON pc.student_id = s.id WHERE (pc.is_deleted = 0 OR pc.is_deleted IS NULL) AND $sys_cond AND pc.tenant_id = $cur_tenant_id AND s.tenant_id = $cur_tenant_id ORDER BY pc.id DESC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="container-fluid py-4">

@@ -27,7 +27,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"madrasa_app", origin, size)) {
+  // "مدرسہ اشرف المدارس - مینجمنٹ سسٹم" encoded in Unicode escapes for 100% clean MSVC compilation
+  const wchar_t* kWindowTitle =
+      L"\u0645\u062F\u0631\u0633\u06C1 \u0627\u0634\u0631\u0641 \u0627\u0644\u0645\u062F\u0627\u0631\u0633 - \u0645\u06CC\u0646\u062C\u0645\u0646\u0679 \u0633\u0633\u0679\u0645";
+
+  if (!window.Create(kWindowTitle, origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

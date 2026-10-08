@@ -3,7 +3,13 @@ require_once 'db.php';
 include 'header.php'; 
 
 // سیکیورٹی چیک
-if (!isset($_SESSION['user_id']) || !app_has_perm('manage_erp')) { 
+if (!isset($_SESSION['user_id'])) { 
+    echo "<script>window.location='login.php';</script>"; 
+    exit; 
+}
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_erp')) { 
     echo "<script>window.location='dashboard.php';</script>"; 
     exit; 
 }

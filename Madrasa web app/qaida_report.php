@@ -1,7 +1,5 @@
 <?php
 require_once 'db.php';
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 
 // 1. فلٹرز - header include سے پہلے
 $selected_class = $_GET['class'] ?? '';
@@ -10,8 +8,12 @@ if (empty($selected_class)) {
     exit;
 }
 
+$cur_tenant_id = (int)get_current_tenant_id();
+
 try {
-    $settings = $pdo->query("SELECT * FROM settings WHERE id=1")->fetch();
+    $st_stmt = $pdo->prepare("SELECT * FROM settings WHERE tenant_id = ? LIMIT 1");
+    $st_stmt->execute([$cur_tenant_id]);
+    $settings = $st_stmt->fetch();
     $week_start_day = $settings['week_start_day'] ?? 6;
 } catch (Exception $e) {
     $week_start_day = 6;
@@ -41,25 +43,106 @@ try {
 
 
 $selected_student_id = isset($_GET['student_id']) && $_GET['student_id'] !== '' ? (int)$_GET['student_id'] : 0;
-
+$sys_type = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys_type === 'Masjid') ? "(s.system_type = 'Masjid' OR s.admission_number LIKE 'M-%' OR COALESCE(s.roll_number, '') LIKE 'M-%')" : "((s.system_type = 'Madrasa' OR s.system_type IS NULL OR s.system_type = '') AND (s.admission_number NOT LIKE 'M-%' AND COALESCE(s.roll_number, '') NOT LIKE 'M-%'))";
 try {
-    // Fetch all active Qaida students
+    $chkCol = $pdo->query("SHOW COLUMNS FROM students LIKE 'class_name'");
+    $hasClassName = ($chkCol && $chkCol->rowCount() > 0);
+
+    $class_id = 0;
+    try {
+        $c_stmt = $pdo->prepare("SELECT id FROM classes WHERE name = ? LIMIT 1");
+        $c_stmt->execute([$selected_class]);
+        $class_row = $c_stmt->fetch();
+        if ($class_row) {
+            $class_id = (int)$class_row['id'];
+        }
+    } catch (Exception $eC) {}
+
+    $matchConditions = [
+        "s.class = ?",
+        "TRIM(s.class) = ?",
+        "s.class LIKE ?"
+    ];
+    $matchParams = [
+        $selected_class,
+        trim($selected_class),
+        '%' . trim($selected_class) . '%'
+    ];
+
+    if ($hasClassName) {
+        $matchConditions[] = "s.class_name = ?";
+        $matchConditions[] = "TRIM(s.class_name) = ?";
+        $matchConditions[] = "s.class_name LIKE ?";
+        $matchParams[] = $selected_class;
+        $matchParams[] = trim($selected_class);
+        $matchParams[] = '%' . trim($selected_class) . '%';
+    }
+
+    if ($class_id > 0) {
+        $matchConditions[] = "s.class = '$class_id'";
+        if ($hasClassName) {
+            $matchConditions[] = "s.class_name = '$class_id'";
+        }
+    }
+
+    $classMatchSql = "(" . implode(" OR ", $matchConditions) . ")";
+
+    // Query students
     $stmt_lazy = $pdo->prepare("
-        SELECT s.id, s.name, s.father_name, s.admission_number, $student_roll_select FROM students s
-        WHERE (LOWER(s.status) = 'active' OR s.status = 'حاضر' OR s.status = 'Present') 
-          AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
-          AND s.class = ?
+        SELECT s.*, $student_roll_select 
+        FROM students s 
+        WHERE (s.is_deleted = 0 OR s.is_deleted IS NULL) 
+          AND (s.tenant_id = ? OR s.tenant_id IS NULL OR s.tenant_id = 0)
+          AND $sys_cond
+          AND (LOWER(TRIM(COALESCE(s.status, ''))) NOT IN ('alumni', 'left', 'struck off', 'dropped', 'expelled', 'graduated', 'inactive', 'خارج', 'فارغ', 'فارغ التحصیل', 'چھوڑ دیا', 'ترک تعلیم'))
+          AND (s.status NOT LIKE '%خارج%' AND s.status NOT LIKE '%فارغ%' AND s.status NOT LIKE '%چھوڑ%' AND s.status NOT LIKE '%ترک%')
+          AND $classMatchSql 
         ORDER BY s.name ASC
     ");
-    $stmt_lazy->execute([$selected_class]);
-    $all_class_students = $stmt_lazy->fetchAll();
+    $stmt_lazy->execute(array_merge([$cur_tenant_id], $matchParams));
+    $all_class_students = $stmt_lazy->fetchAll(PDO::FETCH_ASSOC);
+
+    // Fallback if tenant_id was restrictive
+    if (empty($all_class_students)) {
+        $stmt_lazy_fallback = $pdo->prepare("
+            SELECT s.*, $student_roll_select 
+            FROM students s 
+            WHERE (s.is_deleted = 0 OR s.is_deleted IS NULL) 
+              AND $sys_cond 
+              AND (LOWER(TRIM(COALESCE(s.status, ''))) NOT IN ('alumni', 'left', 'struck off', 'dropped', 'expelled', 'graduated', 'inactive', 'خارج', 'فارغ', 'فارغ التحصیل', 'چھوڑ دیا', 'ترک تعلیم'))
+              AND (s.status NOT LIKE '%خارج%' AND s.status NOT LIKE '%فارغ%' AND s.status NOT LIKE '%چھوڑ%' AND s.status NOT LIKE '%ترک%')
+              AND $classMatchSql 
+            ORDER BY s.name ASC
+        ");
+        $stmt_lazy_fallback->execute($matchParams);
+        $all_class_students = $stmt_lazy_fallback->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // Fallback to maktab_students if still empty
+    if (empty($all_class_students) && $sys_type === 'Masjid') {
+        try {
+            $m_stmt = $pdo->prepare("
+                SELECT s.*, $student_roll_select 
+                FROM maktab_students s 
+                WHERE (s.is_deleted = 0 OR s.is_deleted IS NULL) 
+                  AND (s.class = ? OR TRIM(s.class) = ? OR s.class LIKE ?) 
+                ORDER BY s.name ASC
+            ");
+            $m_stmt->execute([$selected_class, trim($selected_class), '%' . trim($selected_class) . '%']);
+            $all_class_students = $m_stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $eM) {}
+    }
 
     if ($selected_student_id > 0) {
         $all_qaida_students = array_values(array_filter($all_class_students, function($st) use ($selected_student_id) {
             return (int)$st['id'] === $selected_student_id;
         }));
     } else {
-        $all_qaida_students = $all_class_students;
+        $filtered_qaida = array_values(array_filter($all_class_students, function($st) use ($start_date) {
+            return !is_student_inactive($st, $start_date);
+        }));
+        $all_qaida_students = !empty($filtered_qaida) ? $filtered_qaida : $all_class_students;
     }
 } catch (PDOException $e) {
     echo "<div class='container mt-5'><div class='alert alert-danger'><strong>ڈیٹا بیس ایرر (Students):</strong> " . $e->getMessage() . "</div></div>";
@@ -148,7 +231,7 @@ function cleanUrduStr($str) {
         <input type="hidden" name="class" value="<?php echo htmlspecialchars($selected_class); ?>">
         <div class="col-6 col-md-3">
             <label class="fw-bold small mb-1"><i class="fas fa-user-graduate me-1 text-success"></i> طالب علم (سرچ کریں):</label>
-            <select name="student_id" class="form-select form-select-sm fw-bold">
+            <select name="student_id" class="form-select form-select-sm fw-bold" onchange="this.form.submit()">
                 <option value="">-- تمام طلبہ (ڈیفالٹ) --</option>
                 <?php foreach($all_class_students as $st): ?>
                     <option value="<?php echo $st['id']; ?>" <?php echo $selected_student_id == $st['id'] ? 'selected' : ''; ?>>
@@ -171,11 +254,11 @@ function cleanUrduStr($str) {
         </div>
         <div class="col-6 col-md-2">
             <label class="fw-bold small mb-1">تاریخ سے:</label>
-            <input type="date" name="from" id="qaidaFromDate" class="form-control form-control-sm fw-bold" value="<?php echo $start_date; ?>" required>
+            <input type="date" name="from" id="qaidaFromDate" class="form-control form-control-sm fw-bold" value="<?php echo $start_date; ?>" onchange="if(this.value && document.getElementById('qaidaToDate').value) this.form.submit();" required>
         </div>
         <div class="col-6 col-md-2">
             <label class="fw-bold small mb-1">تاریخ تک:</label>
-            <input type="date" name="to" id="qaidaToDate" class="form-control form-control-sm fw-bold" value="<?php echo $end_date; ?>" required>
+            <input type="date" name="to" id="qaidaToDate" class="form-control form-control-sm fw-bold" value="<?php echo $end_date; ?>" onchange="if(this.value && document.getElementById('qaidaFromDate').value) this.form.submit();" required>
         </div>
         <div class="col-12 col-md-2 d-flex gap-1">
             <button type="submit" class="btn btn-success btn-sm w-100 fw-bold"><i class="fas fa-search me-1"></i> فلٹر کریں</button>
@@ -221,6 +304,7 @@ function applyQaidaPeriodDates(val) {
     if (val !== 'custom') {
         document.getElementById('qaidaFromDate').value = formatDate(fromDate);
         document.getElementById('qaidaToDate').value = formatDate(toDate);
+        document.getElementById('qaidaPeriodSelect').form.submit();
     }
 }
 </script>
@@ -255,13 +339,23 @@ function applyQaidaPeriodDates(val) {
             </thead>
             <tbody>
                 <?php
-                // Fetch Hifz records
+                // Date normalization helper
+                $norm_date = function($dRaw) {
+                    $dRaw = explode(' ', trim((string)$dRaw))[0];
+                    if (empty($dRaw)) return '';
+                    if (preg_match('/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/', $dRaw, $m)) return sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]);
+                    elseif (preg_match('/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/', $dRaw, $m)) return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+                    $ts = strtotime($dRaw);
+                    return $ts ? date('Y-m-d', $ts) : $dRaw;
+                };
+
+                // Fetch Qaida records
                 $sql = "SELECT d.* FROM qaida_records d 
                         JOIN students s ON d.student_id = s.id 
-                        WHERE d.date BETWEEN ? AND ? AND d.is_deleted = 0 AND (s.is_deleted = 0 OR s.is_deleted IS NULL) AND s.class = ?";
+                        WHERE d.tenant_id = ? AND s.tenant_id = ? AND (d.is_deleted = 0 OR d.is_deleted IS NULL) AND (s.is_deleted = 0 OR s.is_deleted IS NULL) AND s.class = ?";
                 try {
                     $stmt = $pdo->prepare($sql);
-                    $stmt->execute([$start_date, $end_date, $selected_class]);
+                    $stmt->execute([$cur_tenant_id, $cur_tenant_id, $selected_class]);
                     $hifz_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 } catch (PDOException $e) {
                     echo "<tr><td colspan='15'>DB Error: " . $e->getMessage() . "</td></tr>";
@@ -270,29 +364,76 @@ function applyQaidaPeriodDates(val) {
 
                 $qaida_map = [];
                 foreach ($hifz_records as $rec) {
-                    $qaida_map[$rec['date']][$rec['student_id']] = $rec;
+                    $dNorm = $norm_date($rec['date'] ?? '');
+                    if ($dNorm >= $start_date && $dNorm <= $end_date) {
+                        $qaida_map[$dNorm][$rec['student_id']] = $rec;
+                    }
                 }
 
                 // Fetch Complaints for the date range
-                $c_sql = "SELECT c.student_id, c.date, c.complaint as description, 'admin' as type FROM complaints c WHERE c.date BETWEEN ? AND ?";
-                $pc_sql = "SELECT p.student_id, p.date, CONCAT('[', p.category, '] ', p.description) as description, 'parent' as type FROM parent_complaints p WHERE p.date BETWEEN ? AND ?";
+                $c_sql = "SELECT c.student_id, c.date, c.complaint as description, 'admin' as type FROM complaints c WHERE c.tenant_id = $cur_tenant_id";
+                $pc_sql = "SELECT p.student_id, p.date, CONCAT('[', p.category, '] ', p.description) as description, 'parent' as type FROM parent_complaints p WHERE p.tenant_id = $cur_tenant_id";
                 
                 $all_c_sql = "$c_sql UNION ALL $pc_sql";
                 try {
-                    $c_stmt = $pdo->prepare($all_c_sql);
-                    $c_stmt->execute([$start_date, $end_date, $start_date, $end_date]);
+                    $c_stmt = $pdo->query($all_c_sql);
                     $complaints_data = $c_stmt->fetchAll();
                 } catch (PDOException $e) {
-                    $c_stmt = $pdo->prepare($c_sql);
-                    $c_stmt->execute([$start_date, $end_date]);
+                    $c_stmt = $pdo->query($c_sql);
                     $complaints_data = $c_stmt->fetchAll();
                 }
                 
                 $complaints_map = [];
                 foreach($complaints_data as $cd) {
-                    $key = $cd['student_id'] . '_' . $cd['date'];
-                    if(!isset($complaints_map[$key])) $complaints_map[$key] = [];
-                    $complaints_map[$key][] = ($cd['type'] == 'parent' ? '⚠️(والدین)' : '') . $cd['description'];
+                    $dNorm = $norm_date($cd['date'] ?? '');
+                    if ($dNorm >= $start_date && $dNorm <= $end_date) {
+                        $key = $cd['student_id'] . '_' . $dNorm;
+                        if(!isset($complaints_map[$key])) $complaints_map[$key] = [];
+                        $complaints_map[$key][] = ($cd['type'] == 'parent' ? '⚠️(والدین)' : '') . $cd['description'];
+                    }
+                }
+
+                // Fetch Attendance for all class students
+                $all_q_sids = array_map(function($st) { return (int)$st['id']; }, $all_qaida_students);
+                $att_map = [];
+
+                if (!empty($all_q_sids)) {
+                    $in_clause = implode(',', $all_q_sids);
+                    try {
+                        $att_sql = "SELECT * FROM attendance WHERE tenant_id = $cur_tenant_id AND student_id IN ($in_clause)";
+                        $att_stmt = $pdo->query($att_sql);
+                        $att_records = $att_stmt->fetchAll(PDO::FETCH_ASSOC);
+                        foreach ($att_records as $a) {
+                            $dNorm = $norm_date($a['date'] ?? '');
+                            if (!$dNorm || $dNorm < $start_date || $dNorm > $end_date) continue;
+                            $sid = (int)$a['student_id'];
+                            $st = mb_strtoupper(trim(($a['status'] ?? '') . ' ' . ($a['status_1'] ?? '') . ' ' . ($a['status_2'] ?? '') . ' ' . ($a['status_3'] ?? '') . ' ' . ($a['status_4'] ?? '')), 'UTF-8');
+                            $tokens = preg_split('/\s+/', $st);
+                            if (strpos($st, 'ABSENT') !== false || strpos($st, 'غیر حاضر') !== false || strpos($st, 'غیرحاضر') !== false || strpos($st, 'غائب') !== false || in_array('A', $tokens, true) || in_array('غ', $tokens, true)) {
+                                $att_map[$dNorm][$sid] = 'A';
+                            } elseif (strpos($st, 'LEAVE') !== false || strpos($st, 'رخصت') !== false || strpos($st, 'چھٹی') !== false || in_array('L', $tokens, true) || in_array('ر', $tokens, true)) {
+                                if (($att_map[$dNorm][$sid] ?? '') !== 'A') $att_map[$dNorm][$sid] = 'L';
+                            }
+                        }
+                    } catch (Exception $e) {}
+
+                    try {
+                        $pa_sql = "SELECT student_id, date, status FROM period_attendance WHERE tenant_id = $cur_tenant_id AND student_id IN ($in_clause) UNION ALL SELECT student_id, date, status FROM maktab_attendance WHERE tenant_id = $cur_tenant_id AND student_id IN ($in_clause)";
+                        $pa_stmt = $pdo->query($pa_sql);
+                        $pa_records = $pa_stmt->fetchAll(PDO::FETCH_ASSOC);
+                        foreach ($pa_records as $p) {
+                            $dNorm = $norm_date($p['date'] ?? '');
+                            if (!$dNorm || $dNorm < $start_date || $dNorm > $end_date) continue;
+                            $sid = (int)$p['student_id'];
+                            $s = mb_strtoupper(trim((string)($p['status'] ?? '')), 'UTF-8');
+                            $tokens = preg_split('/\s+/', $s);
+                            if (strpos($s, 'ABSENT') !== false || strpos($s, 'غیر حاضر') !== false || strpos($s, 'غیرحاضر') !== false || strpos($s, 'غائب') !== false || in_array('A', $tokens, true) || in_array('غ', $tokens, true)) {
+                                $att_map[$dNorm][$sid] = 'A';
+                            } elseif (strpos($s, 'LEAVE') !== false || strpos($s, 'رخصت') !== false || strpos($s, 'چھٹی') !== false || in_array('L', $tokens, true) || in_array('ر', $tokens, true)) {
+                                if (($att_map[$dNorm][$sid] ?? '') !== 'A') $att_map[$dNorm][$sid] = 'L';
+                            }
+                        }
+                    } catch (Exception $e) {}
                 }
 
                 // Generate dates in range (descending)
@@ -305,15 +446,15 @@ function applyQaidaPeriodDates(val) {
 
                 $totalSabaq = 0; $totalSabqi = 0; $totalManzil = 0; $h_count = 0;
                 $students_with_records = [];
-                
-                // Weekly Frequency Trackers
-                
 
                 if (count($all_qaida_students) > 0) {
                     foreach ($report_dates as $date) {
                         $formatted_date = translateDateUrduFull($date);
                         echo "<tr class='table-secondary'><td colspan='15' class='fw-bold py-2 bg-light text-center'>تاریخ: {$formatted_date}</td></tr>";
                         
+                        $day_of_week = date('N', strtotime($date));
+                        $is_friday = ($day_of_week == 5);
+
                         $summary_missed_sabaq = 0;
                         $summary_missed_sabqi = 0;
                         $summary_missed_manzil = 0;
@@ -323,36 +464,82 @@ function applyQaidaPeriodDates(val) {
                         foreach ($all_qaida_students as $student) {
                             $student_id = $student['id'];
                             $rec = $qaida_map[$date][$student_id] ?? null;
-                            
-                            if ($rec) {
-                                $students_with_records[] = $student_id;
-                                $ht = empty($rec['hearing_time']) ? '-' : date("h:i A", strtotime($rec['hearing_time']));
-                                
-                                $s1 = htmlspecialchars($rec['sabaq_1'] ?? '-');
-                                $q1 = htmlspecialchars($rec['qty_1'] ?? '-');
-                                $g1 = htmlspecialchars($rec['grade_1'] ?? '-');
-                                
-                                $s2 = htmlspecialchars($rec['sabaq_2'] ?? '-');
-                                $q2 = htmlspecialchars($rec['qty_2'] ?? '-');
-                                $g2 = htmlspecialchars($rec['grade_2'] ?? '-');
-                                
-                                $s3 = htmlspecialchars($rec['sabaq_3'] ?? '-');
-                                $q3 = htmlspecialchars($rec['qty_3'] ?? '-');
-                                $g3 = htmlspecialchars($rec['grade_3'] ?? '-');
-                                
-                                $s4 = htmlspecialchars($rec['sabaq_4'] ?? '-');
-                                $q4 = htmlspecialchars($rec['qty_4'] ?? '-');
-                                $g4 = htmlspecialchars($rec['grade_4'] ?? '-');
-                                
-                                $att = translateStatusClean($rec['attendance'] ?? '-');
-                                $beh = htmlspecialchars($rec['behavior'] ?? '-');
-                            } else {
+                            $attStatus = $att_map[$date][$student_id] ?? '';
+
+                            $sAdm = !empty($student['admission_date']) ? $norm_date($student['admission_date']) : '';
+                            $hasRecOnDay = !empty($rec) || !empty($attStatus);
+                            if (!$hasRecOnDay && is_student_inactive($student, $date)) continue;
+
+
+
+
+
+                            if ($is_friday) {
                                 $ht = '-';
-                                $s1 = '-'; $q1 = '-'; $g1 = '-';
+                                $badge = "<span class='text-primary fw-bold'>جمعہ</span>";
+                                $s1 = $badge; $q1 = '-'; $g1 = $badge;
                                 $s2 = '-'; $q2 = '-'; $g2 = '-';
                                 $s3 = '-'; $q3 = '-'; $g3 = '-';
                                 $s4 = '-'; $q4 = '-'; $g4 = '-';
-                                $att = '-'; $beh = '-';
+                                $att = $badge;
+                                $beh = '-';
+                            } else {
+                                if ($rec) {
+                                    $chk_q_stat = function($st) {
+                                        $st = mb_strtoupper(trim((string)$st), 'UTF-8');
+                                        if (strpos($st, 'غیر حاضر') !== false || strpos($st, 'غیرحاضر') !== false || strpos($st, 'غائب') !== false || strpos($st, 'ABSENT') !== false || $st === 'A') return 'A';
+                                        if (strpos($st, 'رخصت') !== false || strpos($st, 'LEAVE') !== false || $st === 'L') return 'L';
+                                        return '';
+                                    };
+                                    $qStat = $chk_q_stat($rec['attendance'] ?? '') ?: $chk_q_stat($rec['grade_1'] ?? '');
+                                    if ($qStat === 'A') $attStatus = 'A';
+                                    elseif ($qStat === 'L' && $attStatus !== 'A') $attStatus = 'L';
+                                }
+                                
+                                if ($attStatus === 'A' || $attStatus === 'L') {
+                                    $ht = '-';
+                                    $attClass = ($attStatus === 'A') ? 'bg-danger text-white' : 'bg-warning text-dark';
+                                    $attLabel = ($attStatus === 'A') ? 'غیر حاضر' : 'رخصت پر';
+                                    $badge = "<span class='badge {$attClass}'>{$attLabel}</span>";
+                                    $s1 = $badge; $q1 = '-'; $g1 = $badge;
+                                    $s2 = '-'; $q2 = '-'; $g2 = '-';
+                                    $s3 = '-'; $q3 = '-'; $g3 = '-';
+                                    $s4 = '-'; $q4 = '-'; $g4 = '-';
+                                    $att = $badge;
+                                    $beh = '-';
+                                    if ($rec) {
+                                        $beh = htmlspecialchars($rec['behavior'] ?? '-');
+                                    }
+                                } elseif ($rec) {
+                                    $students_with_records[] = $student_id;
+                                    $ht = empty($rec['hearing_time']) ? '-' : date("h:i A", strtotime($rec['hearing_time']));
+                                    
+                                    $s1 = htmlspecialchars($rec['sabaq_1'] ?? '-');
+                                    $q1 = htmlspecialchars($rec['qty_1'] ?? '-');
+                                    $g1 = htmlspecialchars($rec['grade_1'] ?? '-');
+                                    
+                                    $s2 = htmlspecialchars($rec['sabaq_2'] ?? '-');
+                                    $q2 = htmlspecialchars($rec['qty_2'] ?? '-');
+                                    $g2 = htmlspecialchars($rec['grade_2'] ?? '-');
+                                    
+                                    $s3 = htmlspecialchars($rec['sabaq_3'] ?? '-');
+                                    $q3 = htmlspecialchars($rec['qty_3'] ?? '-');
+                                    $g3 = htmlspecialchars($rec['grade_3'] ?? '-');
+                                    
+                                    $s4 = htmlspecialchars($rec['sabaq_4'] ?? '-');
+                                    $q4 = htmlspecialchars($rec['qty_4'] ?? '-');
+                                    $g4 = htmlspecialchars($rec['grade_4'] ?? '-');
+                                    
+                                    $att = translateStatusClean($rec['attendance'] ?? 'حاضر');
+                                    $beh = htmlspecialchars($rec['behavior'] ?? '-');
+                                } else {
+                                    $ht = '-';
+                                    $s1 = "<span class='badge bg-danger'>ناغہ</span>"; $q1 = '-'; $g1 = "<span class='badge bg-danger'>ناغہ</span>";
+                                    $s2 = '-'; $q2 = '-'; $g2 = '-';
+                                    $s3 = '-'; $q3 = '-'; $g3 = '-';
+                                    $s4 = '-'; $q4 = '-'; $g4 = '-';
+                                    $att = "<span class='badge bg-success'>حاضر</span>"; $beh = '-';
+                                }
                             }
                             
                             $comp_key = $student_id . '_' . $date;
@@ -390,16 +577,16 @@ function applyQaidaPeriodDates(val) {
                         echo "<tr class='table-light border-top border-dark border-2'>
                                 <td colspan='3' class='fw-bold text-end'>آج کی سمری ($formatted_date):</td>
                                 <td colspan='3' class='fw-bold' style='font-size:11px;'>
-                                    <span class='text-danger'>ناغہ: <a href='$url_base&lesson_type=sabaq&miss_count=any' target='_blank'>$summary_missed_sabaq</a></span><br>
-                                    <span class='text-success'>سنانے والے: <a href='$url_base&lesson_type=sabaq&miss_count=0' target='_blank'>$sabaq_0</a></span>
+                                    <span class='text-danger'>ناغہ: $summary_missed_sabaq</span><br>
+                                    <span class='text-success'>سنانے والے: $sabaq_0</span>
                                 </td>
                                 <td colspan='4' class='fw-bold' style='font-size:11px;'>
-                                    <span class='text-danger'>ناغہ: <a href='$url_base&lesson_type=sabqi&miss_count=any' target='_blank'>$summary_missed_sabqi</a></span><br>
-                                    <span class='text-success'>سنانے والے: <a href='$url_base&lesson_type=sabqi&miss_count=0' target='_blank'>$sabqi_0</a></span>
+                                    <span class='text-danger'>ناغہ: $summary_missed_sabqi</span><br>
+                                    <span class='text-success'>سنانے والے: $sabqi_0</span>
                                 </td>
                                 <td colspan='4' class='fw-bold' style='font-size:11px;'>
-                                    <span class='text-danger'>ناغہ: <a href='$url_base&lesson_type=manzil&miss_count=any' target='_blank'>$summary_missed_manzil</a></span><br>
-                                    <span class='text-success'>سنانے والے: <a href='$url_base&lesson_type=manzil&miss_count=0' target='_blank'>$manzil_0</a></span>
+                                    <span class='text-danger'>ناغہ: $summary_missed_manzil</span><br>
+                                    <span class='text-success'>سنانے والے: $manzil_0</span>
                                 </td>
                                 <td class='text-danger fw-bold'>شکایات: $daily_complaints</td>
                               </tr>";

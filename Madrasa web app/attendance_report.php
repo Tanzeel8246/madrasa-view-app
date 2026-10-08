@@ -5,6 +5,7 @@ error_reporting(E_ALL);
 
 require_once 'db.php'; 
 include 'header.php'; 
+$cur_tenant_id = (int)get_current_tenant_id();
 
 // --- 1. ہجری ایڈجسٹمنٹ لاجک ---
 $offset_file = 'hijri_offset.txt';
@@ -48,15 +49,76 @@ foreach ($period as $dt) {
 }
 krsort($grouped_months); 
 
-// ڈیٹا لائیں
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'administrator'], true);
+$p_needed = ($sys === 'Masjid') ? 'manage_masjid_attendance_report' : 'manage_attendance_report';
+$p_alt = ($sys === 'Masjid') ? 'manage_masjid_attendance' : 'manage_attendance';
+if (!$is_admin && !app_has_perm($p_needed) && !app_has_perm($p_alt)) {
+    echo "<div class='alert alert-danger m-4 text-center fw-bold'>آپ کو اس حاضری رپورٹ تک رسائی کی اجازت نہیں ہے۔</div>";
+    include 'footer.php';
+    exit;
+}
+
+$allowed_classes = get_allowed_classes($pdo, 'id ASC', null, null, $sys);
+$allowed_class_names = array_values(array_filter(array_unique(array_column($allowed_classes, 'name'))));
+if ($is_admin) {
+    $class_condition = "1=1";
+} elseif (empty($allowed_class_names)) {
+    $class_condition = "1=0";
+} else {
+    $inClasses = implode(',', array_map(function($c) use ($pdo) { return $pdo->quote($c); }, $allowed_class_names));
+    $class_condition = "(TRIM(class) IN ($inClasses) OR TRIM(class_name) IN ($inClasses))";
+}
+
+$studentCols = [];
+try { $studentCols = $pdo->query("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN); } catch(Exception $e){}
+$hasSys = in_array('system_type', $studentCols, true);
+$stdSysCond = $hasSys ? $sys_cond : "1=1";
+
+$std_filter = (isset($_GET['std_id']) && $_GET['std_id'] != '') ? " AND id = " . (int)$_GET['std_id'] : "";
+
 $students = $pdo->query("
     SELECT * FROM students 
-    WHERE ((status='Active' AND is_deleted=0) 
-       OR (id IN (SELECT student_id FROM attendance WHERE date BETWEEN '$start_date' AND '$end_date'))
-       OR (id IN (SELECT student_id FROM period_attendance WHERE date BETWEEN '$start_date' AND '$end_date')))
-       " . (isset($_GET['std_id']) && $_GET['std_id'] != '' ? " AND id = " . (int)$_GET['std_id'] : "") . "
+    WHERE tenant_id = $cur_tenant_id AND $stdSysCond AND ($class_condition) AND (is_deleted=0 OR is_deleted IS NULL)
+       AND (
+           (
+               (status='Active' OR status='Present' OR status='حاضر' OR status='' OR status IS NULL)
+               AND (LOWER(TRIM(COALESCE(status, ''))) NOT IN ('alumni', 'left', 'struck off', 'dropped', 'expelled', 'graduated', 'inactive', 'خارج', 'فارغ', 'فارغ التحصیل', 'چھوڑ دیا', 'ترک تعلیم'))
+               AND (status NOT LIKE '%خارج%' AND status NOT LIKE '%فارغ%' AND status NOT LIKE '%چھوڑ%' AND status NOT LIKE '%ترک%')
+               AND (alumni_category IS NULL OR alumni_category = '' OR LOWER(TRIM(alumni_category)) NOT IN ('completed', 'left', 'dropped', 'expelled'))
+               AND (graduation_date IS NULL OR graduation_date = '' OR graduation_date = '0000-00-00' OR graduation_date >= '$start_date')
+           )
+           OR (status='Alumni' AND graduation_date >= '$start_date')
+           OR (id IN (SELECT student_id FROM attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND tenant_id = $cur_tenant_id))
+           OR (id IN (SELECT student_id FROM period_attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND tenant_id = $cur_tenant_id))
+       )
+       $std_filter
     ORDER BY class ASC, admission_number ASC
-") ->fetchAll();
+")->fetchAll(PDO::FETCH_ASSOC);
+
+if (empty($students) && !empty($allowed_class_names)) {
+    $students = $pdo->query("
+        SELECT * FROM students 
+        WHERE tenant_id = $cur_tenant_id AND ($class_condition) AND (is_deleted=0 OR is_deleted IS NULL)
+           AND (
+               (
+                   (status='Active' OR status='Present' OR status='حاضر' OR status='' OR status IS NULL)
+                   AND (LOWER(TRIM(COALESCE(status, ''))) NOT IN ('alumni', 'left', 'struck off', 'dropped', 'expelled', 'graduated', 'inactive', 'خارج', 'فارغ', 'فارغ التحصیل', 'چھوڑ دیا', 'ترک تعلیم'))
+                   AND (status NOT LIKE '%خارج%' AND status NOT LIKE '%فارغ%' AND status NOT LIKE '%چھوڑ%' AND status NOT LIKE '%ترک%')
+                   AND (alumni_category IS NULL OR alumni_category = '' OR LOWER(TRIM(alumni_category)) NOT IN ('completed', 'left', 'dropped', 'expelled'))
+                   AND (graduation_date IS NULL OR graduation_date = '' OR graduation_date = '0000-00-00' OR graduation_date >= '$start_date')
+               )
+               OR (status='Alumni' AND graduation_date >= '$start_date')
+               OR (id IN (SELECT student_id FROM attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND tenant_id = $cur_tenant_id))
+               OR (id IN (SELECT student_id FROM period_attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND tenant_id = $cur_tenant_id))
+           )
+           $std_filter
+        ORDER BY class ASC, admission_number ASC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $grouped_students = [];
 foreach ($students as $s) {
@@ -64,6 +126,16 @@ foreach ($students as $s) {
     if (!isset($grouped_students[$c])) $grouped_students[$c] = [];
     $grouped_students[$c][] = $s;
 }
+
+// Sort each class by roll/admission number
+foreach ($grouped_students as $c => &$cStudents) {
+    usort($cStudents, function($a, $b) {
+        $admA = (int)($a['admission_number'] ?? ($a['roll_number'] ?? 0));
+        $admB = (int)($b['admission_number'] ?? ($b['roll_number'] ?? 0));
+        return $admA <=> $admB;
+    });
+}
+unset($cStudents);
 
 $predefined_order = ['حفظ', 'گردان', 'تجوید', 'حسن صوت', 'اولیٰ', 'اولیٰ دہم', 'اولیٰ نہم', 'مڈل'];
 $ordered_classes = [];
@@ -75,19 +147,48 @@ foreach (array_keys($grouped_students) as $c) {
 }
 
 $attendance_data = [];
-$stmt = $pdo->prepare("SELECT * FROM attendance WHERE date BETWEEN ? AND ?");
-$stmt->execute([$start_date, $end_date]);
+$stmt = $pdo->prepare("SELECT * FROM attendance WHERE date BETWEEN ? AND ? AND tenant_id = ?");
+$stmt->execute([$start_date, $end_date, $cur_tenant_id]);
 while($row = $stmt->fetch()) {
     $s1 = $row['status_1'] ?? null;
     $s2 = $row['status_2'] ?? null;
     $s3 = $row['status_3'] ?? null;
     $s4 = $row['status_4'] ?? null;
+    $shift_raw = strtolower(str_replace([' ', '_'], '', (string)($row['shift'] ?? '')));
+    $stat_raw = trim((string)($row['status'] ?? ''));
+    if ($shift_raw === '1' || strpos($shift_raw, 'morning') !== false || strpos($shift_raw, 'sabaq') !== false || strpos($shift_raw, 'صبح') !== false) {
+        if ($s1 === null && $stat_raw !== '') $s1 = $stat_raw;
+    } elseif ($shift_raw === '2' || strpos($shift_raw, 'after') !== false || strpos($shift_raw, 'sabqi') !== false || strpos($shift_raw, 'اشراق') !== false) {
+        if ($s2 === null && $stat_raw !== '') $s2 = $stat_raw;
+    } elseif ($shift_raw === '3' || strpos($shift_raw, 'noon') !== false || strpos($shift_raw, 'manzil') !== false || strpos($shift_raw, 'ظہر') !== false) {
+        if ($s3 === null && $stat_raw !== '') $s3 = $stat_raw;
+    } elseif ($shift_raw === '4' || strpos($shift_raw, 'evening') !== false || strpos($shift_raw, 'عصر') !== false) {
+        if ($s4 === null && $stat_raw !== '') $s4 = $stat_raw;
+    }
     $l1 = (int)($row['late_1'] ?? 0);
     $l2 = (int)($row['late_2'] ?? 0);
     $l3 = (int)($row['late_3'] ?? 0);
     $l4 = (int)($row['late_4'] ?? 0);
 
-    $attendance_data[$row['student_id']][$row['date']] = [
+    $sid = $row['student_id'];
+    $dt = $row['date'];
+    if (!isset($attendance_data[$sid][$dt])) {
+        $attendance_data[$sid][$dt] = [
+            's1' => null, 's2' => null, 's3' => null, 's4' => null,
+            's5' => null, 's6' => null, 's7' => null, 's8' => null,
+            'l1' => 0, 'l2' => 0, 'l3' => 0, 'l4' => 0,
+            'l5' => 0, 'l6' => 0, 'l7' => 0, 'l8' => 0,
+        ];
+    }
+    if ($s1 !== null && ($attendance_data[$sid][$dt]['s1'] === null || $attendance_data[$sid][$dt]['s1'] === '')) $attendance_data[$sid][$dt]['s1'] = $s1;
+    if ($s2 !== null && ($attendance_data[$sid][$dt]['s2'] === null || $attendance_data[$sid][$dt]['s2'] === '')) $attendance_data[$sid][$dt]['s2'] = $s2;
+    if ($s3 !== null && ($attendance_data[$sid][$dt]['s3'] === null || $attendance_data[$sid][$dt]['s3'] === '')) $attendance_data[$sid][$dt]['s3'] = $s3;
+    if ($s4 !== null && ($attendance_data[$sid][$dt]['s4'] === null || $attendance_data[$sid][$dt]['s4'] === '')) $attendance_data[$sid][$dt]['s4'] = $s4;
+    if ($l1 > 0) $attendance_data[$sid][$dt]['l1'] = $l1;
+    if ($l2 > 0) $attendance_data[$sid][$dt]['l2'] = $l2;
+    if ($l3 > 0) $attendance_data[$sid][$dt]['l3'] = $l3;
+    if ($l4 > 0) $attendance_data[$sid][$dt]['l4'] = $l4;
+    if (false) $attendance_data[$row['student_id']][$row['date']] = [
         's1' => $s1, 's2' => $s2, 's3' => $s3, 's4' => $s4,
         's5' => $row['status_5'] ?? $s1,
         's6' => $row['status_6'] ?? $s2,
@@ -100,8 +201,8 @@ while($row = $stmt->fetch()) {
         'l8' => (int)($row['late_8'] ?? $l4),
     ];
 }
-$stmt = $pdo->prepare("SELECT student_id, date, period_num, status, remarks FROM period_attendance WHERE date BETWEEN ? AND ?");
-$stmt->execute([$start_date, $end_date]);
+$stmt = $pdo->prepare("SELECT student_id, date, period_num, status, remarks FROM period_attendance WHERE date BETWEEN ? AND ? AND tenant_id = ?");
+$stmt->execute([$start_date, $end_date, $cur_tenant_id]);
 while($row = $stmt->fetch()) {
     $periodNo = (int)($row['period_num'] ?? 0);
     if ($periodNo < 1 || $periodNo > 8) continue;
@@ -113,10 +214,32 @@ while($row = $stmt->fetch()) {
 }
 
 // --- 3. اساتذہ اور ان کی حاضری لائیں (Teachers & their Attendance) ---
-$teachers_db = $pdo->query("SELECT id, name, father_name, assigned_classes FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL)")->fetchAll();
+$teachers_db = $pdo->query("SELECT id, name, father_name, assigned_classes, status, status_reason, status_change_date, joining_date FROM teachers WHERE tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchAll();
 $teachers_assoc = [];
 foreach($teachers_db as $t) {
     $teachers_assoc[$t['id']] = $t;
+}
+
+// اساتذہ کی آخری حاضری کی تاریخ معلوم کریں
+$teacher_last_att = [];
+try {
+    $t_stmt = $pdo->query("SELECT teacher_id, MAX(date) as last_date FROM teacher_period_attendance WHERE tenant_id = $cur_tenant_id GROUP BY teacher_id");
+    while($t_r = $t_stmt->fetch()) {
+        $teacher_last_att[$t_r['teacher_id']] = $t_r['last_date'];
+    }
+} catch (Exception $e) {}
+
+function ar_clean_date($date_str) {
+    if (empty($date_str)) return null;
+    $date_str = trim((string)$date_str);
+    if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})/', $date_str, $m)) {
+        return sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]);
+    }
+    if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})/', $date_str, $m)) {
+        return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+    }
+    $ts = strtotime($date_str);
+    return $ts ? date('Y-m-d', $ts) : null;
 }
 
 function ar_list_values($value) {
@@ -132,7 +255,7 @@ function ar_list_values($value) {
     return array_values(array_unique($out));
 }
 
-$classes_db = get_allowed_classes($pdo);
+$classes_db = get_allowed_classes($pdo, 'id ASC', null, null, $sys);
 $classes_assoc = [];
 $class_id_map = [];
 foreach($classes_db as $c) {
@@ -216,6 +339,10 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
     if ($code === 'A') $aCount++;
     if ($code === 'L') $lCount++;
 }
+
+function att_period_display_name($pNo, $totalPeriods = 8) {
+    return 'سبق ' . $pNo;
+}
 ?>
 
 <style>
@@ -229,6 +356,8 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
     .report-table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
     .report-table th, .report-table td { border: 1px solid #000; padding: 2px 0px; text-align: center; vertical-align: middle; white-space: nowrap; overflow: hidden; }
     .madrasa-header { border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
+    .period-summary-card { border-color: #cbd5e1 !important; border-radius: 8px; background: #fff; }
+    .period-stat-card { background: #fff; border-color: #cbd5e1 !important; border-radius: 6px; min-width: 95px; flex: 1 1 0; }
     .page-break { page-break-after: always; }
     .title-box { font-family: 'Noto Nastaliq Urdu', sans-serif; font-size: 18px; font-weight: bold; display: inline-block; border-bottom: 1px solid #ccc; padding-bottom: 2px; line-height: 1.4; }
     .date-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
@@ -317,7 +446,7 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
                             <option value="">تمام طلبہ</option>
                             <?php 
                             $st_id = $_GET['std_id'] ?? '';
-                            $all_sts = $pdo->query("SELECT id, name FROM students WHERE status='Active' AND is_deleted=0 ORDER BY name ASC")->fetchAll();
+                            $all_sts = $pdo->query("SELECT id, name FROM students WHERE ($class_condition) AND status='Active' AND is_deleted=0 ORDER BY name ASC")->fetchAll();
                             foreach($all_sts as $st) echo "<option value='{$st['id']}' ".($st_id==$st['id']?'selected':'').">{$st['name']}</option>";
                             ?>
                         </select>
@@ -329,8 +458,8 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
                     <?php else: ?>
                     <form class="d-flex gap-2 align-items-center">
                         <input type="hidden" name="mode" value="range">
-                        <input type="date" name="from" class="form-control form-control-sm" value="<?php echo $start_date; ?>">
-                        <input type="date" name="to" class="form-control form-control-sm" value="<?php echo $end_date; ?>">
+                        <input type="date" name="from" id="attRangeFrom" class="form-control form-control-sm" value="<?php echo $start_date; ?>" onchange="if(this.value && document.getElementById('attRangeTo').value) this.form.submit();">
+                        <input type="date" name="to" id="attRangeTo" class="form-control form-control-sm" value="<?php echo $end_date; ?>" onchange="if(this.value && document.getElementById('attRangeFrom').value) this.form.submit();">
                         <button type="submit" class="btn btn-primary btn-sm">رپورٹ دیکھیں</button>
                     </form>
                     <?php endif; ?>
@@ -366,6 +495,26 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
 
     <?php foreach($ordered_classes as $cName):
         $class_periods = att_class_periods($cName, $classes_assoc, $class_id_map);
+        
+        // Initialize period-wise date stats and students for this class
+        $class_period_date_stats = [];
+        $class_period_date_students = [];
+        $class_daily_p = [];
+        $class_daily_late = [];
+        $class_daily_a = [];
+        $class_daily_l = [];
+        foreach ($dates_array as $d_tmp) {
+            $class_period_date_stats[$d_tmp] = [];
+            $class_period_date_students[$d_tmp] = [];
+            $class_daily_p[$d_tmp] = 0;
+            $class_daily_late[$d_tmp] = 0;
+            $class_daily_a[$d_tmp] = 0;
+            $class_daily_l[$d_tmp] = 0;
+            foreach ($class_periods as $pNo) {
+                $class_period_date_stats[$d_tmp][$pNo] = ['p' => 0, 'late' => 0, 'a' => 0, 'l' => 0];
+                $class_period_date_students[$d_tmp][$pNo] = ['p' => [], 'late' => [], 'a' => [], 'l' => []];
+            }
+        }
     ?>
     <div class="card report-card shadow-sm mb-4 page-break">
         <div class="card-body p-2">
@@ -405,15 +554,14 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
                             <th style="width: 100px; text-align:right; padding-right:5px;">ولدیت</th>
                             <?php foreach($dates_array as $date_str): 
                                 $is_friday = (date('N', strtotime($date_str)) == 5);
-                                $is_friday = (date('N', strtotime($date_str)) == 5);
                                 $g_day = (int)date('d', strtotime($date_str));
                                 $h_data = getHijriDateLoop($date_str, $hijri_offset); 
                                 $h_day = $h_data['d'];
                             ?>
-                                <th style="width: 22px;">
+                                <th style="width: 22px; <?php if($is_friday) echo 'background-color: #fee2e2 !important; border-left: 1px solid #f87171 !important; border-right: 1px solid #f87171 !important;'; ?>">
                                     <div class="date-cell">
-                                        <span class="greg-date"><?php echo $g_day; ?></span>
-                                        <span class="hijri-date"><?php echo $h_day; ?></span>
+                                        <span class="greg-date" style="<?php if($is_friday) echo 'color: #b91c1c; font-weight: bold;'; ?>"><?php echo $is_friday ? 'جمعہ' : $g_day; ?></span>
+                                        <span class="hijri-date" style="<?php if($is_friday) echo 'color: #dc2626;'; ?>"><?php echo $h_day; ?></span>
                                     </div>
                                 </th>
                             <?php endforeach; ?>
@@ -464,30 +612,78 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
                                 if (!empty($cRow['teacher_id'])) {
                                     $teachers_for_class[$cRow['teacher_id']] = $cRow['teacher_id'];
                                 }
-                            } else {
-                                if (isset($class_periods_assoc[$cid])) {
-                                    foreach ($class_periods_assoc[$cid] as $cp) {
-                                        if (!empty($cp['teacher_ids'])) {
-                                            $tids = json_decode($cp['teacher_ids'], true) ?: [];
-                                            foreach ($tids as $tid) {
-                                                $teachers_for_class[$tid] = $tid;
-                                            }
-                                        } elseif (!empty($cp['teacher_id'])) {
-                                            $teachers_for_class[$cp['teacher_id']] = $cp['teacher_id'];
-                                        }
-                                    }
+                            } elseif (isset($class_periods_assoc[$cid])) {
+                                foreach ($class_periods_assoc[$cid] as $cp) {
+                                    if (!empty($cp['teacher_ids'])) {
+                                        $tids = json_decode($cp['teacher_ids'], true) ?: [];
+                                        foreach ($tids as $tid) $teachers_for_class[$tid] = $tid;
+                                    } elseif (!empty($cp['teacher_id'])) $teachers_for_class[$cp['teacher_id']] = $cp['teacher_id'];
                                 }
                             }
                         }
                         foreach ($teachers_assoc as $profile_tid => $profile_teacher) {
                             if (in_array($cName, ar_list_values($profile_teacher['assigned_classes'] ?? ''), true)) {
                                 $teachers_for_class[$profile_tid] = $profile_tid;
+                            } elseif ($cid && !empty($teacher_attendance_data[$profile_tid][$cid])) {
+                                $teachers_for_class[$profile_tid] = $profile_tid;
                             }
                         }
-                        
+
+                        usort($teachers_for_class, function($a, $b) use ($teachers_assoc, $ym) {
+                            $tA = $teachers_assoc[$a] ?? [];
+                            $tB = $teachers_assoc[$b] ?? [];
+                            $stA = trim((string)($tA['status'] ?? 'Active'));
+                            $stB = trim((string)($tB['status'] ?? 'Active'));
+                            $status_a_date = !empty($tA['status_change_date']) ? ar_clean_date($tA['status_change_date']) : (!empty($tA['resignation_date']) ? ar_clean_date($tA['resignation_date']) : null);
+                            $status_b_date = !empty($tB['status_change_date']) ? ar_clean_date($tB['status_change_date']) : (!empty($tB['resignation_date']) ? ar_clean_date($tB['resignation_date']) : null);
+                            $status_a_ym = $status_a_date ? substr($status_a_date, 0, 7) : null;
+                            $status_b_ym = $status_b_date ? substr($status_b_date, 0, 7) : null;
+                            $inactA = ($stA !== 'Active' && $stA !== 'حاضر' && $stA !== 'فعال' && !empty($stA)) && (empty($status_a_ym) || $ym >= $status_a_ym);
+                            $inactB = ($stB !== 'Active' && $stB !== 'حاضر' && $stB !== 'فعال' && !empty($stB)) && (empty($status_b_ym) || $ym >= $status_b_ym);
+                            if (!$inactA && $inactB) return -1;
+                            if ($inactA && !$inactB) return 1;
+                            return strcmp((string)($tA['name'] ?? ''), (string)($tB['name'] ?? ''));
+                        });
+
                         foreach ($teachers_for_class as $tid): 
                             if (!isset($teachers_assoc[$tid])) continue;
                             $tInfo = $teachers_assoc[$tid];
+                            $t_status = trim((string)($tInfo['status'] ?? 'Active'));
+                            $t_status_reason = trim((string)($tInfo['status_reason'] ?? ''));
+                            $isInactiveTeacher = ($t_status !== 'Active' && $t_status !== 'حاضر' && $t_status !== 'فعال' && !empty($t_status));
+
+                            $join_date = !empty($tInfo['joining_date']) ? ar_clean_date($tInfo['joining_date']) : null;
+                            $join_ym = $join_date ? substr($join_date, 0, 7) : null;
+                            $status_date = !empty($tInfo['status_change_date']) ? ar_clean_date($tInfo['status_change_date']) : (!empty($tInfo['resignation_date']) ? ar_clean_date($tInfo['resignation_date']) : null);
+                            if (!$status_date && $isInactiveTeacher && !empty($teacher_last_att[$tid])) $status_date = ar_clean_date($teacher_last_att[$tid]);
+                            $status_ym = $status_date ? substr($status_date, 0, 7) : null;
+
+                            // کیا استاذ اس رپورٹ کے مہینے میں غیر فعال تھا؟
+                            // اگر رپورٹ کا مہینہ استعفیٰ کے مہینے سے پہلے کا ہے، تو وہ اس مہینے میں مکمل فعال استاذ تھا
+                            $isInactiveTeacherForReport = $isInactiveTeacher && (empty($status_ym) || $ym >= $status_ym);
+
+                            $has_att_in_this_month = false;
+                            if (!empty($teacher_attendance_data[$tid][$cid])) {
+                                foreach ($dates_array as $dStr) {
+                                    if (!empty($teacher_attendance_data[$tid][$cid][$dStr])) { $has_att_in_this_month = true; break; }
+                                }
+                            }
+
+                            if ($join_ym && $ym < $join_ym) continue;
+                            if ($isInactiveTeacher && $status_ym && $ym > $status_ym && !$has_att_in_this_month) continue;
+
+                            $tStatusText = "غیر فعال"; $tStatusColor = "#dc3545"; $tStatusBgColor = "#fde8e8"; $tStatusBorderColor = "#dc3545";
+                            if (strpos($t_status, 'Terminated') !== false || strpos($t_status, 'برطرف') !== false || strpos($t_status, 'فارغ') !== false) {
+                                $tStatusText = "برطرف / فارغ";
+                            } elseif (strpos($t_status, 'On Leave') !== false || strpos($t_status, 'رخصت') !== false) {
+                                $tStatusText = "رخصت پر"; $tStatusColor = "#fd7e14"; $tStatusBgColor = "#fff3cd"; $tStatusBorderColor = "#fd7e14";
+                            } elseif (strpos($t_status, 'مستعفی') !== false || strpos($t_status, 'استعفی') !== false || strpos($t_status, 'Resigned') !== false) {
+                                $tStatusText = "مستعفی"; $tStatusColor = "#6c757d"; $tStatusBgColor = "#f8f9fa"; $tStatusBorderColor = "#6c757d";
+                            }
+                            if (!empty($t_status_reason)) $tStatusText .= " (" . htmlspecialchars($t_status_reason) . ")";
+
+                            $show_full_status_banner = ($isInactiveTeacherForReport && !$has_att_in_this_month) || ($isInactiveTeacher && $status_ym && $ym > $status_ym);
+
                             $month_p = 0; $month_late = 0; $month_a = 0; $month_l = 0;
                         ?>
                         <tr style="background-color: #e8f4f8;">
@@ -495,71 +691,235 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
                             <td style="vertical-align: middle;"><span class="badge bg-primary ms-1" style="font-size:7px; vertical-align: middle; padding: 3px 5px;">استاد</span></td>
                             <td style="text-align:right; padding-right:5px; font-weight:bold; color: #084298; font-size: 10px; vertical-align: middle; white-space: nowrap;"><?php echo htmlspecialchars($tInfo['name']); ?></td>
                             <td style="text-align:right; padding-right:5px; color:#6c757d; font-size: 9px; vertical-align: middle;"><?php echo htmlspecialchars($tInfo['father_name'] ?? '-'); ?></td>
-                            <?php foreach($dates_array as $date_str): 
-                                $is_friday = (date('N', strtotime($date_str)) == 5);
-                                $is_friday = (date('N', strtotime($date_str)) == 5);
-                                $att = $teacher_attendance_data[$tid][$cid][$date_str] ?? null;
-                                if($att) {
-                                    foreach($class_periods as $pNo) {
-                                        $st = $att[$pNo]['status'] ?? '';
-                                        $late = $att[$pNo]['late'] ?? 0;
-                                        att_count_status($month_p, $month_late, $month_a, $month_l, $st, $late);
-                                    }
-                                }
-                            ?>
-                            <td>
-                                <?php if($att): 
-                                    $tGrid = [];
-                                    foreach($class_periods as $pNo) {
-                                        $tGrid['s' . $pNo] = $att[$pNo]['status'] ?? '';
-                                        $tGrid['l' . $pNo] = $att[$pNo]['late'] ?? 0;
-                                    }
-                                    echo att_render_grid($tGrid, $class_periods);
-                                endif; ?>
+                            <?php if ($show_full_status_banner): ?>
+                            <td colspan="<?php echo count($dates_array); ?>" style="text-align:center; vertical-align:middle; background-color: <?php echo $tStatusBgColor; ?>; border: 1px solid <?php echo $tStatusBorderColor; ?>; font-weight:bold; font-size:10px; color: <?php echo $tStatusColor; ?>;">
+                                <?php echo $tStatusText . ($status_date ? " (مورخہ: " . date('d M Y', strtotime($status_date)) . ")" : ""); ?>
                             </td>
-                            <?php endforeach; ?>
-                            <td style="font-weight:bold;"><?php echo $month_p; ?></td>
-                            <td style="font-weight:bold; color: #fd7e14;"><?php echo $month_late; ?></td>
-                            <td style="font-weight:bold;"><?php echo $month_a; ?></td>
-                            <td style="font-weight:bold;"><?php echo $month_l; ?></td>
+                            <?php else: ?>
+                            <?php $total_days_count = count($dates_array);
+                            for($d_idx = 0; $d_idx < $total_days_count; $d_idx++): 
+                                $date_str = $dates_array[$d_idx];
+                                if (!empty($join_date) && $date_str < $join_date): ?>
+                                    <td style="text-align:center; vertical-align:middle; background-color:#f9f9f9;"><span class="text-muted" style="font-size:9px;">-</span></td>
+                                    <?php continue; endif;
+                                if ($isInactiveTeacherForReport && !empty($status_date) && $date_str >= $status_date):
+                                    $remaining_cols = $total_days_count - $d_idx;
+                                    $status_display = " (مورخہ: " . date('d M Y', strtotime($status_date)) . ")"; ?>
+                                    <td colspan="<?php echo $remaining_cols; ?>" style="background-color: <?php echo $tStatusBgColor; ?>; text-align: center; vertical-align: middle; border: 1px dashed <?php echo $tStatusBorderColor; ?>; padding: 2px 4px;">
+                                        <div style="font-weight: bold; color: <?php echo $tStatusColor; ?>; font-size: 10px;"><?php echo $tStatusText . $status_display; ?></div>
+                                    </td>
+                                    <?php break; endif;
+                                $att = $teacher_attendance_data[$tid][$cid][$date_str] ?? null;
+                                if($att) { foreach($class_periods as $pNo) { $st = $att[$pNo]['status'] ?? ''; $late = $att[$pNo]['late'] ?? 0; att_count_status($month_p, $month_late, $month_a, $month_l, $st, $late); } }
+                            ?>
+                            <?php if($is_friday): ?>
+                                <td style="background-color: #fff5f5; text-align: center; border-left: 1px solid #fca5a5; border-right: 1px solid #fca5a5; font-size: 9px; font-weight: bold; color: #dc2626;">جمعہ</td>
+                            <?php else: ?>
+                                <td><?php if($att): $tGrid = []; foreach($class_periods as $pNo) { $tGrid['s' . $pNo] = $att[$pNo]['status'] ?? ''; $tGrid['l' . $pNo] = $att[$pNo]['late'] ?? 0; } echo att_render_grid($tGrid, $class_periods); endif; ?></td>
+                            <?php endif; ?>
+                            <?php endfor; ?>
+                            <?php endif; ?>
+                            <td style="font-weight:bold;"><?php echo ($month_p > 0 || !$isInactiveTeacherForReport) ? $month_p : '-'; ?></td>
+                            <td style="font-weight:bold; color: #fd7e14;"><?php echo ($month_late > 0 || !$isInactiveTeacherForReport) ? $month_late : '-'; ?></td>
+                            <td style="font-weight:bold;"><?php echo ($month_a > 0 || !$isInactiveTeacherForReport) ? $month_a : '-'; ?></td>
+                            <td style="font-weight:bold;"><?php echo ($month_l > 0 || !$isInactiveTeacherForReport) ? $month_l : '-'; ?></td>
                             <?php 
                                 $total_slots = $month_p + $month_late + $month_a + $month_l;
-                                $status = "-";
-                                $status_color = "black";
-                                if ($total_slots > 0) {
-                                    $perc = (($month_p + $month_late) / $total_slots) * 100;
-                                    if ($perc >= 100) {
-                                        $status = "مکمل حاضر";
-                                        $status_color = "green";
-                                    } else {
-                                        $status = round($perc) . "% حاضر";
-                                        $status_color = "blue";
-                                    }
-                                }
+                                $status = "-"; $status_color = "black";
+                                if ($isInactiveTeacherForReport && ($total_slots == 0 || $show_full_status_banner)) { $status = $tStatusText; $status_color = $tStatusColor; }
+                                elseif ($total_slots > 0) { $perc = (($month_p + $month_late) / $total_slots) * 100; $status = ($perc >= 100) ? "مکمل حاضر" : round($perc) . "% حاضر"; $status_color = ($perc >= 100) ? "green" : "blue"; }
                             ?>
-                            <td style="font-weight:bold; color: <?php echo $status_color; ?>;"><?php echo $status; ?></td>
+                            <td style="font-weight:bold; color: <?php echo $status_color; ?>; font-size:<?php echo ($isInactiveTeacherForReport && ($total_slots == 0 || $show_full_status_banner))?'9px':'10px'; ?>;"><?php echo $status; ?></td>
                         </tr>
                         <?php endforeach; ?>
 
-                        <?php $sr = 1; foreach($grouped_students[$cName] as $s): 
-                            $month_p = 0; $month_late = 0; $month_a = 0; $month_l = 0;
-                        ?>
-                        <tr>
-                            <td><?php echo $sr++; ?></td>
-                            <td><?php echo htmlspecialchars($s['roll_number'] ?? $s['admission_number']); ?></td>
-                            <td style="text-align:right; padding-right:5px; font-weight:bold;"><?php echo $s['name']; ?></td>
-                            <td style="text-align:right; padding-right:5px; color:#555;"><?php echo $s['father_name']; ?></td>
-                            <?php foreach($dates_array as $date_str): 
-                                $is_friday = (date('N', strtotime($date_str)) == 5);
-                                $is_friday = (date('N', strtotime($date_str)) == 5);
-                                $isAlumni = ($s['status'] == 'Alumni' && !empty($s['graduation_date']) && $date_str >= $s['graduation_date']);
+                        <?php 
+                        $sr = 1; 
+                        $total_days = count($dates_array);
+
+                        // فلٹر: اس مہینے کے مطابق طلبہ کا انتخاب
+                        $month_students = [];
+                        foreach ($grouped_students[$cName] as $s) {
+                            $admDate = !empty($s['admission_date']) ? ar_clean_date($s['admission_date']) : '';
+                            $adm_ym = !empty($admDate) ? substr($admDate, 0, 7) : null;
+
+                            // اگر رپورٹ کا مہینہ تاریخِ داخلہ سے پہلے کا ہے تو طالب علم کو رجسٹر سے مکمل خارج کریں
+                            if ($adm_ym && $ym < $adm_ym) {
+                                continue;
+                            }
+
+                            $sStatus = $s['status'] ?? 'Active';
+                            $isCurrentlyInactive = is_student_inactive($s, $start_date) || !empty($s['graduation_date']);
+                            $gradDate = !empty($s['graduation_date']) ? $s['graduation_date'] : '';
+                            $grad_ym = !empty($gradDate) ? date('Y-m', strtotime($gradDate)) : null;
+
+                            if (!$isCurrentlyInactive) {
+                                $month_students[] = $s; // ایکٹو طلبہ شامل ہیں
+                                continue;
+                            }
+
+                            // چیک کریں کہ آیا اس طالب علم کی اس مہینے میں کوئی حاضری لگی ہے
+                            $has_att_in_month = false;
+                            if (isset($attendance_data[$s['id']])) {
+                                foreach ($dates_array as $chk_date) {
+                                    if (!empty($attendance_data[$s['id']][$chk_date])) {
+                                        $has_att_in_month = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if ($has_att_in_month) {
+                                $month_students[] = $s; // اس مہینے میں حاضری لگی ہے، ریکارڈ محفوظ رہے گا
+                                continue;
+                            }
+
+                            // اگر اس مہینے میں کوئی حاضری نہیں ہے:
+                            if (!empty($gradDate)) {
+                                // اگر موجودہ رپورٹ کا مہینہ اخراج کے مہینے کے بعد کا ہے، تو نام خارج کر دیں
+                                if ($ym > $grad_ym) {
+                                    continue; // بعد کے مہینوں میں رجسٹر سے خارج
+                                }
+                                $month_students[] = $s;
+                            }
+                        }
+
+                        // چھانٹی برائے موجودہ مہینہ: اس مہینے میں جو ایکٹو رہے وہ اوپر، اور جو اسی مہینے فارغ ہوئے وہ رجسٹر کے آخر میں
+                        usort($month_students, function($a, $b) use ($ym) {
+                            $aGradDate = !empty($a['graduation_date']) ? $a['graduation_date'] : '';
+                            $bGradDate = !empty($b['graduation_date']) ? $b['graduation_date'] : '';
+                            
+                            $aStatus = $a['status'] ?? 'Active';
+                            $bStatus = $b['status'] ?? 'Active';
+                            
+                            $aInactiveInMonth = ($aStatus === 'Alumni' || !empty($aGradDate) || $aStatus === 'Left' || $aStatus === 'Struck Off' || $aStatus === 'خارج')
+                                && (empty($aGradDate) || date('Y-m', strtotime($aGradDate)) <= $ym);
+                            
+                            $bInactiveInMonth = ($bStatus === 'Alumni' || !empty($bGradDate) || $bStatus === 'Left' || $bStatus === 'Struck Off' || $bStatus === 'خارج')
+                                && (empty($bGradDate) || date('Y-m', strtotime($bGradDate)) <= $ym);
                                 
+                            if (!$aInactiveInMonth && $bInactiveInMonth) return -1;
+                            if ($aInactiveInMonth && !$bInactiveInMonth) return 1;
+                            
+                            $admA = (int)($a['admission_number'] ?? ($a['roll_number'] ?? 0));
+                            $admB = (int)($b['admission_number'] ?? ($b['roll_number'] ?? 0));
+                            return $admA <=> $admB;
+                        });
+
+                        foreach($month_students as $s_idx => $s): 
+                            $month_p = 0; $month_late = 0; $month_a = 0; $month_l = 0;
+                            
+                            $sStatus = $s['status'] ?? 'Active';
+                            $admDate = !empty($s['admission_date']) ? ar_clean_date($s['admission_date']) : '';
+                            $gradDate = !empty($s['graduation_date']) ? $s['graduation_date'] : '';
+                            $grad_ym = !empty($gradDate) ? date('Y-m', strtotime($gradDate)) : null;
+                            $leavingReason = trim((string)($s['leaving_reason'] ?? ''));
+                            $alumniCat = trim((string)($s['alumni_category'] ?? ''));
+
+                            // کیا طالب علم اس رپورٹ کے مہینے میں ان ایکٹو تھا؟
+                            // اگر رپورٹ کا مہینہ اس کے فارغ ہونے سے پہلے کا ہے، تو وہ اس مہینے میں مکمل ایکٹو طالب علم تھا
+                            $isInactiveForThisReport = ($sStatus === 'Alumni' || !empty($gradDate) || $sStatus === 'Left' || $sStatus === 'Struck Off' || $sStatus === 'خارج')
+                                && (empty($gradDate) || $grad_ym <= $ym);
+
+                            $statusBadgeText = "تعلیم مکمل ہو گئی";
+                            $statusBadgeColor = "#198754";
+                            $statusBgColor = "#e8f5e9";
+
+                            if (strpos($leavingReason, 'خارج') !== false || strpos($sStatus, 'خارج') !== false || strpos($alumniCat, 'خارج') !== false) {
+                                $statusBadgeText = "خارج کر دیا گیا";
+                                $statusBadgeColor = "#dc3545";
+                                $statusBgColor = "#fde8e8";
+                            } elseif (strpos($leavingReason, 'چھوڑ') !== false || strpos($leavingReason, 'شوقیہ') !== false || strpos($sStatus, 'Left') !== false) {
+                                $statusBadgeText = "چھوڑ گیا";
+                                $statusBadgeColor = "#fd7e14";
+                                $statusBgColor = "#fff3cd";
+                            } elseif (!empty($alumniCat)) {
+                                $statusBadgeText = $alumniCat;
+                            } elseif (!empty($leavingReason)) {
+                                $statusBadgeText = $leavingReason;
+                            }
+                        ?>
+                        <tr <?php if($isInactiveForThisReport && (!empty($gradDate) && $grad_ym == $ym)) echo 'style="background-color: #fafbfc;"'; ?>>
+                            <td><?php echo $sr++; ?></td>
+                            <td><?php echo htmlspecialchars((string)($s['roll_number'] ?? $s['admission_number'])); ?></td>
+                            <td style="text-align:right; padding-right:5px; font-weight:bold;">
+                                <?php echo htmlspecialchars((string)$s['name']); ?>
+                                <?php if($isInactiveForThisReport && (!empty($gradDate) && $grad_ym == $ym)): ?>
+                                    <span class="badge" style="font-size: 8px; background-color: <?php echo $statusBadgeColor; ?>; vertical-align: middle; margin-right: 3px;"><?php echo $statusBadgeText; ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td style="text-align:right; padding-right:5px; color:#555;"><?php echo htmlspecialchars((string)$s['father_name']); ?></td>
+                            <?php 
+                            for ($d_idx = 0; $d_idx < $total_days; $d_idx++):
+                                $date_str = $dates_array[$d_idx];
+                                $is_friday = (date('N', strtotime($date_str)) == 5);
+                                
+                                if ($is_friday):
+                                    if ($s_idx === 0): ?>
+                                        <td rowspan="<?php echo count($month_students); ?>" class="friday-column text-center" style="background-color: #fff5f5 !important; border-left: 1.5px solid #f87171 !important; border-right: 1.5px solid #f87171 !important; vertical-align: middle !important; padding: 0 !important; width: 24px; min-width: 24px;">
+                                            <div style="writing-mode: vertical-rl; transform: rotate(180deg); font-weight: bold; color: #dc2626; font-size: 13px; letter-spacing: 5px; white-space: nowrap; display: inline-block; margin: 0 auto;">جمعۃ المبارک</div>
+                                        </td>
+                                    <?php endif;
+                                    // بعد کے تمام طلبہ کے لیے جمعہ کا سیل اس سنگل کالم و رَو rowspan میں سما چکا ہے
+                                    continue;
+                                endif;
+
+                                // اگر تاریخِ داخلہ سے پہلے کا دن ہے تو ریکارڈ یا حاضری کاؤنٹ نہ ہو
+                                if (!empty($admDate) && $date_str < $admDate): ?>
+                                    <td style="text-align:center; vertical-align:middle; background-color:#f9f9f9;"><span class="text-muted" style="font-size:9px;">-</span></td>
+                                    <?php continue; endif;
+
+                                // اگر طالب علم فارغ التحصیل / خارج ہو چکا ہو اور یہ تاریخ اس کی فراغت کے بعد ہو
+                                if ($isInactiveForThisReport && !empty($gradDate) && $date_str >= $gradDate): ?>
+                                    <td style="background-color: <?php echo $statusBgColor; ?>; text-align: center; vertical-align: middle;">
+                                        <span class="text-muted" style="font-size:9px;">-</span>
+                                    </td>
+                                    <?php continue;
+                                endif;
+
                                 $att = $attendance_data[$s['id']][$date_str] ?? null;
                                 if($att) {
                                     foreach($class_periods as $pNo) {
                                         $st = $att['s' . $pNo] ?? '';
                                         $late = $att['l' . $pNo] ?? 0;
                                         att_count_status($month_p, $month_late, $month_a, $month_l, $st, $late);
+                                        att_count_status($class_daily_p[$date_str], $class_daily_late[$date_str], $class_daily_a[$date_str], $class_daily_l[$date_str], $st, $late);
+                                        if (isset($class_period_date_stats[$date_str][$pNo])) {
+                                            att_count_status(
+                                                $class_period_date_stats[$date_str][$pNo]['p'],
+                                                $class_period_date_stats[$date_str][$pNo]['late'],
+                                                $class_period_date_stats[$date_str][$pNo]['a'],
+                                                $class_period_date_stats[$date_str][$pNo]['l'],
+                                                $st,
+                                                $late
+                                            );
+                                            
+                                            $stdInfo = [
+                                                'id' => $s['id'],
+                                                'roll' => htmlspecialchars((string)($s['roll_number'] ?? $s['admission_number'])),
+                                                'name' => htmlspecialchars((string)$s['name']),
+                                                'father' => htmlspecialchars((string)$s['father_name']),
+                                                'late' => (int)$late,
+                                            ];
+                                            $stClean = trim((string)$st);
+                                            $stMap = [
+                                                'حاضر' => 'P', 'P' => 'P', 'present' => 'P', 'PRESENT' => 'P',
+                                                'غیر حاضر' => 'A', 'A' => 'A', 'absent' => 'A', 'ABSENT' => 'A',
+                                                'رخصت' => 'L', 'L' => 'L', 'leave' => 'L', 'LEAVE' => 'L',
+                                                'تاخیر' => 'T', 'T' => 'T', 'late' => 'T', 'LATE' => 'T',
+                                            ];
+                                            $code = $stMap[$stClean] ?? (function_exists('mb_substr') ? mb_strtoupper(mb_substr($stClean, 0, 1, 'UTF-8'), 'UTF-8') : strtoupper(substr($stClean, 0, 1)));
+                                            if ($code === 'P') {
+                                                if ((int)$late > 0) $class_period_date_students[$date_str][$pNo]['late'][] = $stdInfo;
+                                                else $class_period_date_students[$date_str][$pNo]['p'][] = $stdInfo;
+                                            } elseif ($code === 'T') {
+                                                $class_period_date_students[$date_str][$pNo]['late'][] = $stdInfo;
+                                            } elseif ($code === 'A') {
+                                                $class_period_date_students[$date_str][$pNo]['a'][] = $stdInfo;
+                                            } elseif ($code === 'L') {
+                                                $class_period_date_students[$date_str][$pNo]['l'][] = $stdInfo;
+                                            }
+                                        }
                                         if($st) {
                                             $grand_total_slots++;
                                             att_count_status($grand_total_p, $grand_total_late, $grand_total_a, $grand_total_l, $st, $late);
@@ -568,24 +928,23 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
                                 }
                             ?>
                             <td>
-                                <?php if($is_friday): ?>
-                                    <div style="writing-mode: vertical-rl; transform: rotate(180deg); font-weight: bold; color: #dc3545; display: inline-block;">جمعہ</div>
-                                <?php elseif($isAlumni): ?>
-                                    <span class="text-muted" style="font-size: 10px;">-</span>
-                                <?php elseif($att): ?>
+                                <?php if($att): ?>
                                     <?php echo att_render_grid($att, $class_periods); ?>
+                                <?php else: ?>
+                                    <span class="text-muted" style="font-size: 10px;">-</span>
                                 <?php endif; ?>
                             </td>
-                            <?php endforeach; ?>
-                            <td style="font-weight:bold;"><?php echo $month_p; ?></td>
-                            <td style="font-weight:bold; color: #fd7e14;"><?php echo $month_late; ?></td>
-                            <td style="font-weight:bold;"><?php echo $month_a; ?></td>
-                            <td style="font-weight:bold;"><?php echo $month_l; ?></td>
+                            <?php endfor; ?>
+                            <td style="font-weight:bold;"><?php echo ($month_p > 0 || !$isInactiveForThisReport) ? $month_p : '-'; ?></td>
+                            <td style="font-weight:bold; color: #fd7e14;"><?php echo ($month_late > 0 || !$isInactiveForThisReport) ? $month_late : '-'; ?></td>
+                            <td style="font-weight:bold;"><?php echo ($month_a > 0 || !$isInactiveForThisReport) ? $month_a : '-'; ?></td>
+                            <td style="font-weight:bold;"><?php echo ($month_l > 0 || !$isInactiveForThisReport) ? $month_l : '-'; ?></td>
                             <?php 
                                 $total_slots = $month_p + $month_late + $month_a + $month_l;
-                                $status = "-";
-                                $status_color = "black";
-                                if ($total_slots > 0) {
+                                if ($isInactiveForThisReport && $total_slots == 0) {
+                                    $status = $statusBadgeText;
+                                    $status_color = $statusBadgeColor;
+                                } elseif ($total_slots > 0) {
                                     $perc = (($month_p + $month_late) / $total_slots) * 100;
                                     if ($perc >= 100) {
                                         $status = "مکمل حاضر";
@@ -594,14 +953,131 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
                                         $status = round($perc) . "% حاضر";
                                         $status_color = "blue";
                                     }
+                                } else {
+                                    $status = "-";
+                                    $status_color = "black";
                                 }
                             ?>
-                            <td style="font-weight:bold; color: <?php echo $status_color; ?>;"><?php echo $status; ?></td>
+
+                            <td style="font-weight:bold; color: <?php echo $status_color; ?>; font-size: 10px;"><?php echo $status; ?></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
+
+            <!-- پیریڈ وائز حاضری سمری پینل (Period-wise Attendance Summary Panel) -->
+            <?php 
+                $cls_safe_id = 'cls_' . md5($ym . '_' . $cName);
+                
+                // تلاش کریں کہ کس تاریخ پر اس کلاس میں حاضری کا اندراج موجود ہے
+                $latest_attended_date = null;
+                $today_date = date('Y-m-d');
+                $today_has_att = false;
+                if (isset($class_period_date_stats[$today_date])) {
+                    $today_tot = 0;
+                    foreach ($class_periods as $pNo) {
+                        $today_tot += ($class_period_date_stats[$today_date][$pNo]['p'] ?? 0)
+                                    + ($class_period_date_stats[$today_date][$pNo]['late'] ?? 0)
+                                    + ($class_period_date_stats[$today_date][$pNo]['a'] ?? 0)
+                                    + ($class_period_date_stats[$today_date][$pNo]['l'] ?? 0);
+                    }
+                    if ($today_tot > 0) {
+                        $today_has_att = true;
+                    }
+                }
+
+                if ($today_has_att) {
+                    $default_date = $today_date;
+                } else {
+                    foreach (array_reverse($dates_array) as $d_cand) {
+                        $cand_tot = 0;
+                        foreach ($class_periods as $pNo) {
+                            $cand_tot += ($class_period_date_stats[$d_cand][$pNo]['p'] ?? 0)
+                                       + ($class_period_date_stats[$d_cand][$pNo]['late'] ?? 0)
+                                       + ($class_period_date_stats[$d_cand][$pNo]['a'] ?? 0)
+                                       + ($class_period_date_stats[$d_cand][$pNo]['l'] ?? 0);
+                        }
+                        if ($cand_tot > 0) {
+                            $latest_attended_date = $d_cand;
+                            break;
+                        }
+                    }
+                    $default_date = $latest_attended_date ?? (in_array($today_date, $dates_array) ? $today_date : end($dates_array));
+                }
+            ?>
+            <div class="period-summary-card mt-3 mb-1 p-3 bg-white border rounded shadow-sm no-print-break" style="border-color: #cbd5e1 !important; border-radius: 8px;">
+                <!-- ہیڈر بار: بائیں جانب تاریخ سلیکٹر، دائیں جانب عنوان -->
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom" style="border-color: #e2e8f0 !important;">
+                    <div class="d-flex align-items-center gap-2">
+                        <select class="form-select form-select-sm fw-bold text-dark border-secondary" 
+                                id="date_sel_<?php echo $cls_safe_id; ?>" 
+                                style="width: auto; min-width: 140px; font-size: 13px; border-radius: 6px; cursor: pointer; background-color: #f8fafc;" 
+                                onchange="updateClassPeriodCards('<?php echo $cls_safe_id; ?>', this.value, '<?php echo htmlspecialchars(addslashes($cName), ENT_QUOTES); ?>')">
+                            <?php foreach(array_reverse($dates_array) as $d_opt): 
+                                $opt_label = date('d-M-Y', strtotime($d_opt));
+                            ?>
+                                <option value="<?php echo $d_opt; ?>" <?php echo ($d_opt === $default_date) ? 'selected' : ''; ?>>
+                                    <?php echo $opt_label; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <h5 class="fw-bold mb-0 text-dark" style="font-family: 'Noto Nastaliq Urdu', sans-serif; font-size: 18px;">
+                        پیریڈ وائز حاضری سمری
+                    </h5>
+                </div>
+
+                <!-- پیریڈ کارڈز گرڈ (RTL میں دائیں سے بائیں ترتیب) -->
+                <div class="d-flex flex-wrap gap-2 justify-content-start" dir="rtl" id="cards_wrap_<?php echo $cls_safe_id; ?>">
+                    <?php foreach($class_periods as $pNo): 
+                        $pTitle = att_period_display_name($pNo, count($class_periods));
+                        $curr_p = $class_period_date_stats[$default_date][$pNo]['p'] ?? 0;
+                        $curr_late = $class_period_date_stats[$default_date][$pNo]['late'] ?? 0;
+                        $curr_a = $class_period_date_stats[$default_date][$pNo]['a'] ?? 0;
+                        $curr_l = $class_period_date_stats[$default_date][$pNo]['l'] ?? 0;
+                    ?>
+                    <div class="period-stat-card border rounded p-2 text-center" 
+                         style="flex: 1 1 0; min-width: 100px; max-width: 140px; background: #fff; border-color: #cbd5e1 !important; border-radius: 8px;">
+                        <div class="fw-bold text-dark pb-1 mb-2 border-bottom" style="font-size: 13px; border-color: #e2e8f0 !important;">
+                            <?php echo $pTitle; ?>
+                        </div>
+                        <div class="d-flex justify-content-around align-items-center pt-1 fw-bold" style="font-size: 12.5px;">
+                            <span class="period-stat-btn" style="color: #0d9488; cursor: pointer; text-decoration: underline;" 
+                                  title="حاضر طلبہ کی فہرست دیکھنے کے لیے کلک کریں"
+                                  onclick="openPeriodStudentsModal('<?php echo $cls_safe_id; ?>', <?php echo $pNo; ?>, 'p', '<?php echo htmlspecialchars(addslashes($cName), ENT_QUOTES); ?>')">
+                                ح: <span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_p"><?php echo $curr_p; ?></span>
+                            </span>
+                            <span class="period-stat-btn" style="color: #ea580c; cursor: pointer; text-decoration: underline;" 
+                                  title="تاخیر والے طلبہ کی فہرست دیکھنے کے لیے کلک کریں"
+                                  onclick="openPeriodStudentsModal('<?php echo $cls_safe_id; ?>', <?php echo $pNo; ?>, 'late', '<?php echo htmlspecialchars(addslashes($cName), ENT_QUOTES); ?>')">
+                                ت: <span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_late"><?php echo $curr_late; ?></span>
+                            </span>
+                            <span class="period-stat-btn" style="color: #dc2626; cursor: pointer; text-decoration: underline;" 
+                                  title="غیر حاضر طلبہ کی فہرست دیکھنے کے لیے کلک کریں"
+                                  onclick="openPeriodStudentsModal('<?php echo $cls_safe_id; ?>', <?php echo $pNo; ?>, 'a', '<?php echo htmlspecialchars(addslashes($cName), ENT_QUOTES); ?>')">
+                                غ: <span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_a"><?php echo $curr_a; ?></span>
+                            </span>
+                            <span class="period-stat-btn" style="color: #ca8a04; cursor: pointer; text-decoration: underline;" 
+                                  title="رخصت والے طلبہ کی فہرست دیکھنے کے لیے کلک کریں"
+                                  onclick="openPeriodStudentsModal('<?php echo $cls_safe_id; ?>', <?php echo $pNo; ?>, 'l', '<?php echo htmlspecialchars(addslashes($cName), ENT_QUOTES); ?>')">
+                                ر: <span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_l"><?php echo $curr_l; ?></span>
+                            </span>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <script>
+            if (typeof window.allClassPeriodData === 'undefined') {
+                window.allClassPeriodData = {};
+            }
+            if (typeof window.allClassPeriodStudents === 'undefined') {
+                window.allClassPeriodStudents = {};
+            }
+            window.allClassPeriodData['<?php echo $cls_safe_id; ?>'] = <?php echo json_encode($class_period_date_stats); ?>;
+            window.allClassPeriodStudents['<?php echo $cls_safe_id; ?>'] = <?php echo json_encode($class_period_date_students); ?>;
+            </script>
         </div>
     </div>
     <?php endforeach; ?>
@@ -629,7 +1105,166 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
     </div>
 </div>
 
+<!-- پاپ اپ ماڈل: پیریڈ وائز کیٹیگری کے طلبہ کی فہرست -->
+<div class="modal fade no-print" id="periodStudentsModal" tabindex="-1" aria-labelledby="periodStudentsModalLabel" aria-hidden="true" dir="rtl">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.25); border: 1px solid #cbd5e1;">
+            <div class="modal-header py-2 px-3 text-white" id="modalHeaderBg" style="background-color: #0d9488;">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fas fa-users fs-5"></i>
+                    <h5 class="modal-title fw-bold m-0" id="periodStudentsModalLabel" style="font-family: 'Noto Nastaliq Urdu', sans-serif; font-size: 18px;">
+                        فہرست طلبہ
+                    </h5>
+                </div>
+                <button type="button" class="btn-close btn-close-white ms-0 me-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="d-flex justify-content-between align-items-center bg-light p-2 rounded mb-3 border">
+                    <div>
+                        <span class="fw-bold text-dark" id="modalClassName">کلاس: -</span> | 
+                        <span class="text-secondary fw-bold" id="modalPeriodName">پیریڈ: -</span>
+                    </div>
+                    <div>
+                        <span class="badge bg-dark fs-6" id="modalDateBadge">تاریخ: -</span>
+                        <span class="badge fs-6 ms-1" id="modalTypeBadge">-</span>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+                    <table class="table table-bordered table-hover text-center align-middle m-0" style="font-size: 13px;">
+                        <thead class="table-secondary sticky-top">
+                            <tr>
+                                <th style="width: 50px;">#</th>
+                                <th style="width: 110px;">رول / داخلہ نمبر</th>
+                                <th>نام طالب علم</th>
+                                <th>والد کا نام</th>
+                                <th style="width: 130px;">کیفیت</th>
+                            </tr>
+                        </thead>
+                        <tbody id="periodStudentsTableBody">
+                            <!-- جاوا اسکرپٹ سے بھرا جائے گا -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="emptyModalMsg" class="alert alert-info text-center mt-2 d-none fw-bold">
+                    اس کیٹیگری میں فی الوقت کوئی طالب علم موجود نہیں ہے۔
+                </div>
+            </div>
+            <div class="modal-footer py-2 px-3 bg-light d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-primary btn-sm fw-bold" onclick="printModalStudentsList()">
+                    <i class="fas fa-print me-1"></i> پرنٹ فہرست
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm fw-bold" data-bs-dismiss="modal">
+                    بند کریں
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+function updateClassPeriodCards(clsId, selectedDate, className) {
+    if (!window.allClassPeriodData || !window.allClassPeriodData[clsId]) return;
+    var dateMap = window.allClassPeriodData[clsId][selectedDate];
+    if (!dateMap) return;
+    for (var pNo in dateMap) {
+        if (dateMap.hasOwnProperty(pNo)) {
+            var st = dateMap[pNo];
+            var elP = document.getElementById(clsId + '_p' + pNo + '_p');
+            var elLate = document.getElementById(clsId + '_p' + pNo + '_late');
+            var elA = document.getElementById(clsId + '_p' + pNo + '_a');
+            var elL = document.getElementById(clsId + '_p' + pNo + '_l');
+            if (elP) elP.innerText = st.p !== undefined ? st.p : 0;
+            if (elLate) elLate.innerText = st.late !== undefined ? st.late : 0;
+            if (elA) elA.innerText = st.a !== undefined ? st.a : 0;
+            if (elL) elL.innerText = st.l !== undefined ? st.l : 0;
+        }
+    }
+}
+
+function openPeriodStudentsModal(clsId, pNo, type, className) {
+    var selEl = document.getElementById('date_sel_' + clsId);
+    var selectedDate = selEl ? selEl.value : '';
+    
+    var typeTitles = {
+        'p': { label: 'حاضر طلبہ', color: '#0d9488', badge: 'bg-success' },
+        'late': { label: 'تاخیر والے طلبہ', color: '#ea580c', badge: 'bg-warning text-dark' },
+        'a': { label: 'غیر حاضر طلبہ', color: '#dc2626', badge: 'bg-danger' },
+        'l': { label: 'رخصت والے طلبہ', color: '#ca8a04', badge: 'bg-warning text-dark' }
+    };
+    var tInfo = typeTitles[type] || { label: 'فہرست طلبہ', color: '#0d9488', badge: 'bg-primary' };
+    
+    var periodName = 'سبق ' + pNo;
+    
+    document.getElementById('periodStudentsModalLabel').innerText = 'فہرست ' + tInfo.label + ' (' + periodName + ')';
+    document.getElementById('modalHeaderBg').style.backgroundColor = tInfo.color;
+    document.getElementById('modalClassName').innerText = 'کلاس: ' + className;
+    document.getElementById('modalPeriodName').innerText = 'پیریڈ: ' + periodName;
+    document.getElementById('modalDateBadge').innerText = 'تاریخ: ' + selectedDate;
+    
+    var badgeEl = document.getElementById('modalTypeBadge');
+    badgeEl.className = 'badge fs-6 ms-1 ' + tInfo.badge;
+    badgeEl.innerText = tInfo.label;
+    
+    var list = [];
+    if (window.allClassPeriodStudents && 
+        window.allClassPeriodStudents[clsId] && 
+        window.allClassPeriodStudents[clsId][selectedDate] && 
+        window.allClassPeriodStudents[clsId][selectedDate][pNo] && 
+        window.allClassPeriodStudents[clsId][selectedDate][pNo][type]) {
+        list = window.allClassPeriodStudents[clsId][selectedDate][pNo][type];
+    }
+    
+    var tbody = document.getElementById('periodStudentsTableBody');
+    tbody.innerHTML = '';
+    var emptyMsg = document.getElementById('emptyModalMsg');
+    
+    if (!list || list.length === 0) {
+        emptyMsg.classList.remove('d-none');
+    } else {
+        emptyMsg.classList.add('d-none');
+        for (var i = 0; i < list.length; i++) {
+            var st = list[i];
+            var tr = document.createElement('tr');
+            var lateDetail = (type === 'late' && st.late > 0) ? ' (' + st.late + ' منٹ)' : '';
+            tr.innerHTML = '<td>' + (i + 1) + '</td>' +
+                           '<td>' + (st.roll || '-') + '</td>' +
+                           '<td class="fw-bold text-end pe-3">' + st.name + '</td>' +
+                           '<td class="text-end pe-3 text-secondary">' + (st.father || '-') + '</td>' +
+                           '<td><span class="badge ' + tInfo.badge + '">' + tInfo.label + lateDetail + '</span></td>';
+            tbody.appendChild(tr);
+        }
+    }
+    
+    var modalEl = document.getElementById('periodStudentsModal');
+    var modalInstance = bootstrap.Modal.getInstance(modalEl);
+    if (!modalInstance) {
+        modalInstance = new bootstrap.Modal(modalEl);
+    }
+    modalInstance.show();
+}
+
+function printModalStudentsList() {
+    var title = document.getElementById('periodStudentsModalLabel').innerText;
+    var cls = document.getElementById('modalClassName').innerText;
+    var dt = document.getElementById('modalDateBadge').innerText;
+    var typeText = document.getElementById('modalTypeBadge').innerText;
+    var tbody = document.getElementById('periodStudentsTableBody').innerHTML;
+    
+    var win = window.open('', '', 'height=750,width=900');
+    win.document.write('<html dir="rtl"><head><title>' + title + '</title>');
+    win.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">');
+    win.document.write('<style>body{font-family:sans-serif;padding:25px;} table{width:100%;border-collapse:collapse;margin-top:15px;} th,td{border:1px solid #333;padding:8px;text-align:center;} th{background-color:#f2f2f2;}</style>');
+    win.document.write('</head><body>');
+    win.document.write('<h3 class="text-center fw-bold mb-1">مدرسہ اشرف المدارس</h3>');
+    win.document.write('<h5 class="text-center text-muted mb-3">' + title + ' (' + cls + ' | ' + dt + ')</h5>');
+    win.document.write('<table class="table table-bordered"><thead><tr><th>#</th><th>رول / داخلہ نمبر</th><th>نام طالب علم</th><th>والد کا نام</th><th>کیفیت</th></tr></thead><tbody>' + tbody + '</tbody></table>');
+    win.document.write('</body></html>');
+    win.document.close();
+    win.focus();
+    setTimeout(function(){ win.print(); }, 500);
+}
+
 function printLandscape() {
     document.querySelectorAll('.print-title-bar').forEach(el => el.style.display = 'block');
     window.print();

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
+import '../../utils/globals.dart';
 
 class CoreSyncSaver {
   static Future<void> save(Database db, Batch batch, Map<String, dynamic> data) async {
@@ -37,6 +38,22 @@ class CoreSyncSaver {
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
+        final syncedName = s['madrasa_name']?.toString().trim();
+        if (syncedName != null && syncedName.isNotEmpty) {
+          currentTenantName.value = syncedName;
+        }
+        final syncedLogo = s['logo_path']?.toString().trim();
+        if (syncedLogo != null && syncedLogo.isNotEmpty) {
+          currentTenantLogoPath.value = syncedLogo;
+        }
+        final syncedMasjid = s['masjid_name']?.toString().trim();
+        if (syncedMasjid != null && syncedMasjid.isNotEmpty) {
+          currentTenantMasjidName.value = syncedMasjid;
+        }
+        final syncedMasjidLogo = s['masjid_logo_path']?.toString().trim();
+        if (syncedMasjidLogo != null && syncedMasjidLogo.isNotEmpty) {
+          currentTenantMasjidLogoPath.value = syncedMasjidLogo;
+        }
       } catch (e) {
         debugPrint("Sync Error (settings): $e");
       }

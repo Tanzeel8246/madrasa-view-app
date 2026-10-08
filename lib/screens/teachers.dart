@@ -1,6 +1,7 @@
 // ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously, deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'dart:convert';
 import 'dart:io';
 import '../db_helper.dart';
@@ -25,32 +26,201 @@ class _TeachersPageState extends State<TeachersPage> {
     _refreshTeachers();
   }
 
+  String _selectedStatusFilter = 'All';
+  String _searchKeyword = '';
+
   void _refreshTeachers() async {
     final data = await DBHelper().getTeachers();
     setState(() {
       _allTeachers = data;
-      _foundTeachers = data;
     });
+    _applyFilters();
   }
 
   void _runFilter(String enteredKeyword) {
-    List<Map<String, dynamic>> results = [];
-    if (enteredKeyword.isEmpty) {
-      results = _allTeachers;
-    } else {
-      results = _allTeachers
+    _searchKeyword = enteredKeyword;
+    _applyFilters();
+  }
+
+  void _applyFilters() {
+    List<Map<String, dynamic>> results = _allTeachers;
+    if (_selectedStatusFilter != 'All') {
+      results = results.where((t) {
+        final st = (t['status'] ?? 'Active').toString();
+        if (_selectedStatusFilter == 'Active') {
+          return st == 'Active' || st == 'حاضر' || st == 'فعال' || st.isEmpty;
+        } else if (_selectedStatusFilter == 'On Leave') {
+          return st == 'On Leave' || st == 'رخصت پر';
+        } else if (_selectedStatusFilter == 'Resigned') {
+          return st == 'Resigned' || st.contains('مستعفی') || st.contains('علیحدہ');
+        } else if (_selectedStatusFilter == 'Terminated') {
+          return st == 'Terminated' || st.contains('برطرف') || st.contains('فارغ');
+        } else if (_selectedStatusFilter == 'Inactive') {
+          return st == 'Inactive' || st.contains('غیر فعال');
+        }
+        return st == _selectedStatusFilter;
+      }).toList();
+    }
+    if (_searchKeyword.isNotEmpty) {
+      results = results
           .where((teacher) =>
               teacher["name"]
                   .toString()
                   .toLowerCase()
-                  .contains(enteredKeyword.toLowerCase()) ||
+                  .contains(_searchKeyword.toLowerCase()) ||
               (teacher["phone"] != null &&
-                  teacher["phone"].toString().contains(enteredKeyword)))
+                  teacher["phone"].toString().contains(_searchKeyword)))
           .toList();
     }
     setState(() {
       _foundTeachers = results;
     });
+  }
+
+  void _showChangeStatusDialog(Map<String, dynamic> teacher) {
+    final isUrdu = isUrduGlobal.value;
+    String selectedStatus = teacher['status']?.toString() ?? 'Active';
+    final reasonController =
+        TextEditingController(text: teacher['status_reason']?.toString() ?? '');
+    final existingDate = teacher['status_change_date']?.toString();
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final dateController = TextEditingController(
+        text: (existingDate != null && existingDate.isNotEmpty && existingDate != 'null')
+            ? existingDate
+            : todayStr);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          title: Text(
+              isUrdu ? "استاد کا اسٹیٹس تبدیل کریں" : "Change Teacher Status"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "${teacher['name']}",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.green.shade800),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  value: ['Active', 'On Leave', 'Resigned', 'Terminated', 'Inactive']
+                          .contains(selectedStatus)
+                      ? selectedStatus
+                      : 'Active',
+                  decoration: InputDecoration(
+                    labelText: isUrdu ? "اسٹیٹس" : "Status",
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                        value: "Active",
+                        child: Text(isUrdu ? "فعال / حاضر (Active)" : "Active")),
+                    DropdownMenuItem(
+                        value: "On Leave",
+                        child:
+                            Text(isUrdu ? "رخصت پر (On Leave)" : "On Leave")),
+                    DropdownMenuItem(
+                        value: "Resigned",
+                        child: Text(isUrdu
+                            ? "مستعفی / علیحدہ شدہ (Resigned / Left)"
+                            : "Resigned / Left")),
+                    DropdownMenuItem(
+                        value: "Terminated",
+                        child: Text(isUrdu
+                            ? "برطرف / فارغ (Terminated)"
+                            : "Terminated")),
+                    DropdownMenuItem(
+                        value: "Inactive",
+                        child:
+                            Text(isUrdu ? "غیر فعال (Inactive)" : "Inactive")),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setDlgState(() => selectedStatus = val);
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: dateController,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: isUrdu
+                        ? "تاریخ تبدیلی اسٹیٹس"
+                        : "Status Change Date",
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.calendar_today),
+                  ),
+                  onTap: () async {
+                    DateTime initial = DateTime.tryParse(dateController.text) ?? DateTime.now();
+                    DateTime? picked = await showDatePicker(
+                      context: context,
+                      initialDate: initial,
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2100),
+                    );
+                    if (picked != null) {
+                      setDlgState(() {
+                        dateController.text =
+                            DateFormat('yyyy-MM-dd').format(picked);
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: reasonController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: isUrdu
+                        ? "وجہ / تفصیل / دورانیہ"
+                        : "Reason / Details / Duration",
+                    border: const OutlineInputBorder(),
+                    hintText: isUrdu
+                        ? "مثلاً: ایک ماہ کی رخصت، یا استعفیٰ وغیرہ"
+                        : "e.g. 1 month leave, resignation",
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(isUrdu ? "کینسل" : "Cancel"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade700,
+                  foregroundColor: Colors.white),
+              onPressed: () async {
+                await DBHelper().updateTeacher(teacher['id'], {
+                  'status': selectedStatus,
+                  'status_reason': reasonController.text.trim(),
+                  'status_change_date': dateController.text.trim(),
+                  'is_synced': 0,
+                });
+                Navigator.pop(ctx);
+                _refreshTeachers();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isUrdu
+                        ? "اسٹیٹس کامیابی سے تبدیل ہو گیا"
+                        : "Status updated successfully"),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              },
+              child: Text(isUrdu ? "محفوظ کریں" : "Save"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteTeacher(int id) async {
@@ -471,29 +641,6 @@ class _TeachersPageState extends State<TeachersPage> {
                     },
                   ),
                   const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: selectedStatus,
-                    decoration: InputDecoration(
-                        labelText: isUrduGlobal.value ? "سٹیٹس" : "Status"),
-                    items: [
-                      DropdownMenuItem(
-                          value: "Active",
-                          child: Text(isUrduGlobal.value
-                              ? "Active (موجود)"
-                              : "Active")),
-                      DropdownMenuItem(
-                          value: "Inactive",
-                          child: Text(isUrduGlobal.value
-                              ? "Inactive (غیر حاضر)"
-                              : "Inactive")),
-                    ],
-                    onChanged: (value) {
-                      setStateDialog(() {
-                        selectedStatus = value!;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 10),
                   TextField(
                     controller: addressController,
                     maxLines: 2,
@@ -663,6 +810,9 @@ class _TeachersPageState extends State<TeachersPage> {
                   final nav = Navigator.of(context);
                   final messenger = ScaffoldMessenger.of(context);
                   if (teacher == null) {
+                    data['status'] = 'Active';
+                    data['status_change_date'] =
+                        DateFormat('yyyy-MM-dd').format(DateTime.now());
                     await DBHelper().insertTeacher(data);
                   } else {
                     await DBHelper().updateTeacher(teacher['id'], data);
@@ -710,6 +860,11 @@ class _TeachersPageState extends State<TeachersPage> {
               foregroundColor: Colors.white,
               actions: [
                 IconButton(
+                  icon: const Icon(Icons.person_add, color: Colors.white),
+                  tooltip: isUrdu ? "نیا استاذ ایڈ کریں" : "Add Teacher",
+                  onPressed: () => _showAddTeacherDialog(),
+                ),
+                IconButton(
                   icon: const Icon(Icons.sync, color: Colors.white),
                   tooltip: isUrdu ? 'سنک کریں' : 'Sync',
                   onPressed: () async {
@@ -738,14 +893,22 @@ class _TeachersPageState extends State<TeachersPage> {
                 ),
               ],
             ),
-            floatingActionButton: FloatingActionButton(
+            floatingActionButton: FloatingActionButton.extended(
               backgroundColor: Colors.green.shade700,
               onPressed: _showAddTeacherDialog,
-              child: const Icon(Icons.add, color: Colors.white),
+              icon: const Icon(Icons.person_add, color: Colors.white),
+              label: Text(
+                isUrdu ? "نیا استاذ ایڈ کریں" : "Add New Teacher",
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold),
+              ),
             ),
-            body: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
+            body: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
                 children: [
                   TextField(
                     onChanged: (value) => _runFilter(value),
@@ -760,7 +923,85 @@ class _TeachersPageState extends State<TeachersPage> {
                       fillColor: Colors.grey.shade100,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          label: Text(isUrdu ? "تمام اساتذہ" : "All"),
+                          selected: _selectedStatusFilter == 'All',
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() => _selectedStatusFilter = 'All');
+                              _applyFilters();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(isUrdu ? "فعال / حاضر" : "Active"),
+                          selected: _selectedStatusFilter == 'Active',
+                          selectedColor: Colors.green.shade100,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() => _selectedStatusFilter = 'Active');
+                              _applyFilters();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(isUrdu ? "رخصت پر" : "On Leave"),
+                          selected: _selectedStatusFilter == 'On Leave',
+                          selectedColor: Colors.orange.shade100,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() => _selectedStatusFilter = 'On Leave');
+                              _applyFilters();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(isUrdu ? "مستعفی / علیحدہ شدہ" : "Resigned"),
+                          selected: _selectedStatusFilter == 'Resigned',
+                          selectedColor: Colors.blueGrey.shade100,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() => _selectedStatusFilter = 'Resigned');
+                              _applyFilters();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(isUrdu ? "برطرف / فارغ" : "Terminated"),
+                          selected: _selectedStatusFilter == 'Terminated',
+                          selectedColor: Colors.red.shade100,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() => _selectedStatusFilter = 'Terminated');
+                              _applyFilters();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(isUrdu ? "غیر فعال" : "Inactive"),
+                          selected: _selectedStatusFilter == 'Inactive',
+                          selectedColor: Colors.grey.shade300,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() => _selectedStatusFilter = 'Inactive');
+                              _applyFilters();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Expanded(
                     child: _foundTeachers.isNotEmpty
                         ? ListView.builder(
@@ -776,18 +1017,41 @@ class _TeachersPageState extends State<TeachersPage> {
                               final assignedPeriods = _formatAssignedPeriods(
                                   t['assigned_periods'],
                                   isUrdu: isUrdu);
+                              final statusReason =
+                                  t['status_reason']?.toString() ?? '';
+                              final statusDate =
+                                  t['status_change_date']?.toString() ?? '';
                               final subtitleParts = [
                                 "${isUrdu ? 'موبائل' : 'Mobile'}: $phone",
                                 if (assignedClasses.isNotEmpty)
                                   "${isUrdu ? 'کلاسز' : 'Classes'}: $assignedClasses",
                                 if (assignedPeriods.isNotEmpty)
                                   "${isUrdu ? 'پیریڈز' : 'Periods'}: $assignedPeriods",
+                                if (statusDate.isNotEmpty && statusDate != 'null')
+                                  "${isUrdu ? 'تاریخ تبدیلی' : 'Status Date'}: $statusDate",
+                                if (statusReason.isNotEmpty)
+                                  "${isUrdu ? 'وجہ' : 'Reason'}: $statusReason",
                               ];
                               final status =
                                   t['status']?.toString() ?? 'Active';
-                              final Color statusColor = status == 'Active'
-                                  ? Colors.green
-                                  : Colors.red;
+                              Color statusColor;
+                              String statusText;
+                              if (status == 'Active' || status == 'حاضر' || status == 'فعال') {
+                                statusColor = Colors.green;
+                                statusText = isUrdu ? 'فعال / حاضر' : 'Active';
+                              } else if (status == 'On Leave' || status == 'رخصت پر') {
+                                statusColor = Colors.orange.shade800;
+                                statusText = isUrdu ? 'رخصت پر' : 'On Leave';
+                              } else if (status == 'Resigned' || status.contains('مستعفی') || status.contains('علیحدہ')) {
+                                statusColor = Colors.blueGrey.shade700;
+                                statusText = isUrdu ? 'مستعفی / علیحدہ شدہ' : 'Resigned';
+                              } else if (status == 'Terminated' || status.contains('برطرف') || status.contains('فارغ')) {
+                                statusColor = Colors.red.shade800;
+                                statusText = isUrdu ? 'برطرف / فارغ' : 'Terminated';
+                              } else {
+                                statusColor = Colors.grey.shade700;
+                                statusText = isUrdu ? 'غیر فعال' : 'Inactive';
+                              }
 
                               // Build photo avatar
                               Widget leadingWidget;
@@ -842,24 +1106,46 @@ class _TeachersPageState extends State<TeachersPage> {
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: statusColor.withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Text(
-                                          status == 'Active'
-                                              ? (isUrdu ? 'موجود' : 'Active')
-                                              : (isUrdu
-                                                  ? 'غیر حاضر'
-                                                  : 'Inactive'),
-                                          style: TextStyle(
-                                              color: statusColor,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12),
+                                      InkWell(
+                                        onTap: () => _showChangeStatusDialog(t),
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: statusColor.withOpacity(0.12),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                border: Border.all(
+                                                    color: statusColor.withOpacity(0.4)),
+                                              ),
+                                              child: Text(
+                                                statusText,
+                                                style: TextStyle(
+                                                    color: statusColor,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12),
+                                              ),
+                                            ),
+                                            if (statusDate.isNotEmpty &&
+                                                statusDate != 'null')
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.only(top: 2),
+                                                child: Text(
+                                                  statusDate,
+                                                  style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.blueGrey.shade700),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                       ),
                                       IconButton(
@@ -905,6 +1191,9 @@ class _TeachersPageState extends State<TeachersPage> {
                                                     "${isUrdu ? 'تعلیم' : 'Qual.'}: $qual\n"
                                                     "${isUrdu ? 'وظیفہ' : 'Stipend'}: Rs $sal\n"
                                                     "${isUrdu ? 'تقرری کی تاریخ' : 'Joining'}: $join\n"
+                                                    "${isUrdu ? 'اسٹیٹس' : 'Status'}: $statusText\n"
+                                                    "${isUrdu ? 'تاریخ تبدیلی اسٹیٹس' : 'Status Date'}: ${statusDate.isEmpty || statusDate == 'null' ? '-' : statusDate}\n"
+                                                    "${isUrdu ? 'وجہ / تفصیل' : 'Status Reason'}: ${statusReason.isEmpty ? '-' : statusReason}\n"
                                                     "${isUrdu ? 'الاٹ کلاسز' : 'Assigned Classes'}: ${classesText.isEmpty ? '-' : classesText}\n"
                                                     "${isUrdu ? 'الاٹ پیریڈز' : 'Assigned Periods'}: ${periodsText.isEmpty ? '-' : periodsText}\n"
                                                     "${isUrdu ? 'پتہ' : 'Address'}: $address"),
@@ -934,7 +1223,9 @@ class _TeachersPageState extends State<TeachersPage> {
               ),
             ),
           ),
-        );
+        ),
+      ),
+    );
       },
     );
   }

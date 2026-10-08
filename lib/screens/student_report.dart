@@ -2,6 +2,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../utils/performance_helper.dart';
+import '../utils/hifz_calculator.dart';
 import 'package:intl/intl.dart' as intl;
 import 'dart:ui' as ui;
 import 'package:screenshot/screenshot.dart';
@@ -9,17 +11,26 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:url_launcher/url_launcher.dart';
 import '../db_helper.dart';
 import '../utils/globals.dart';
 import '../utils/ai_service.dart';
-import '../utils/performance_helper.dart';
 import '../widgets/app_drawer.dart';
 import '../utils/sync_service.dart';
 import 'dashboard.dart';
 
 class StudentReportPage extends StatefulWidget {
   final String? forceStudentId;
-  const StudentReportPage({super.key, this.forceStudentId});
+  final bool isEmbedded;
+  final String? targetClassType;
+  final String? forceClassName;
+  const StudentReportPage({
+    super.key,
+    this.forceStudentId,
+    this.isEmbedded = false,
+    this.targetClassType,
+    this.forceClassName,
+  });
 
   @override
   State<StudentReportPage> createState() => _StudentReportPageState();
@@ -31,12 +42,94 @@ class _StudentReportPageState extends State<StudentReportPage> {
 
   List<Map<String, dynamic>> _hifzRecords = [];
   List<Map<String, dynamic>> _qaidaRecords = [];
+  List<Map<String, dynamic>> _husnSautRecords = [];
   List<Map<String, dynamic>> _attendanceRecords = [];
   List<Map<String, dynamic>> _complaints = [];
   List<Map<String, dynamic>> _examResults = [];
   List<Map<String, dynamic>> _academicReports = [];
   Map<String, dynamic> _stats = {};
   Map<String, dynamic>? _student;
+
+  DateTime? _filterStartDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  DateTime? _filterEndDate = DateTime(DateTime.now().year, DateTime.now().month + 1, 0, 23, 59, 59);
+  String _selectedPeriodFilter = 'current_month';
+
+  List<Map<String, dynamic>> get _filteredHifzRecords {
+    if (_filterStartDate == null || _filterEndDate == null) return _hifzRecords;
+    return _hifzRecords.where((r) {
+      final dt = PerformanceCalculator.parseDateRobust(r['date']?.toString() ?? '');
+      if (dt.year < 2000) return true;
+      return !dt.isBefore(_filterStartDate!) && !dt.isAfter(_filterEndDate!);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> get _filteredQaidaRecords {
+    if (_filterStartDate == null || _filterEndDate == null) return _qaidaRecords;
+    return _qaidaRecords.where((r) {
+      final dt = PerformanceCalculator.parseDateRobust(r['date']?.toString() ?? '');
+      if (dt.year < 2000) return true;
+      return !dt.isBefore(_filterStartDate!) && !dt.isAfter(_filterEndDate!);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> get _filteredHusnSautRecords {
+    if (_filterStartDate == null || _filterEndDate == null) return _husnSautRecords;
+    return _husnSautRecords.where((r) {
+      final dt = PerformanceCalculator.parseDateRobust(r['date']?.toString() ?? '');
+      if (dt.year < 2000) return true;
+      return !dt.isBefore(_filterStartDate!) && !dt.isAfter(_filterEndDate!);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> get _filteredAttendanceRecords {
+    if (_filterStartDate == null || _filterEndDate == null) return _attendanceRecords;
+    return _attendanceRecords.where((r) {
+      final dt = PerformanceCalculator.parseDateRobust(r['date']?.toString() ?? '');
+      if (dt.year < 2000) return true;
+      return !dt.isBefore(_filterStartDate!) && !dt.isAfter(_filterEndDate!);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> get _filteredAcademicReports {
+    if (_filterStartDate == null || _filterEndDate == null) return _academicReports;
+    return _academicReports.where((r) {
+      final dt = PerformanceCalculator.parseDateRobust(r['date']?.toString() ?? '');
+      if (dt.year < 2000) return true;
+      return !dt.isBefore(_filterStartDate!) && !dt.isAfter(_filterEndDate!);
+    }).toList();
+  }
+
+  bool get _isHusnSautStudent {
+    if (widget.targetClassType != null) {
+      final t = widget.targetClassType!.toLowerCase();
+      if (t.contains('husn') || t.contains('صوت')) return true;
+      if (t == 'hifz' || t == 'qaida' || t == 'nazira' || t == 'academic') return false;
+    }
+    final cls = (_student?['class_name'] ?? _student?['class'] ?? widget.forceClassName ?? '').toString().toLowerCase();
+    return cls.contains('حسن') || cls.contains('صوت') || _husnSautRecords.any((r) => r['is_dummy'] != 1);
+  }
+
+  bool get _isHifzStudent {
+    if (_isHusnSautStudent) return false;
+    if (widget.targetClassType != null) {
+      final t = widget.targetClassType!.toLowerCase();
+      if (t.contains('hifz') || t.contains('حفظ')) return true;
+      if (t.contains('husn') || t == 'qaida' || t == 'nazira' || t == 'academic') return false;
+    }
+    final cls = (_student?['class_name'] ?? _student?['class'] ?? widget.forceClassName ?? '').toString();
+    return cls.contains('حفظ') || _hifzRecords.any((r) => r['is_dummy'] != 1);
+  }
+
+  bool get _isQaidaStudent {
+    if (_isHusnSautStudent || _isHifzStudent) return false;
+    if (widget.targetClassType != null) {
+      final t = widget.targetClassType!.toLowerCase();
+      if (t.contains('qaida') || t.contains('nazira') || t.contains('قاعدہ') || t.contains('ناظرہ')) return true;
+      if (t.contains('husn') || t == 'hifz' || t == 'academic') return false;
+    }
+    final cls = (_student?['class_name'] ?? _student?['class'] ?? widget.forceClassName ?? '').toString();
+    return cls.contains('قاعدہ') || cls.contains('ناظرہ') || _qaidaRecords.any((r) => r['is_dummy'] != 1);
+  }
 
   bool _isLoading = true;
   String _aiAdvice = '';
@@ -57,119 +150,140 @@ class _StudentReportPageState extends State<StudentReportPage> {
 
     final allHifz = await db.getHifzRecords();
     final allQaida = await db.getQaidaRecords();
-    final allAtt = await db.getAttendance();
+    List<Map<String, dynamic>> allHusn = [];
+    try {
+      allHusn = await db.getHusnSautRecords();
+    } catch (_) {}
+    final database = await db.database;
+    final allAtt = await database.query('attendance');
+    List<Map<String, dynamic>> extraAtt = [];
+    try {
+      extraAtt = await database.query('maktab_attendance');
+    } catch (_) {}
+    final mergedAtt = [...allAtt, ...extraAtt];
+
     final allComplaints = await db.getComplaints();
     final studentExams = await db.getStudentResults(targetId);
     final allAcademic = await db.getAcademicReports();
+    List<Map<String, dynamic>> extraAcademic = [];
+    try {
+      extraAcademic = await database.query('maktab_academic_reports');
+    } catch (_) {}
+    final mergedAcademic = [...allAcademic, ...extraAcademic];
 
-    final allStudents = await db.getStudents();
+    final allStudents = await db.getStudentsForUser();
+    List<Map<String, dynamic>> extraMaktabStudents = [];
+    try {
+      extraMaktabStudents = await db.getMaktabStudentsForUser();
+    } catch (_) {}
+    final combinedStudents = [...allStudents, ...extraMaktabStudents];
     final settings = await db.getSettings();
 
+    final matched =
+        combinedStudents.where((s) => s['id'].toString() == targetIdStr).toList();
+    final studentObj = matched.isNotEmpty ? matched.first : null;
+    final singleStudentList = studentObj != null ? [studentObj] : <Map<String, dynamic>>[];
+
+    var studentAtt = mergedAtt
+        .where((r) => r['student_id'].toString() == targetIdStr)
+        .toList();
+
+    var studentHifz = allHifz
+        .where((r) => r['student_id'].toString() == targetIdStr)
+        .toList();
+
+    var studentQaida = allQaida
+        .where((r) => r['student_id'].toString() == targetIdStr)
+        .toList();
+
+    var studentHusn = allHusn
+        .where((r) => r['student_id'].toString() == targetIdStr)
+        .toList();
+
+    var studentAcademic = mergedAcademic
+        .where((r) => r['student_id'].toString() == targetIdStr)
+        .toList();
+
+    final cls = (studentObj?['class_name'] ?? studentObj?['class'] ?? widget.forceClassName ?? '').toString().toLowerCase();
+    final isTargetHusn = widget.targetClassType != null &&
+        (widget.targetClassType!.toLowerCase().contains('husn') || widget.targetClassType!.toLowerCase().contains('صوت'));
+    final isHusn = isTargetHusn || cls.contains('حسن') || cls.contains('صوت') || studentHusn.isNotEmpty;
+    final isHifz = !isHusn && (cls.contains('حفظ') || studentHifz.isNotEmpty);
+    final isQaida = !isHusn && !isHifz && (cls.contains('قاعدہ') || cls.contains('ناظرہ') || studentQaida.isNotEmpty);
+
+    if (isHifz) {
+      studentHifz = PerformanceCalculator.injectMissingAttendanceRecords(
+          studentHifz, studentAtt, singleStudentList, 'hifz');
+    }
+    if (isQaida) {
+      studentQaida = PerformanceCalculator.injectMissingAttendanceRecords(
+          studentQaida, studentAtt, singleStudentList, 'qaida');
+    }
+    if (!isHifz && !isQaida && !isHusn && studentAcademic.isNotEmpty) {
+      studentAcademic = PerformanceCalculator.injectMissingAttendanceRecords(
+          studentAcademic, studentAtt, singleStudentList, 'academic');
+    }
+
+    studentHifz = studentHifz
+        .where((r) => r['student_id'].toString() == targetIdStr)
+        .toList();
+    studentQaida = studentQaida
+        .where((r) => r['student_id'].toString() == targetIdStr)
+        .toList();
+    studentHusn = studentHusn
+        .where((r) => r['student_id'].toString() == targetIdStr)
+        .toList();
+    studentAcademic = studentAcademic
+        .where((r) => r['student_id'].toString() == targetIdStr)
+        .toList();
+
+    studentHifz.sort((a, b) {
+      DateTime dA = PerformanceCalculator.parseDateRobust(a['date']?.toString() ?? '');
+      DateTime dB = PerformanceCalculator.parseDateRobust(b['date']?.toString() ?? '');
+      return dB.compareTo(dA);
+    });
+    studentQaida.sort((a, b) {
+      DateTime dA = PerformanceCalculator.parseDateRobust(a['date']?.toString() ?? '');
+      DateTime dB = PerformanceCalculator.parseDateRobust(b['date']?.toString() ?? '');
+      return dB.compareTo(dA);
+    });
+    studentHusn.sort((a, b) {
+      DateTime dA = PerformanceCalculator.parseDateRobust(a['date']?.toString() ?? '');
+      DateTime dB = PerformanceCalculator.parseDateRobust(b['date']?.toString() ?? '');
+      return dB.compareTo(dA);
+    });
+    studentAtt.sort((a, b) {
+      DateTime dA = PerformanceCalculator.parseDateRobust(a['date']?.toString() ?? '');
+      DateTime dB = PerformanceCalculator.parseDateRobust(b['date']?.toString() ?? '');
+      return dB.compareTo(dA);
+    });
+    studentAcademic.sort((a, b) {
+      DateTime dA = PerformanceCalculator.parseDateRobust(a['date']?.toString() ?? '');
+      DateTime dB = PerformanceCalculator.parseDateRobust(b['date']?.toString() ?? '');
+      return dB.compareTo(dA);
+    });
+
+    DateTime latest = DateTime.now();
+    for (var r in [...studentHifz, ...studentQaida, ...studentHusn, ...studentAtt]) {
+      final dt = PerformanceCalculator.parseDateRobust(r['date']?.toString() ?? '');
+      if (dt.year > 2000 && dt.isAfter(latest)) {
+        latest = dt;
+      }
+    }
+    _filterStartDate ??= DateTime(latest.year, latest.month, 1);
+    _filterEndDate ??= DateTime(latest.year, latest.month + 1, 0, 23, 59, 59);
+
     setState(() {
-      _hifzRecords = allHifz
-          .where((r) => r['student_id'].toString() == targetIdStr)
-          .toList();
-      _qaidaRecords = allQaida
-          .where((r) => r['student_id'].toString() == targetIdStr)
-          .toList();
-      _qaidaRecords.sort((a, b) {
-        DateTime dA;
-        try {
-          dA = DateTime.parse(a['date'] ?? '1970-01-01');
-        } catch (_) { dA = DateTime(1970); }
-        DateTime dB;
-        try {
-          dB = DateTime.parse(b['date'] ?? '1970-01-01');
-        } catch (_) { dB = DateTime(1970); }
-        return dB.compareTo(dA);
-      });
-      _hifzRecords.sort((a, b) {
-        DateTime dA;
-        try {
-          dA = intl.DateFormat('d/M/yyyy').parse(a['date'] ?? '');
-        } catch (_) {
-          try {
-            dA = DateTime.parse(a['date'] ?? '');
-          } catch (_) {
-            dA = DateTime.now();
-          }
-        }
-        DateTime dB;
-        try {
-          dB = intl.DateFormat('d/M/yyyy').parse(b['date'] ?? '');
-        } catch (_) {
-          try {
-            dB = DateTime.parse(b['date'] ?? '');
-          } catch (_) {
-            dB = DateTime.now();
-          }
-        }
-        return dB.compareTo(dA); // descending
-      });
-
-      _attendanceRecords = allAtt
-          .where((r) => r['student_id'].toString() == targetIdStr)
-          .toList();
-      _attendanceRecords.sort((a, b) {
-        DateTime dA;
-        try {
-          dA = intl.DateFormat('d/M/yyyy').parse(a['date'] ?? '');
-        } catch (_) {
-          try {
-            dA = DateTime.parse(a['date'] ?? '');
-          } catch (_) {
-            dA = DateTime.now();
-          }
-        }
-        DateTime dB;
-        try {
-          dB = intl.DateFormat('d/M/yyyy').parse(b['date'] ?? '');
-        } catch (_) {
-          try {
-            dB = DateTime.parse(b['date'] ?? '');
-          } catch (_) {
-            dB = DateTime.now();
-          }
-        }
-        return dB.compareTo(dA);
-      });
-
+      _hifzRecords = studentHifz;
+      _qaidaRecords = studentQaida;
+      _husnSautRecords = studentHusn;
+      _attendanceRecords = studentAtt;
       _complaints = allComplaints
           .where((r) => r['student_id'].toString() == targetIdStr)
           .toList();
-
       _examResults = studentExams;
-
-      _academicReports = allAcademic
-          .where((r) => r['student_id'].toString() == targetIdStr)
-          .toList();
-      _academicReports.sort((a, b) {
-        DateTime dA;
-        try {
-          dA = intl.DateFormat('d/M/yyyy').parse(a['date'] ?? '');
-        } catch (_) {
-          try {
-            dA = DateTime.parse(a['date'] ?? '');
-          } catch (_) {
-            dA = DateTime.now();
-          }
-        }
-        DateTime dB;
-        try {
-          dB = intl.DateFormat('d/M/yyyy').parse(b['date'] ?? '');
-        } catch (_) {
-          try {
-            dB = DateTime.parse(b['date'] ?? '');
-          } catch (_) {
-            dB = DateTime.now();
-          }
-        }
-        return dB.compareTo(dA);
-      });
-
-      final matched =
-          allStudents.where((s) => s['id'].toString() == targetIdStr);
-      _student = matched.isNotEmpty ? matched.first : null;
+      _academicReports = studentAcademic;
+      _student = studentObj;
 
       int weekStart = settings['week_start_day'] ?? 6;
       _stats = PerformanceCalculator.calculateWeeklyPerformance(
@@ -254,16 +368,28 @@ class _StudentReportPageState extends State<StudentReportPage> {
                   children: [
                     _buildProfileCard(isUrdu),
                     const SizedBox(height: 12),
+                    _buildSummaryCardsSection(isUrdu),
+                    const SizedBox(height: 12),
+                    if (_isHifzStudent) ...[
+                      _buildHifzCompletionEstimateCard(isUrdu),
+                      const SizedBox(height: 12),
+                    ],
                     _buildPerformanceSection(isUrdu),
                     const SizedBox(height: 12),
                     _buildAdviceCard(isUrdu),
                     const SizedBox(height: 12),
-                    _buildAcademicRegister(isUrdu),
+                    if (_isHusnSautStudent) ...[
+                      _buildHusnSautTable(isUrdu),
+                    ] else if (_isHifzStudent) ...[
+                      _buildHifzTable(isUrdu),
+                    ] else if (_isQaidaStudent) ...[
+                      _buildQaidaTable(isUrdu),
+                    ] else ...[
+                      _buildAcademicRegister(isUrdu),
+                    ],
                     const SizedBox(height: 12),
-                    _buildHifzTable(isUrdu),
-                    const SizedBox(height: 12),
-                    _buildQaidaTable(isUrdu),
-                    const SizedBox(height: 12),
+                    _buildAttendanceHistoryTable(isUrdu),
+                    const SizedBox(height: 15),
                     _buildDailyLog(isUrdu),
                     const SizedBox(height: 12),
                     _buildComplaintsCard(isUrdu),
@@ -318,30 +444,346 @@ class _StudentReportPageState extends State<StudentReportPage> {
     }
   }
 
+  String _formatDateUrdu(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(dateStr);
+      final monthsUr = [
+        '',
+        'جنوری',
+        'فروری',
+        'مارچ',
+        'اپریل',
+        'مئی',
+        'جون',
+        'جولائی',
+        'اگست',
+        'ستمبر',
+        'اکتوبر',
+        'نومبر',
+        'دسمبر'
+      ];
+      return '${dt.day} ${monthsUr[dt.month]}';
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
   Future<void> _shareReportSummary() async {
     final studentName = _student?['name']?.toString() ?? 'طالب علم';
+    final fatherName = _student?['father_name']?.toString() ?? '';
+    final studentFullName =
+        fatherName.isNotEmpty ? '$studentName ولد $fatherName' : studentName;
     final className =
-        (_student?['class_name'] ?? _student?['class'] ?? '-').toString();
-    final attendance = _stats['attendancePerc']?.toString() ?? '0';
-    final academic = _stats['academicScore']?.toString() ?? '0';
-    final hifzCount = _stats['hifzCount']?.toString() ?? '0';
+        (_student?['class_name'] ?? _student?['class'] ?? '').toString();
+
+    // 1. Calculate Date Range
+    String fromDateStr = '';
+    String toDateStr = '';
+    if (_filterStartDate != null && _filterEndDate != null) {
+      fromDateStr = _formatDateUrdu(
+          intl.DateFormat('yyyy-MM-dd').format(_filterStartDate!));
+      toDateStr = _formatDateUrdu(
+          intl.DateFormat('yyyy-MM-dd').format(_filterEndDate!));
+    } else {
+      List<DateTime> allDates = [];
+      for (var r in _attendanceRecords) {
+        final d = DateTime.tryParse(r['date']?.toString() ?? '');
+        if (d != null) allDates.add(d);
+      }
+      for (var r in _hifzRecords) {
+        final d = DateTime.tryParse(r['date']?.toString() ?? '');
+        if (d != null) allDates.add(d);
+      }
+      if (allDates.isNotEmpty) {
+        allDates.sort();
+        fromDateStr = _formatDateUrdu(
+            intl.DateFormat('yyyy-MM-dd').format(allDates.first));
+        toDateStr = _formatDateUrdu(
+            intl.DateFormat('yyyy-MM-dd').format(allDates.last));
+      } else {
+        final now = DateTime.now();
+        final monthStart = DateTime(now.year, now.month, 1);
+        fromDateStr = _formatDateUrdu(
+            intl.DateFormat('yyyy-MM-dd').format(monthStart));
+        toDateStr = _formatDateUrdu(
+            intl.DateFormat('yyyy-MM-dd').format(now));
+      }
+    }
+
+    final hRecords = _filteredHifzRecords;
+    final aRecords = _filteredAttendanceRecords;
+
+    // 2. Attendance %
+    final Set<String> presentDates = {};
+    final Set<String> absentDates = {};
+    final Set<String> leaveDates = {};
+    for (var a in aRecords) {
+      final date = PerformanceCalculator.normalizeDate(a['date']?.toString() ?? '');
+      if (date.isEmpty || date == '1970-01-01') continue;
+      final st = (a['status'] ?? '').toString().trim().toUpperCase();
+      if (st == 'ABSENT' || st == 'A' || st.contains('غیر حاضر') || st.contains('غائب')) {
+        absentDates.add(date);
+      } else if (st == 'LEAVE' || st == 'L' || st.contains('رخصت')) {
+        leaveDates.add(date);
+      } else if (st == 'PRESENT' || st == 'P' || st.contains('حاضر')) {
+        presentDates.add(date);
+      }
+    }
+    for (var h in hRecords) {
+      final date = PerformanceCalculator.normalizeDate(h['date']?.toString() ?? '');
+      final attSt = (h['att_status'] ?? '').toString().trim();
+      if (attSt == 'غیر حاضر') {
+        absentDates.add(date);
+      } else if (attSt == 'رخصت') {
+        leaveDates.add(date);
+      } else if (date.isNotEmpty && !absentDates.contains(date)) {
+        presentDates.add(date);
+      }
+    }
+    for (var d in absentDates) {
+      presentDates.remove(d);
+    }
+    for (var d in leaveDates) {
+      presentDates.remove(d);
+    }
+    int totalAttDays = presentDates.length + absentDates.length + leaveDates.length;
+    final attendancePerc = totalAttDays > 0
+        ? (presentDates.length / totalAttDays * 100).toStringAsFixed(0)
+        : (_stats['attendancePerc']?.toString() ?? '0');
+
+    // 3. Naghas & Summary Calculation
+    int sabaqNagha = 0;
+    int sabqiNagha = 0;
+    int manzilNagha = 0;
+    int totalSabaqLines = 0;
+    int sabqiDaysRecited = 0;
+    double manzilParasRecited = 0.0;
+
+    for (var r in hRecords) {
+      final attStatus = (r['att_status'] ?? '').toString().trim();
+      if (attStatus == 'غیر حاضر' || attStatus == 'Absent' || attStatus == 'A' ||
+          attStatus == 'رخصت' || attStatus == 'Leave' || attStatus == 'L') {
+        continue;
+      }
+
+      final sp = (r['sabaq_p'] ?? r['sabaq_grade'] ?? '').toString().trim();
+      final sq = (r['sabqi_p'] ?? r['sabqi_grade'] ?? '').toString().trim();
+      final mp = (r['manzil_p'] ?? r['manzil_grade'] ?? '').toString().trim();
+      final sLines = int.tryParse((r['sabaq_lines'] ?? '0').toString().trim()) ?? 0;
+      final sPara = (r['sabaq_para'] ?? '').toString().trim();
+      final sqPara = (r['sabqi_para'] ?? '').toString().trim();
+      final sqQty = (r['sabqi_qty'] ?? '').toString().trim();
+      final mDetails = (r['manzil_details'] ?? r['manzil_parah'] ?? '').toString().trim();
+      final mQty = (r['manzil_total_qty'] ?? r['manzil_amount'] ?? '').toString().trim();
+
+      if (sp == 'ناغہ' || sp == 'Absent' || sp == 'کمزور' || sp == 'نہیں سنایا' || (sLines == 0 && sPara.isEmpty)) {
+        sabaqNagha++;
+      } else {
+        totalSabaqLines += sLines;
+      }
+
+      if (sq == 'ناغہ' || sq == 'Absent' || sq == 'کمزور' || sq == 'نہیں سنائی' || (sqPara.isEmpty && sqQty.isEmpty)) {
+        sabqiNagha++;
+      } else {
+        sabqiDaysRecited++;
+      }
+
+      if (mp == 'ناغہ' || mp == 'Absent' || mp == 'کمزور' || mp == 'نہیں سنائی' || (mDetails.isEmpty && mQty.isEmpty)) {
+        manzilNagha++;
+      } else {
+        double paras = _parseManzilAmountToParas(mQty);
+        if (paras == 0.0 && mDetails.isNotEmpty) paras = 1.0;
+        manzilParasRecited += paras;
+      }
+    }
+
+    // If student is in Qaida, also check qaida naghas
+    final qRecords = _filteredQaidaRecords;
+    if (hRecords.isEmpty && qRecords.isNotEmpty) {
+      for (var r in qRecords) {
+        final attStatus = (r['att_status'] ?? '').toString().trim();
+        if (attStatus == 'غیر حاضر' || attStatus == 'Absent' || attStatus == 'A' ||
+            attStatus == 'رخصت' || attStatus == 'Leave' || attStatus == 'L') {
+          continue;
+        }
+        final st =
+            (r['sabaq_status'] ?? r['grade_1'] ?? '').toString().trim();
+        if (st == 'ناغہ' || st == 'Absent' || st == 'کمزور') {
+          sabaqNagha++;
+        } else {
+          totalSabaqLines += 1;
+        }
+      }
+    }
+
+    // 4. Complaints count
     final complaintsCount = _complaints.length;
-    final advice = _aiAdvice.trim().isNotEmpty
-        ? _aiAdvice.trim()
-        : 'کارکردگی رپورٹ ملاحظہ فرمائیں۔';
 
-    final text = [
-      'مدرسہ رپورٹ',
-      'طالب علم: $studentName',
-      'درجہ: $className',
-      'حاضری: $attendance%',
-      'تعلیمی اسکور: $academic/100',
-      'حفظ/سبق اندراجات: $hifzCount',
-      'شکایات/نوٹس: $complaintsCount',
-      'مشورہ: $advice',
-    ].join('\n');
+    // 5. Fee status check
+    String feeStatus = '';
+    try {
+      final db = await DBHelper().database;
+      final targetId = _student?['id'];
+      if (targetId != null) {
+        final feeRows = await db.query(
+          'fee_submissions',
+          where: 'student_id = ?',
+          whereArgs: [targetId],
+          orderBy: 'id DESC',
+          limit: 1,
+        );
+        if (feeRows.isNotEmpty) {
+          final lastFee = feeRows.first;
+          final status = (lastFee['status'] ?? 'Pending').toString();
+          final amount = lastFee['amount']?.toString() ?? '0';
+          if (status.toLowerCase() == 'approved' ||
+              status.toLowerCase() == 'paid' ||
+              status == 'ادا شدہ') {
+            feeStatus = 'ادا شدہ ($amount روپے)';
+          } else {
+            feeStatus = 'بقایا ($amount روپے)';
+          }
+        }
+      }
+    } catch (_) {}
 
-    await Share.share(text, subject: 'Student Report - $studentName');
+    // 6. Build the formatted Urdu WhatsApp message
+    final buffer = StringBuffer();
+    buffer.writeln('📋 *مجموعی تعلیمی و حاضری رپورٹ*');
+    buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
+    buffer.writeln('👤 *برائے :* $studentFullName');
+    if (className.isNotEmpty) {
+      buffer.writeln('🏫 *جماعت :* $className');
+    }
+    buffer.writeln('📅 *از :* $fromDateStr *تا :* $toDateStr');
+    buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
+    buffer.writeln('📊 *حاضری :* $attendancePerc فیصد');
+    final bool isManzilGardan = (_student?['hifz_section'] == 'manzil_gardan');
+    if (isManzilGardan) {
+      buffer.writeln('🏷️ *سیکشن :* منزل/گردان (پارٹ ٹائم)');
+      buffer.writeln('📖 *سبق و سبقی :* استثناء (پارٹ ٹائم)');
+      buffer.writeln('🕋 *منزل :* ${manzilParasRecited.toStringAsFixed(1)} پارے سنائے | $manzilNagha ناغے');
+    } else {
+      buffer.writeln('📖 *سبق :* $totalSabaqLines لائنیں سنائیں | $sabaqNagha ناغے');
+      if (_hifzRecords.isNotEmpty) {
+        buffer.writeln('📚 *سبقی :* $sabqiDaysRecited دن سنائی | $sabqiNagha ناغے');
+        buffer.writeln('🕋 *منزل :* ${manzilParasRecited.toStringAsFixed(1)} پارے سنائے | $manzilNagha ناغے');
+      }
+    }
+    buffer.writeln('⚠️ *شکایات :* $complaintsCount');
+    if (feeStatus.isNotEmpty) {
+      buffer.writeln('💰 *فیس سٹیٹس :* $feeStatus');
+    }
+    buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
+    buffer.writeln('_منجانب: ادارہ اشرف المدارس فروکہ_');
+
+    await Share.share(buffer.toString(), subject: 'مجموعی رپورٹ - $studentName');
+  }
+
+  Future<void> _sendSmsReport() async {
+    final studentName = _student?['name']?.toString() ?? 'نامعلوم';
+    final studentFullName = _student?['full_name']?.toString() ?? studentName;
+    final className = (_student?['class_name'] ?? _student?['class'] ?? widget.forceClassName ?? '').toString();
+    
+    String fromDateStr = _filterStartDate != null ? intl.DateFormat('yyyy-MM-dd').format(_filterStartDate!) : '-';
+    String toDateStr = _filterEndDate != null ? intl.DateFormat('yyyy-MM-dd').format(_filterEndDate!) : '-';
+    
+    // Fallbacks
+    final hRecords = _filteredHifzRecords;
+    final aRecords = _filteredAttendanceRecords;
+
+    final Set<String> presentDates = {};
+    final Set<String> absentDates = {};
+    final Set<String> leaveDates = {};
+    for (var a in aRecords) {
+      final date = PerformanceCalculator.normalizeDate(a['date']?.toString() ?? '');
+      if (date.isEmpty || date == '1970-01-01') continue;
+      final st = (a['status'] ?? '').toString().trim().toUpperCase();
+      if (st == 'ABSENT' || st == 'A' || st.contains('غیر حاضر') || st.contains('غائب')) {
+        absentDates.add(date);
+      } else if (st == 'LEAVE' || st == 'L' || st.contains('رخصت')) {
+        leaveDates.add(date);
+      } else if (st == 'PRESENT' || st == 'P' || st.contains('حاضر')) {
+        presentDates.add(date);
+      }
+    }
+    for (var h in hRecords) {
+      final date = PerformanceCalculator.normalizeDate(h['date']?.toString() ?? '');
+      final attSt = (h['att_status'] ?? '').toString().trim();
+      if (attSt == 'غیر حاضر') absentDates.add(date);
+      else if (attSt == 'رخصت') leaveDates.add(date);
+      else if (date.isNotEmpty && !absentDates.contains(date)) presentDates.add(date);
+    }
+    for (var d in absentDates) presentDates.remove(d);
+    for (var d in leaveDates) presentDates.remove(d);
+    
+    int totalAttDays = presentDates.length + absentDates.length + leaveDates.length;
+    final attendancePerc = totalAttDays > 0
+        ? (presentDates.length / totalAttDays * 100).toStringAsFixed(0)
+        : (_stats['attendancePerc']?.toString() ?? '0');
+
+    int sabaqNagha = 0;
+    int sabqiNagha = 0;
+    int manzilNagha = 0;
+    int totalSabaqLines = 0;
+    int sabqiDaysRecited = 0;
+    double manzilParasRecited = 0.0;
+
+    for (var r in hRecords) {
+      final attStatus = (r['att_status'] ?? '').toString().trim();
+      if (attStatus == 'غیر حاضر' || attStatus == 'Absent' || attStatus == 'A' ||
+          attStatus == 'رخصت' || attStatus == 'Leave' || attStatus == 'L') continue;
+      final sp = (r['sabaq_p'] ?? r['sabaq_grade'] ?? '').toString().trim();
+      final sq = (r['sabqi_p'] ?? r['sabqi_grade'] ?? '').toString().trim();
+      final mp = (r['manzil_p'] ?? r['manzil_grade'] ?? '').toString().trim();
+      final sLines = int.tryParse((r['sabaq_lines'] ?? '0').toString().trim()) ?? 0;
+      final sPara = (r['sabaq_para'] ?? '').toString().trim();
+      final sqPara = (r['sabqi_para'] ?? '').toString().trim();
+      final sqQty = (r['sabqi_qty'] ?? '').toString().trim();
+      final mDetails = (r['manzil_details'] ?? r['manzil_parah'] ?? '').toString().trim();
+      final mQty = (r['manzil_total_qty'] ?? r['manzil_amount'] ?? '').toString().trim();
+
+      if (sp == 'ناغہ' || sp == 'Absent' || sp == 'کمزور' || sp == 'نہیں سنایا' || (sLines == 0 && sPara.isEmpty)) sabaqNagha++;
+      else totalSabaqLines += sLines;
+
+      if (sq == 'ناغہ' || sq == 'Absent' || sq == 'کمزور' || sq == 'نہیں سنائی' || (sqPara.isEmpty && sqQty.isEmpty)) sabqiNagha++;
+      else sabqiDaysRecited++;
+
+      if (mp == 'ناغہ' || mp == 'Absent' || mp == 'کمزور' || mp == 'نہیں سنائی' || (mDetails.isEmpty && mQty.isEmpty)) manzilNagha++;
+      else {
+        double paras = double.tryParse(mQty) ?? (mDetails.isNotEmpty ? 1.0 : 0.0);
+        manzilParasRecited += paras;
+      }
+    }
+
+    final buffer = StringBuffer();
+    final classSuffix = className.isNotEmpty ? ' ($className)' : '';
+    buffer.writeln('مدرسہ اشرف المدارس: $studentFullName$classSuffix کی رپورٹ ($fromDateStr تا $toDateStr)۔');
+    buffer.writeln('حاضری: $attendancePerc%۔');
+    if (_hifzRecords.isNotEmpty) {
+      buffer.writeln('سبق لائنیں: $totalSabaqLines (ناغے: $sabaqNagha)۔ سبقی دن: $sabqiDaysRecited (ناغے: $sabqiNagha)۔ منزل پارے: ${manzilParasRecited.toStringAsFixed(1)} (ناغے: $manzilNagha)۔');
+    }
+    buffer.writeln('شکایات: ${_complaints.length}۔');
+
+    String msg = buffer.toString();
+    String? parentPhone = _student?['parent_phone']?.toString();
+    
+    if (parentPhone == null || parentPhone.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('والدین کا موبائل نمبر درج نہیں ہے۔')));
+      return;
+    }
+    
+    final uri = Uri.parse('sms:$parentPhone?body=${Uri.encodeComponent(msg)}');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('SMS ایپ نہیں کھولی جا سکی۔')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
   }
 
   Color _gradeColor(String? g) {
@@ -372,37 +814,150 @@ class _StudentReportPageState extends State<StudentReportPage> {
   @override
   Widget build(BuildContext context) {
     final isUrdu = isUrduGlobal.value;
+
+    if (widget.isEmbedded) {
+      if (_isLoading) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32.0),
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: Screenshot(
+          controller: _screenshotController,
+          child: Container(
+            color: bgColor,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.share, size: 16),
+                        label: Text(
+                          isUrdu ? 'WhatsApp رپورٹ' : 'Share WhatsApp',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF25D366),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                        ),
+                        onPressed: _shareReportSummary,
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.picture_as_pdf, size: 16),
+                        label: Text(
+                          isUrdu ? 'PDF' : 'PDF',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryGreen,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                        ),
+                        onPressed: _sharePdf,
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.sms, size: 16),
+                        label: Text(
+                          isUrdu ? 'SMS' : 'SMS',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                        ),
+                        onPressed: _sendSmsReport,
+                      ),
+                    ],
+                  ),
+                ),
+                _buildProfileCard(isUrdu),
+                const SizedBox(height: 12),
+                _buildDateFilterBar(isUrdu),
+                const SizedBox(height: 12),
+                _buildSummaryCardsSection(isUrdu),
+                const SizedBox(height: 12),
+                _buildPerformanceSection(isUrdu),
+                const SizedBox(height: 12),
+                _buildAdviceCard(isUrdu),
+                const SizedBox(height: 12),
+                if (_isHusnSautStudent) ...[
+                  _buildHusnSautTable(isUrdu),
+                ] else if (_isHifzStudent) ...[
+                  _buildHifzTable(isUrdu),
+                ] else if (_isQaidaStudent) ...[
+                  _buildQaidaTable(isUrdu),
+                ] else ...[
+                  _buildAcademicRegister(isUrdu),
+                ],
+                _buildAttendanceHistoryTable(isUrdu),
+                const SizedBox(height: 15),
+                _buildDailyLog(isUrdu),
+                const SizedBox(height: 12),
+                _buildComplaintsCard(isUrdu),
+                const SizedBox(height: 12),
+                _buildExamsCard(isUrdu),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Directionality(
       textDirection: isUrdu ? ui.TextDirection.rtl : ui.TextDirection.ltr,
       child: PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) return;
-          Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (c) => const DashboardPage()));
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          } else {
+            Navigator.pushReplacement(context,
+                MaterialPageRoute(builder: (c) => const DashboardPage()));
+          }
         },
         child: Scaffold(
           backgroundColor: bgColor,
           drawer: const AppDrawer(),
           appBar: AppBar(
-            leading: Builder(
-              builder: (context) => IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () => Scaffold.of(context).openDrawer(),
-              ),
-            ),
+            leading: Navigator.canPop(context)
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Navigator.pop(context),
+                  )
+                : Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                    ),
+                  ),
             title: Text(isUrdu ? 'میری تعلیمی رپورٹ' : 'My Academic Report'),
             backgroundColor: primaryGreen,
             foregroundColor: Colors.white,
             actions: [
               IconButton(
-                  tooltip: isUrdu ? 'WhatsApp/SMS رپورٹ' : 'Share Summary',
-                  icon: const Icon(Icons.mark_email_read),
+                  tooltip: isUrdu ? 'WhatsApp رپورٹ' : 'Share WhatsApp Summary',
+                  icon: const Icon(Icons.share),
                   onPressed: _shareReportSummary),
               IconButton(
                   tooltip: isUrdu ? 'PDF شیئر کریں' : 'Share PDF',
                   icon: const Icon(Icons.picture_as_pdf),
                   onPressed: _sharePdf),
+              IconButton(icon: const Icon(Icons.sms), onPressed: _sendSmsReport),
               IconButton(icon: const Icon(Icons.sync), onPressed: _runSync)
             ],
           ),
@@ -418,15 +973,27 @@ class _StudentReportPageState extends State<StudentReportPage> {
                         children: [
                           _buildProfileCard(isUrdu),
                           const SizedBox(height: 12),
+                          _buildDateFilterBar(isUrdu), // Period / Month Filter
+                          const SizedBox(height: 12),
+                          _buildSummaryCardsSection(isUrdu), // Sabaq, Sabqi, Manzil & Attendance Summary
+                          const SizedBox(height: 12),
+                          if (_isHifzStudent) ...[
+                            _buildHifzCompletionEstimateCard(isUrdu),
+                            const SizedBox(height: 12),
+                          ],
                           _buildPerformanceSection(isUrdu), // Graph + Gauges
                           const SizedBox(height: 12),
                           _buildAdviceCard(isUrdu), // Advice
                           const SizedBox(height: 12),
-                          _buildAcademicRegister(isUrdu), // Academic Register
-                          const SizedBox(height: 12),
-                          _buildHifzTable(isUrdu), // Hifz Register
-                          const SizedBox(height: 12),
-                          _buildQaidaTable(isUrdu), // Qaida Register
+                          if (_isHusnSautStudent) ...[
+                            _buildHusnSautTable(isUrdu),
+                          ] else if (_isHifzStudent) ...[
+                            _buildHifzTable(isUrdu),
+                          ] else if (_isQaidaStudent) ...[
+                            _buildQaidaTable(isUrdu),
+                          ] else ...[
+                            _buildAcademicRegister(isUrdu),
+                          ],
                           const SizedBox(height: 12),
                           _buildDailyLog(isUrdu),
                           const SizedBox(height: 12),
@@ -465,24 +1032,791 @@ class _StudentReportPageState extends State<StudentReportPage> {
           Text(
               '${isUrdu ? 'ولد' : 'S/O'}: ${_student?['father_name'] ?? '-'} | ${isUrdu ? 'درجہ' : 'Class'}: ${_student?['class_name'] ?? _student?['class'] ?? '-'}',
               style: const TextStyle(color: Colors.grey)),
+          if (_student?['hifz_section'] == 'manzil_gardan') ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.shade700),
+              ),
+              child: Text(
+                isUrdu ? "⭐ سیکشن B: منزل/گردان (پارٹ ٹائم)" : "⭐ Section B: Manzil/Gardan (Part-time)",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amber.shade900,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF25D366),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            icon: const Icon(Icons.share, size: 18),
+            label: Text(
+              isUrdu ? 'مختصر رپورٹ WhatsApp کریں' : 'Share WhatsApp Report',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            onPressed: _shareReportSummary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHifzCompletionEstimateCard(bool isUrdu) {
+    final result = HifzCompletionCalculator.calculate(
+      student: _student,
+      hifzRecords: _hifzRecords,
+    );
+
+    Widget buildPill(String label, String value) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0x59000000),
+          border: Border.all(color: const Color(0x40FFFFFF)),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(text: '$label: ', style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 10.5, fontWeight: FontWeight.normal, fontFamily: 'JameelNooriNastaleeq')),
+              TextSpan(text: value, style: const TextStyle(color: Color(0xFFFDE047), fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'JameelNooriNastaleeq')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F3D2E),
+        borderRadius: BorderRadius.circular(12),
+        border: const Border(
+          top: BorderSide(color: Color(0xFF1E6B52)),
+          left: BorderSide(color: Color(0xFF1E6B52)),
+          bottom: BorderSide(color: Color(0xFF1E6B52)),
+          right: BorderSide(color: Color(0xFFEAB308), width: 5),
+        ),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.calendar_month, color: Color(0xFFFDE047), size: 19),
+                  const SizedBox(width: 6),
+                  Text(
+                    isUrdu ? 'تخمینہ تکمیلِ حفظ' : 'Hifz Completion Estimate',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14.5,
+                      fontFamily: 'JameelNooriNastaleeq',
+                    ),
+                  ),
+                ],
+              ),
+              buildPill(isUrdu ? "رفتار" : "Pace", '${result.avgDailyLines} ${isUrdu ? "لائنیں" : "lines"}'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              buildPill(isUrdu ? "نسخہ" : "Edition", result.edition),
+              buildPill(isUrdu ? "ترتیب" : "Order", result.sequenceTitle),
+              buildPill(isUrdu ? "مکمل" : "Done", '${result.completedParas}/30 ${isUrdu ? "پارے" : "paras"}'),
+            ],
+          ),
+          const Divider(color: Color(0x33FFFFFF), height: 16),
+
+          if (result.isCompleted) ...[
+            Row(
+              children: [
+                const Icon(Icons.stars, color: Color(0xFFFDE047), size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  isUrdu ? 'مبارک ہو! حفظِ قرآن مکمل ہو چکا ہے' : 'Hifz Completed!',
+                  style: const TextStyle(color: Color(0xFFFDE047), fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'JameelNooriNastaleeq'),
+                ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  isUrdu ? 'متوقع تاریخ فراغت: ' : 'Expected Date: ',
+                  style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w600, fontFamily: 'JameelNooriNastaleeq'),
+                ),
+                Text(
+                  result.expectedDateFormatted,
+                  style: const TextStyle(
+                    color: Color(0xFFFDE047),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    fontFamily: 'JameelNooriNastaleeq',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(text: isUrdu ? 'متوقع دورانیہ: ' : 'Duration: ', style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11.5, fontFamily: 'JameelNooriNastaleeq')),
+                        TextSpan(text: result.durationText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5, fontFamily: 'JameelNooriNastaleeq')),
+                        const TextSpan(text: ' • ', style: TextStyle(color: Color(0xFF6EE7B7))),
+                        TextSpan(text: isUrdu ? 'خالص ایام: ' : 'Net days: ', style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11.5, fontFamily: 'JameelNooriNastaleeq')),
+                        TextSpan(text: '${result.netEducationalDays} ${isUrdu ? "دن" : "d"}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5, fontFamily: 'JameelNooriNastaleeq')),
+                      ],
+                    ),
+                  ),
+                ),
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(text: '${result.progressPerc}% ', style: const TextStyle(color: Color(0xFFFDE047), fontWeight: FontWeight.bold, fontSize: 12)),
+                      TextSpan(text: '(${result.completedLines}/${result.totalLines})', style: const TextStyle(color: Colors.white, fontSize: 10.5)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: LinearProgressIndicator(
+                value: (result.progressPerc / 100.0).clamp(0.0, 1.0),
+                minHeight: 8,
+                backgroundColor: const Color(0x33FFFFFF),
+                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFACC15)),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  double _parseManzilAmountToParas(String? amountStr) {
+    if (amountStr == null || amountStr.isEmpty || amountStr == '-' || amountStr == 'ناغہ') return 0.0;
+    final s = amountStr.trim();
+    const map = {
+      'Quarter': 0.25, 'پاؤ': 0.25,
+      'Half': 0.5, 'آدھا': 0.5,
+      'Three Quarter': 0.75, 'تین پاؤ': 0.75,
+      'Full': 1.0, 'مکمل': 1.0,
+      '1 Parah': 1.0, 'ایک پارہ': 1.0, '1': 1.0,
+      '1.25 Parah': 1.25, 'سوا پارہ': 1.25,
+      '1.5 Parah': 1.5, 'ڈیڑھ': 1.5, 'ڈیڑھ پارہ': 1.5, '1.5': 1.5,
+      '2 Parah': 2.0, 'دو پارے': 2.0, 'دو': 2.0, '2': 2.0,
+      '2.5 Parah': 2.5, 'ڈھائی': 2.5, 'ڈھائی پارے': 2.5, '2.5': 2.5,
+      '3 Parah': 3.0, 'تین': 3.0, 'تین پارے': 3.0, '3': 3.0
+    };
+    if (map.containsKey(s)) return map[s]!;
+    final match = RegExp(r'^([0-9\.]+)').firstMatch(s);
+    if (match != null) {
+      return double.tryParse(match.group(1)!) ?? 0.0;
+    }
+    return 0.0;
+  }
+
+  Widget _buildDateFilterBar(bool isUrdu) {
+    String dateRangeLabel;
+    if (_filterStartDate == null || _filterEndDate == null) {
+      dateRangeLabel = isUrdu ? 'تمام ریکارڈز' : 'All Records';
+    } else {
+      final fromStr = intl.DateFormat('d MMM yyyy').format(_filterStartDate!);
+      final toStr = intl.DateFormat('d MMM yyyy').format(_filterEndDate!);
+      dateRangeLabel = isUrdu ? '$fromStr تا $toStr' : '$fromStr to $toStr';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.calendar_month, color: primaryGreen, size: 20),
+                  const SizedBox(width: 6),
+                  Text(
+                    isUrdu ? 'رپورٹ کا دورانیہ' : 'Report Period',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: primaryGreen),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: primaryGreen.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: primaryGreen.withOpacity(0.2)),
+                ),
+                child: Text(
+                  dateRangeLabel,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryGreen),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip(
+                  label: isUrdu ? 'یہ مہینہ' : 'This Month',
+                  selected: _selectedPeriodFilter == 'current_month',
+                  onTap: () {
+                    final now = DateTime.now();
+                    setState(() {
+                      _selectedPeriodFilter = 'current_month';
+                      _filterStartDate = DateTime(now.year, now.month, 1);
+                      _filterEndDate = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+                    });
+                  },
+                ),
+                const SizedBox(width: 6),
+                _buildFilterChip(
+                  label: isUrdu ? 'گزشتہ مہینہ' : 'Last Month',
+                  selected: _selectedPeriodFilter == 'last_month',
+                  onTap: () {
+                    final now = DateTime.now();
+                    setState(() {
+                      _selectedPeriodFilter = 'last_month';
+                      _filterStartDate = DateTime(now.year, now.month - 1, 1);
+                      _filterEndDate = DateTime(now.year, now.month, 0, 23, 59, 59);
+                    });
+                  },
+                ),
+                const SizedBox(width: 6),
+                _buildFilterChip(
+                  label: isUrdu ? 'تمام ریکارڈز' : 'All Time',
+                  selected: _selectedPeriodFilter == 'all',
+                  onTap: () {
+                    setState(() {
+                      _selectedPeriodFilter = 'all';
+                      _filterStartDate = null;
+                      _filterEndDate = null;
+                    });
+                  },
+                ),
+                const SizedBox(width: 6),
+                _buildFilterChip(
+                  label: isUrdu ? 'مخصوص تاریخ 📅' : 'Custom 📅',
+                  selected: _selectedPeriodFilter == 'custom',
+                  onTap: () async {
+                    final now = DateTime.now();
+                    final initialRange = DateTimeRange(
+                      start: _filterStartDate ?? DateTime(now.year, now.month, 1),
+                      end: _filterEndDate ?? now,
+                    );
+                    final picked = await showDateRangePicker(
+                      context: context,
+                      initialDateRange: initialRange,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(now.year + 2),
+                      builder: (context, child) {
+                        return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: ColorScheme.light(
+                              primary: primaryGreen,
+                              onPrimary: Colors.white,
+                              onSurface: Colors.black87,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _selectedPeriodFilter = 'custom';
+                        _filterStartDate = DateTime(picked.start.year, picked.start.month, picked.start.day, 0, 0, 0);
+                        _filterEndDate = DateTime(picked.end.year, picked.end.month, picked.end.day, 23, 59, 59);
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({required String label, required bool selected, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? primaryGreen : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? primaryGreen : Colors.grey.shade300),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+            color: selected ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHusnSautSummaryCards(bool isUrdu) {
+    int manzilRecited = 0;
+    int manzilNaghas = 0;
+    int totalMashq = 0;
+    int tilawatDays = 0;
+
+    final husnRecords = _filteredHusnSautRecords;
+    for (var r in husnRecords) {
+      if (r['is_dummy'] == 1) continue;
+      final mSabaq = (r['manzil_sabaq'] ?? '').toString().trim();
+      final mGrade = (r['manzil_grade'] ?? '').toString().trim();
+      if (mGrade == 'ناغہ' || mGrade == 'Absent' || mGrade == 'نہیں سنائی' || mSabaq == '-' || mSabaq.isEmpty) {
+        if (mGrade == 'ناغہ' || mGrade == 'Absent') manzilNaghas++;
+      } else {
+        manzilRecited++;
+      }
+
+      for (int i = 1; i <= 4; i++) {
+        final m = (r['mashq_${i}_sabaq'] ?? '').toString().trim();
+        if (m.isNotEmpty && m != '-') totalMashq++;
+      }
+
+      final tQty = (r['tilawat_qty'] ?? '').toString().trim();
+      if (tQty.isNotEmpty && tQty != '-') tilawatDays++;
+    }
+
+    final aRecords = _filteredAttendanceRecords;
+    final Set<String> presentDates = {};
+    final Set<String> absentDates = {};
+    for (var a in aRecords) {
+      final date = PerformanceCalculator.normalizeDate(a['date']?.toString() ?? '');
+      if (date.isEmpty || date == '1970-01-01') continue;
+      final st = (a['status'] ?? '').toString().trim().toUpperCase();
+      if (st == 'ABSENT' || st == 'A' || st.contains('غیر حاضر')) {
+        absentDates.add(date);
+      } else if (st == 'PRESENT' || st == 'P' || st.contains('حاضر')) {
+        presentDates.add(date);
+      }
+    }
+    for (var r in husnRecords) {
+      final date = PerformanceCalculator.normalizeDate(r['date']?.toString() ?? '');
+      if (date.isNotEmpty && !absentDates.contains(date) && r['is_dummy'] != 1) {
+        presentDates.add(date);
+      }
+    }
+    final presentDays = presentDates.length;
+    final absentDays = absentDates.length;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                title: isUrdu ? 'منزل سمری' : 'Manzil Summary',
+                icon: Icons.auto_stories,
+                primaryColor: const Color(0xFF6A1B9A),
+                stat1Label: isUrdu ? 'سنائی گئی منزل' : 'Recited Days',
+                stat1Value: isUrdu ? '$manzilRecited دن' : '$manzilRecited d',
+                stat2Label: isUrdu ? 'ناغے' : 'Naghas',
+                stat2Value: manzilNaghas.toString(),
+                isStat2Alert: manzilNaghas > 0,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildMetricCard(
+                title: isUrdu ? 'مشق سمری' : 'Mashq Summary',
+                icon: Icons.record_voice_over,
+                primaryColor: Colors.deepPurple,
+                stat1Label: isUrdu ? 'کل مشقیں' : 'Total Sessions',
+                stat1Value: isUrdu ? '$totalMashq مشق' : '$totalMashq',
+                stat2Label: isUrdu ? 'معیار' : 'Quality',
+                stat2Value: isUrdu ? 'جاری' : 'Active',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                title: isUrdu ? 'تلاوت سمری' : 'Tilawat Summary',
+                icon: Icons.menu_book,
+                primaryColor: Colors.teal.shade800,
+                stat1Label: isUrdu ? 'ایام تلاوت' : 'Tilawat Days',
+                stat1Value: isUrdu ? '$tilawatDays دن' : '$tilawatDays d',
+                stat2Label: isUrdu ? 'کیفیت' : 'Status',
+                stat2Value: isUrdu ? 'حسب شیڈول' : 'On Schedule',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildMetricCard(
+                title: isUrdu ? 'حاضری سمری' : 'Attendance',
+                icon: Icons.how_to_reg,
+                primaryColor: Colors.teal.shade700,
+                stat1Label: isUrdu ? 'کل حاضری' : 'Presents',
+                stat1Value: isUrdu ? '$presentDays دن' : '$presentDays d',
+                stat2Label: isUrdu ? 'غیر حاضری' : 'Absents',
+                stat2Value: isUrdu ? '$absentDays دن' : '$absentDays d',
+                isStat2Alert: absentDays > 0,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCardsSection(bool isUrdu) {
+    if (_isHusnSautStudent) {
+      return _buildHusnSautSummaryCards(isUrdu);
+    }
+    final bool isManzilGardan = (_student?['hifz_section'] == 'manzil_gardan');
+    int totalSabaqLines = 0;
+    int sabaqNaghas = 0;
+    int sabqiDaysRecited = 0;
+    int sabqiNaghas = 0;
+    double manzilParasRecited = 0.0;
+    int manzilNaghas = 0;
+
+    final hRecords = _filteredHifzRecords;
+    final aRecords = _filteredAttendanceRecords;
+
+    for (var r in hRecords) {
+      final attStatus = (r['att_status'] ?? '').toString().trim();
+      // If student was Absent or Leave on this day, it's counted in attendance, NOT as a lesson nagha!
+      if (attStatus == 'غیر حاضر' || attStatus == 'Absent' || attStatus == 'A' ||
+          attStatus == 'رخصت' || attStatus == 'Leave' || attStatus == 'L') {
+        continue;
+      }
+
+      final sGrade = (r['sabaq_p'] ?? r['sabaq_grade'] ?? '').toString().trim();
+      final sLines = int.tryParse((r['sabaq_lines'] ?? '0').toString().trim()) ?? 0;
+      final sPara = (r['sabaq_para'] ?? '').toString().trim();
+      bool isSabaqMissed = (sGrade == 'ناغہ' || sGrade == 'Absent' || sGrade == 'نہیں سنایا' || (sLines == 0 && sPara.isEmpty));
+      if (isSabaqMissed) {
+        if (!isManzilGardan) sabaqNaghas++;
+      } else {
+        totalSabaqLines += sLines;
+      }
+
+      final sqGrade = (r['sabqi_p'] ?? r['sabqi_grade'] ?? '').toString().trim();
+      final sqPara = (r['sabqi_para'] ?? '').toString().trim();
+      final sqQty = (r['sabqi_qty'] ?? '').toString().trim();
+      bool isSabqiMissed = (sqGrade == 'ناغہ' || sqGrade == 'Absent' || sqGrade == 'نہیں سنائی' || (sqPara.isEmpty && sqQty.isEmpty));
+      if (isSabqiMissed) {
+        if (!isManzilGardan) sabqiNaghas++;
+      } else {
+        sabqiDaysRecited++;
+      }
+
+      final mGrade = (r['manzil_p'] ?? r['manzil_grade'] ?? '').toString().trim();
+      final mDetails = (r['manzil_details'] ?? r['manzil_parah'] ?? '').toString().trim();
+      final mQty = (r['manzil_total_qty'] ?? r['manzil_amount'] ?? '').toString().trim();
+      bool isManzilMissed = (mGrade == 'ناغہ' || mGrade == 'Absent' || mGrade == 'نہیں سنائی' || (mDetails.isEmpty && mQty.isEmpty));
+      if (isManzilMissed) {
+        manzilNaghas++;
+      } else {
+        double paras = _parseManzilAmountToParas(mQty);
+        if (paras == 0.0 && mDetails.isNotEmpty) paras = 1.0;
+        manzilParasRecited += paras;
+      }
+    }
+
+    final Set<String> presentDates = {};
+    final Set<String> absentDates = {};
+    final Set<String> leaveDates = {};
+
+    for (var a in aRecords) {
+      final date = PerformanceCalculator.normalizeDate(a['date']?.toString() ?? '');
+      if (date.isEmpty || date == '1970-01-01') continue;
+      final st = (a['status'] ?? '').toString().trim().toUpperCase();
+      if (st == 'ABSENT' || st == 'A' || st.contains('غیر حاضر') || st.contains('غائب')) {
+        absentDates.add(date);
+      } else if (st == 'LEAVE' || st == 'L' || st.contains('رخصت')) {
+        leaveDates.add(date);
+      } else if (st == 'PRESENT' || st == 'P' || st.contains('حاضر')) {
+        presentDates.add(date);
+      }
+    }
+
+    for (var h in hRecords) {
+      final date = PerformanceCalculator.normalizeDate(h['date']?.toString() ?? '');
+      final attSt = (h['att_status'] ?? '').toString().trim();
+      if (attSt == 'غیر حاضر') {
+        absentDates.add(date);
+      } else if (attSt == 'رخصت') {
+        leaveDates.add(date);
+      } else if (date.isNotEmpty && !absentDates.contains(date)) {
+        presentDates.add(date);
+      }
+    }
+
+    for (var d in absentDates) {
+      presentDates.remove(d);
+    }
+    for (var d in leaveDates) {
+      presentDates.remove(d);
+    }
+
+    int presentDays = presentDates.length;
+    int absentDays = absentDates.length;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                title: isUrdu ? 'سبق کی سمری' : 'Sabaq Summary',
+                icon: Icons.menu_book,
+                primaryColor: Colors.green.shade700,
+                stat1Label: isUrdu ? 'کل لائنیں' : 'Total Lines',
+                stat1Value: totalSabaqLines.toString(),
+                stat2Label: isManzilGardan ? (isUrdu ? 'حیثیت' : 'Status') : (isUrdu ? 'ناغے' : 'Naghas'),
+                stat2Value: isManzilGardan ? (isUrdu ? 'استثناء' : 'Exempt') : sabaqNaghas.toString(),
+                isStat2Alert: !isManzilGardan && sabaqNaghas > 0,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildMetricCard(
+                title: isUrdu ? 'سبقی کی سمری' : 'Sabqi Summary',
+                icon: Icons.book,
+                primaryColor: Colors.blue.shade700,
+                stat1Label: isUrdu ? 'سنائے گئے ایام' : 'Days Recited',
+                stat1Value: isUrdu ? '$sabqiDaysRecited دن' : '$sabqiDaysRecited d',
+                stat2Label: isManzilGardan ? (isUrdu ? 'حیثیت' : 'Status') : (isUrdu ? 'ناغے' : 'Naghas'),
+                stat2Value: isManzilGardan ? (isUrdu ? 'استثناء' : 'Exempt') : sabqiNaghas.toString(),
+                isStat2Alert: !isManzilGardan && sabqiNaghas > 0,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                title: isUrdu ? 'منزل کی سمری' : 'Manzil Summary',
+                icon: Icons.auto_stories,
+                primaryColor: Colors.amber.shade800,
+                stat1Label: isUrdu ? 'کل پارے' : 'Total Paras',
+                stat1Value: isUrdu ? '${manzilParasRecited.toStringAsFixed(1)} پارے' : '${manzilParasRecited.toStringAsFixed(1)} p',
+                stat2Label: isUrdu ? 'ناغے' : 'Naghas',
+                stat2Value: manzilNaghas.toString(),
+                isStat2Alert: manzilNaghas > 0,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildMetricCard(
+                title: isUrdu ? 'حاضری سمری' : 'Attendance',
+                icon: Icons.how_to_reg,
+                primaryColor: Colors.teal.shade700,
+                stat1Label: isUrdu ? 'کل حاضری' : 'Presents',
+                stat1Value: isUrdu ? '$presentDays دن' : '$presentDays d',
+                stat2Label: isUrdu ? 'غیر حاضری' : 'Absents',
+                stat2Value: isUrdu ? '$absentDays دن' : '$absentDays d',
+                isStat2Alert: absentDays > 0,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetricCard({
+    required String title,
+    required IconData icon,
+    required Color primaryColor,
+    required String stat1Label,
+    required String stat1Value,
+    required String stat2Label,
+    required String stat2Value,
+    bool isStat2Alert = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(top: BorderSide(color: primaryColor, width: 3.5)),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: primaryColor),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primaryColor),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(stat1Value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  Text(stat1Label, style: TextStyle(fontSize: 9.5, color: Colors.grey.shade600)),
+                ],
+              ),
+              Container(width: 1, height: 26, color: Colors.grey.shade200),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    stat2Value,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isStat2Alert ? Colors.red.shade700 : Colors.green.shade700,
+                    ),
+                  ),
+                  Text(stat2Label, style: TextStyle(fontSize: 9.5, color: Colors.grey.shade600)),
+                ],
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
   Widget _buildPerformanceSection(bool isUrdu) {
-    final att = (_stats['attendancePerc'] as int? ?? 0).toDouble();
-    final acad = (_stats['academicScore'] as int? ?? 0).toDouble();
+    final aRecords = _filteredAttendanceRecords;
+    final hRecords = _filteredHifzRecords;
+
+    final Set<String> presentDates = {};
+    final Set<String> absentDates = {};
+    final Set<String> leaveDates = {};
+
+    for (var a in aRecords) {
+      final date = PerformanceCalculator.normalizeDate(a['date']?.toString() ?? '');
+      if (date.isEmpty || date == '1970-01-01') continue;
+      final st = (a['status'] ?? '').toString().trim().toUpperCase();
+      if (st == 'ABSENT' || st == 'A' || st.contains('غیر حاضر') || st.contains('غائب')) {
+        absentDates.add(date);
+      } else if (st == 'LEAVE' || st == 'L' || st.contains('رخصت')) {
+        leaveDates.add(date);
+      } else if (st == 'PRESENT' || st == 'P' || st.contains('حاضر')) {
+        presentDates.add(date);
+      }
+    }
+
+    for (var h in hRecords) {
+      final date = PerformanceCalculator.normalizeDate(h['date']?.toString() ?? '');
+      final attSt = (h['att_status'] ?? '').toString().trim();
+      if (attSt == 'غیر حاضر') {
+        absentDates.add(date);
+      } else if (attSt == 'رخصت') {
+        leaveDates.add(date);
+      } else if (date.isNotEmpty && !absentDates.contains(date)) {
+        presentDates.add(date);
+      }
+    }
+
+    for (var d in absentDates) {
+      presentDates.remove(d);
+    }
+    for (var d in leaveDates) {
+      presentDates.remove(d);
+    }
+
+    int totalAttDays = presentDates.length + absentDates.length + leaveDates.length;
+    double att = totalAttDays > 0 ? (presentDates.length / totalAttDays * 100) : (_stats['attendancePerc'] as num? ?? 0).toDouble();
+
+    final bool isManzilGardan = (_student?['hifz_section'] == 'manzil_gardan');
+    double totalPoints = 0;
+    int count = 0;
+    for (var h in hRecords) {
+      final attSt = (h['att_status'] ?? '').toString();
+      if (attSt == 'غیر حاضر' || attSt == 'رخصت') continue;
+      count++;
+      if (isManzilGardan) {
+        totalPoints += PerformanceCalculator.getGradePoints(h['manzil_grade'], 100);
+      } else {
+        totalPoints += PerformanceCalculator.getGradePoints(h['sabaq_grade'], 30);
+        totalPoints += PerformanceCalculator.getGradePoints(h['sabqi_grade'], 30);
+        totalPoints += PerformanceCalculator.getGradePoints(h['manzil_grade'], 40);
+      }
+    }
+    double acad = count > 0 ? (totalPoints / count) : (_stats['academicScore'] as num? ?? 0).toDouble();
 
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
           color: Colors.white, borderRadius: BorderRadius.circular(15)),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isUrdu ? 'ہفتہ وار کارکردگی' : 'Weekly Performance',
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+          Center(
+            child: Text(isUrdu ? '📊 کارکردگی اور گراف' : '📊 Performance & Graphs',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
           const Divider(),
+          const SizedBox(height: 5),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -490,13 +1824,149 @@ class _StudentReportPageState extends State<StudentReportPage> {
               _buildGauge(isUrdu ? 'تعلیمی' : 'Academic', acad, Colors.green),
             ],
           ),
-          const SizedBox(height: 15),
-          Text(isUrdu ? 'تعلیمی گراف (%)' : 'Academic Graph (%)',
-              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 20),
+          Text(isUrdu ? '📈 حفظ / سبق اسکور ٹرینڈ (آخری 7 ایام)' : '📈 Sabaq Score Trend (Last 7 Days)',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
           const SizedBox(height: 10),
           _buildSimpleBarChart(),
+          const SizedBox(height: 20),
+          Text(isUrdu ? '📅 ماہانہ حاضری فیصد ٹرینڈ' : '📅 Monthly Attendance % Trend',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+          const SizedBox(height: 10),
+          SizedBox(height: 85, child: _buildMonthlyAttendanceChart(isUrdu)),
+          const SizedBox(height: 20),
+          Text(isUrdu ? '📝 آخری 5 امتحانی نتائج (%)' : '📝 Recent Exam Results (%)',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+          const SizedBox(height: 10),
+          SizedBox(height: 85, child: _buildExamResultsBarChart(isUrdu)),
         ],
       ),
+    );
+  }
+
+  Widget _buildMonthlyAttendanceChart(bool isUrdu) {
+    if (_attendanceRecords.isEmpty) {
+      return Center(
+        child: Text(isUrdu ? 'حاضری کا ڈیٹا دستیاب نہیں' : 'No attendance data',
+            style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      );
+    }
+
+    final Map<String, List<Map<String, dynamic>>> monthlyGroups = {};
+    for (var r in _attendanceRecords) {
+      final dateStr = r['date']?.toString() ?? '';
+      if (dateStr.length >= 7) {
+        final ym = dateStr.substring(0, 7);
+        monthlyGroups.putIfAbsent(ym, () => []).add(r);
+      }
+    }
+
+    final sortedKeys = monthlyGroups.keys.toList()..sort();
+    final recentKeys = sortedKeys.reversed.take(5).toList().reversed.toList();
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: recentKeys.map((ym) {
+        final records = monthlyGroups[ym]!;
+        int presentCount = 0;
+        for (var rec in records) {
+          final s1 =
+              (rec['status_1'] ?? rec['status'] ?? '').toString().toUpperCase();
+          if (s1 == 'P' || s1 == 'PRESENT' || s1 == 'حاضر') presentCount++;
+        }
+        final double perc = records.isNotEmpty
+            ? ((presentCount / records.length) * 100).clamp(0, 100)
+            : 0;
+        String monthName = ym;
+        try {
+          monthName =
+              intl.DateFormat('MMM').format(DateTime.parse('$ym-01'));
+        } catch (_) {}
+
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text('${perc.toInt()}%',
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue)),
+            const SizedBox(height: 4),
+            Container(
+              width: 26,
+              height: (perc * 0.55).clamp(6, 55),
+              decoration: BoxDecoration(
+                color: perc >= 80
+                    ? Colors.blue.shade600
+                    : (perc >= 60 ? Colors.blue.shade300 : Colors.orange),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(4)),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(monthName,
+                style: const TextStyle(fontSize: 10, color: Colors.black87)),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildExamResultsBarChart(bool isUrdu) {
+    if (_examResults.isEmpty) {
+      return Center(
+        child: Text(isUrdu ? 'امتحانی نتائج دستیاب نہیں' : 'No exam results',
+            style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      );
+    }
+
+    final recentExams = _examResults.take(5).toList();
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: recentExams.map((ex) {
+        final total =
+            double.tryParse(ex['total_marks']?.toString() ?? '100') ?? 100;
+        final obt =
+            double.tryParse(ex['obtained_marks']?.toString() ?? '0') ?? 0;
+        final perc =
+            total > 0 ? ((obt / total) * 100).clamp(0, 100) : 0.0;
+        final name =
+            (ex['exam_name'] ?? ex['subject'] ?? 'Exam').toString();
+        final shortName = name.length > 6 ? name.substring(0, 6) : name;
+
+        Color barColor = perc >= 80
+            ? Colors.green
+            : (perc >= 60
+                ? Colors.blue
+                : (perc >= 40 ? Colors.orange : Colors.red));
+
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text('${perc.toInt()}%',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: barColor)),
+            const SizedBox(height: 4),
+            Container(
+              width: 26,
+              height: (perc * 0.55).clamp(6, 55),
+              decoration: BoxDecoration(
+                color: barColor,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(4)),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(shortName,
+                style: const TextStyle(fontSize: 9, color: Colors.black87)),
+          ],
+        );
+      }).toList(),
     );
   }
 
@@ -527,9 +1997,13 @@ class _StudentReportPageState extends State<StudentReportPage> {
   }
 
   Widget _buildSimpleBarChart() {
+    final bool isManzilGardan = (_student?['hifz_section'] == 'manzil_gardan');
     List<double> scores = _hifzRecords.reversed
         .take(7)
         .map((r) {
+          if (isManzilGardan) {
+            return PerformanceCalculator.getGradePoints(r['manzil_grade'], 100);
+          }
           double s =
               (PerformanceCalculator.getGradePoints(r['sabaq_grade'], 30) +
                   PerformanceCalculator.getGradePoints(r['sabqi_grade'], 30) +
@@ -541,8 +2015,10 @@ class _StudentReportPageState extends State<StudentReportPage> {
         .toList();
 
     if (scores.isEmpty) {
-      return const Text('ڈیٹا دستیاب نہیں',
-          style: TextStyle(fontSize: 10, color: Colors.grey));
+      return const Center(
+        child: Text('ڈیٹا دستیاب نہیں',
+            style: TextStyle(fontSize: 10, color: Colors.grey)),
+      );
     }
 
     return SizedBox(
@@ -551,17 +2027,28 @@ class _StudentReportPageState extends State<StudentReportPage> {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: scores.map((s) {
-          return Container(
-            width: 25,
-            height: (s * 0.7).clamp(5, 70),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [primaryGreen.withOpacity(0.5), primaryGreen],
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(5)),
-            ),
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text('${s.toInt()}',
+                  style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: primaryGreen)),
+              const SizedBox(height: 2),
+              Container(
+                width: 25,
+                height: (s * 0.55).clamp(5, 55),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                      colors: [primaryGreen.withOpacity(0.5), primaryGreen],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(5)),
+                ),
+              ),
+            ],
           );
         }).toList(),
       ),
@@ -598,7 +2085,8 @@ class _StudentReportPageState extends State<StudentReportPage> {
   }
 
   Widget _buildAcademicRegister(bool isUrdu) {
-    if (_academicReports.isEmpty) return const SizedBox.shrink();
+    final realReports = _filteredAcademicReports.where((r) => r['is_dummy'] != 1).toList();
+    if (realReports.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
@@ -630,7 +2118,7 @@ class _StudentReportPageState extends State<StudentReportPage> {
                 DataColumn(label: Text(isUrdu ? 'کیفیت' : 'Grade')),
                 DataColumn(label: Text(isUrdu ? 'ریمارکس' : 'Remarks')),
               ],
-              rows: _academicReports.map((r) {
+              rows: realReports.map((r) {
                 final dateText = (r['date'] ?? '').toString();
                 final classText =
                     (r['class_name'] ?? r['class'] ?? '-').toString();
@@ -667,6 +2155,129 @@ class _StudentReportPageState extends State<StudentReportPage> {
               }).toList(),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttendanceHistoryTable(bool isUrdu) {
+    final attList = _filteredAttendanceRecords.where((r) => r['is_dummy'] != 1).toList();
+    if (attList.isEmpty) return const SizedBox.shrink();
+    
+    // Group attendance by date
+    Map<String, Map<String, dynamic>> grouped = {};
+    for (var a in attList) {
+      final date = a['date']?.toString() ?? '';
+      if (date.isEmpty) continue;
+      if (!grouped.containsKey(date)) {
+        grouped[date] = {
+          'status_1': '-', 'delay_1': '-',
+          'status_2': '-', 'delay_2': '-',
+          'status_3': '-', 'delay_3': '-',
+          'status_4': '-', 'delay_4': '-',
+        };
+      }
+      if (a.containsKey('status_1')) grouped[date]!['status_1'] = a['status_1'];
+      if (a.containsKey('delay_1')) grouped[date]!['delay_1'] = a['delay_1'];
+      if (a.containsKey('status_2')) grouped[date]!['status_2'] = a['status_2'];
+      if (a.containsKey('delay_2')) grouped[date]!['delay_2'] = a['delay_2'];
+      if (a.containsKey('status_3')) grouped[date]!['status_3'] = a['status_3'];
+      if (a.containsKey('delay_3')) grouped[date]!['delay_3'] = a['delay_3'];
+      if (a.containsKey('status_4')) grouped[date]!['status_4'] = a['status_4'];
+      if (a.containsKey('delay_4')) grouped[date]!['delay_4'] = a['delay_4'];
+      
+      // Fallback
+      if (a.containsKey('status') && !a.containsKey('status_1')) {
+         grouped[date]!['status_1'] = a['status'];
+      }
+      if (a.containsKey('delay_time') && !a.containsKey('delay_1')) {
+         grouped[date]!['delay_1'] = a['delay_time'];
+      }
+    }
+
+    final sortedDates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    Widget _attCell(String status, String delay) {
+      String st = status.toString().toUpperCase();
+      String mark = '-';
+      Color c = Colors.black;
+      if (st.startsWith('P') || st.contains('حاضر')) { mark = 'ح'; c = Colors.green; }
+      else if (st.startsWith('A') || st.contains('غیر')) { mark = 'غ'; c = Colors.red; }
+      else if (st.startsWith('L') || st.contains('رخصت')) { mark = 'ر'; c = Colors.orange; }
+      else if (st.startsWith('T') || st.contains('تاخیر')) { mark = 'ت'; c = Colors.blue; }
+
+      String dText = (delay == '-' || delay.isEmpty || delay == 'null' || delay == '0') ? '' : ' \n$delay';
+      
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        child: RichText(
+          textAlign: TextAlign.center,
+          text: TextSpan(
+            text: mark,
+            style: TextStyle(color: c, fontWeight: FontWeight.bold, fontFamily: 'JameelNooriNastaleeq', fontSize: 16),
+            children: [
+              if (dText.isNotEmpty) TextSpan(text: dText, style: const TextStyle(color: Colors.grey, fontSize: 10, fontFamily: 'Roboto')),
+            ]
+          )
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 15),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(15)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.date_range, color: Color(0xFF284D3D), size: 20),
+              const SizedBox(width: 8),
+              Text(isUrdu ? 'حاضری کی تفصیل' : 'Attendance History',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const Divider(),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Table(
+              border: TableBorder.all(color: Colors.grey.shade300),
+              columnWidths: const {
+                0: FixedColumnWidth(90),
+                1: FixedColumnWidth(60),
+                2: FixedColumnWidth(60),
+                3: FixedColumnWidth(60),
+                4: FixedColumnWidth(60),
+              },
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: primaryGreen.withOpacity(0.05)),
+                  children: [
+                    _tableHCell(isUrdu ? "تاریخ" : "Date"),
+                    _tableHCell(isUrdu ? "فجر" : "Fajr"),
+                    _tableHCell(isUrdu ? "ظہر" : "Dhuhr"),
+                    _tableHCell(isUrdu ? "عصر" : "Asr"),
+                    _tableHCell(isUrdu ? "عشاء" : "Isha"),
+                  ]
+                ),
+                ...sortedDates.map((d) {
+                  final rec = grouped[d]!;
+                  return TableRow(
+                    children: [
+                      Container(padding: const EdgeInsets.all(8), alignment: Alignment.center, child: Text(d, style: const TextStyle(fontSize: 12))),
+                      _attCell(rec['status_1'].toString(), rec['delay_1'].toString()),
+                      _attCell(rec['status_2'].toString(), rec['delay_2'].toString()),
+                      _attCell(rec['status_3'].toString(), rec['delay_3'].toString()),
+                      _attCell(rec['status_4'].toString(), rec['delay_4'].toString()),
+                    ]
+                  );
+                }).toList(),
+              ],
+            ),
+          )
         ],
       ),
     );
@@ -1032,6 +2643,124 @@ class _StudentReportPageState extends State<StudentReportPage> {
   }
 
   Widget _buildDataRow(Map<String, dynamic> h) {
+    String attStatus = (h['att_status'] ?? '').toString().trim();
+    String sabaqStatus = (h['sabaq_status'] ?? '').toString().trim();
+    bool isAbsent = attStatus == 'غیر حاضر' || sabaqStatus == 'غیر حاضر' || attStatus.toLowerCase() == 'absent' || sabaqStatus.toLowerCase() == 'absent';
+    bool isLeave = attStatus == 'رخصت' || sabaqStatus == 'رخصت' || attStatus.toLowerCase() == 'leave' || sabaqStatus.toLowerCase() == 'leave';
+    final bool isManzilGardan = (_student?['hifz_section'] == 'manzil_gardan');
+    bool isNaagha = !isManzilGardan && (h['is_dummy'] == 1 && (sabaqStatus == 'ناغہ' || (attStatus == 'حاضر' && (h['sabaq_para'] == null || h['sabaq_para'].toString().isEmpty || h['sabaq_para'] == '-'))));
+
+    if (isAbsent) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.08),
+          border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _cell(h['date'] ?? '-', 80, bold: true, fontSize: 10),
+              Container(
+                width: 985,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.cancel, color: Colors.red, size: 16),
+                    SizedBox(width: 8),
+                    Text(
+                      '❌ غیر حاضر (Absent)',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (isLeave) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.amber.withOpacity(0.08),
+          border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _cell(h['date'] ?? '-', 80, bold: true, fontSize: 10),
+              Container(
+                width: 985,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.amber.shade800, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      '⚠️ رخصت (On Leave)',
+                      style: TextStyle(
+                        color: Colors.amber.shade900,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (isNaagha) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _cell(h['date'] ?? '-', 80, bold: true, fontSize: 10),
+              Container(
+                width: 985,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'ناغہ (سبق نہیں سنایا)',
+                      style: TextStyle(
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1114,16 +2843,48 @@ class _StudentReportPageState extends State<StudentReportPage> {
                     _qaidaCell(isUrdu ? 'سبق 4' : 'Sabaq 4', true),
                   ],
                 ),
-                ..._qaidaRecords.take(30).map((r) => TableRow(
-                  children: [
-                    _qaidaCell(r['date'] ?? '-', false),
-                    _qaidaCell(r['lesson_type'] ?? '-', false),
-                    _qaidaCell("${r['sabaq_1'] ?? '-'} (${r['grade_1'] ?? '-'})", false),
-                    _qaidaCell("${r['sabaq_2'] ?? '-'} (${r['grade_2'] ?? '-'})", false),
-                    _qaidaCell("${r['sabaq_3'] ?? '-'} (${r['grade_3'] ?? '-'})", false),
-                    _qaidaCell("${r['sabaq_4'] ?? '-'} (${r['grade_4'] ?? '-'})", false),
-                  ]
-                )),
+                ..._filteredQaidaRecords.map((r) {
+                  String attStatus = (r['att_status'] ?? '').toString().trim();
+                  bool isAbsent = attStatus == 'غیر حاضر' || (r['grade_1'] == 'غیر حاضر' && (r['sabaq_1']?.toString().isEmpty ?? true));
+                  bool isLeave = attStatus == 'رخصت' || (r['grade_1'] == 'رخصت' && (r['sabaq_1']?.toString().isEmpty ?? true));
+
+                  if (isAbsent) {
+                    return TableRow(
+                      decoration: BoxDecoration(color: Colors.red.withOpacity(0.08)),
+                      children: [
+                        _qaidaCell(r['date'] ?? '-', false),
+                        _qaidaCell('غیر حاضر', false),
+                        _qaidaCell('-', false),
+                        _qaidaCell('-', false),
+                        _qaidaCell('-', false),
+                        _qaidaCell('❌ غیر حاضر (Absent)', false),
+                      ],
+                    );
+                  }
+                  if (isLeave) {
+                    return TableRow(
+                      decoration: BoxDecoration(color: Colors.amber.withOpacity(0.08)),
+                      children: [
+                        _qaidaCell(r['date'] ?? '-', false),
+                        _qaidaCell('رخصت', false),
+                        _qaidaCell('-', false),
+                        _qaidaCell('-', false),
+                        _qaidaCell('-', false),
+                        _qaidaCell('⚠️ رخصت (On Leave)', false),
+                      ],
+                    );
+                  }
+                  return TableRow(
+                    children: [
+                      _qaidaCell(r['date'] ?? '-', false),
+                      _qaidaCell(r['lesson_type'] ?? '-', false),
+                      _qaidaCell("${r['sabaq_1'] ?? '-'} (${r['grade_1'] ?? '-'})", false),
+                      _qaidaCell("${r['sabaq_2'] ?? '-'} (${r['grade_2'] ?? '-'})", false),
+                      _qaidaCell("${r['sabaq_3'] ?? '-'} (${r['grade_3'] ?? '-'})", false),
+                      _qaidaCell("${r['sabaq_4'] ?? '-'} (${r['grade_4'] ?? '-'})", false),
+                    ],
+                  );
+                }),
               ],
             ),
           )
@@ -1145,8 +2906,72 @@ class _StudentReportPageState extends State<StudentReportPage> {
     );
   }
 
-Widget _buildHifzTable(bool isUrdu) {
-    if (_hifzRecords.isEmpty) return const SizedBox.shrink();
+  Widget _buildHusnSautTable(bool isUrdu) {
+    final records = _filteredHusnSautRecords;
+    if (records.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(15)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.record_voice_over, color: Color(0xFF6A1B9A), size: 20),
+              const SizedBox(width: 8),
+              Text(isUrdu ? 'حسن صوت تعلیمی تفصیلات' : 'Husn-e-Saut Academic Details',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const Divider(),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300, width: 1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(const Color(0xFF6A1B9A).withOpacity(0.08)),
+                columns: [
+                  DataColumn(label: Text(isUrdu ? 'تاریخ' : 'Date', style: const TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text(isUrdu ? 'منزل' : 'Manzil', style: const TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text(isUrdu ? 'مشق 1' : 'Mashq 1', style: const TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text(isUrdu ? 'مشق 2' : 'Mashq 2', style: const TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text(isUrdu ? 'مشق 3' : 'Mashq 3', style: const TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text(isUrdu ? 'مشق 4' : 'Mashq 4', style: const TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text(isUrdu ? 'تلاوت' : 'Tilawat', style: const TextStyle(fontWeight: FontWeight.bold))),
+                ],
+                rows: records.map((r) {
+                  final date = r['date']?.toString() ?? '-';
+                  final manzil = "${r['manzil_sabaq'] ?? '-'} (${r['manzil_grade'] ?? '-'})";
+                  final m1 = "${r['mashq_1_sabaq'] ?? '-'} ${r['mashq_1_time'] != null && r['mashq_1_time'].toString().isNotEmpty ? '(${r['mashq_1_time']})' : ''}";
+                  final m2 = "${r['mashq_2_sabaq'] ?? '-'} ${r['mashq_2_time'] != null && r['mashq_2_time'].toString().isNotEmpty ? '(${r['mashq_2_time']})' : ''}";
+                  final m3 = "${r['mashq_3_sabaq'] ?? '-'} ${r['mashq_3_time'] != null && r['mashq_3_time'].toString().isNotEmpty ? '(${r['mashq_3_time']})' : ''}";
+                  final m4 = "${r['mashq_4_sabaq'] ?? '-'} ${r['mashq_4_time'] != null && r['mashq_4_time'].toString().isNotEmpty ? '(${r['mashq_4_time']})' : ''}";
+                  final tilawat = "${r['tilawat_qty'] ?? '-'} (${r['tilawat_parahs'] ?? '-'})";
+                  return DataRow(cells: [
+                    DataCell(Text(date)),
+                    DataCell(Text(manzil)),
+                    DataCell(Text(m1)),
+                    DataCell(Text(m2)),
+                    DataCell(Text(m3)),
+                    DataCell(Text(m4)),
+                    DataCell(Text(tilawat)),
+                  ]);
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHifzTable(bool isUrdu) {
+    final records = _filteredHifzRecords;
+    if (records.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
@@ -1173,7 +2998,7 @@ Widget _buildHifzTable(bool isUrdu) {
               child: Column(
                 children: [
                   _buildTableHeader(isUrdu),
-                  ..._hifzRecords.take(30).map((r) => _buildDataRow(r)),
+                  ...records.map((r) => _buildDataRow(r)),
                 ],
               ),
             ),
@@ -1638,3 +3463,4 @@ Widget _buildHifzTable(bool isUrdu) {
     }
   }
 }
+

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- White background -->
+  <rect width="64" height="64" rx="10" fill="#ffffff"/>
+
+  <!-- Mosque dome (main) -->
+  <ellipse cx="32" cy="26" rx="12" ry="10" fill="#284D3D"/>
+
+  <!-- Mosque body -->
+  <rect x="20" y="26" width="24" height="18" fill="#284D3D"/>
+
+  <!-- Door arch -->
+  <path d="M28 44 Q28 36 32 36 Q36 36 36 44 Z" fill="#ffffff"/>
+
+  <!-- Left minaret -->
+  <rect x="12" y="22" width="6" height="22" rx="1" fill="#284D3D"/>
+  <ellipse cx="15" cy="22" rx="3" ry="4" fill="#284D3D"/>
+  <circle cx="15" cy="18.5" r="1.8" fill="#D4AC0D"/>
+
+  <!-- Right minaret -->
+  <rect x="46" y="22" width="6" height="22" rx="1" fill="#284D3D"/>
+  <ellipse cx="49" cy="22" rx="3" ry="4" fill="#284D3D"/>
+  <circle cx="49" cy="18.5" r="1.8" fill="#D4AC0D"/>
+
+  <!-- Crescent on main dome -->
+  <path d="M32 16 Q28 13 28 10 Q31 12 34 10 Q34 13 32 16 Z" fill="#D4AC0D"/>
+
+  <!-- Bottom line / ground -->
+  <rect x="10" y="44" width="44" height="3" rx="1.5" fill="#284D3D"/>
+
+  <!-- Windows -->
+  <circle cx="26" cy="33" r="2" fill="#ffffff" opacity="0.7"/>
+  <circle cx="38" cy="33" r="2" fill="#ffffff" opacity="0.7"/>
+</svg>

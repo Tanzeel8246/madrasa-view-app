@@ -1,2 +1,1 @@
-require 'db.php';
-echo \->query('SELECT COUNT(*) FROM daily_hifz')->fetchColumn();
+<?php http_response_code(403); exit("Access Denied: This test script has been archived."); ?>

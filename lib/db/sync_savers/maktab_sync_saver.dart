@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 class MaktabSyncSaver {
-  static Future<void> save(Database db, Batch batch, Map<String, dynamic> data) async {
+  static Future<void> save(Database db, Batch batch, Map<String, dynamic> data, [List<List<int>>? maktabStudentIdRemaps]) async {
     // 1. Maktab Students
     if (data['maktab_students'] != null) {
       try {
@@ -14,6 +14,26 @@ class MaktabSyncSaver {
           String roll =
               (item['roll_number'] ?? item['admission_number'])?.toString().trim() ??
                   '';
+
+          var existing = <Map<String, dynamic>>[];
+          if (serverId > 0) {
+            existing = await db.query('maktab_students',
+                where: 'id = ?', whereArgs: [serverId], limit: 1);
+          }
+          if (existing.isEmpty && roll.isNotEmpty) {
+            existing = await db.query('maktab_students',
+                where: 'roll_number = ? OR admission_number = ?',
+                whereArgs: [roll, roll],
+                limit: 1);
+          }
+
+          if (existing.isNotEmpty) {
+            final existingId =
+                int.tryParse(existing.first['id']?.toString() ?? '') ?? 0;
+            if (serverId > 0 && existingId > 0 && existingId != serverId) {
+              maktabStudentIdRemaps?.add([existingId, serverId]);
+            }
+          }
 
           Map<String, dynamic> row = {
             'id': serverId > 0 ? serverId : null,
@@ -45,6 +65,8 @@ class MaktabSyncSaver {
             'wifaq_exam': int.tryParse(item['wifaq_exam']?.toString() ?? '0') ?? 0,
             'wifaq_marks': item['wifaq_marks']?.toString() ?? '',
             'mehrab_recitation': item['mehrab_recitation']?.toString() ?? '',
+            'hifz_section':
+                (item['hifz_section']?.toString().isNotEmpty == true) ? item['hifz_section'].toString() : 'regular',
             'is_deleted':
                 int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
             'is_synced': 1,
@@ -146,10 +168,17 @@ class MaktabSyncSaver {
       try {
         for (var item in data['maktab_attendance']) {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          final studentId = int.tryParse(item['student_id']?.toString() ?? '0') ?? 0;
+          final date = item['date']?.toString() ?? '';
+          if (studentId > 0 && date.isNotEmpty) {
+            batch.delete('maktab_attendance',
+                where: 'student_id = ? AND date = ? AND (id IS NULL OR id != ?)',
+                whereArgs: [studentId, date, serverId]);
+          }
           Map<String, dynamic> row = {
             'id': serverId > 0 ? serverId : null,
-            'student_id': int.tryParse(item['student_id']?.toString() ?? '0') ?? 0,
-            'date': item['date']?.toString() ?? '',
+            'student_id': studentId,
+            'date': date,
             'status': item['status']?.toString() ?? '',
             'remarks': item['remarks']?.toString() ?? '',
             'system_type': 'Masjid',
@@ -169,12 +198,19 @@ class MaktabSyncSaver {
       try {
         for (var item in data['maktab_nazira_record']) {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          final studentId = int.tryParse(item['student_id']?.toString() ?? '') ?? 0;
+          final date = item['date']?.toString() ?? '';
+          if (studentId > 0 && date.isNotEmpty) {
+            batch.delete('maktab_nazira_record',
+                where: 'student_id = ? AND date = ? AND (id IS NULL OR id != ?)',
+                whereArgs: [studentId, date, serverId]);
+          }
           Map<String, dynamic> row = {
             if (serverId > 0) 'id': serverId,
-            'student_id': int.tryParse(item['student_id']?.toString() ?? '') ?? 0,
+            'student_id': studentId,
             'class_name': item['class_name']?.toString() ?? '',
             'teacher_id': int.tryParse(item['teacher_id']?.toString() ?? ''),
-            'date': item['date']?.toString() ?? '',
+            'date': date,
             'morning_sabaq': item['morning_sabaq']?.toString() ?? '',
             'morning_qty': item['morning_qty']?.toString() ?? '',
             'morning_time': item['morning_time']?.toString() ?? '',
@@ -215,13 +251,25 @@ class MaktabSyncSaver {
       try {
         for (var item in data['maktab_hifz_record']) {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          final studentId = item['student_id']?.toString() ?? '';
+          final date = item['date']?.toString() ?? '';
+          if (serverId > 0) {
+            batch.delete('maktab_hifz_record',
+                where: 'server_id = ? AND id != ?',
+                whereArgs: [serverId, serverId]);
+          }
+          if (studentId.isNotEmpty && date.isNotEmpty) {
+            batch.delete('maktab_hifz_record',
+                where: 'student_id = ? AND date = ? AND (id IS NULL OR id != ?)',
+                whereArgs: [studentId, date, serverId]);
+          }
           Map<String, dynamic> row = {
             if (serverId > 0) 'id': serverId,
             'server_id': serverId > 0 ? serverId : null,
-            'student_id': item['student_id']?.toString() ?? '',
+            'student_id': studentId,
             'class_name': item['class_name']?.toString() ?? '',
             'teacher_id': int.tryParse(item['teacher_id']?.toString() ?? ''),
-            'date': item['date']?.toString() ?? '',
+            'date': date,
             'sabaq_para': item['sabaq_para']?.toString() ?? '',
             'sabaq_lines': item['sabaq_lines']?.toString() ?? '',
             'sabaq_grade': item['sabaq_grade']?.toString() ?? '',
@@ -263,12 +311,19 @@ class MaktabSyncSaver {
       try {
         for (var item in data['maktab_qaida_records']) {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          final studentId = int.tryParse(item['student_id']?.toString() ?? '') ?? 0;
+          final date = item['date']?.toString() ?? '';
+          if (studentId > 0 && date.isNotEmpty) {
+            batch.delete('maktab_qaida_records',
+                where: 'student_id = ? AND date = ? AND (id IS NULL OR id != ?)',
+                whereArgs: [studentId, date, serverId]);
+          }
           Map<String, dynamic> row = {
             if (serverId > 0) 'id': serverId,
-            'student_id': int.tryParse(item['student_id']?.toString() ?? '') ?? 0,
+            'student_id': studentId,
             'class_name': item['class_name']?.toString() ?? '',
             'teacher_id': int.tryParse(item['teacher_id']?.toString() ?? ''),
-            'date': item['date']?.toString() ?? '',
+            'date': date,
             'lesson_type': item['lesson_type']?.toString() ?? 'نورانی قاعدہ',
             'hearing_time': item['hearing_time']?.toString() ?? '',
             'sabaq_1': item['sabaq_1']?.toString() ?? '',

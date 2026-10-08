@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "madrasa_app" "\0"
+            VALUE "CompanyName", "جامعہ اشرف المدارس (Jamia Ashraf-ul-Madaris)" "\0"
+            VALUE "FileDescription", "مدرسہ و مکتب مینجمنٹ سسٹم (Madrasa Ashraf-ul-Madaris Management System)" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "madrasa_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 جامعہ اشرف المدارس. تمام حقوق محفوظ ہیں۔" "\0"
             VALUE "OriginalFilename", "madrasa_app.exe" "\0"
-            VALUE "ProductName", "madrasa_app" "\0"
+            VALUE "ProductName", "مدرسہ و مکتب مینجمنٹ سسٹم (Madrasa & Maktab ERP)" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

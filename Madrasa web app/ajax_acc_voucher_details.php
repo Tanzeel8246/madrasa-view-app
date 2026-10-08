@@ -13,8 +13,9 @@ if (!$voucher_id) {
     exit;
 }
 
-$entries = $pdo->prepare("SELECT e.*, a.name as account_name, a.code as account_code FROM acc_ledger_entries e JOIN acc_chart_of_accounts a ON e.account_id = a.id WHERE e.voucher_id = ? ORDER BY e.id ASC");
-$entries->execute([$voucher_id]);
+$cur_tenant_id = get_current_tenant_id($pdo);
+$entries = $pdo->prepare("SELECT e.*, a.name as account_name, a.code as account_code FROM acc_ledger_entries e JOIN acc_chart_of_accounts a ON e.account_id = a.id WHERE e.voucher_id = ? AND e.tenant_id = ? ORDER BY e.id ASC");
+$entries->execute([$voucher_id, $cur_tenant_id]);
 $ledger = $entries->fetchAll(PDO::FETCH_ASSOC);
 
 if (!$ledger) {

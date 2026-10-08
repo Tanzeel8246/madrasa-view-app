@@ -91,7 +91,7 @@ class _NaziraPageState extends State<NaziraPage> {
   }
 
   void _loadStudents() async {
-    final data = await DBHelper().getStudents();
+    final data = await DBHelper().getStudentsForUser();
     setState(() {
       students = data.where((s) {
         bool isActive = s['status'] == 'Active' &&
@@ -368,8 +368,12 @@ class _NaziraPageState extends State<NaziraPage> {
           canPop: false,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
-            Navigator.pushReplacement(
-                context, MaterialPageRoute(builder: (c) => DashboardPage()));
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (c) => const DashboardPage()));
+            }
           },
           child: Directionality(
             textDirection: isUrdu ? ui.TextDirection.rtl : ui.TextDirection.ltr,
@@ -647,6 +651,8 @@ class _NaziraPageState extends State<NaziraPage> {
               child: DropdownButton<String>(
                   isExpanded: true,
                   value: value,
+                  dropdownColor: Colors.white,
+                  style: const TextStyle(color: Colors.black87, fontSize: 13),
                   hint: Text("--", style: TextStyle(color: textColor)),
                   icon: Icon(Icons.keyboard_arrow_down, color: textColor),
                   items: items
@@ -654,7 +660,7 @@ class _NaziraPageState extends State<NaziraPage> {
                           value: i,
                           child: Text(i,
                               style:
-                                  TextStyle(color: textColor, fontSize: 13))))
+                                  const TextStyle(color: Colors.black87, fontSize: 13))))
                       .toList(),
                   onChanged: onChanged)),
         ),

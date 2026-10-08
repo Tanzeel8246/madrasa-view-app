@@ -33,9 +33,6 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
   );
 
   List<Map<String, dynamic>> results = [];
-  List<Map<String, dynamic>> allResults = [];
-  String selectedClass = '';
-  String selectedSubject = '';
   bool isLoading = true;
   bool _isPrinting = false;
 
@@ -62,7 +59,6 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
       });
 
       setState(() {
-        allResults = data;
         results = data;
         isLoading = false;
       });
@@ -70,61 +66,6 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
       debugPrint("Load Error: $e");
       setState(() => isLoading = false);
     }
-  }
-
-  void _applyFilters() {
-    final filtered = allResults.where((r) {
-      final className = (r['class_name'] ?? r['class'] ?? '').toString();
-      final subject = (r['subject'] ?? '').toString();
-      final classOk = selectedClass.isEmpty || className == selectedClass;
-      final subjectOk = selectedSubject.isEmpty || subject == selectedSubject;
-      return classOk && subjectOk;
-    }).toList()
-      ..sort((a, b) {
-        final valA =
-            double.tryParse((a['marks_obtained'] ?? 0).toString()) ?? 0.0;
-        final valB =
-            double.tryParse((b['marks_obtained'] ?? 0).toString()) ?? 0.0;
-        return valB.compareTo(valA);
-      });
-    setState(() => results = filtered);
-  }
-
-  List<String> _uniqueValues(String key) {
-    final values = allResults
-        .map((r) => (r[key] ?? '').toString().trim())
-        .where((v) => v.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-    return values;
-  }
-
-  bool _isPassStatus(String? status) {
-    final value = (status ?? '').trim();
-    return value == 'Pass' || value == 'Grace Pass' || value == 'Pass (Grace)';
-  }
-
-  bool _isAbsent(Map<String, dynamic> r) {
-    final status = (r['status'] ?? '').toString();
-    final grade = (r['grade'] ?? '').toString();
-    return status == 'Absent' || grade == 'Absent';
-  }
-
-  String _gradeKey(Map<String, dynamic> r) {
-    if (_isAbsent(r)) return 'Absent';
-    final grade = (r['grade'] ?? '').toString().trim();
-    const valid = ['A+', 'A', 'B', 'C', 'D', 'E', 'F'];
-    return valid.contains(grade) ? grade : 'F';
-  }
-
-  String _statusLabel(String? status) {
-    final value = (status ?? '').trim();
-    if (value == 'Absent') return 'غیر حاضر';
-    if (value == 'Pass') return 'پاس';
-    if (value == 'Grace Pass' || value == 'Pass (Grace)') return 'رعایتی';
-    if (value == 'Fail') return 'فیل';
-    return value.isEmpty ? '-' : value;
   }
 
   @override
@@ -142,17 +83,8 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             actions: [
               IconButton(
-                icon: _isPrinting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.print, color: Colors.white),
-                onPressed: _isPrinting ? null : _printPdf,
+                icon: const Icon(Icons.print, color: Colors.white),
+                onPressed: _printPdf,
                 tooltip: "پرنٹ کریں",
               ),
               IconButton(
@@ -169,7 +101,6 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
                   : SingleChildScrollView(
                       child: Column(
                         children: [
-                          _filters(),
                           _stats(),
                           _top3(),
                           _perfectBanner(),
@@ -178,76 +109,6 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
                       ),
                     ),
         ),
-      ),
-    );
-  }
-
-  Widget _filters() {
-    final classes = _uniqueValues('class_name');
-    final subjects = _uniqueValues('subject');
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
-      ),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          SizedBox(
-            width: 190,
-            child: DropdownButtonFormField<String>(
-              value: selectedClass,
-              decoration: const InputDecoration(
-                labelText: 'کلاس',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              items: [
-                const DropdownMenuItem(value: '', child: Text('تمام کلاسز')),
-                ...classes
-                    .map((v) => DropdownMenuItem(value: v, child: Text(v))),
-              ],
-              onChanged: (value) {
-                selectedClass = value ?? '';
-                _applyFilters();
-              },
-            ),
-          ),
-          SizedBox(
-            width: 190,
-            child: DropdownButtonFormField<String>(
-              value: selectedSubject,
-              decoration: const InputDecoration(
-                labelText: 'مضمون',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              items: [
-                const DropdownMenuItem(value: '', child: Text('تمام مضامین')),
-                ...subjects
-                    .map((v) => DropdownMenuItem(value: v, child: Text(v))),
-              ],
-              onChanged: (value) {
-                selectedSubject = value ?? '';
-                _applyFilters();
-              },
-            ),
-          ),
-          OutlinedButton.icon(
-            onPressed: () {
-              selectedClass = '';
-              selectedSubject = '';
-              _applyFilters();
-            },
-            icon: const Icon(Icons.filter_alt_off),
-            label: const Text('فلٹر ختم کریں'),
-          ),
-        ],
       ),
     );
   }
@@ -276,22 +137,19 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
   // ================= STATS =================
   Widget _stats() {
     int total = results.length;
-    int pass =
-        results.where((e) => _isPassStatus(e['status']?.toString())).length;
-    int absent = results.where(_isAbsent).length;
-    int fail = total - pass - absent;
+    int pass = results
+        .where((e) => e['status'] == 'Pass' || e['status'] == 'Pass (Grace)')
+        .length;
+    int fail = total - pass;
     double perc = total > 0 ? (pass / total) * 100 : 0;
 
     return Padding(
       padding: const EdgeInsets.all(8),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        runSpacing: 8,
+      child: Row(
         children: [
           _statCard("کل طلباء", total, Colors.blue),
           _statCard("کامیاب", pass, Colors.green),
-          _statCard("ناکام", fail < 0 ? 0 : fail, Colors.red),
-          _statCard("غیر حاضر", absent, Colors.orange),
+          _statCard("ناکام", fail, Colors.red),
           _statCard("شرح فیصد", "${perc.toStringAsFixed(1)}%", Colors.teal),
         ],
       ),
@@ -299,8 +157,7 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
   }
 
   Widget _statCard(String t, dynamic v, Color c) {
-    return SizedBox(
-      width: 104,
+    return Expanded(
       child: Container(
         margin: const EdgeInsets.all(4),
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -327,7 +184,7 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
     if (results.isEmpty) return const SizedBox();
     Map<double, List<Map<String, dynamic>>> groupedByMarks = {};
     for (var r in results) {
-      if (!_isPassStatus(r['status']?.toString())) continue;
+      if (r['status'] != 'Pass') continue;
       double m = double.tryParse((r['marks_obtained'] ?? 0).toString()) ?? 0;
       if (m == 0) continue;
       groupedByMarks.putIfAbsent(m, () => []);
@@ -398,7 +255,7 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
     final perfect = results.where((r) {
       double obt = double.tryParse((r['marks_obtained'] ?? 0).toString()) ?? 0;
       double tot = double.tryParse((r['total_marks'] ?? 100).toString()) ?? 0;
-      return !_isAbsent(r) && tot > 0 && obt >= tot;
+      return tot > 0 && obt >= tot;
     }).toList();
     if (perfect.isEmpty) return const SizedBox();
     return Container(
@@ -493,25 +350,11 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
   // ================= GRADE SECTIONS =================
   Widget _gradeSections() {
     Map<String, List<Map<String, dynamic>>> grouped = {};
-    const gradeOrder = ['A+', 'A', 'B', 'C', 'D', 'E', 'F', 'Absent'];
+    const gradeOrder = ['A+', 'A', 'B', 'C', 'D', 'E', 'F'];
     for (var r in results) {
-      String g = _gradeKey(r);
+      String g = r['grade'] ?? 'F';
       grouped.putIfAbsent(g, () => []);
       grouped[g]!.add(r);
-    }
-    for (final list in grouped.values) {
-      list.sort((a, b) {
-        final marksA =
-            double.tryParse((a['marks_obtained'] ?? 0).toString()) ?? 0.0;
-        final marksB =
-            double.tryParse((b['marks_obtained'] ?? 0).toString()) ?? 0.0;
-        if (marksA == marksB) {
-          return (a['student_name'] ?? '').toString().compareTo(
-                (b['student_name'] ?? '').toString(),
-              );
-        }
-        return marksB.compareTo(marksA);
-      });
     }
     List<String> sortedGrades = grouped.keys.toList()
       ..sort((a, b) {
@@ -530,7 +373,6 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
   }
 
   Widget _gradeHeader(String g, int count) {
-    final label = g == 'Absent' ? 'غیر حاضر' : 'گریڈ $g';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -538,7 +380,7 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
           color: primary.withOpacity(0.05),
           border: Border(right: BorderSide(color: primary, width: 5))),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label,
+        Text("گریڈ $g",
             style: urdu.copyWith(
                 fontWeight: FontWeight.bold, fontSize: 15, color: primary)),
         Text("$count طلباء", style: urdu.copyWith(fontSize: 13, color: primary))
@@ -565,7 +407,6 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
             headingRowColor: MaterialStateProperty.all(primary),
             columns: [
               _hCol("شمار"),
-              _hCol("رول نمبر"),
               _hCol("نام طالب علم"),
               _hCol("ولدیت"),
               _hCol("مقدار خواندگی"),
@@ -596,14 +437,8 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
     double obt = double.tryParse((r['marks_obtained'] ?? 0).toString()) ?? 0;
     double tot = double.tryParse((r['total_marks'] ?? 100).toString()) ?? 100;
     double perc = tot > 0 ? (obt / tot) * 100 : 0;
-    final isAbsent = _isAbsent(r);
     return DataRow(cells: [
       DataCell(Text("$i", style: const TextStyle(fontSize: 11))),
-      DataCell(Text(
-          r['roll_number']?.toString() ??
-              r['admission_number']?.toString() ??
-              '-',
-          style: const TextStyle(fontSize: 11))),
       DataCell(Text(r['student_name'] ?? '',
           style: urdu.copyWith(fontWeight: FontWeight.bold, fontSize: 12))),
       DataCell(Text(r['father_name'] ?? '',
@@ -622,20 +457,17 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
       DataCell(Text(tot.toStringAsFixed(0),
           style: const TextStyle(fontSize: 11, color: Colors.grey))),
-      DataCell(Text(isAbsent ? '-' : "${perc.toStringAsFixed(1)}%",
+      DataCell(Text("${perc.toStringAsFixed(1)}%",
           style: TextStyle(
               color: perc < 40 ? Colors.red : Colors.blue.shade800,
               fontSize: 11,
               fontWeight: FontWeight.bold))),
-      DataCell(Text(_gradeKey(r),
+      DataCell(Text(r['grade'] ?? '-',
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-      DataCell(Text(_statusLabel(r['status']?.toString()),
-          style: urdu.copyWith(fontSize: 11))),
-      DataCell(isAbsent
-          ? const Text('-')
-          : IconButton(
-              icon: const Icon(Icons.visibility, size: 22, color: Colors.blue),
-              onPressed: () => _viewResultCard(r))),
+      DataCell(Text(r['status'] ?? '-', style: urdu.copyWith(fontSize: 11))),
+      DataCell(IconButton(
+          icon: const Icon(Icons.visibility, size: 22, color: Colors.blue),
+          onPressed: () => _viewResultCard(r))),
     ]);
   }
 
@@ -942,13 +774,12 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
                                     color: primary,
                                     fontFamily: 'sans-serif')),
                             const SizedBox(height: 2),
-                            Text(_statusLabel(r['status']?.toString()),
+                            Text(r['status'] == 'Pass' ? 'کامیاب' : 'فیل',
                                 style: urdu.copyWith(
                                     fontSize: 14,
-                                    color:
-                                        _isPassStatus(r['status']?.toString())
-                                            ? Colors.green
-                                            : Colors.red,
+                                    color: r['status'] == 'Pass'
+                                        ? Colors.green
+                                        : Colors.red,
                                     fontWeight: FontWeight.bold)),
                           ],
                         ),
@@ -1004,11 +835,9 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
         imageWidget = Image.file(File(photoPath), fit: BoxFit.cover);
       } else {
         String baseUrl = apiUrl;
-        if (baseUrl.endsWith('api.php')) {
-          baseUrl = baseUrl.substring(0, baseUrl.length - 7);
-        }
+        if (baseUrl.endsWith('api.php')) baseUrl = baseUrl.substring(0, baseUrl.length - 7);
         if (!baseUrl.endsWith('/')) baseUrl += '/';
-
+        
         String fullUrl = baseUrl;
         if (photoPath.startsWith('uploads/')) {
           fullUrl += photoPath;
@@ -1129,7 +958,7 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
 
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
-        name: "ResultCard_${r['roll_number']?.toString().replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '') ?? 'Student'}.pdf",
+        name: "ResultCard_${r['student_name']}.pdf",
       );
     } catch (e) {
       debugPrint("Print Card Error: $e");
@@ -1144,21 +973,16 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
 
       int passed = 0;
       int failed = 0;
-      int absent = 0;
       double totalMarksSum = 0;
       double obtainedMarksSum = 0;
       for (var r in results) {
-        if (_isPassStatus(r['status']?.toString())) {
+        if (r['status'] == 'Pass' || r['status'] == 'Grace Pass') {
           passed++;
-        } else if (_isAbsent(r)) {
-          absent++;
         } else {
           failed++;
         }
-        double tot =
-            double.tryParse((r['total_marks'] ?? 100).toString()) ?? 100;
-        double obt =
-            double.tryParse((r['marks_obtained'] ?? 0).toString()) ?? 0;
+        double tot = double.tryParse((r['total_marks'] ?? 100).toString()) ?? 100;
+        double obt = double.tryParse((r['marks_obtained'] ?? 0).toString()) ?? 0;
         totalMarksSum += tot;
         obtainedMarksSum += obt;
       }
@@ -1169,7 +993,7 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
       // Group by marks for proper Top 3
       Map<double, List<Map<String, dynamic>>> groupedByMarks = {};
       for (var r in results) {
-        if (!_isPassStatus(r['status']?.toString())) continue;
+        if (r['status'] != 'Pass') continue;
         double m = double.tryParse((r['marks_obtained'] ?? 0).toString()) ?? 0;
         if (m == 0) continue;
         groupedByMarks.putIfAbsent(m, () => []);
@@ -1177,7 +1001,7 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
       }
       List<double> sortedMarks = groupedByMarks.keys.toList()
         ..sort((a, b) => b.compareTo(a));
-
+      
       // top3 will store Map with {score, students_list}
       List<Map<String, dynamic>> top3 = [];
       int count = sortedMarks.length < 3 ? sortedMarks.length : 3;
@@ -1189,28 +1013,22 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
         });
       }
 
+      const int rowsPerPageFirst = 15;
+      const int rowsPerPageNormal = 22;
+      
       List<List<Map<String, dynamic>>> chunks = [];
-      List<Map<String, dynamic>> currentChunk = [];
-      double currentHeight = 0;
-      bool isFirstPage = true;
-
-      for (var r in results) {
-        double maxPageHeight = isFirstPage ? 480.0 : 640.0;
-        double rowHeight = 35.0; // Result register rows are single-line and fixed height
-        
-        if (currentChunk.isNotEmpty && currentHeight + rowHeight > maxPageHeight) {
-          chunks.add(List.from(currentChunk));
-          currentChunk.clear();
-          currentHeight = 0;
-          isFirstPage = false;
-        }
-        
-        currentChunk.add(r);
-        currentHeight += rowHeight;
+      int currentIndex = 0;
+      
+      if (results.isNotEmpty) {
+        int firstChunkSize = results.length > rowsPerPageFirst ? rowsPerPageFirst : results.length;
+        chunks.add(results.sublist(0, firstChunkSize));
+        currentIndex = firstChunkSize;
       }
       
-      if (currentChunk.isNotEmpty) {
-        chunks.add(currentChunk);
+      while (currentIndex < results.length) {
+        int nextChunkSize = (results.length - currentIndex) > rowsPerPageNormal ? rowsPerPageNormal : (results.length - currentIndex);
+        chunks.add(results.sublist(currentIndex, currentIndex + nextChunkSize));
+        currentIndex += nextChunkSize;
       }
 
       if (chunks.isEmpty) {
@@ -1221,49 +1039,45 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
       for (int i = 0; i < chunks.length; i++) {
         final chunk = chunks[i];
         final pageNum = i + 1;
-
+        
         final pageWidget = _buildPdfPageWidget(
-          chunk: chunk,
-          pageNum: pageNum,
+          chunk: chunk, 
+          pageNum: pageNum, 
           totalPages: chunks.length,
-          total: total,
-          passed: passed,
-          failed: failed,
-          absent: absent,
-          avgMarks: avgMarks,
-          avgTotal: avgTotal,
-          top3: top3,
+          total: total, passed: passed, failed: failed, 
+          avgMarks: avgMarks, avgTotal: avgTotal, top3: top3,
           isUrdu: true,
         );
 
         final imageBytes = await screenshotController.captureFromWidget(
           pageWidget,
-          delay: const Duration(milliseconds: 400),
+          delay: const Duration(milliseconds: 200),
           targetSize: const Size(1122, 793), // A4 Landscape size
-          pixelRatio: 2.0, // High-Resolution rendering for Print Quality
+          pixelRatio: 3.0, // High-Resolution rendering for Print Quality
         );
 
-        pdf.addPage(pw.Page(
-          pageFormat: PdfPageFormat.a4.landscape,
-          margin: pw.EdgeInsets.zero,
-          build: (pw.Context context) {
-            return pw.FullPage(
-              ignoreMargins: true,
-              child: pw.Image(pw.MemoryImage(imageBytes), fit: pw.BoxFit.fill),
-            );
-          },
-        ));
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.a4.landscape,
+            margin: pw.EdgeInsets.zero,
+            build: (pw.Context context) {
+              return pw.FullPage(
+                ignoreMargins: true,
+                child: pw.Image(pw.MemoryImage(imageBytes), fit: pw.BoxFit.fill),
+              );
+            },
+          )
+        );
       }
 
       await Printing.layoutPdf(
         onLayout: (format) async => pdf.save(),
-        name: 'Result_Register_Report.pdf',
+        name: 'Result_Register_${widget.exam['exam_name']}.pdf',
       );
     } catch (e) {
       debugPrint("Print Error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Print failed: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Print failed: $e")));
       }
     } finally {
       if (mounted) setState(() => _isPrinting = false);
@@ -1274,314 +1088,205 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
     required List<Map<String, dynamic>> chunk,
     required int pageNum,
     required int totalPages,
-    required int total,
-    required int passed,
-    required int failed,
-    required int absent,
-    required double avgMarks,
-    required double avgTotal,
+    required int total, required int passed, required int failed,
+    required double avgMarks, required double avgTotal,
     required List<Map<String, dynamic>> top3,
     required bool isUrdu,
   }) {
     const primary = Color(0xFF284D3D);
     const gold = Color(0xFFD4AC0D);
-    const urduFont =
-        TextStyle(fontFamily: 'JameelNooriNastaleeq', color: Colors.black);
+    const urduFont = TextStyle(fontFamily: 'JameelNooriNastaleeq', color: Colors.black);
 
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: MediaQuery(
-          data: const MediaQueryData(size: Size(1122, 793)),
-          child: Theme(
-            data: ThemeData(
-              fontFamily: 'JameelNooriNastaleeq',
-              textTheme: const TextTheme(
-                bodyMedium: TextStyle(color: Colors.black),
-                bodyLarge: TextStyle(color: Colors.black),
-                titleMedium: TextStyle(color: Colors.black),
-              ),
-            ),
-            child: DefaultTextStyle(
-              style: const TextStyle(fontFamily: 'JameelNooriNastaleeq', color: Colors.black),
-              child: SizedBox(
-                  width: 1122,
-                  height: 793,
-                  child: Material(
-                    color: Colors.white,
-                    child: Container(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(children: [
-                          // Header
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                                color: primary,
-                                borderRadius: BorderRadius.circular(8)),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Image.asset('assets/logo.png',
-                                    height: 45,
-                                    width: 45,
-                                    errorBuilder: (_, __, ___) => Icon(
-                                        Icons.school,
-                                        color: Colors.white,
-                                        size: 45)),
-                                Column(
-                                  children: [
-                                    Text("مدرسہ اشرف المدارس — فاروقہ، سرگودھا",
-                                        style: urduFont.copyWith(
-                                            fontSize: 20,
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold)),
-                                    Text(
-                                        "اجتماعی رزلٹ رجسٹر — ${widget.exam['exam_name'] ?? ''}",
-                                        style: urduFont.copyWith(
-                                            fontSize: 14, color: gold)),
-                                  ],
-                                ),
-                                Text("صفحہ $pageNum / $totalPages",
-                                    style: urduFont.copyWith(
-                                        color: Colors.white, fontSize: 14)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
+        data: const MediaQueryData(size: Size(1122, 793)),
+        child: SizedBox(
+          width: 1122,
+          height: 793,
+          child: Material(
+            color: Colors.white,
+            child: Container(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(color: primary, borderRadius: BorderRadius.circular(8)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Image.asset('assets/logo.png', height: 45, width: 45, errorBuilder: (_,__,___)=>Icon(Icons.school, color: Colors.white, size: 45)),
+                      Column(
+                        children: [
+                          Text("مدرسہ اشرف المدارس — فاروقہ، سرگودھا", style: urduFont.copyWith(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
+                          Text("اجتماعی رزلٹ رجسٹر — ${widget.exam['exam_name'] ?? ''}", style: urduFont.copyWith(fontSize: 14, color: gold)),
+                        ],
+                      ),
+                      Text("صفحہ $pageNum / $totalPages", style: urduFont.copyWith(color: Colors.white, fontSize: 14)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
 
-                          // Summary & Top 3 (Only on Page 1)
-                          if (pageNum == 1) ...[
-                            Container(
+                // Summary & Top 3 (Only on Page 1)
+                if (pageNum == 1) ...[
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: primary, width: 1.5),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _pdfSummaryItem("کل طلباء", "$total", primary),
+                        _pdfSummaryItem("کامیاب", "$passed", Colors.green.shade700),
+                        _pdfSummaryItem("ناکام", "$failed", Colors.red.shade700),
+                        _pdfSummaryItem("اوسط نمبر", "${avgMarks.toStringAsFixed(1)} / ${avgTotal.toStringAsFixed(0)}", primary),
+                        _pdfSummaryItem("پاسنگ %", "${total > 0 ? (passed / total * 100).toStringAsFixed(1) : 0}%", Colors.blue.shade700),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (top3.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8E1),
+                        border: Border.all(color: gold, width: 1.5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text("پوزیشن ہولڈرز:", style: urduFont.copyWith(fontSize: 14, color: Colors.orange.shade900, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 16),
+                          ...List.generate(top3.length, (i) {
+                            final posGroup = top3[i];
+                            final score = posGroup['score'];
+                            final students = posGroup['students'] as List;
+                            final names = students.map((s) => s['student_name']).join("، ");
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               decoration: BoxDecoration(
-                                border: Border.all(color: primary, width: 1.5),
-                                borderRadius: BorderRadius.circular(8),
+                                color: i == 0 ? gold : (i == 1 ? Colors.grey.shade400 : const Color(0xFFCD7F32)),
+                                borderRadius: BorderRadius.circular(4),
                               ),
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 8, horizontal: 12),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceAround,
-                                children: [
-                                  _pdfSummaryItem(
-                                      "کل طلباء", "$total", primary),
-                                  _pdfSummaryItem("کامیاب", "$passed",
-                                      Colors.green.shade700),
-                                  _pdfSummaryItem(
-                                      "ناکام", "$failed", Colors.red.shade700),
-                                  _pdfSummaryItem("غیر حاضر", "$absent",
-                                      Colors.orange.shade700),
-                                  _pdfSummaryItem(
-                                      "اوسط نمبر",
-                                      "${avgMarks.toStringAsFixed(1)} / ${avgTotal.toStringAsFixed(0)}",
-                                      primary),
-                                  _pdfSummaryItem(
-                                      "پاسنگ %",
-                                      "${total > 0 ? (passed / total * 100).toStringAsFixed(1) : 0}%",
-                                      Colors.blue.shade700),
-                                ],
+                              child: Text(
+                                "${i+1}. $names (${score.toStringAsFixed(0)} نمبر)",
+                                style: urduFont.copyWith(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            if (top3.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFF8E1),
-                                  border: Border.all(color: gold, width: 1.5),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text("پوزیشن ہولڈرز:",
-                                        style: urduFont.copyWith(
-                                            fontSize: 14,
-                                            color: Colors.orange.shade900,
-                                            fontWeight: FontWeight.bold)),
-                                    const SizedBox(width: 16),
-                                    ...List.generate(top3.length, (i) {
-                                      final posGroup = top3[i];
-                                      final score = posGroup['score'];
-                                      final students =
-                                          posGroup['students'] as List;
-                                      final names = students
-                                          .map((s) => s['student_name'])
-                                          .join("، ");
-                                      return Container(
-                                        margin: const EdgeInsets.symmetric(
-                                            horizontal: 4),
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: i == 0
-                                              ? gold
-                                              : (i == 1
-                                                  ? Colors.grey.shade400
-                                                  : const Color(0xFFCD7F32)),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                            "${i + 1}. $names (${score.toStringAsFixed(0)} نمبر)",
-                                            style: urduFont.copyWith(
-                                                fontSize: 12,
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold)),
-                                      );
-                                    })
-                                  ],
-                                ),
-                              ),
-                            const SizedBox(height: 12),
+                            );
+                          })
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Table
+                Expanded(
+                  child: Table(
+                    border: TableBorder.all(color: primary, width: 1),
+                    columnWidths: const {
+                      0: FlexColumnWidth(0.5),
+                      1: FlexColumnWidth(2),
+                      2: FlexColumnWidth(1),
+                      3: FlexColumnWidth(1),
+                      4: FlexColumnWidth(1),
+                      5: FlexColumnWidth(1),
+                      6: FlexColumnWidth(1),
+                      7: FlexColumnWidth(1),
+                      8: FlexColumnWidth(1),
+                      9: FlexColumnWidth(1),
+                      10: FlexColumnWidth(1),
+                      11: FlexColumnWidth(1),
+                    },
+                    children: [
+                      // Table Header
+                      TableRow(
+                        decoration: BoxDecoration(color: primary),
+                        children: [
+                          _pdfTHeader("#"),
+                          _pdfTHeader(isUrdu ? "طالب علم مع ولدیت" : "Student"),
+                          _pdfTHeader(isUrdu ? "پختگی" : "Pukhtagi"),
+                          _pdfTHeader(isUrdu ? "تجوید" : "Tajweed"),
+                          _pdfTHeader(isUrdu ? "لہجہ" : "Lahja"),
+                          _pdfTHeader(isUrdu ? "مسائل" : "Masail"),
+                          _pdfTHeader(isUrdu ? "حاصل" : "Obtained"),
+                          _pdfTHeader(isUrdu ? "رعایتی" : "Grace"),
+                          _pdfTHeader(isUrdu ? "کل" : "Total"),
+                          _pdfTHeader("%"),
+                          _pdfTHeader(isUrdu ? "گریڈ" : "Grade"),
+                          _pdfTHeader(isUrdu ? "کیفیت" : "Status"),
+                        ],
+                      ),
+                      // Table Rows
+                      ...chunk.map((r) {
+                        int index = results.indexOf(r) + 1;
+                        double obt = double.tryParse((r['marks_obtained'] ?? 0).toString()) ?? 0;
+                        double tot = double.tryParse((r['total_marks'] ?? 100).toString()) ?? 100;
+                        double perc = tot > 0 ? (obt / tot) * 100 : 0;
+                        String statusStr = r['status'] == 'Pass' ? 'پاس' : (r['status'] == 'Grace Pass' ? 'رعایتی' : 'فیل');
+                        Color rowColor = r['status'] == 'Fail' ? Colors.red.shade50 : Colors.white;
+
+                        String fn = (r['father_name'] ?? '').toString().trim();
+                        String studentWithFather = fn.isNotEmpty ? "${r['student_name'] ?? ''} بن $fn" : (r['student_name'] ?? '');
+                        return TableRow(
+                          decoration: BoxDecoration(color: rowColor),
+                          children: [
+                            _pdfTCell("$index"),
+                            _pdfTCell(studentWithFather, align: Alignment.centerRight),
+                            _pdfTCell(r['pukhtagi']?.toString() ?? "-"),
+                            _pdfTCell(r['tajweed']?.toString() ?? "-"),
+                            _pdfTCell(r['lahja']?.toString() ?? "-"),
+                            _pdfTCell(r['masail']?.toString() ?? "-"),
+                            _pdfTCell(obt.toStringAsFixed(0), bold: true),
+                            _pdfTCell(r['grace_marks']?.toString() ?? "-"),
+                            _pdfTCell(tot.toStringAsFixed(0)),
+                            _pdfTCell("${perc.toStringAsFixed(1)}%"),
+                            _pdfTCell(r['grade'] ?? "-", bold: true),
+                            _pdfTCell(statusStr),
                           ],
-
-                          // Table
-                          Expanded(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.topCenter,
-                              child: SizedBox(
-                                width: 1122 - 48,
-                                child: Table(
-                                  border:
-                                      TableBorder.all(color: primary, width: 1),
-                                  columnWidths: const {
-                                0: FlexColumnWidth(0.5),
-                                1: FlexColumnWidth(0.8),
-                                2: FlexColumnWidth(2),
-                                3: FlexColumnWidth(1),
-                                4: FlexColumnWidth(1),
-                                5: FlexColumnWidth(1),
-                                6: FlexColumnWidth(1),
-                                7: FlexColumnWidth(1),
-                                8: FlexColumnWidth(1),
-                                9: FlexColumnWidth(1),
-                                10: FlexColumnWidth(1),
-                                11: FlexColumnWidth(1),
-                                12: FlexColumnWidth(1),
-                              },
-                                  children: [
-                                // Table Header
-                                TableRow(
-                                  decoration: BoxDecoration(color: primary),
-                                  children: [
-                                    _pdfTHeader("#"),
-                                    _pdfTHeader(
-                                        isUrdu ? "رول نمبر" : "Roll No"),
-                                    _pdfTHeader(isUrdu
-                                        ? "طالب علم مع ولدیت"
-                                        : "Student"),
-                                    _pdfTHeader(isUrdu ? "پختگی" : "Pukhtagi"),
-                                    _pdfTHeader(isUrdu ? "تجوید" : "Tajweed"),
-                                    _pdfTHeader(isUrdu ? "لہجہ" : "Lahja"),
-                                    _pdfTHeader(isUrdu ? "مسائل" : "Masail"),
-                                    _pdfTHeader(isUrdu ? "حاصل" : "Obtained"),
-                                    _pdfTHeader(isUrdu ? "رعایتی" : "Grace"),
-                                    _pdfTHeader(isUrdu ? "کل" : "Total"),
-                                    _pdfTHeader("%"),
-                                    _pdfTHeader(isUrdu ? "گریڈ" : "Grade"),
-                                    _pdfTHeader(isUrdu ? "کیفیت" : "Status"),
-                                  ],
-                                ),
-                                // Table Rows
-                                ...chunk.map((r) {
-                                  int index = results.indexOf(r) + 1;
-                                  double obt = double.tryParse(
-                                          (r['marks_obtained'] ?? 0)
-                                              .toString()) ??
-                                      0;
-                                  double tot = double.tryParse(
-                                          (r['total_marks'] ?? 100)
-                                              .toString()) ??
-                                      100;
-                                  double perc = tot > 0 ? (obt / tot) * 100 : 0;
-                                  final isAbsent = _isAbsent(r);
-                                  String statusStr =
-                                      _statusLabel(r['status']?.toString());
-                                  Color rowColor = isAbsent
-                                      ? Colors.grey.shade100
-                                      : (r['status'] == 'Fail'
-                                          ? Colors.red.shade50
-                                          : Colors.white);
-
-                                  String fn = (r['father_name'] ?? '')
-                                      .toString()
-                                      .trim();
-                                  String studentWithFather = fn.isNotEmpty
-                                      ? "${r['student_name'] ?? ''} بن $fn"
-                                      : (r['student_name'] ?? '');
-                                  return TableRow(
-                                    decoration: BoxDecoration(color: rowColor),
-                                    children: [
-                                      _pdfTCell("$index"),
-                                      _pdfTCell(r['roll_number']?.toString() ??
-                                          r['admission_number']?.toString() ??
-                                          '-'),
-                                      _pdfTCell(studentWithFather,
-                                          align: Alignment.centerRight),
-                                      _pdfTCell(
-                                          r['pukhtagi']?.toString() ?? "-"),
-                                      _pdfTCell(
-                                          r['tajweed']?.toString() ?? "-"),
-                                      _pdfTCell(r['lahja']?.toString() ?? "-"),
-                                      _pdfTCell(r['masail']?.toString() ?? "-"),
-                                      _pdfTCell(obt.toStringAsFixed(0),
-                                          bold: true),
-                                      _pdfTCell(
-                                          r['grace_marks']?.toString() ?? "-"),
-                                      _pdfTCell(tot.toStringAsFixed(0)),
-                                      _pdfTCell(isAbsent
-                                          ? '-'
-                                          : "${perc.toStringAsFixed(1)}%"),
-                                      _pdfTCell(_gradeKey(r), bold: true),
-                                      _pdfTCell(statusStr),
-                                    ],
-                                  );
-                                 })
-                               ]),
-                              ),
-                            ),
-                          ),
-                        ]))))))));
+                        );
+                      })
+                    ]
+                  )
+                )
+              ]
+            )
+          )
+        )
+      )
+    ));
   }
 
   Widget _pdfSummaryItem(String label, String value, Color color) {
-    return Column(children: [
-      Text(value,
-          style: TextStyle(
-              fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-      Text(label,
-          style: const TextStyle(
-              fontFamily: 'JameelNooriNastaleeq',
-              fontSize: 12,
-              fontWeight: FontWeight.bold)),
-    ]);
+    return Column(
+      children: [
+        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+        Text(label, style: const TextStyle(fontFamily: 'JameelNooriNastaleeq', fontSize: 12, fontWeight: FontWeight.bold)),
+      ]
+    );
   }
 
   Widget _pdfTHeader(String text) {
     return Container(
       padding: const EdgeInsets.all(6),
       alignment: Alignment.center,
-      child: Text(text,
-          style: const TextStyle(
-              fontFamily: 'JameelNooriNastaleeq',
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.bold)),
+      child: Text(text, style: const TextStyle(fontFamily: 'JameelNooriNastaleeq', color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
     );
   }
 
-  Widget _pdfTCell(String text,
-      {Alignment align = Alignment.center, bool bold = false}) {
+  Widget _pdfTCell(String text, {Alignment align = Alignment.center, bool bold = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       alignment: align,
-      child: Text(text,
-          style: TextStyle(
-              fontFamily: 'JameelNooriNastaleeq',
-              color: Colors.black87,
-              fontSize: 11,
-              fontWeight: bold ? FontWeight.bold : FontWeight.normal)),
+      child: Text(text, style: TextStyle(fontFamily: 'JameelNooriNastaleeq', color: Colors.black87, fontSize: 11, fontWeight: bold ? FontWeight.bold : FontWeight.normal)),
     );
   }
+
 }

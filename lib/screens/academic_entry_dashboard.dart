@@ -10,7 +10,9 @@ import 'dashboard.dart';
 import 'nazira.dart';
 import 'qaida.dart';
 import 'hifz.dart';
+import 'husn_saut.dart';
 import 'academic_report.dart';
+import 'reports_academic.dart';
 
 class AcademicEntryDashboardPage extends StatefulWidget {
   const AcademicEntryDashboardPage({super.key});
@@ -60,7 +62,7 @@ class _AcademicEntryDashboardPageState
   Future<void> _loadClasses() async {
     final db = DBHelper();
     final data = await db.getClassesForUser();
-    final students = await db.getStudents();
+    final students = await db.getStudentsForUser();
     final counts = <String, int>{};
     for (final student in students) {
       if (!_isActiveStudent(student)) continue;
@@ -87,8 +89,12 @@ class _AcademicEntryDashboardPageState
           canPop: false,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
-            Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (c) => const DashboardPage()));
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (c) => const DashboardPage()));
+            }
           },
           child: Directionality(
             textDirection: isUrdu ? ui.TextDirection.rtl : ui.TextDirection.ltr,
@@ -110,6 +116,16 @@ class _AcademicEntryDashboardPageState
                 foregroundColor: Colors.white,
                 centerTitle: true,
                 actions: [
+                  IconButton(
+                    icon: const Icon(Icons.analytics, color: Colors.white),
+                    tooltip: isUrdu ? "تعلیمی رپورٹس و جائزہ" : "Academic Reports",
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ReportsAcademicPage()),
+                      );
+                    },
+                  ),
                   IconButton(
                     icon: const Icon(Icons.sync, color: Colors.white),
                     onPressed: () async {
@@ -143,7 +159,12 @@ class _AcademicEntryDashboardPageState
                   ? const Center(child: CircularProgressIndicator())
                   : _classes.isEmpty
                       ? _buildEmptyState(isUrdu)
-                      : _buildClassesList(isUrdu),
+                      : Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1100),
+                            child: _buildClassesList(isUrdu),
+                          ),
+                        ),
             ),
           ),
         );
@@ -215,18 +236,25 @@ class _AcademicEntryDashboardPageState
       child: InkWell(
         onTap: () {
           String classType = c['class_type'] ?? '';
-          if (classType == 'Qaida' || classType == 'نورانی قاعدہ' || c['name'].toString().contains('قاعدہ') || classType == 'نماز حنفی' || c['name'].toString().contains('نماز حنفی')) {
+          String className = c['name']?.toString() ?? '';
+          if (classType == 'Qaida' || classType == 'نورانی قاعدہ' || className.contains('قاعدہ') || classType == 'نماز حنفی' || className.contains('نماز حنفی')) {
             Navigator.push(
                 context,
                 MaterialPageRoute(
                     builder: (_) => QaidaEntryPage(selectedClass: c['name'])));
-          } else if (classType == 'Nazira') {
+          } else if (classType == 'Nazira' || className.contains('ناظرہ')) {
             Navigator.push(
                 context,
                 MaterialPageRoute(
                     builder: (_) => NaziraPage(className: c['name'])));
+          } else if (className.contains('حسن') || className.contains('صوت') || className.toLowerCase().contains('husn') || className.toLowerCase().contains('saut') || classType == 'Husn Saut' || classType == 'Husn') {
+            Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => HusnSautPage(className: c['name'])));
           } else if (classType == 'Hifz/Gardan/Husn' ||
-              classType == 'Hifz/Nazira') {
+              classType == 'Hifz/Nazira' ||
+              className.contains('حفظ')) {
             Navigator.push(
                 context,
                 MaterialPageRoute(

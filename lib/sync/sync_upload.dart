@@ -107,18 +107,37 @@ class SyncUploader {
           for (final id in syncedIds) {
             final localId = int.tryParse(id.toString()) ?? 0;
             if (localId == 0) continue;
-            if (table == 'finance') {
+            if (table == 'finance' || table == 'masjid_finance') {
               int? serverId;
               if (serverIds is Map && serverIds[id.toString()] != null) {
                 serverId = int.tryParse(serverIds[id.toString()].toString());
               }
-              await db.markFinanceAsSynced(localId, serverId);
+              await db.markFinanceAsSynced(localId, serverId,
+                  isMasjid: table == 'masjid_finance');
             } else if (table == 'teachers') {
               int? serverId;
               if (serverIds is Map && serverIds[id.toString()] != null) {
                 serverId = int.tryParse(serverIds[id.toString()].toString());
               }
               await db.markTeacherAsSynced(localId, serverId);
+            } else if (table == 'students') {
+              int? serverId;
+              if (serverIds is Map && serverIds[id.toString()] != null) {
+                serverId = int.tryParse(serverIds[id.toString()].toString());
+              }
+              await db.markStudentAsSynced(localId, serverId, isMaktab: false);
+            } else if (table == 'maktab_students') {
+              int? serverId;
+              if (serverIds is Map && serverIds[id.toString()] != null) {
+                serverId = int.tryParse(serverIds[id.toString()].toString());
+              }
+              await db.markStudentAsSynced(localId, serverId, isMaktab: true);
+            } else if (table == 'teacher_leaves') {
+              int? serverId;
+              if (serverIds is Map && serverIds[id.toString()] != null) {
+                serverId = int.tryParse(serverIds[id.toString()].toString());
+              }
+              await db.markTeacherLeaveAsSynced(localId, serverId);
             } else {
               await db.markAsSynced(table, localId);
             }

@@ -3,9 +3,11 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import '../db_helper.dart';
 import '../utils/globals.dart';
+import '../utils/system_type_global.dart';
 import '../widgets/app_drawer.dart';
 import '../utils/sync_service.dart';
 import 'dashboard.dart';
+import 'sanad_preview_screen.dart';
 import 'student_report.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
@@ -33,9 +35,10 @@ class _StudentsPageState extends State<StudentsPage> {
   List<Map<String, dynamic>> _classes = [];
   String? _selectedClass;
   String? _selectedResidenceStatus;
+  String _selectedAlumniCategory = 'all';
 
   // پیجینیشن متغیرات (Pagination)
-  static const int _pageSize = 50;
+  static const int _pageSize = 100;
   int _activeOffset = 0;
   int _alumniOffset = 0;
   bool _hasMoreActive = true;
@@ -43,6 +46,12 @@ class _StudentsPageState extends State<StudentsPage> {
   bool _isLoadingMore = false;
   final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
+  Map<String, int> _studentCounts = {
+    'total_active': 0,
+    'residential': 0,
+    'non_residential': 0,
+    'alumni': 0,
+  };
 
   @override
   void initState() {
@@ -106,13 +115,25 @@ class _StudentsPageState extends State<StudentsPage> {
     });
 
     final classData = await DBHelper().getClassesForUser();
+    final counts = await DBHelper().getStudentSummaryCounts();
     if (!mounted) return;
-    setState(() => _classes = classData);
+    setState(() {
+      _classes = classData;
+      _studentCounts = counts;
+    });
 
     if (widget.initialClassFilter != null &&
         widget.initialClassFilter!.isNotEmpty) {
       _searchController.text = widget.initialClassFilter!;
       _searchQuery = widget.initialClassFilter!;
+    }
+
+    if (activeData.isEmpty && alumniData.isEmpty && _searchQuery.isEmpty) {
+      SyncService.runTwoWaySync().then((_) {
+        if (mounted) {
+          _refreshStudents();
+        }
+      }).catchError((_) {});
     }
   }
 
@@ -156,8 +177,42 @@ class _StudentsPageState extends State<StudentsPage> {
   }
 
   void _runFilter(String enteredKeyword) {
-    _searchQuery = enteredKeyword.trim();
-    _refreshStudents();
+    _searchQuery = enteredKeyword.trim().toLowerCase();
+    if (_searchQuery.isEmpty) {
+      setState(() {
+        _foundActive = _activeStudents;
+        _foundAlumni = _alumniStudents;
+      });
+    } else {
+      setState(() {
+        _foundActive = _activeStudents.where((s) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          final roll = (s['roll_number'] ?? s['admission_number'] ?? '')
+              .toString()
+              .toLowerCase();
+          final cls =
+              (s['class_name'] ?? s['class'] ?? '').toString().toLowerCase();
+          final fName = (s['father_name'] ?? '').toString().toLowerCase();
+          return name.contains(_searchQuery) ||
+              roll.contains(_searchQuery) ||
+              cls.contains(_searchQuery) ||
+              fName.contains(_searchQuery);
+        }).toList();
+        _foundAlumni = _alumniStudents.where((s) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          final roll = (s['roll_number'] ?? s['admission_number'] ?? '')
+              .toString()
+              .toLowerCase();
+          final cls =
+              (s['class_name'] ?? s['class'] ?? '').toString().toLowerCase();
+          final fName = (s['father_name'] ?? '').toString().toLowerCase();
+          return name.contains(_searchQuery) ||
+              roll.contains(_searchQuery) ||
+              cls.contains(_searchQuery) ||
+              fName.contains(_searchQuery);
+        }).toList();
+      });
+    }
   }
 
   Future<void> _showAddStudentDialog() async {
@@ -165,7 +220,10 @@ class _StudentsPageState extends State<StudentsPage> {
     final fatherNameController = TextEditingController();
     final rollNoController = TextEditingController();
     _selectedClass = null;
-      _selectedResidenceStatus = null;
+    _selectedResidenceStatus = null;
+    String addQuranEdition = '16 سطری';
+    String addHifzSequence = 'reverse';
+    String addHifzSection = 'regular';
     final contactController = TextEditingController();
     final addressController = TextEditingController();
     final admissionDateController =
@@ -174,11 +232,49 @@ class _StudentsPageState extends State<StudentsPage> {
     final durationController = TextEditingController();
 
     // ویب کی طرح اگلا داخلہ نمبر خودکار تجویز کریں
-    final nextRollNo = await DBHelper().getNextStudentRollNumber();
+    final nextRollNo = await DBHelper().getNextStudentRollNumber(
+        systemType: SystemTypeGlobal.currentSystemType.value);
     rollNoController.text = nextRollNo;
 
     bool isSaving = false;
     String? photoPath;
+    bool? isRollNoDuplicate;
+    String? rollNoOwnerName;
+
+    Future<void> checkRollDuplicate(
+        String val, void Function(void Function()) setDialogState) async {
+      final trimmed = val.trim();
+      if (trimmed.isEmpty) {
+        setDialogState(() {
+          isRollNoDuplicate = null;
+          rollNoOwnerName = null;
+        });
+        return;
+      }
+      final db = await DBHelper().database;
+      final sysType = SystemTypeGlobal.currentSystemType.value;
+      final sysCond = (sysType == 'Masjid')
+          ? "system_type = 'Masjid'"
+          : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+      final res = await db.query(
+        'students',
+        columns: ['name', 'father_name'],
+        where:
+            "LOWER(TRIM(roll_number)) = ? AND (is_deleted = 0 OR is_deleted IS NULL) AND $sysCond",
+        whereArgs: [trimmed.toLowerCase()],
+        limit: 1,
+      );
+      setDialogState(() {
+        if (res.isNotEmpty) {
+          isRollNoDuplicate = true;
+          rollNoOwnerName =
+              "${res.first['name'] ?? ''} ولد ${res.first['father_name'] ?? ''}";
+        } else {
+          isRollNoDuplicate = false;
+          rollNoOwnerName = null;
+        }
+      });
+    }
 
     Future<void> pickImage(
         void Function(void Function()) setDialogState) async {
@@ -246,17 +342,58 @@ class _StudentsPageState extends State<StudentsPage> {
                 const SizedBox(height: 10),
                 // داخلہ نمبر اور کلاس (ویب کی طرح)
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: rollNoController,
-                        decoration: InputDecoration(
-                          labelText: isUrduGlobal.value
-                              ? "داخلہ نمبر *"
-                              : "Admission No *",
-                          border: const OutlineInputBorder(),
-                          hintText: "مثلاً 90001",
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: rollNoController,
+                            onChanged: (val) =>
+                                checkRollDuplicate(val, setDialogState),
+                            decoration: InputDecoration(
+                              labelText: isUrduGlobal.value
+                                  ? "داخلہ نمبر *"
+                                  : "Admission No *",
+                              border: const OutlineInputBorder(),
+                              hintText: "مثلاً 90001",
+                              suffixIcon: isRollNoDuplicate == true
+                                  ? const Icon(Icons.cancel, color: Colors.red)
+                                  : (isRollNoDuplicate == false
+                                      ? const Icon(Icons.check_circle,
+                                          color: Colors.green)
+                                      : null),
+                            ),
+                          ),
+                          if (isRollNoDuplicate == true)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                isUrduGlobal.value
+                                    ? "❌ پہلے سے موجود ہے (${rollNoOwnerName ?? ''})"
+                                    : "❌ Already taken (${rollNoOwnerName ?? ''})",
+                                style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            )
+                          else if (isRollNoDuplicate == false &&
+                              rollNoController.text.trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                isUrduGlobal.value
+                                    ? "✔ دستیاب ہے"
+                                    : "✔ Available",
+                                style: const TextStyle(
+                                    color: Colors.green,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -280,27 +417,128 @@ class _StudentsPageState extends State<StudentsPage> {
                           });
                         },
                       ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          value: _selectedResidenceStatus,
-                          decoration: InputDecoration(
-                            labelText: isUrduGlobal.value ? "?????? ?????" : "Residential Status",
-                            border: const OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: 'residential_aided', child: Text("??????? ??????")),
-                            DropdownMenuItem(value: 'non_residential_non_aided', child: Text("??? ??????? ??? ??????")),
-                            DropdownMenuItem(value: 'residential_non_aided', child: Text("??????? ??? ??????")),
-                            DropdownMenuItem(value: 'non_residential_aided', child: Text("??? ??????? ??????")),
-                          ],
-                          onChanged: (v) {
-                            setDialogState(() {
-                              _selectedResidenceStatus = v;
-                            });
-                          },
-                        ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value:
+                      addQuranEdition.isNotEmpty ? addQuranEdition : '16 سطری',
+                  decoration: InputDecoration(
+                    labelText: isUrduGlobal.value
+                        ? "قرآن کریم نسخہ / لائنز *"
+                        : "Quran Edition *",
+                    prefixIcon:
+                        const Icon(Icons.menu_book, color: Colors.green),
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: '13 سطری',
+                        child: Text("13 سطری قرآن کریم (13 Lines)")),
+                    DropdownMenuItem(
+                        value: '15 سطری',
+                        child: Text("15 سطری قرآن کریم (15 Lines)")),
+                    DropdownMenuItem(
+                        value: '16 سطری',
+                        child: Text("16 سطری قرآن کریم (16 Lines - عام فہم)")),
+                    DropdownMenuItem(
+                        value: '18 سطری',
+                        child: Text("18 سطری قرآن کریم (18 Lines)")),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) {
+                      setDialogState(() => addQuranEdition = v);
+                    }
+                  },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value:
+                      addHifzSequence.isNotEmpty ? addHifzSequence : 'reverse',
+                  decoration: InputDecoration(
+                    labelText: isUrduGlobal.value
+                        ? "طریقۂ حفظ / ترتیب *"
+                        : "Hifz Sequence *",
+                    prefixIcon: const Icon(Icons.format_list_numbered,
+                        color: Colors.green),
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'reverse',
+                        child: Text("طریقہ 1: پارہ 30 تا 1 (عم سے شروع)")),
+                    DropdownMenuItem(
+                        value: 'forward',
+                        child: Text("طریقہ 2: پارہ 1 تا 30 (شروع سے آخر)")),
+                    DropdownMenuItem(
+                        value: 'thirty_then_forward',
+                        child: Text("طریقہ 3: پارہ عم (30) پھر 1 تا 29")),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) {
+                      setDialogState(() => addHifzSequence = v);
+                    }
+                  },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: addHifzSection,
+                  decoration: InputDecoration(
+                    labelText: isUrduGlobal.value
+                        ? "حفظ سیکشن / زمرہ *"
+                        : "Hifz Section *",
+                    prefixIcon: const Icon(Icons.category, color: Colors.teal),
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'regular',
+                      child: Text(isUrduGlobal.value
+                          ? "سیکشن A: ریگولر حفظ (مکمل وقت)"
+                          : "Section A: Regular Hifz (Full Time)"),
+                    ),
+                    DropdownMenuItem(
+                      value: 'manzil_gardan',
+                      child: Text(isUrduGlobal.value
+                          ? "سیکشن B: منزل/گردان (پارٹ ٹائم/سکول)"
+                          : "Section B: Manzil / Gardan (Part Time)"),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) {
+                      setDialogState(() => addHifzSection = v);
+                    }
+                  },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: _selectedResidenceStatus,
+                  decoration: InputDecoration(
+                    labelText: isUrduGlobal.value
+                        ? "رہائشی حیثیت"
+                        : "Residential Status",
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'residential_aided',
+                        child: Text("اقامتی، امدادی")),
+                    DropdownMenuItem(
+                        value: 'non_residential_non_aided',
+                        child: Text("غیر اقامتی، غیر امدادی")),
+                    DropdownMenuItem(
+                        value: 'residential_non_aided',
+                        child: Text("اقامتی، غیر امدادی")),
+                    DropdownMenuItem(
+                        value: 'non_residential_aided',
+                        child: Text("غیر اقامتی، امدادی")),
+                  ],
+                  onChanged: (v) {
+                    setDialogState(() {
+                      _selectedResidenceStatus = v;
+                    });
+                  },
                 ),
                 const SizedBox(height: 10),
                 // رابطہ نمبر *
@@ -421,6 +659,16 @@ class _StudentsPageState extends State<StudentsPage> {
                         return;
                       }
 
+                      if (isRollNoDuplicate == true) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(isUrduGlobal.value
+                              ? "❌ یہ داخلہ نمبر پہلے سے موجود ہے!"
+                              : "❌ Admission number already exists!"),
+                          backgroundColor: Colors.red,
+                        ));
+                        return;
+                      }
+
                       setDialogState(() => isSaving = true);
 
                       try {
@@ -430,7 +678,7 @@ class _StudentsPageState extends State<StudentsPage> {
                           'father_name': fatherNameController.text.trim(),
                           'roll_number': rollNoController.text.trim(),
                           'class_name': _selectedClass ?? '',
-          'residence_status': _selectedResidenceStatus ?? '',
+                          'residence_status': _selectedResidenceStatus ?? '',
                           'contact_number': contactController.text.trim(),
                           'address': addressController.text.trim(),
                           'status': 'Active',
@@ -438,6 +686,15 @@ class _StudentsPageState extends State<StudentsPage> {
                           'graduation_date': graduationDateController.text,
                           'duration': durationController.text.trim(),
                           'photo': photoPath ?? '',
+                          'quran_edition': addQuranEdition.isNotEmpty
+                              ? addQuranEdition
+                              : '16 سطری',
+                          'hifz_sequence': addHifzSequence.isNotEmpty
+                              ? addHifzSequence
+                              : 'reverse',
+                          'system_type':
+                              SystemTypeGlobal.currentSystemType.value,
+                          'hifz_section': addHifzSection,
                         });
 
                         if (result == -1) {
@@ -452,8 +709,6 @@ class _StudentsPageState extends State<StudentsPage> {
                           return;
                         }
 
-                        await SyncService.runTwoWaySync();
-
                         if (mounted) {
                           Navigator.pop(context);
                           _refreshStudents();
@@ -464,12 +719,20 @@ class _StudentsPageState extends State<StudentsPage> {
                             backgroundColor: Colors.green,
                           ));
                         }
-                      } catch (e) {
+
+                        SyncService.triggerBackgroundTableSync('students');
+                      } catch (e, stackTrace) {
+                        debugPrint(
+                            'Error saving student: $e\nStack: $stackTrace');
                         setDialogState(() => isSaving = false);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text("Error: $e"),
-                          backgroundColor: Colors.red,
-                        ));
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(isUrduGlobal.value
+                                ? "❌ طالب علم کا ریکارڈ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔"
+                                : "❌ Failed to save student record. Please try again."),
+                            backgroundColor: Colors.red,
+                          ));
+                        }
                       }
                     },
               label: Text(
@@ -615,12 +878,19 @@ class _StudentsPageState extends State<StudentsPage> {
     return ValueListenableBuilder<bool>(
       valueListenable: isUrduGlobal,
       builder: (context, isUrdu, child) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isDesktop = screenWidth >= 850;
+
         return PopScope(
             canPop: false,
             onPopInvokedWithResult: (didPop, result) {
               if (didPop) return;
-              Navigator.pushReplacement(context,
-                  MaterialPageRoute(builder: (_) => const DashboardPage()));
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                Navigator.pushReplacement(context,
+                    MaterialPageRoute(builder: (_) => const DashboardPage()));
+              }
             },
             child: Directionality(
               textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
@@ -628,85 +898,454 @@ class _StudentsPageState extends State<StudentsPage> {
                 backgroundColor: const Color(0xFFF1EFE7),
                 appBar: AppBar(
                   leading: Builder(
-                    builder: (context) => IconButton(
-                      icon: const Icon(Icons.menu, color: Colors.white),
-                      onPressed: () => Scaffold.of(context).openDrawer(),
-                    ),
+                    builder: (context) {
+                      final canPop = Navigator.canPop(context);
+                      if (canPop) {
+                        return IconButton(
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
+                          tooltip: isUrdu ? 'واپس' : 'Back',
+                          onPressed: () => Navigator.pop(context),
+                        );
+                      }
+                      return IconButton(
+                        icon: const Icon(Icons.menu, color: Colors.white),
+                        tooltip: isUrdu ? 'مینیو' : 'Menu',
+                        onPressed: () => Scaffold.of(context).openDrawer(),
+                      );
+                    },
                   ),
-                  title: Text(isUrdu ? "طلباء کا ریکارڈ" : "Students Record"),
+                  title: Text(isUrdu
+                      ? "طلباء کا ریکارڈ و مینیجمنٹ"
+                      : "Students Management"),
                   backgroundColor: const Color(0xFF284D3D),
                   foregroundColor: Colors.white,
-                  centerTitle: true,
+                  centerTitle: !isDesktop,
                   actions: [
-                    IconButton(
-                      icon: const Icon(Icons.upload_file, color: Colors.white),
-                      tooltip: isUrdu ? 'طلباء امپورٹ کریں' : 'Import Students',
-                      onPressed: _showBulkImportDialog,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.sync, color: Colors.white),
-                      tooltip: isUrdu ? 'سنک کریں' : 'Sync',
-                      onPressed: () async {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(isUrdu
-                                ? "ڈیٹا سنک ہو رہا ہے..."
-                                : "Syncing data...")));
-                        try {
-                          await SyncService.runTwoWaySync();
-                          if (mounted) {
-                            _refreshStudents();
+                    if (isDesktop) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 4),
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFD4AF37),
+                            foregroundColor: Colors.black87,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6)),
+                          ),
+                          onPressed: _showAddStudentDialog,
+                          icon: const Icon(Icons.person_add, size: 18),
+                          label: Text(
+                            isUrdu ? 'نیا داخلہ' : 'New Admission',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 4),
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white70),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6)),
+                          ),
+                          onPressed: _showBulkImportDialog,
+                          icon: const Icon(Icons.upload_file, size: 18),
+                          label: Text(
+                            isUrdu ? 'امپورٹ' : 'Import',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 4),
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white70),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6)),
+                          ),
+                          onPressed: () async {
                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                                 content: Text(isUrdu
-                                    ? "سنک مکمل ہو گیا!"
-                                    : "Sync complete!"),
-                                backgroundColor: Colors.green));
+                                    ? "ڈیٹا سنک ہو رہا ہے..."
+                                    : "Syncing data...")));
+                            try {
+                              await SyncService.runTwoWaySync();
+                              if (mounted) {
+                                _refreshStudents();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(isUrdu
+                                            ? "سنک مکمل ہو گیا!"
+                                            : "Sync complete!"),
+                                        backgroundColor: Colors.green));
+                              }
+                            } catch (e, stackTrace) {
+                              debugPrint(
+                                  'Error syncing students: $e\nStack: $stackTrace');
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(isUrdu
+                                            ? "سنک میں خرابی آئی"
+                                            : "Sync failed"),
+                                        backgroundColor: Colors.red));
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.sync, size: 18),
+                          label: Text(
+                            isUrdu ? 'سنک' : 'Sync',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ] else ...[
+                      IconButton(
+                        icon:
+                            const Icon(Icons.upload_file, color: Colors.white),
+                        tooltip:
+                            isUrdu ? 'طلباء امپورٹ کریں' : 'Import Students',
+                        onPressed: _showBulkImportDialog,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.sync, color: Colors.white),
+                        tooltip: isUrdu ? 'سنک کریں' : 'Sync',
+                        onPressed: () async {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(isUrdu
+                                  ? "ڈیٹا سنک ہو رہا ہے..."
+                                  : "Syncing data...")));
+                          try {
+                            await SyncService.runTwoWaySync();
+                            if (mounted) {
+                              _refreshStudents();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text(isUrdu
+                                          ? "سنک مکمل ہو گیا!"
+                                          : "Sync complete!"),
+                                      backgroundColor: Colors.green));
+                            }
+                          } catch (e, stackTrace) {
+                            debugPrint(
+                                'Error syncing students: $e\nStack: $stackTrace');
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text(isUrdu
+                                          ? "سنک میں خرابی آئی"
+                                          : "Sync failed"),
+                                      backgroundColor: Colors.red));
+                            }
                           }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text(isUrdu
-                                    ? "سنک میں خرابی آئی"
-                                    : "Sync failed"),
-                                backgroundColor: Colors.red));
-                          }
-                        }
-                      },
-                    ),
+                        },
+                      ),
+                    ],
                   ],
                 ),
                 drawer: const AppDrawer(),
-                floatingActionButton: FloatingActionButton(
-                  backgroundColor: const Color(0xFF284D3D),
-                  onPressed: _showAddStudentDialog,
-                  child: const Icon(Icons.add, color: Colors.white),
-                ),
-                body: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Column(
-                    children: [
-                      TextField(
-                        onChanged: (value) => _runFilter(value),
-                        decoration: InputDecoration(
-                          labelText: isUrdu
-                              ? 'تلاش کریں (نام، رول نمبر یا کلاس)'
-                              : 'Search (Name, Roll No or Class)',
-                          suffixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                          filled: true,
-                          fillColor: Colors.white,
+                floatingActionButton: isDesktop
+                    ? null
+                    : FloatingActionButton(
+                        backgroundColor: const Color(0xFF284D3D),
+                        onPressed: _showAddStudentDialog,
+                        child: const Icon(Icons.add, color: Colors.white),
+                      ),
+                body: DefaultTabController(
+                  length: 6,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        if (isDesktop) ...[
+                          _buildDesktopTopToolbar(isUrdu),
+                          const SizedBox(height: 12),
+                        ] else ...[
+                          TextField(
+                            controller: _searchController,
+                            onChanged: (value) => _runFilter(value),
+                            decoration: InputDecoration(
+                              labelText: isUrdu
+                                  ? 'تلاش کریں (نام، رول نمبر یا کلاس)'
+                                  : 'Search (Name, Roll No or Class)',
+                              suffixIcon: const Icon(Icons.search),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: TabBar(
+                            isScrollable: true,
+                            labelColor: const Color(0xFF284D3D),
+                            unselectedLabelColor: Colors.grey,
+                            indicatorColor: const Color(0xFF284D3D),
+                            indicatorWeight: 3,
+                            tabs: [
+                              Tab(text: isUrdu ? 'تمام طلباء' : 'All'),
+                              Tab(
+                                  text: isUrdu
+                                      ? 'اقامتی، امدادی'
+                                      : 'Residential Aided'),
+                              Tab(
+                                  text: isUrdu
+                                      ? 'غیر اقامتی، غیر امدادی'
+                                      : 'Non-Res Non-Aided'),
+                              Tab(
+                                  text: isUrdu
+                                      ? 'اقامتی، غیر امدادی'
+                                      : 'Residential Non-Aided'),
+                              Tab(
+                                  text: isUrdu
+                                      ? 'غیر اقامتی، امدادی'
+                                      : 'Non-Res Aided'),
+                              Tab(text: isUrdu ? 'فارغ التحصیل' : 'Alumni'),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: _buildGroupedList(isUrdu),
-                      ),
-                    ],
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              _buildGroupedList(isUrdu, 'all_active'),
+                              _buildGroupedList(isUrdu, 'residential_aided'),
+                              _buildGroupedList(
+                                  isUrdu, 'non_residential_non_aided'),
+                              _buildGroupedList(
+                                  isUrdu, 'residential_non_aided'),
+                              _buildGroupedList(
+                                  isUrdu, 'non_residential_aided'),
+                              _buildGroupedList(isUrdu, 'alumni'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             )); // PopScope کا بند
       },
+    );
+  }
+
+  Widget _buildDesktopTopToolbar(bool isUrdu) {
+    final activeCount =
+        _studentCounts['total_active'] ?? _activeStudents.length;
+    final alumniCount = _studentCounts['alumni'] ?? _alumniStudents.length;
+    final resCount = _studentCounts['residential'] ?? 0;
+    final nonResCount = _studentCounts['non_residential'] ??
+        (activeCount >= resCount ? activeCount - resCount : 0);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Row 1: Metric Badges
+          Row(
+            children: [
+              _buildMetricBadge(
+                  isUrdu ? 'کل زیر تعلیم طلباء' : 'Enrolled Students',
+                  '$activeCount',
+                  Icons.school,
+                  const Color(0xFF284D3D)),
+              const SizedBox(width: 14),
+              _buildMetricBadge(isUrdu ? 'اقامتی طلباء' : 'Residential',
+                  '$resCount', Icons.hotel, Colors.teal),
+              const SizedBox(width: 14),
+              _buildMetricBadge(isUrdu ? 'غیر اقامتی طلباء' : 'Day Scholars',
+                  '$nonResCount', Icons.directions_walk, Colors.indigo),
+              const SizedBox(width: 14),
+              _buildMetricBadge(
+                  isUrdu ? 'فارغ التحصیل / سابقہ' : 'Alumni',
+                  '$alumniCount',
+                  Icons.workspace_premium,
+                  const Color(0xFFD4AC0D)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Row 2: Search + Class Filter Dropdown
+          Row(
+            children: [
+              Expanded(
+                flex: 4,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) => _runFilter(value),
+                  style: const TextStyle(fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: isUrdu
+                        ? 'تلاش کریں (نام، داخلہ نمبر، ولدیت یا کلاس)...'
+                        : 'Search by name, roll no, father, class...',
+                    prefixIcon:
+                        const Icon(Icons.search, color: Color(0xFF284D3D)),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              _runFilter('');
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    filled: true,
+                    fillColor: const Color(0xFFFAFAFA),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade400),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedClass,
+                    hint: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.filter_list,
+                            size: 20, color: Color(0xFF284D3D)),
+                        const SizedBox(width: 8),
+                        Text(isUrdu ? 'تمام کلاسز' : 'All Classes',
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    items: [
+                      DropdownMenuItem<String>(
+                        value: null,
+                        child: Text(isUrdu ? 'تمام کلاسز' : 'All Classes',
+                            style: const TextStyle(fontSize: 14)),
+                      ),
+                      ..._classes.map((c) => DropdownMenuItem<String>(
+                            value: c['name'].toString(),
+                            child: Text(c['name'].toString(),
+                                style: const TextStyle(fontSize: 14)),
+                          )),
+                    ],
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedClass = val;
+                        _searchController.text = val ?? '';
+                        _runFilter(val ?? '');
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricBadge(
+      String title, String count, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.35), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    count,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -755,71 +1394,280 @@ class _StudentsPageState extends State<StudentsPage> {
   Widget _buildClassDataTable(
       List<Map<String, dynamic>> students, bool isUrdu) {
     int serialNo = 1;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor:
-            WidgetStateProperty.resolveWith((states) => Colors.grey.shade200),
-        dataRowMinHeight: 40,
-        dataRowMaxHeight: 55,
-        columnSpacing: 20,
-        columns: [
-          DataColumn(
-              label: Text(isUrdu ? 'نمبرشمار' : 'S.No',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(
-              label: Text(isUrdu ? 'رول نمبر' : 'Roll No',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(
-              label: Text(isUrdu ? 'تصویر' : 'Photo',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(
-              label: Text(isUrdu ? 'نام طالب علم' : 'Name',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(
-              label: Text(isUrdu ? 'ولدیت' : 'Father',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(
-              label: Text(isUrdu ? 'رابطہ' : 'Contact',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(
-              label: Text(isUrdu ? 'ایکشن' : 'Action',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-        ],
-        rows: students.map((s) {
-          return DataRow(
-            cells: [
-              DataCell(Text((serialNo++).toString(),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, color: Colors.grey))),
-              DataCell(Text(s['roll_number']?.toString() ?? '-')),
-              DataCell(_buildPhotoAvatar(s['photo']?.toString())),
-              DataCell(Text(s['name']?.toString() ?? '-',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-              DataCell(Text(s['father_name']?.toString() ?? '-')),
-              DataCell(Text(s['contact_number']?.toString() ?? '-')),
-              DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.visibility,
-                          color: Colors.blue, size: 20),
-                      onPressed: () => _showStudentDetails(s, isUrdu),
-                    ),
-                    if (currentUserRole.value == 'admin')
-                      IconButton(
-                        icon: const Icon(Icons.edit,
-                            color: Colors.orange, size: 20),
-                        onPressed: () => _showEditStudentDialog(s),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 850;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: constraints.maxWidth,
+            ),
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.resolveWith(
+                  (states) => const Color(0xFFE8ECE9)),
+              dataRowMinHeight: isDesktop ? 48 : 40,
+              dataRowMaxHeight: isDesktop ? 60 : 55,
+              columnSpacing: isDesktop
+                  ? ((constraints.maxWidth - 520) / (isDesktop ? 8 : 6))
+                      .clamp(16.0, 48.0)
+                  : 20,
+              columns: [
+                DataColumn(
+                    label: Text(isUrdu ? 'نمبرشمار' : 'S.No',
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(
+                    label: Text(isUrdu ? 'داخلہ نمبر' : 'Roll No',
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(
+                    label: Text(isUrdu ? 'تصویر' : 'Photo',
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(
+                    label: Text(isUrdu ? 'نام طالب علم' : 'Name',
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(
+                    label: Text(isUrdu ? 'ولدیت' : 'Father',
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+                if (isDesktop)
+                  DataColumn(
+                      label: Text(isUrdu ? 'کلاس' : 'Class',
+                          style: const TextStyle(fontWeight: FontWeight.bold))),
+                if (isDesktop)
+                  DataColumn(
+                      label: Text(isUrdu ? 'حیثیت' : 'Residence',
+                          style: const TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(
+                    label: Text(isUrdu ? 'رابطہ' : 'Contact',
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(
+                    label: Text(isUrdu ? 'ایکشنز' : 'Action',
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+              ],
+              rows: students.map((s) {
+                final cls = (s['class_name'] ?? s['class'])?.toString() ?? '-';
+                final resStatus = (s['residence_status'] ?? '').toString();
+                final rsLower = resStatus.trim().toLowerCase();
+                String resLabel = '-';
+                Color resColor = Colors.grey;
+                if (rsLower == 'residential_aided' ||
+                    (rsLower.contains('اقامتی') &&
+                        rsLower.contains('امدادی') &&
+                        !rsLower.contains('غیر'))) {
+                  resLabel = isUrdu ? 'اقامتی، امدادی' : 'Res. Aided';
+                  resColor = Colors.teal;
+                } else if (rsLower == 'residential_non_aided' ||
+                    (rsLower.contains('اقامتی') &&
+                        !rsLower.contains('غیر') &&
+                        rsLower.contains('غیر امدادی'))) {
+                  resLabel = isUrdu ? 'اقامتی، غیر امدادی' : 'Res. Non-Aided';
+                  resColor = Colors.blue;
+                } else if (rsLower == 'non_residential_aided' ||
+                    ((rsLower.contains('غیر اقامتی') ||
+                            rsLower.contains('non')) &&
+                        rsLower.contains('امدادی') &&
+                        !rsLower.contains('غیر امدادی'))) {
+                  resLabel = isUrdu ? 'غیر اقامتی، امدادی' : 'Non-Res Aided';
+                  resColor = Colors.orange;
+                } else if (rsLower == 'non_residential_non_aided' ||
+                    ((rsLower.contains('غیر اقامتی') ||
+                            rsLower.contains('non')) &&
+                        rsLower.contains('غیر امدادی'))) {
+                  resLabel =
+                      isUrdu ? 'غیر اقامتی، غیر امدادی' : 'Non-Res Non-Aided';
+                  resColor = Colors.purple;
+                } else if (rsLower.contains('غیر') || rsLower.contains('non')) {
+                  resLabel = isUrdu ? 'غیر اقامتی' : 'Day Scholar';
+                  resColor = Colors.indigo;
+                } else if (rsLower.contains('اقامتی') ||
+                    rsLower.contains('residential') ||
+                    rsLower.contains('رہائشی')) {
+                  resLabel = isUrdu ? 'اقامتی' : 'Residential';
+                  resColor = Colors.teal;
+                }
+
+                final roll =
+                    (s['roll_number'] ?? s['admission_number'])?.toString() ??
+                        '-';
+
+                return DataRow(
+                  cells: [
+                    DataCell(Text((serialNo++).toString(),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: isDesktop ? 13 : 11,
+                            color: Colors.grey))),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: Colors.green.shade300, width: 0.8),
+                        ),
+                        child: Text(
+                          roll,
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: isDesktop ? 13 : 11,
+                              color: const Color(0xFF284D3D)),
+                        ),
                       ),
+                    ),
+                    DataCell(_buildPhotoAvatar(s['photo']?.toString(),
+                        radius: isDesktop ? 18 : 16)),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(s['name']?.toString() ?? '-',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: isDesktop ? 14 : 12)),
+                          if (s['hifz_section'] == 'manzil_gardan') ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                    color: Colors.amber.shade700, width: 0.8),
+                              ),
+                              child: Text(
+                                isUrdu ? 'منزل/گردان' : 'Manzil',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.amber.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    DataCell(Text(s['father_name']?.toString() ?? '-',
+                        style: TextStyle(fontSize: isDesktop ? 13 : 12))),
+                    if (isDesktop)
+                      DataCell(Text(cls,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13))),
+                    if (isDesktop)
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: resColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
+                            border:
+                                Border.all(color: resColor.withOpacity(0.35)),
+                          ),
+                          child: Text(resLabel,
+                              style: TextStyle(
+                                  color: resColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    DataCell(Text(s['contact_number']?.toString() ?? '-',
+                        style: TextStyle(fontSize: isDesktop ? 13 : 11))),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: isUrdu ? 'تفصیلات دیکھیں' : 'View Details',
+                            icon: const Icon(Icons.visibility,
+                                color: Colors.blue, size: 20),
+                            onPressed: () => _showStudentDetails(s, isUrdu),
+                          ),
+                          if (currentUserRole.value == 'admin')
+                            IconButton(
+                              tooltip: isUrdu ? 'ترمیم کریں' : 'Edit',
+                              icon: const Icon(Icons.edit,
+                                  color: Colors.orange, size: 20),
+                              onPressed: () => _showEditStudentDialog(s),
+                            ),
+                          if (isDesktop) ...[
+                            IconButton(
+                              tooltip:
+                                  isUrdu ? 'شناختی کارڈ پرنٹ' : 'Print ID Card',
+                              icon: const Icon(Icons.assignment_ind,
+                                  color: Colors.green, size: 20),
+                              onPressed: () => _printIDCard(s, isUrdu),
+                            ),
+                            if ((s['status']?.toString().toLowerCase() ?? '') ==
+                                    'alumni' &&
+                                resolveAlumniCategory(s) == 'completed')
+                              IconButton(
+                                tooltip: isUrdu
+                                    ? 'سند الفراغ جاری کریں'
+                                    : 'Issue Sanad',
+                                icon: const Icon(Icons.card_membership,
+                                    color: Color(0xFFD4AC0D), size: 20),
+                                onPressed: () => _issueSanad(s, isUrdu),
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ],
-                ),
-              ),
-            ],
-          );
-        }).toList(),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAlumniFilterBar(bool isUrdu) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _buildAlumniCatChip(
+                'all', isUrdu ? 'تمام سابقہ طلباء' : 'All Alumni'),
+            const SizedBox(width: 8),
+            _buildAlumniCatChip(
+                'completed', isUrdu ? '🎓 تکمیلِ تعلیم' : 'Completed'),
+            const SizedBox(width: 8),
+            _buildAlumniCatChip(
+                'dropped', isUrdu ? '⏸️ ترکِ تعلیم' : 'Dropped'),
+            const SizedBox(width: 8),
+            _buildAlumniCatChip('expelled', isUrdu ? '❌ اخراج' : 'Expelled'),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildAlumniCatChip(String catKey, String label) {
+    final isSelected = _selectedAlumniCategory == catKey;
+    return ChoiceChip(
+      label: Text(label,
+          style: TextStyle(
+              color: isSelected ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+              fontSize: 12)),
+      selected: isSelected,
+      selectedColor: const Color(0xFF284D3D),
+      backgroundColor: Colors.grey.shade200,
+      onSelected: (bool selected) {
+        if (selected) {
+          setState(() {
+            _selectedAlumniCategory = catKey;
+          });
+        }
+      },
     );
   }
 
@@ -828,14 +1676,61 @@ class _StudentsPageState extends State<StudentsPage> {
     List<Map<String, dynamic>> alumniList = [];
 
     if (filterType == 'alumni') {
+      if (_selectedAlumniCategory != 'all') {
+        alumniList = _foundAlumni
+            .where((s) => resolveAlumniCategory(s) == _selectedAlumniCategory)
+            .toList();
+      } else {
         alumniList = _foundAlumni;
+      }
     } else if (filterType == 'all_active') {
-        activeList = _foundActive;
+      activeList = _foundActive;
     } else {
-        activeList = _foundActive.where((s) => (s['residence_status']?.toString() ?? '') == filterType).toList();
+      activeList = _foundActive.where((s) {
+        final rs =
+            (s['residence_status'] ?? '').toString().trim().toLowerCase();
+        if (filterType == 'residential_aided') {
+          return rs == 'residential_aided' ||
+              (rs.contains('اقامتی') &&
+                  rs.contains('امدادی') &&
+                  !rs.contains('غیر'));
+        } else if (filterType == 'non_residential_non_aided') {
+          return rs == 'non_residential_non_aided' ||
+              ((rs.contains('غیر اقامتی') || rs.contains('non')) &&
+                  rs.contains('غیر امدادی'));
+        } else if (filterType == 'residential_non_aided') {
+          return rs == 'residential_non_aided' ||
+              (rs.contains('اقامتی') &&
+                  !rs.contains('غیر') &&
+                  rs.contains('غیر امدادی'));
+        } else if (filterType == 'non_residential_aided') {
+          return rs == 'non_residential_aided' ||
+              ((rs.contains('غیر اقامتی') || rs.contains('non')) &&
+                  rs.contains('امدادی') &&
+                  !rs.contains('غیر امدادی'));
+        }
+        return rs == filterType.toLowerCase();
+      }).toList();
     }
 
     if (activeList.isEmpty && alumniList.isEmpty) {
+      if (filterType == 'alumni') {
+        return Column(
+          children: [
+            _buildAlumniFilterBar(isUrdu),
+            Expanded(
+              child: Center(
+                child: Text(
+                  isUrdu
+                      ? 'اس کیٹیگری میں کوئی ریکارڈ نہیں ملا'
+                      : 'No records in this category',
+                  style: const TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
       return Center(
         child: Text(
           isUrdu ? 'کوئی ریکارڈ نہیں ملا' : 'No record found',
@@ -858,7 +1753,8 @@ class _StudentsPageState extends State<StudentsPage> {
     // Group active students by class
     Map<String, List<Map<String, dynamic>>> classGroups = {};
     for (var student in activeList) {
-      String cName = student['class_name']?.toString() ?? 'دیگر';
+      String cName =
+          (student['class_name'] ?? student['class'])?.toString() ?? 'دیگر';
       if (cName.trim().isEmpty) {
         cName = 'دیگر';
       }
@@ -935,6 +1831,10 @@ class _StudentsPageState extends State<StudentsPage> {
       );
     }
 
+    if (filterType == 'alumni') {
+      listWidgets.insert(0, _buildAlumniFilterBar(isUrdu));
+    }
+
     return ListView(
       children: listWidgets,
     );
@@ -942,23 +1842,44 @@ class _StudentsPageState extends State<StudentsPage> {
 
   void _showPromoteDialog(Map<String, dynamic> student, bool isUrdu) {
     String? selectedClass;
+    String selectedQuran = student['quran_edition']?.toString() ?? '16 سطری';
+    if (!['13 سطری', '15 سطری', '16 سطری', '18 سطری'].contains(selectedQuran)) {
+      selectedQuran = '16 سطری';
+    }
+    String selectedSequence = student['hifz_sequence']?.toString() ?? 'reverse';
+    if (!['reverse', 'forward', 'thirty_then_forward']
+        .contains(selectedSequence)) {
+      selectedSequence = 'reverse';
+    }
+    String selectedHifzSection =
+        student['hifz_section']?.toString() ?? 'regular';
+
+    bool isQuranClass(String? cls) {
+      if (cls == null) return false;
+      return cls.contains('حفظ') ||
+          cls.contains('ناظرہ') ||
+          cls.contains('گردان');
+    }
+
     showDialog(
         context: context,
         builder: (ctx) {
           return StatefulBuilder(builder: (context, setStateSB) {
+            final showQuran = isQuranClass(selectedClass);
             return AlertDialog(
               title:
                   Text(isUrdu ? 'طالب علم کو پروموٹ کریں' : 'Promote Student'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('${student['name']} کو اگلی کلاس میں منتقل کریں'),
                   const SizedBox(height: 20),
                   DropdownButtonFormField<String>(
                     decoration: InputDecoration(
                         labelText: isUrdu
-                            ? 'نئی کلاس منتخب کریں'
-                            : 'Select New Class'),
+                            ? 'نئی کلاس منتخب کریں *'
+                            : 'Select New Class *'),
                     value: selectedClass,
                     items: _classes
                         .map((c) => DropdownMenuItem(
@@ -971,6 +1892,98 @@ class _StudentsPageState extends State<StudentsPage> {
                       });
                     },
                   ),
+                  if (showQuran) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'قرآن کریم نسخہ / لائنز *',
+                        prefixIcon: Icon(Icons.menu_book, color: Colors.green),
+                        border: OutlineInputBorder(),
+                      ),
+                      value: selectedQuran,
+                      items: const [
+                        DropdownMenuItem(
+                            value: '13 سطری',
+                            child: Text('13 سطری قرآن کریم (13 Lines)')),
+                        DropdownMenuItem(
+                            value: '15 سطری',
+                            child: Text('15 سطری قرآن کریم (15 Lines)')),
+                        DropdownMenuItem(
+                            value: '16 سطری',
+                            child:
+                                Text('16 سطری قرآن کریم (16 Lines - عام فہم)')),
+                        DropdownMenuItem(
+                            value: '18 سطری',
+                            child: Text('18 سطری قرآن کریم (18 Lines)')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setStateSB(() {
+                            selectedQuran = v;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'طریقۂ حفظ / ترتیب *',
+                        prefixIcon: Icon(Icons.format_list_numbered,
+                            color: Colors.green),
+                        border: OutlineInputBorder(),
+                      ),
+                      value: selectedSequence,
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'reverse',
+                            child: Text('طریقہ 1: پارہ 30 تا 1 (عم سے شروع)')),
+                        DropdownMenuItem(
+                            value: 'forward',
+                            child: Text('طریقہ 2: پارہ 1 تا 30 (شروع سے آخر)')),
+                        DropdownMenuItem(
+                            value: 'thirty_then_forward',
+                            child: Text('طریقہ 3: پارہ عم (30) پھر 1 تا 29')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setStateSB(() {
+                            selectedSequence = v;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'حفظ سیکشن / زمرہ *',
+                        prefixIcon: Icon(Icons.category, color: Colors.teal),
+                        border: OutlineInputBorder(),
+                      ),
+                      value: selectedHifzSection,
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'regular',
+                            child: Text('سیکشن A: ریگولر حفظ (مکمل وقت)')),
+                        DropdownMenuItem(
+                            value: 'manzil_gardan',
+                            child:
+                                Text('سیکشن B: منزل/گردان (پارٹ ٹائم/سکول)')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setStateSB(() {
+                            selectedHifzSection = v;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'حفظ، ناظرہ یا گردان میں پروموشن پر قرآنی نسخہ اور طریقۂ حفظ خودکار ریکارڈ میں شامل ہو جائے گا۔',
+                      style:
+                          TextStyle(fontSize: 11, color: Colors.green.shade800),
+                    ),
+                  ],
                 ],
               ),
               actions: [
@@ -981,8 +1994,16 @@ class _StudentsPageState extends State<StudentsPage> {
                 ElevatedButton(
                   onPressed: () async {
                     if (selectedClass != null) {
-                      await DBHelper().updateStudent(
-                          student['id'], {'class_name': selectedClass});
+                      final updateMap = <String, dynamic>{
+                        'class_name': selectedClass,
+                        'class': selectedClass,
+                      };
+                      if (isQuranClass(selectedClass)) {
+                        updateMap['quran_edition'] = selectedQuran;
+                        updateMap['hifz_sequence'] = selectedSequence;
+                        updateMap['hifz_section'] = selectedHifzSection;
+                      }
+                      await DBHelper().updateStudent(student['id'], updateMap);
                       if (context.mounted) {
                         Navigator.pop(ctx);
                         Navigator.pop(context); // Close details dialog
@@ -1041,16 +2062,42 @@ class _StudentsPageState extends State<StudentsPage> {
                   if (student['status'] == 'Alumni') ...[
                     const Divider(),
                     _detailTile(
+                        Icons.category,
+                        isUrdu ? 'نوعیت / کیٹیگری' : 'Category',
+                        resolveAlumniCategory(student) == 'dropped'
+                            ? (isUrdu ? 'ترکِ تعلیم' : 'Dropped Out')
+                            : (resolveAlumniCategory(student) == 'expelled'
+                                ? (isUrdu ? 'خارج کردہ' : 'Expelled')
+                                : (isUrdu ? 'تکمیلِ تعلیم' : 'Completed'))),
+                    _detailTile(
                         Icons.calendar_today,
-                        isUrdu ? 'فراغت کی تاریخ' : 'Graduation Date',
+                        isUrdu
+                            ? 'فراغت / اخراج کی تاریخ'
+                            : 'Graduation / Leaving Date',
                         student['graduation_date'] ?? '-'),
                     _detailTile(
                         Icons.timer,
                         isUrdu ? 'تعلیمی دورانیہ' : 'Duration',
                         student['duration'] ?? '-'),
+                    if (student['wifaq_exam'] == 1 ||
+                        student['wifaq_exam'] == '1')
+                      _detailTile(
+                          Icons.grade,
+                          isUrdu ? 'امتحان وفاق' : 'Wifaq Exam',
+                          isUrdu
+                              ? "ہاں (نمبرات: ${student['wifaq_marks']?.toString().isNotEmpty == true ? student['wifaq_marks'] : 'درج نہیں'})"
+                              : "Yes (Marks: ${student['wifaq_marks']?.toString().isNotEmpty == true ? student['wifaq_marks'] : 'N/A'})"),
+                    if (student['mehrab_recitation']?.toString().isNotEmpty ==
+                        true)
+                      _detailTile(
+                          Icons.mosque,
+                          isUrdu
+                              ? 'محراب (تراویح میں قرآن)'
+                              : 'Mehrab Recitation',
+                          student['mehrab_recitation'].toString()),
                     _detailTile(
                         Icons.info_outline,
-                        isUrdu ? 'وجہ فراغت' : 'Reason',
+                        isUrdu ? 'وجہ فراغت / اخراج' : 'Reason',
                         student['leaving_reason'] ?? '-'),
                   ],
                 ],
@@ -1065,6 +2112,16 @@ class _StudentsPageState extends State<StudentsPage> {
                     style: const TextStyle(color: Colors.white)),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               ),
+              if (resolveAlumniCategory(student) == 'completed')
+                ElevatedButton.icon(
+                  onPressed: () => _issueSanad(student, isUrdu),
+                  icon: const Icon(Icons.card_membership,
+                      color: Colors.white, size: 18),
+                  label: Text(isUrdu ? "سند جاری کریں" : "Issue Sanad",
+                      style: const TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD4AC0D)),
+                ),
               if (currentUserRole.value == 'admin') ...[
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.blue),
@@ -1081,8 +2138,9 @@ class _StudentsPageState extends State<StudentsPage> {
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (c) => AlertDialog(
-                        title: Text(isUrdu ? 'طالب علم حذف کریں' : 'Delete Student'),
-                        content: Text(isUrdu 
+                        title: Text(
+                            isUrdu ? 'طالب علم حذف کریں' : 'Delete Student'),
+                        content: Text(isUrdu
                             ? 'کیا آپ واقعی اس طالب علم کا ریکارڈ حذف کرنا چاہتے ہیں؟'
                             : 'Are you sure you want to delete this student?'),
                         actions: [
@@ -1092,7 +2150,8 @@ class _StudentsPageState extends State<StudentsPage> {
                           ),
                           TextButton(
                             onPressed: () => Navigator.pop(c, true),
-                            child: Text(isUrdu ? 'ہاں' : 'Yes', style: const TextStyle(color: Colors.red)),
+                            child: Text(isUrdu ? 'ہاں' : 'Yes',
+                                style: const TextStyle(color: Colors.red)),
                           ),
                         ],
                       ),
@@ -1100,18 +2159,24 @@ class _StudentsPageState extends State<StudentsPage> {
                     if (confirm == true) {
                       try {
                         await DBHelper().deleteStudent(student['id']);
-                        await SyncService.runTwoWaySync();
                         if (mounted) {
                           _refreshStudents();
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(isUrdu ? "✅ طالب علم حذف کر دیا گیا!" : "✅ Student deleted!"),
+                            content: Text(isUrdu
+                                ? "✅ طالب علم حذف کر دیا گیا!"
+                                : "✅ Student deleted!"),
                             backgroundColor: Colors.green,
                           ));
                         }
-                      } catch (e) {
+                        SyncService.triggerBackgroundTableSync('students');
+                      } catch (e, stackTrace) {
+                        debugPrint(
+                            'Error deleting student: $e\nStack: $stackTrace');
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text("Error: $e"),
+                            content: Text(isUrdu
+                                ? "❌ طالب علم کو حذف کرنے میں خرابی پیش آئی۔"
+                                : "❌ Failed to delete student. Please try again."),
                             backgroundColor: Colors.red,
                           ));
                         }
@@ -1184,7 +2249,21 @@ class _StudentsPageState extends State<StudentsPage> {
     final rollNoController =
         TextEditingController(text: student['roll_number']?.toString() ?? '');
     String? localSelectedClass = student['class_name']?.toString();
-      _selectedResidenceStatus = student['residence_status']?.toString();
+    _selectedResidenceStatus = student['residence_status']?.toString();
+    String selectedQuran = student['quran_edition']?.toString() ?? '16 سطری';
+    if (!['13 سطری', '15 سطری', '16 سطری', '18 سطری'].contains(selectedQuran)) {
+      selectedQuran = '16 سطری';
+    }
+    String selectedSequence = student['hifz_sequence']?.toString() ?? 'reverse';
+    if (!['reverse', 'forward', 'thirty_then_forward']
+        .contains(selectedSequence)) {
+      selectedSequence = 'reverse';
+    }
+    String selectedHifzSection =
+        student['hifz_section']?.toString() ?? 'regular';
+    if (!['regular', 'manzil_gardan'].contains(selectedHifzSection)) {
+      selectedHifzSection = 'regular';
+    }
     final contactController = TextEditingController(
         text: student['contact_number']?.toString() ?? '');
     final addressController =
@@ -1213,6 +2292,8 @@ class _StudentsPageState extends State<StudentsPage> {
         setDialogState(() => photoPath = picked.path);
       }
     }
+
+    bool isSaving = false;
 
     showDialog(
       context: context,
@@ -1272,6 +2353,97 @@ class _StudentsPageState extends State<StudentsPage> {
                   onChanged: (v) =>
                       setDialogState(() => localSelectedClass = v),
                 ),
+                if (localSelectedClass != null &&
+                    (localSelectedClass!.contains('حفظ') ||
+                        localSelectedClass!.contains('ناظرہ') ||
+                        localSelectedClass!.contains('گردان'))) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: selectedQuran,
+                    decoration: InputDecoration(
+                        labelText: isUrduGlobal.value
+                            ? "قرآن کریم نسخہ / لائنز"
+                            : "Quran Edition",
+                        prefixIcon:
+                            const Icon(Icons.menu_book, color: Colors.green),
+                        border: const OutlineInputBorder()),
+                    items: const [
+                      DropdownMenuItem(
+                          value: '13 سطری',
+                          child: Text("13 سطری قرآن کریم (13 Lines)")),
+                      DropdownMenuItem(
+                          value: '15 سطری',
+                          child: Text("15 سطری قرآن کریم (15 Lines)")),
+                      DropdownMenuItem(
+                          value: '16 سطری',
+                          child:
+                              Text("16 سطری قرآن کریم (16 Lines - عام فہم)")),
+                      DropdownMenuItem(
+                          value: '18 سطری',
+                          child: Text("18 سطری قرآن کریم (18 Lines)")),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setDialogState(() => selectedQuran = v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: selectedSequence,
+                    decoration: InputDecoration(
+                        labelText: isUrduGlobal.value
+                            ? "طریقۂ حفظ / ترتیب"
+                            : "Hifz Sequence",
+                        prefixIcon: const Icon(Icons.format_list_numbered,
+                            color: Colors.green),
+                        border: const OutlineInputBorder()),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'reverse',
+                          child: Text("طریقہ 1: پارہ 30 تا 1 (عم سے شروع)")),
+                      DropdownMenuItem(
+                          value: 'forward',
+                          child: Text("طریقہ 2: پارہ 1 تا 30 (شروع سے آخر)")),
+                      DropdownMenuItem(
+                          value: 'thirty_then_forward',
+                          child: Text("طریقہ 3: پارہ عم (30) پھر 1 تا 29")),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setDialogState(() => selectedSequence = v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: selectedHifzSection,
+                    decoration: InputDecoration(
+                        labelText: isUrduGlobal.value
+                            ? "حفظ سیکشن / زمرہ *"
+                            : "Hifz Section *",
+                        prefixIcon:
+                            const Icon(Icons.category, color: Colors.teal),
+                        border: const OutlineInputBorder()),
+                    items: [
+                      DropdownMenuItem(
+                          value: 'regular',
+                          child: Text(isUrduGlobal.value
+                              ? "سیکشن A: ریگولر حفظ (مکمل وقت)"
+                              : "Section A: Regular Hifz (Full Time)")),
+                      DropdownMenuItem(
+                          value: 'manzil_gardan',
+                          child: Text(isUrduGlobal.value
+                              ? "سیکشن B: منزل/گردان (پارٹ ٹائم/سکول)"
+                              : "Section B: Manzil / Gardan (Part Time)")),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setDialogState(() => selectedHifzSection = v);
+                      }
+                    },
+                  ),
+                ],
                 const SizedBox(height: 10),
                 TextField(
                     controller: contactController,
@@ -1290,31 +2462,82 @@ class _StudentsPageState extends State<StudentsPage> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(isUrduGlobal.value ? "کینسل" : "Cancel")),
+              onPressed: isSaving ? null : () => Navigator.pop(context),
+              child: Text(isUrduGlobal.value ? "کینسل" : "Cancel"),
+            ),
             ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.trim().isEmpty) {
-                  return;
-                }
-                await DBHelper().updateStudent(student['id'], {
-                  'name': nameController.text.trim(),
-                  'father_name': fatherNameController.text.trim(),
-                  'roll_number': rollNoController.text.trim(),
-                  'class_name': localSelectedClass ?? '',
-          'residence_status': _selectedResidenceStatus ?? '',
-                  'contact_number': contactController.text.trim(),
-                  'address': addressController.text.trim(),
-                  'photo': photoPath ?? '',
-                });
-                try {
-                  await SyncService.runTwoWaySync();
-                } catch (_) {}
-                Navigator.pop(context);
-                _refreshStudents();
-              },
-              child: Text(isUrduGlobal.value ? "محفوظ کریں" : "Save"),
-            )
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (nameController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(isUrduGlobal.value
+                              ? "نام طالب علم لکھنا ضروری ہے!"
+                              : "Student name is required!"),
+                          backgroundColor: Colors.red,
+                        ));
+                        return;
+                      }
+                      setDialogState(() => isSaving = true);
+                      try {
+                        final updateMap = <String, dynamic>{
+                          'name': nameController.text.trim(),
+                          'father_name': fatherNameController.text.trim(),
+                          'roll_number': rollNoController.text.trim(),
+                          'class_name': localSelectedClass ?? '',
+                          'residence_status': _selectedResidenceStatus ?? '',
+                          'contact_number': contactController.text.trim(),
+                          'address': addressController.text.trim(),
+                          'photo': photoPath ?? '',
+                        };
+                        if (localSelectedClass != null &&
+                            (localSelectedClass!.contains('حفظ') ||
+                                localSelectedClass!.contains('ناظرہ') ||
+                                localSelectedClass!.contains('گردان'))) {
+                          updateMap['quran_edition'] = selectedQuran;
+                          updateMap['hifz_sequence'] = selectedSequence;
+                          updateMap['hifz_section'] = selectedHifzSection;
+                        }
+                        await DBHelper()
+                            .updateStudent(student['id'], updateMap);
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(isUrduGlobal.value
+                                ? "✅ طالب علم کی معلومات کامیابی سے محفوظ ہو گئیں!"
+                                : "✅ Student updated successfully!"),
+                            backgroundColor: Colors.green,
+                          ));
+                        }
+                        _refreshStudents();
+                        SyncService.triggerBackgroundTableSync('students');
+                      } catch (e) {
+                        setDialogState(() => isSaving = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(isUrduGlobal.value
+                                ? "❌ خرابی: $e"
+                                : "❌ Error: $e"),
+                            backgroundColor: Colors.red,
+                          ));
+                        }
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(isUrduGlobal.value ? "محفوظ کریں" : "Save"),
+            ),
           ],
         );
       }),
@@ -1322,53 +2545,510 @@ class _StudentsPageState extends State<StudentsPage> {
   }
 
   void _showMigrateStudentDialog(Map<String, dynamic> student) {
+    final isUrdu = isUrduGlobal.value;
+    String selectedCategory =
+        student['alumni_category']?.toString().isNotEmpty == true
+            ? student['alumni_category'].toString()
+            : 'completed';
+    if (selectedCategory != 'completed' &&
+        selectedCategory != 'dropped' &&
+        selectedCategory != 'expelled') {
+      selectedCategory = 'completed';
+    }
+
+    String admDateStr = student['admission_date']?.toString().isNotEmpty == true
+        ? student['admission_date'].toString().substring(0, 10)
+        : DateTime.now().toString().substring(0, 10);
+    String gradDateStr = DateTime.now().toString().substring(0, 10);
+
+    bool wifaqExam = student['wifaq_exam'] == 1 || student['wifaq_exam'] == '1';
+    final wifaqMarksController =
+        TextEditingController(text: student['wifaq_marks']?.toString() ?? '');
+    String selectedMehrab =
+        student['mehrab_recitation']?.toString().isNotEmpty == true
+            ? student['mehrab_recitation'].toString()
+            : 'ہاں';
+
+    String defaultReasonFor(String cat) {
+      if (cat == 'dropped') {
+        return isUrdu
+            ? 'بغیر تعلیم مکمل کیے (درمیان میں چھوڑا)'
+            : 'Left without completing education';
+      } else if (cat == 'expelled') {
+        return isUrdu
+            ? 'مدرسہ سے خارج کیا گیا (تادیبی کارروائی)'
+            : 'Expelled from madrasa';
+      }
+      return isUrdu
+          ? 'تعلیم مکمل ہونے کی وجہ سے'
+          : 'Graduated / Completed education';
+    }
+
+    final reasonController = TextEditingController(
+      text: student['leaving_reason']?.toString().isNotEmpty == true
+          ? student['leaving_reason'].toString()
+          : defaultReasonFor(selectedCategory),
+    );
+
+    String calcDurationText(String adm, String grad) {
+      try {
+        DateTime d1 = DateTime.parse(adm);
+        DateTime d2 = DateTime.parse(grad);
+        if (d2.isBefore(d1)) return isUrdu ? 'غلط تاریخ!' : 'Invalid Date';
+        int days = d2.difference(d1).inDays;
+        int years = days ~/ 365;
+        int remDays = days % 365;
+        int months = remDays ~/ 30;
+        int finalDays = remDays % 30;
+        String res = '';
+        if (years > 0) res += '$years ${isUrdu ? 'سال' : 'Years'} ';
+        if (months > 0) res += '$months ${isUrdu ? 'ماہ' : 'Months'} ';
+        if (finalDays > 0) res += '$finalDays ${isUrdu ? 'دن' : 'Days'}';
+        return res.trim().isEmpty ? (isUrdu ? '0 دن' : '0 Days') : res.trim();
+      } catch (_) {
+        return '';
+      }
+    }
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(isUrduGlobal.value
-            ? "طالب علم کو فارغ کریں / حذف کریں"
-            : "Migrate / Soft Delete"),
-        content: Text(isUrduGlobal.value
-            ? "کیا آپ اس طالب علم کو فارغ التحصیل (Alumni) کرنا چاہتے ہیں یا مدرسہ سے خارج کرنا چاہتے ہیں؟"
-            : "Do you want to make this student an Alumni or remove them?"),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(isUrduGlobal.value ? "کینسل" : "Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            onPressed: () async {
-              await DBHelper().updateStudent(student['id'], {
-                'status': 'Alumni',
-                'graduation_date': DateTime.now().toString().substring(0, 10),
-                'leaving_reason': 'Graduated',
-              });
-              try {
-                await SyncService.runTwoWaySync();
-              } catch (_) {}
-              Navigator.pop(context);
-              _refreshStudents();
-            },
-            child: Text(isUrduGlobal.value ? "فارغ التحصیل" : "Alumni",
-                style: const TextStyle(color: Colors.white)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              await DBHelper().updateStudent(student['id'], {
-                'status': 'Inactive',
-                'leaving_reason': 'Removed',
-              });
-              try {
-                await SyncService.runTwoWaySync();
-              } catch (_) {}
-              Navigator.pop(context);
-              _refreshStudents();
-            },
-            child: Text(isUrduGlobal.value ? "خارج کریں" : "Remove",
-                style: const TextStyle(color: Colors.white)),
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final durationStr = calcDurationText(admDateStr, gradDateStr);
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.school, color: Colors.orange),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isUrdu
+                        ? 'فارغ التحصیل / اخراج ریکارڈ'
+                        : 'Graduation / Migration Record',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: MediaQuery.of(context).size.width * 0.9,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.person, color: Color(0xFF284D3D)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  student['name']?.toString() ?? '-',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15),
+                                ),
+                                Text(
+                                  "${isUrdu ? 'داخلہ نمبر' : 'Roll/Adm'}: ${student['admission_number'] ?? student['roll_number'] ?? '-'} | ${student['class_name'] ?? student['class'] ?? '-'}",
+                                  style: const TextStyle(
+                                      fontSize: 12, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // کیٹیگری کا انتخاب
+                    Text(
+                      isUrdu ? "نوعیت / کیٹیگری:* " : "Category:*",
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: selectedCategory,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'completed',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle,
+                                  color: Colors.green, size: 18),
+                              const SizedBox(width: 8),
+                              Text(isUrdu
+                                  ? '🎓 تکمیلِ تعلیم (تعلیم مکمل)'
+                                  : '🎓 Completed Education'),
+                            ],
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'dropped',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.pause_circle,
+                                  color: Colors.orange, size: 18),
+                              const SizedBox(width: 8),
+                              Text(isUrdu
+                                  ? '⏸️ ترکِ تعلیم (درمیان میں چھوڑا)'
+                                  : '⏸️ Dropped Out'),
+                            ],
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'expelled',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.cancel,
+                                  color: Colors.red, size: 18),
+                              const SizedBox(width: 8),
+                              Text(isUrdu
+                                  ? '❌ خارج کردہ (مدرسہ سے اخراج)'
+                                  : '❌ Expelled'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() {
+                            selectedCategory = val;
+                            reasonController.text = defaultReasonFor(val);
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // تاریخیں
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(isUrdu ? 'تاریخ داخلہ' : 'Adm Date',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              InkWell(
+                                onTap: () async {
+                                  final d = await showDatePicker(
+                                    context: context,
+                                    initialDate:
+                                        DateTime.tryParse(admDateStr) ??
+                                            DateTime.now(),
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (d != null) {
+                                    setDialogState(() => admDateStr =
+                                        d.toString().substring(0, 10));
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    border:
+                                        Border.all(color: Colors.grey.shade400),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(admDateStr,
+                                          style: const TextStyle(fontSize: 12)),
+                                      const Icon(Icons.calendar_today,
+                                          size: 14, color: Colors.grey),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(isUrdu ? 'تاریخ فراغت/اخراج' : 'Grad Date',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green)),
+                              const SizedBox(height: 4),
+                              InkWell(
+                                onTap: () async {
+                                  final d = await showDatePicker(
+                                    context: context,
+                                    initialDate:
+                                        DateTime.tryParse(gradDateStr) ??
+                                            DateTime.now(),
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (d != null) {
+                                    setDialogState(() => gradDateStr =
+                                        d.toString().substring(0, 10));
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.green),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(gradDateStr,
+                                          style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.green)),
+                                      const Icon(Icons.calendar_today,
+                                          size: 14, color: Colors.green),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // دورانیہ
+                    if (durationStr.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Text(isUrdu ? "تعلیمی دورانیہ: " : "Duration: ",
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey)),
+                            Text(durationStr,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.teal)),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 6),
+
+                    // اگر تکمیلِ تعلیم ہو تو وفاق امتحان اور محراب کے فیلڈز
+                    if (selectedCategory == 'completed') ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F8E9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.lightGreen.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              title: Text(
+                                isUrdu
+                                    ? 'کیا وفاق کا امتحان دیا ہے؟'
+                                    : 'Attended Wifaq Exam?',
+                                style: const TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.bold),
+                              ),
+                              value: wifaqExam,
+                              activeColor: Colors.green,
+                              onChanged: (val) =>
+                                  setDialogState(() => wifaqExam = val),
+                            ),
+                            if (wifaqExam) ...[
+                              TextField(
+                                controller: wifaqMarksController,
+                                decoration: InputDecoration(
+                                  labelText: isUrdu
+                                      ? 'وفاق میں حاصل کردہ نمبرات / پوزیشن'
+                                      : 'Wifaq Marks / Position',
+                                  labelStyle: const TextStyle(fontSize: 12),
+                                  hintText: isUrdu
+                                      ? 'مثال: 450 یا ممتاز'
+                                      : 'e.g. 450 / Mumtaz',
+                                  border: const OutlineInputBorder(),
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                            Text(
+                              isUrdu
+                                  ? 'محراب (تراویح میں قرآن سنایا؟):'
+                                  : 'Mehrab (Taraweeh Quran):',
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            DropdownButtonFormField<String>(
+                              value: selectedMehrab,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                              ),
+                              items: [
+                                DropdownMenuItem(
+                                    value: 'ہاں',
+                                    child: Text(isUrdu ? 'ہاں' : 'Yes')),
+                                DropdownMenuItem(
+                                    value: 'نہیں',
+                                    child: Text(isUrdu ? 'نہیں' : 'No')),
+                                DropdownMenuItem(
+                                    value: 'سنا ہے',
+                                    child: Text(isUrdu
+                                        ? 'سنا ہے'
+                                        : 'Listened (Samia)')),
+                              ],
+                              onChanged: (v) {
+                                if (v != null)
+                                  setDialogState(() => selectedMehrab = v);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    // وجہ
+                    TextField(
+                      controller: reasonController,
+                      decoration: InputDecoration(
+                        labelText: isUrdu
+                            ? 'فراغت / اخراج کی وجہ / تفصیلات'
+                            : 'Reason / Remarks',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(isUrdu ? 'کینسل' : 'Cancel'),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: selectedCategory == 'expelled'
+                      ? Colors.red
+                      : (selectedCategory == 'dropped'
+                          ? Colors.orange
+                          : const Color(0xFF284D3D)),
+                ),
+                onPressed: () async {
+                  final sId =
+                      int.tryParse(student['id']?.toString() ?? '') ?? 0;
+                  if (sId <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(isUrdu
+                          ? 'خرابی: طالب علم کی درست شناختی نمبر نہیں ملا'
+                          : 'Error: Invalid student ID'),
+                      backgroundColor: Colors.red,
+                    ));
+                    return;
+                  }
+
+                  await DBHelper().updateStudent(sId, {
+                    'status': 'Alumni',
+                    'alumni_category': selectedCategory,
+                    'admission_date': admDateStr,
+                    'graduation_date': gradDateStr,
+                    'duration': durationStr,
+                    'leaving_reason': reasonController.text.trim(),
+                    'wifaq_exam':
+                        (selectedCategory == 'completed' && wifaqExam) ? 1 : 0,
+                    'wifaq_marks':
+                        (selectedCategory == 'completed' && wifaqExam)
+                            ? wifaqMarksController.text.trim()
+                            : '',
+                    'mehrab_recitation':
+                        selectedCategory == 'completed' ? selectedMehrab : '',
+                  });
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    _refreshStudents();
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(isUrdu
+                          ? '✅ طالب علم کا ریکارڈ کامیابی سے فارغ التحصیل / خارج میں محفوظ ہو گیا!'
+                          : '✅ Student migration record saved successfully!'),
+                      backgroundColor: Colors.green,
+                    ));
+                  }
+
+                  SyncService.triggerBackgroundTableSync('students');
+                },
+                icon: const Icon(Icons.check, color: Colors.white, size: 18),
+                label: Text(
+                  isUrdu ? 'محفوظ کریں' : 'Save',
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _issueSanad(Map<String, dynamic> student, bool isUrdu) async {
+    if (resolveAlumniCategory(student) != 'completed') {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isUrdu
+            ? 'سند صرف تکمیلِ تعلیم کے حامل طلبہ کو جاری کی جا سکتی ہے!'
+            : 'Sanad can only be issued to completed alumni!'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SanadPreviewScreen(student: student),
       ),
     );
   }
@@ -1388,6 +3068,9 @@ class _StudentsPageState extends State<StudentsPage> {
           photoBytes = File(photoPath).readAsBytesSync();
         } else {
           String fullUrl = apiUrl;
+          if (fullUrl.endsWith('api.php')) {
+            fullUrl = fullUrl.substring(0, fullUrl.length - 7);
+          }
           if (!fullUrl.endsWith('/')) fullUrl += '/';
           if (photoPath.startsWith('uploads/')) {
             fullUrl += photoPath;
@@ -1402,185 +3085,261 @@ class _StudentsPageState extends State<StudentsPage> {
       }
     } catch (_) {}
 
-    // Build the ID Card as a Flutter Widget to capture as image
-    // This solves the Urdu text breaking issue perfectly.
-    final Widget idCardWidget = MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'JameelNooriNastaleeq',
-        textTheme: const TextTheme(
-          bodyMedium: TextStyle(color: Colors.black),
-          bodyLarge: TextStyle(color: Colors.black),
-          titleMedium: TextStyle(color: Colors.black),
-        ),
-      ),
-      home: Directionality(
-        textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
-        child: Container(
-          width: 337.5, // 3.375 * 100
-          height: 212.5, // 2.125 * 100
+    Uint8List? sigBytes;
+    try {
+      final sMap = await DBHelper().getSettings();
+      final stampPath = sMap['signature_stamp_path']?.toString() ?? '';
+      if (stampPath.isNotEmpty) {
+        if (stampPath.startsWith('http')) {
+          final res = await http.get(Uri.parse(stampPath));
+          if (res.statusCode == 200) sigBytes = res.bodyBytes;
+        } else if (File(stampPath).existsSync()) {
+          sigBytes = File(stampPath).readAsBytesSync();
+        } else {
+          String fullUrl = apiUrl;
+          if (fullUrl.endsWith('api.php')) {
+            fullUrl = fullUrl.substring(0, fullUrl.length - 7);
+          }
+          if (!fullUrl.endsWith('/')) fullUrl += '/';
+          fullUrl += stampPath;
+          final res = await http.get(Uri.parse(fullUrl));
+          if (res.statusCode == 200) sigBytes = res.bodyBytes;
+        }
+      }
+    } catch (_) {}
+
+    final String stdName = (student['name'] ?? '').toString();
+    final String fName = (student['father_name'] ?? '').toString();
+    final String admNo = (student['roll_number'] ??
+            student['admission_number'] ??
+            student['roll_no'] ??
+            '')
+        .toString();
+    final String clsName = (student['class_name'] ??
+            student['class'] ??
+            student['current_class'] ??
+            '')
+        .toString();
+    final DateTime now = DateTime.now();
+    final String issueDate =
+        "${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}";
+    final DateTime nextYear = DateTime(now.year + 1, now.month, now.day);
+    final String expiryDate =
+        "${nextYear.day.toString().padLeft(2, '0')}-${nextYear.month.toString().padLeft(2, '0')}-${nextYear.year}";
+
+    // Standard CR-80 card dimensions in logical pixels: 337.5 x 212.5 (3.375" x 2.125")
+    final Widget idCardWidget = Directionality(
+      textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
+      child: Container(
+        width: 337.5,
+        height: 212.5,
+        decoration: BoxDecoration(
           color: Colors.white,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header
-          Container(
-            height: 55,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            color: const Color(0xFF284D3D),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Image.memory(logoBytes,
-                    width: 24,
-                    height: 24,
-                    color: Colors.white,
-                    colorBlendMode: BlendMode.srcIn),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      isUrdu
-                          ? "مدرسہ اشرف المدارس فروکہ"
-                          : "Madrasa Ashraf-ul-Madaris",
-                      style: const TextStyle(
-                        fontFamily: 'JameelNooriNastaleeq',
-                        fontSize: 18,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textDirection:
-                          isUrdu ? TextDirection.rtl : TextDirection.ltr,
-                    ),
-                    Text(
-                      "شناختی کارڈ - ID Card",
-                      style: const TextStyle(
-                        fontFamily: 'JameelNooriNastaleeq',
-                        fontSize: 12,
-                        color: Color(0xFFD4AC0D),
-                      ),
-                      textDirection: TextDirection.rtl,
-                    ),
-                  ],
-                ),
-                Image.memory(logoBytes,
-                    width: 24,
-                    height: 24,
-                    color: Colors.white,
-                    colorBlendMode: BlendMode.srcIn),
-              ],
-            ),
-          ),
-          const SizedBox(height: 5),
-          // Main Body
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF284D3D), width: 1.5),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // ===== ہیڈر: بڑا لوگو (40px) اور بڑا نام (22px) =====
+            Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              color: const Color(0xFF284D3D),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Photo & Signature (Left)
-                  Column(
-                    children: [
-                      Container(
-                        width: 70,
-                        height: 85,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                              color: const Color(0xFF284D3D), width: 1.5),
-                          color: Colors.grey.shade200,
-                        ),
-                        child: photoBytes != null
-                            ? Image.memory(photoBytes, fit: BoxFit.cover)
-                            : Center(
-                                child: Text(
-                                  isUrdu ? "تصویر" : "Photo",
-                                  style: const TextStyle(
-                                      fontFamily: 'JameelNooriNastaleeq',
-                                      fontSize: 10),
-                                ),
-                              ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        width: 70,
-                        decoration: const BoxDecoration(
-                          border: Border(
-                              top: BorderSide(color: Colors.black, width: 0.5)),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          isUrdu ? "دستخط جاری کنندہ" : "Issuer Signature",
+                  Image.memory(logoBytes,
+                      width: 40,
+                      height: 40,
+                      color: Colors.white,
+                      colorBlendMode: BlendMode.srcIn),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          isUrdu
+                              ? "مدرسہ اشرف المدارس فروکہ"
+                              : "Madrasa Ashraf-ul-Madaris",
                           style: const TextStyle(
-                              fontFamily: 'JameelNooriNastaleeq',
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold),
+                            fontFamily: 'JameelNooriNastaleeq',
+                            fontSize: 22,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textDirection:
+                              isUrdu ? TextDirection.rtl : TextDirection.ltr,
                           textAlign: TextAlign.center,
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 12),
-                  // Details (Right)
-                  Expanded(
-                    child: Directionality(
-                      textDirection:
-                          isUrdu ? TextDirection.rtl : TextDirection.ltr,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _idRow(isUrdu ? "نام:" : "Name:",
-                              student['name'] ?? '', isUrdu),
-                          const SizedBox(height: 3),
-                          _idRow(isUrdu ? "ولدیت:" : "Father:",
-                              student['father_name'] ?? '', isUrdu),
-                          const SizedBox(height: 3),
-                          _idRow(isUrdu ? "داخلہ نمبر:" : "Adm No:",
-                              student['roll_number'] ?? '', isUrdu),
-                          const SizedBox(height: 3),
-                          _idRow(isUrdu ? "کلاس:" : "Class:",
-                              student['class_name'] ?? '', isUrdu),
-                          const SizedBox(height: 3),
-                          _idRow(isUrdu ? "رابطہ:" : "Contact:",
-                              student['contact_number'] ?? '', isUrdu),
-                          const SizedBox(height: 3),
-                          _idRow(isUrdu ? "آئی ڈی:" : "ID:",
-                              "#${student['id'] ?? ''}", isUrdu),
-                        ],
-                      ),
+                        Text(
+                          "شناختی کارڈ — ID Card",
+                          style: const TextStyle(
+                            fontFamily: 'JameelNooriNastaleeq',
+                            fontSize: 9,
+                            color: Color(0xFFD4AC0D),
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textDirection: TextDirection.rtl,
+                        ),
+                      ],
                     ),
                   ),
+                  Image.memory(logoBytes,
+                      width: 40,
+                      height: 40,
+                      color: Colors.white,
+                      colorBlendMode: BlendMode.srcIn),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 5),
-          // Footer
-          Container(
-            height: 20,
-            color: const Color(0xFFD4AC0D),
-            alignment: Alignment.center,
-            child: Text(
-              isUrdu
-                  ? "تعلیم و تربیت کا گہوارہ (مدرسہ اشرف المدارس)"
-                  : "Education & Training Center",
-              style: const TextStyle(
-                fontFamily: 'JameelNooriNastaleeq',
-                fontSize: 14,
-                color: Color(0xFF284D3D),
-                fontWeight: FontWeight.bold,
+            const SizedBox(height: 3),
+            // ===== مرکزی باڈی =====
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ===== تصویر و دستخط کالم =====
+                    SizedBox(
+                      width: 66,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // تصویر
+                          Container(
+                            width: 62,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                  color: const Color(0xFF284D3D), width: 1.5),
+                              borderRadius: BorderRadius.circular(4),
+                              color: Colors.grey.shade100,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2.5),
+                              child: photoBytes != null
+                                  ? Image.memory(photoBytes, fit: BoxFit.cover)
+                                  : Center(
+                                      child: Icon(Icons.person,
+                                          size: 36,
+                                          color: Colors.grey.shade400),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          // "دستخط جاری کنندہ" — فونٹ سائز 50٪ کم
+                          Text(
+                            isUrdu ? "دستخط جاری کنندہ" : "Issuer Signature",
+                            style: const TextStyle(
+                                fontFamily: 'JameelNooriNastaleeq',
+                                fontSize: 4.8,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                            textDirection: TextDirection.rtl,
+                          ),
+                          Expanded(
+                            child: Center(
+                              child: sigBytes != null
+                                  ? Image.memory(sigBytes,
+                                      height: 16, fit: BoxFit.contain)
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
+                          // دستخط کی لکیر — فوٹر سے عین اوپر
+                          Container(
+                            width: 62,
+                            height: 1,
+                            color: Colors.black87,
+                          ),
+                          const SizedBox(height: 3),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // ===== تفصیلات — 5 rows (واٹر مارک لوگو 22% اوپیسٹی کے ساتھ) =====
+                    Expanded(
+                      child: Directionality(
+                        textDirection:
+                            isUrdu ? TextDirection.rtl : TextDirection.ltr,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // واٹر مارک لوگو (22% اوپیسٹی)
+                            Opacity(
+                              opacity: 0.22,
+                              child: Image.memory(
+                                logoBytes,
+                                width: 75,
+                                height: 75,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _idRow(
+                                    isUrdu ? "نام:" : "Name:", stdName, isUrdu),
+                                _idRow(isUrdu ? "ولدیت:" : "Father:", fName,
+                                    isUrdu),
+                                _idRow(isUrdu ? "داخلہ نمبر:" : "Adm No:",
+                                    admNo, isUrdu),
+                                _idRow(isUrdu ? "کلاس:" : "Class:", clsName,
+                                    isUrdu),
+                                _datesRow(issueDate, expiryDate, isUrdu),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            // ===== فوٹر: 26px اونچائی، ٹیکسٹ سینٹرڈ =====
+            Container(
+              height: 26,
+              color: const Color(0xFFD4AC0D),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Transform.translate(
+                offset: const Offset(0, -1.5),
+                child: Text(
+                  isUrdu
+                      ? "تعلیم و تربیت کا گہوارہ"
+                      : "Education & Training Center",
+                  style: const TextStyle(
+                    fontFamily: 'JameelNooriNastaleeq',
+                    fontSize: 9.5,
+                    color: Color(0xFF284D3D),
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    )));
+    );
 
-    // Capture the widget as image
+    // Capture the widget with exact targetSize and high pixelRatio
     final Uint8List imageBytes = await screenshotController.captureFromWidget(
-      idCardWidget,
-      delay: const Duration(milliseconds: 100),
+      Material(
+        color: Colors.white,
+        child: idCardWidget,
+      ),
+      targetSize: const Size(337.5, 212.5),
+      pixelRatio: 3.0,
+      delay: const Duration(milliseconds: 150),
       context: context,
     );
 
@@ -1588,12 +3347,16 @@ class _StudentsPageState extends State<StudentsPage> {
     final pdf = pw.Document();
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat(
+        pageFormat: const PdfPageFormat(
             3.375 * PdfPageFormat.inch, 2.125 * PdfPageFormat.inch,
             marginAll: 0),
         build: (pw.Context ctx) {
-          return pw.Center(
-            child: pw.Image(pw.MemoryImage(imageBytes), fit: pw.BoxFit.fill),
+          return pw.FullPage(
+            ignoreMargins: true,
+            child: pw.Center(
+              child:
+                  pw.Image(pw.MemoryImage(imageBytes), fit: pw.BoxFit.contain),
+            ),
           );
         },
       ),
@@ -1601,28 +3364,89 @@ class _StudentsPageState extends State<StudentsPage> {
 
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'ID_Card_${(student["id"] ?? "student").toString().replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '')}.pdf',
+      name:
+          'ID_Card_${(student["id"] ?? "student").toString().replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '')}.pdf',
     );
   }
 
   Widget _idRow(String label, String value, bool isUrdu) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 45,
-          child: Text(label,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 0.5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 52,
+            child: Text(
+              label,
               style: const TextStyle(
                   fontFamily: 'JameelNooriNastaleeq',
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold)),
-        ),
-        Expanded(
-          child: Text(value,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.bold),
+              softWrap: false,
+              maxLines: 1,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  fontFamily: 'JameelNooriNastaleeq', fontSize: 10)),
-        ),
-      ],
+                  fontFamily: 'JameelNooriNastaleeq', fontSize: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _datesRow(String issueDate, String expiryDate, bool isUrdu) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFDDDDDD), width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            isUrdu ? "اجراء: " : "Issue: ",
+            style: const TextStyle(
+                fontFamily: 'JameelNooriNastaleeq',
+                fontSize: 7,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF444444)),
+          ),
+          Text(
+            issueDate,
+            style: const TextStyle(
+                fontFamily: 'JameelNooriNastaleeq',
+                fontSize: 7,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284D3D)),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 3),
+            child: Text("|", style: TextStyle(fontSize: 7, color: Colors.grey)),
+          ),
+          Text(
+            isUrdu ? "تنسیخ: " : "Exp: ",
+            style: const TextStyle(
+                fontFamily: 'JameelNooriNastaleeq',
+                fontSize: 7,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF444444)),
+          ),
+          Text(
+            expiryDate,
+            style: const TextStyle(
+                fontFamily: 'JameelNooriNastaleeq',
+                fontSize: 7,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFB91C1C)),
+          ),
+        ],
+      ),
     );
   }
 }

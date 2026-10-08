@@ -1,5 +1,4 @@
 <?php 
-ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_reporting(E_ALL);
 require_once 'db.php'; 
 $selected_class = $_GET['class'] ?? '';
 if (empty($selected_class)) {
@@ -31,8 +30,9 @@ if (isset($_POST['save_nazira'])) {
         $e_time = $_POST['evening_time'] ?? '';
         $e_status = $_POST['evening_status'] ?? '';
 
-        $exist = $pdo->prepare("SELECT * FROM daily_nazira WHERE student_id = ? AND date = ?");
-        $exist->execute([$std_id, $date]);
+        $cur_tenant_id = (int)get_current_tenant_id();
+        $exist = $pdo->prepare("SELECT * FROM daily_nazira WHERE student_id = ? AND date = ? AND tenant_id = ?");
+        $exist->execute([$std_id, $date, $cur_tenant_id]);
         $row = $exist->fetch();
 
         if ($row) {
@@ -49,11 +49,11 @@ if (isset($_POST['save_nazira'])) {
             $e_time = $keepOld($e_time, $row['evening_time'] ?? '');
             $e_status = $keepOld($e_status, $row['evening_status'] ?? '');
             
-            $sql = "UPDATE daily_nazira SET morning_sabaq=?, morning_qty=?, morning_time=?, morning_status=?, evening_sabaq=?, evening_qty=?, evening_time=?, evening_status=? WHERE id=?";
-            $pdo->prepare($sql)->execute([$m_sabaq, $m_qty, $m_time, $m_status, $e_sabaq, $e_qty, $e_time, $e_status, $row['id']]);
+            $sql = "UPDATE daily_nazira SET morning_sabaq=?, morning_qty=?, morning_time=?, morning_status=?, evening_sabaq=?, evening_qty=?, evening_time=?, evening_status=? WHERE id=? AND tenant_id=?";
+            $pdo->prepare($sql)->execute([$m_sabaq, $m_qty, $m_time, $m_status, $e_sabaq, $e_qty, $e_time, $e_status, $row['id'], $cur_tenant_id]);
         } else {
-            $sql = "INSERT INTO daily_nazira (student_id, date, morning_sabaq, morning_qty, morning_time, morning_status, evening_sabaq, evening_qty, evening_time, evening_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $pdo->prepare($sql)->execute([$std_id, $date, $m_sabaq, $m_qty, $m_time, $m_status, $e_sabaq, $e_qty, $e_time, $e_status]);
+            $sql = "INSERT INTO daily_nazira (student_id, date, morning_sabaq, morning_qty, morning_time, morning_status, evening_sabaq, evening_qty, evening_time, evening_status, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $pdo->prepare($sql)->execute([$std_id, $date, $m_sabaq, $m_qty, $m_time, $m_status, $e_sabaq, $e_qty, $e_time, $e_status, $cur_tenant_id]);
         }
         
         echo "<div class='alert alert-success text-center fw-bold shadow mt-2' id='alert_msg'>✅ ناظرہ کا ریکارڈ محفوظ / اپڈیٹ ہو گیا!</div>";
@@ -63,15 +63,20 @@ if (isset($_POST['save_nazira'])) {
 }
 
 // طلباء اور اساتذہ کا ڈیٹا لانا (صرف متعلقہ کلاس کے طلباء)
+$cur_tenant_id = (int)get_current_tenant_id();
+$sys_type = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys_type === 'Masjid') ? "s.system_type = 'Masjid'" : "(s.system_type = 'Madrasa' OR s.system_type IS NULL OR s.system_type = '')";
+
 $stmt = $pdo->prepare("
     SELECT s.* FROM students s
-    LEFT JOIN classes c ON s.class = c.name
-    WHERE (LOWER(s.status) = 'active' OR s.status = 'حاضر' OR s.status = 'Present') 
+    WHERE s.tenant_id = ?
+      AND $sys_cond
+      AND (LOWER(s.status) = 'active' OR s.status = 'حاضر' OR s.status = 'Present' OR s.status IS NULL OR s.status = '') 
       AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
-      AND s.class = ?
+      AND (s.class = ? OR s.class_name = ?)
     ORDER BY s.admission_number ASC
 ");
-$stmt->execute([$selected_class]);
+$stmt->execute([$cur_tenant_id, $selected_class, $selected_class]);
 $students_data = $stmt->fetchAll();
 ?>
 

@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 class StudentsSyncSaver {
-  static Future<void> save(Database db, Batch batch, Map<String, dynamic> data) async {
+  static Future<void> save(Database db, Batch batch, Map<String, dynamic> data, [List<List<int>>? studentIdRemaps]) async {
     // 1. Students (Madrasa)
     if (data['students'] != null) {
       try {
@@ -14,6 +14,26 @@ class StudentsSyncSaver {
           String roll =
               (item['roll_number'] ?? item['admission_number'])?.toString().trim() ??
                   '';
+
+          var existing = <Map<String, dynamic>>[];
+          if (serverId > 0) {
+            existing = await db.query('students',
+                where: 'id = ?', whereArgs: [serverId], limit: 1);
+          }
+          if (existing.isEmpty && roll.isNotEmpty) {
+            existing = await db.query('students',
+                where: 'roll_number = ? OR admission_number = ?',
+                whereArgs: [roll, roll],
+                limit: 1);
+          }
+
+          if (existing.isNotEmpty) {
+            final existingId =
+                int.tryParse(existing.first['id']?.toString() ?? '') ?? 0;
+            if (serverId > 0 && existingId > 0 && existingId != serverId) {
+              studentIdRemaps?.add([existingId, serverId]);
+            }
+          }
 
           Map<String, dynamic> row = {
             'id': serverId > 0 ? serverId : null,
@@ -46,6 +66,8 @@ class StudentsSyncSaver {
             'wifaq_exam': int.tryParse(item['wifaq_exam']?.toString() ?? '0') ?? 0,
             'wifaq_marks': item['wifaq_marks']?.toString() ?? '',
             'mehrab_recitation': item['mehrab_recitation']?.toString() ?? '',
+            'hifz_section':
+                (item['hifz_section']?.toString().isNotEmpty == true) ? item['hifz_section'].toString() : 'regular',
             'is_deleted':
                 int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
             'is_synced': 1,
@@ -66,13 +88,25 @@ class StudentsSyncSaver {
       try {
         for (var item in data['hifz_history']) {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          final dateStr = (item['date']?.toString() ?? '').split(' ')[0];
+          final stdIdStr = item['student_id']?.toString() ?? '';
+          if (serverId > 0) {
+            batch.delete('hifz_record',
+                where: 'server_id = ? AND id != ?',
+                whereArgs: [serverId, serverId]);
+          }
+          if (dateStr.isNotEmpty && stdIdStr.isNotEmpty) {
+            batch.delete('hifz_record',
+                where: 'date = ? AND student_id = ? AND (id IS NULL OR id != ?)',
+                whereArgs: [dateStr, stdIdStr, serverId]);
+          }
           batch.insert(
             'hifz_record',
             {
               'id': serverId > 0 ? serverId : null,
               'server_id': serverId > 0 ? serverId : null,
-              'date': (item['date']?.toString() ?? '').split(' ')[0],
-              'student_id': item['student_id']?.toString() ?? '',
+              'date': dateStr,
+              'student_id': stdIdStr,
               'sabaq_para':
                   (item['sabaq_parah'] ?? item['sabaq_para'])?.toString() ?? '',
               'sabaq_lines': item['sabaq_lines']?.toString() ?? '',
@@ -117,12 +151,19 @@ class StudentsSyncSaver {
       try {
         for (var item in data['nazira_history']) {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          final dateStr = (item['date']?.toString() ?? '').split(' ')[0];
+          final stdIdStr = item['student_id']?.toString() ?? '';
+          if (dateStr.isNotEmpty && stdIdStr.isNotEmpty) {
+            batch.delete('nazira_record',
+                where: 'date = ? AND student_id = ? AND (id IS NULL OR id != ?)',
+                whereArgs: [dateStr, stdIdStr, serverId]);
+          }
           batch.insert(
             'nazira_record',
             {
               'id': serverId > 0 ? serverId : null,
-              'student_id': item['student_id'],
-              'date': item['date'],
+              'student_id': stdIdStr,
+              'date': dateStr,
               'morning_sabaq': item['morning_sabaq'],
               'morning_qty': item['morning_qty'] ?? '',
               'morning_time': item['morning_time'] ?? '',
@@ -354,12 +395,19 @@ class StudentsSyncSaver {
       try {
         for (var item in data['qaida_records']) {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          final dateStr = (item['date']?.toString() ?? '').split(' ')[0];
+          final stdId = int.tryParse(item['student_id']?.toString() ?? '') ?? 0;
+          if (dateStr.isNotEmpty && stdId > 0) {
+            batch.delete('qaida_records',
+                where: 'date = ? AND student_id = ? AND (id IS NULL OR id != ?)',
+                whereArgs: [dateStr, stdId, serverId]);
+          }
           batch.insert(
             'qaida_records',
             {
               'id': serverId > 0 ? serverId : null,
-              'student_id': int.tryParse(item['student_id']?.toString() ?? '') ?? 0,
-              'date': item['date']?.toString() ?? '',
+              'student_id': stdId,
+              'date': dateStr,
               'sabaq_1': item['sabaq_1']?.toString() ?? '',
               'qty_1': item['qty_1']?.toString() ?? '',
               'grade_1': item['grade_1']?.toString() ?? '',
@@ -391,13 +439,25 @@ class StudentsSyncSaver {
       try {
         for (var item in data['husn_saut_record']) {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          final dateStr = (item['date']?.toString() ?? '').split(' ')[0];
+          final stdIdStr = item['student_id']?.toString() ?? '';
+          if (serverId > 0) {
+            batch.delete('husn_saut_record',
+                where: 'server_id = ? AND id != ?',
+                whereArgs: [serverId, serverId]);
+          }
+          if (dateStr.isNotEmpty && stdIdStr.isNotEmpty) {
+            batch.delete('husn_saut_record',
+                where: 'date = ? AND student_id = ? AND (id IS NULL OR id != ?)',
+                whereArgs: [dateStr, stdIdStr, serverId]);
+          }
           batch.insert(
             'husn_saut_record',
             {
               'id': serverId > 0 ? serverId : null,
               'server_id': serverId > 0 ? serverId : null,
-              'student_id': item['student_id']?.toString() ?? '',
-              'date': (item['date']?.toString() ?? '').split(' ')[0],
+              'student_id': stdIdStr,
+              'date': dateStr,
               'manzil_sabaq': item['manzil_sabaq']?.toString() ?? '',
               'manzil_listener': item['manzil_listener']?.toString() ?? '',
               'manzil_grade': item['manzil_grade']?.toString() ?? '',

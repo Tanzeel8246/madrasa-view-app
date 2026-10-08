@@ -1,144 +1,74 @@
 'use client';
-import { useState, useEffect } from 'react';
 
-const formatDate = (dateString: string) => {
-  const d = new Date(dateString);
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-};
+import { useState } from 'react';
+import Link from 'next/link';
 
 export default function ParentComplaintPage() {
-  const [user, setUser] = useState<any>(null);
-  const [complaints, setComplaints] = useState<any[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const [formData, setFormData] = useState({
-    category: 'نصاب / تعلیم',
-    description: ''
-  });
+  const [category, setCategory] = useState('تعلیمی معاملہ');
+  const [description, setDescription] = useState('');
+  const [submitted, setSubmitted] = useState(false);
 
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const parsed = JSON.parse(userStr);
-      setUser(parsed);
-      fetchComplaints(parsed.id);
-    }
-  }, []);
-
-  const fetchComplaints = async (studentId: number) => {
-    try {
-      const res = await fetch(`/api/parent/complaint?student_id=${studentId}`);
-      const json = await res.json();
-      if (json.success) setComplaints(json.data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-    setIsSubmitting(true);
-    
-    try {
-      const res = await fetch('/api/parent/complaint', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          student_id: user.id,
-          ...formData
-        })
-      });
-      const json = await res.json();
-      if (json.success) {
-        alert(json.message);
-        setFormData({ ...formData, description: '' });
-        fetchComplaints(user.id);
-      } else {
-        alert(json.message);
-      }
-    } catch (e) {
-      alert('نیٹ ورک ایرر');
-    } finally {
-      setIsSubmitting(false);
-    }
+    setSubmitted(true);
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 animate-fade-in font-urdu" dir="rtl">
-      
-      <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800 dark:text-white flex items-center gap-3">
-            <span className="text-red-500">⚠️</span> شکایت درج کریں
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-2">
-            کسی بھی قسم کی تعلیمی یا انتظامی شکایت براہ راست مدرسہ انتظامیہ تک پہنچائیں
-          </p>
+    <div className="flex flex-col bg-slate-50 dark:bg-slate-900 font-urdu min-h-screen transition-colors" dir="rtl">
+      <header className="h-20 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-8 sticky top-0 z-10 transition-colors">
+        <div className="flex items-center gap-4">
+          <Link href="/parent_dashboard" className="text-theme-primary dark:text-theme-light hover:text-theme-hover transition-colors bg-theme-primary/10 p-2 rounded-lg">
+            <span className="text-xl">⬅️</span>
+          </Link>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <span>⚠️</span> شکایت یا تجویز کا اندراج
+          </h2>
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Form */}
-        <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700 h-fit border-t-4 border-t-red-500">
-          <h2 className="text-xl font-bold mb-4 border-b pb-2">نئی شکایت</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold mb-1">کیٹگری</label>
-              <select required value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full border rounded-xl px-4 py-3 bg-slate-50 dark:bg-slate-900 font-bold">
-                <option value="نصاب / تعلیم">نصاب / تعلیم</option>
-                <option value="اساتذہ کا رویہ">اساتذہ کا رویہ</option>
-                <option value="انتظامیہ">انتظامیہ</option>
-                <option value="صفائی ستھرائی">صفائی ستھرائی</option>
-                <option value="دیگر (متفرق)">دیگر (متفرق)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-1">شکایت کی تفصیل</label>
-              <textarea required rows={5} value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full border rounded-xl px-4 py-2 bg-slate-50 dark:bg-slate-900" placeholder="مکمل تفصیل یہاں لکھیں..."></textarea>
-            </div>
-            <button type="submit" disabled={isSubmitting} className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition">
-              {isSubmitting ? 'بھیج رہا ہے...' : 'شکایت درج کریں'}
-            </button>
-          </form>
-        </div>
-
-        {/* History */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
-          <div className="p-4 bg-slate-800 text-white border-b border-slate-700">
-            <h2 className="font-bold">آپ کی پچھلی شکایات</h2>
+      <main className="flex-1 p-8 max-w-2xl mx-auto w-full">
+        {submitted ? (
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-sm border border-slate-200 dark:border-slate-700 text-center space-y-4">
+            <div className="text-6xl text-emerald-600">👍</div>
+            <h3 className="text-2xl font-bold text-slate-800 dark:text-white">آپ کی شکایت / تجویز انتظامیہ کو موصول ہو گئی ہے!</h3>
+            <p className="text-slate-500">مہتمم صاحب یا متعلقہ نگران اس پر جلد از جلد غور کر کے کارروائی عمل میں لائیں گے۔</p>
+            <Link href="/parent_dashboard" className="inline-block px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow mt-4">
+              واپس ہوم پر جائیں
+            </Link>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-right">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-700 text-sm">
-                  <th className="p-4 w-32">تاریخ</th>
-                  <th className="p-4 w-32">کیٹگری</th>
-                  <th className="p-4">تفصیل</th>
-                  <th className="p-4 w-32 text-center">سٹیٹس</th>
-                </tr>
-              </thead>
-              <tbody>
-                {complaints.length === 0 ? <tr><td colSpan={4} className="p-8 text-center text-slate-500">کوئی شکایت درج نہیں کی گئی</td></tr> :
-                  complaints.map(c => (
-                  <tr key={c.id} className="border-b dark:border-slate-700">
-                    <td className="p-4 text-sm font-bold">{formatDate(c.date)}</td>
-                    <td className="p-4 text-sm">{c.category}</td>
-                    <td className="p-4 text-sm whitespace-pre-wrap">{c.complaint}</td>
-                    <td className="p-4 text-center">
-                      <span className={`text-xs px-3 py-1 rounded-full font-bold ${c.status === 'Viewed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                        {c.status === 'Viewed' ? 'انتظامیہ نے دیکھ لیا' : 'زیرِ التوا'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        ) : (
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-sm border border-slate-200 dark:border-slate-700">
+            <h3 className="text-xl font-bold mb-4">طالب علم: محمد عثمان (رول نمبر: 1001)</h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2">شکایت کی نوعیت / کیٹگری</label>
+                <select className="w-full px-4 py-3 rounded-xl border text-lg" value={category} onChange={e => setCategory(e.target.value)}>
+                  <option value="تعلیمی معاملہ">تعلیمی معاملہ (پڑھائی / سبق)</option>
+                  <option value="دارالاقامہ / ہاسٹل">دارالاقامہ / ہاسٹل رہائش</option>
+                  <option value="طعام و میس">طعام و میس کچن</option>
+                  <option value="اخلاق و نظم و ضبط">نظم و ضبط و دیگر امور</option>
+                </select>
+              </div>
 
-      </div>
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2">تفصیل تحریر کریں *</label>
+                <textarea 
+                  rows={4} 
+                  required 
+                  className="w-full px-4 py-3 rounded-xl border resize-none" 
+                  placeholder="شکایت یا تجویز کو واضح الفاظ میں درج کریں..."
+                  value={description} 
+                  onChange={e => setDescription(e.target.value)} 
+                />
+              </div>
+
+              <button type="submit" className="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xl rounded-xl shadow-lg transition">
+                شکایت جمع کروائیں
+              </button>
+            </form>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

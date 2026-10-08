@@ -13,6 +13,47 @@ import 'sync_upload.dart';
 class SyncEngine {
   static final ValueNotifier<SyncProgress?> progress = ValueNotifier(null);
   static SyncResult? lastResult;
+  static bool _isSyncing = false;
+
+  /// Check if a sync is currently in progress
+  static bool get isSyncing => _isSyncing;
+
+  /// نان بلاکنگ پس پردہ فوری سنک (Optimistic Background Sync)
+  /// کلک کے فوراً بعد بغیر UI فریز کیے متعلقہ ٹیبل کا نیا ڈیٹا سرور پر بھیجتا ہے
+  static void triggerBackgroundTableSync(String table) {
+    Future.microtask(() async {
+      try {
+        final db = DBHelper();
+        final uploadErrors = <String>[];
+        if (SyncPermissions.canUploadTable(table)) {
+          await SyncUploader.uploadSingleTable(
+            db: db,
+            table: table,
+            uploadErrors: uploadErrors,
+          );
+        }
+      } catch (e) {
+        debugPrint("Background sync for $table error: $e");
+      }
+    });
+  }
+
+  /// سنگل ٹیبل کو براہ راست اور تیز رفتاری سے سنک کرنے کا فنکشن
+  static Future<int> syncSingleTable(String table) async {
+    try {
+      final db = DBHelper();
+      final uploadErrors = <String>[];
+      if (!SyncPermissions.canUploadTable(table)) return 0;
+      return await SyncUploader.uploadSingleTable(
+        db: db,
+        table: table,
+        uploadErrors: uploadErrors,
+      );
+    } catch (e) {
+      debugPrint("Sync single table error ($table): $e");
+      return 0;
+    }
+  }
 
   /// Save last sync timestamp in secure storage
   static Future<void> saveLastSyncTime() async {
@@ -41,23 +82,37 @@ class SyncEngine {
   }
 
   /// Main Two-Way Sync Runner with backward compatibility
-  static Future<void> runTwoWaySync() async {
-    await runTwoWaySyncWithResult();
+  static Future<void> runTwoWaySync({bool forceFull = false}) async {
+    await runTwoWaySyncWithResult(forceFull: forceFull);
   }
 
   /// Main Two-Way Sync Runner returning detailed SyncResult
-  static Future<SyncResult> runTwoWaySyncWithResult() async {
-    final startTime = DateTime.now();
-    final db = DBHelper();
-    final uploadErrors = <String>[];
-    final uploadedPerTable = <String, int>{};
-    final downloadedPerTable = <String, int>{};
+  static Future<SyncResult> runTwoWaySyncWithResult(
+      {bool forceFull = false}) async {
+    if (_isSyncing) {
+      debugPrint("SyncEngine: Sync already in progress, skipping concurrent duplicate run.");
+      return lastResult ??
+          SyncResult(
+            uploadedPerTable: {},
+            downloadedPerTable: {},
+            errors: [],
+            duration: Duration.zero,
+            timestamp: DateTime.now(),
+          );
+    }
+    _isSyncing = true;
+    try {
+      final startTime = DateTime.now();
+      final db = DBHelper();
+      final uploadErrors = <String>[];
+      final uploadedPerTable = <String, int>{};
+      final downloadedPerTable = <String, int>{};
 
-    final uploadableTables =
-        SyncConfig.tables.where((t) => SyncPermissions.canUploadTable(t)).toList();
-    final totalSteps = uploadableTables.length + 1; // +1 for sync_down
+      final uploadableTables =
+          SyncConfig.tables.where((t) => SyncPermissions.canUploadTable(t)).toList();
+      final totalSteps = uploadableTables.length + 1; // +1 for sync_down
 
-    int completedSteps = 0;
+      int completedSteps = 0;
 
     // 1. Upload Phase
     for (final table in uploadableTables) {
@@ -89,7 +144,8 @@ class SyncEngine {
     );
 
     try {
-      final downloadedCounts = await SyncDownloader.syncDown(db);
+      final downloadedCounts =
+          await SyncDownloader.syncDown(db, forceFull: forceFull);
       downloadedPerTable.addAll(downloadedCounts);
     } catch (e) {
       final message = 'Sync down failed: $e';
@@ -132,6 +188,9 @@ class SyncEngine {
     }
 
     return result;
+    } finally {
+      _isSyncing = false;
+    }
   }
 
   /// Push new class period book using authenticated NetworkService

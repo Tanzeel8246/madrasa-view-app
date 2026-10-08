@@ -31,12 +31,56 @@ extension DbSyncRead on DBHelper {
     await db.update(table, {'is_synced': 1}, where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<void> markFinanceAsSynced(int id, int? serverId) async {
+  Future<void> markFinanceAsSynced(int id, int? serverId, {bool isMasjid = false}) async {
     Database db = await database;
-    final values = <String, dynamic>{'is_synced': 1};
-    if (serverId != null && serverId > 0) {
-      values['server_id'] = serverId;
+    final tableName = isMasjid ? 'masjid_finance' : 'finance';
+    if (serverId == null || serverId <= 0 || serverId == id) {
+      final values = <String, dynamic>{'is_synced': 1};
+      if (serverId != null && serverId > 0) {
+        values['server_id'] = serverId;
+      }
+      await db.update(tableName, values, where: 'id = ?', whereArgs: [id]);
+      return;
     }
-    await db.update('finance', values, where: 'id = ?', whereArgs: [id]);
+
+    await db.transaction((txn) async {
+      final current = await txn.query(tableName, where: 'id = ?', whereArgs: [id], limit: 1);
+      if (current.isEmpty) return;
+
+      final existingWithServerId = await txn.query(
+        tableName,
+        where: 'server_id = ? AND id != ?',
+        whereArgs: [serverId, id],
+        limit: 1,
+      );
+
+      if (existingWithServerId.isNotEmpty) {
+        final dupId = existingWithServerId.first['id'];
+        await txn.delete(tableName, where: 'id = ?', whereArgs: [dupId]);
+      }
+
+      final existingWithId = await txn.query(
+        tableName,
+        where: 'id = ?',
+        whereArgs: [serverId],
+        limit: 1,
+      );
+
+      if (existingWithId.isEmpty) {
+        await txn.update(
+          tableName,
+          {'id': serverId, 'server_id': serverId, 'is_synced': 1},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      } else {
+        await txn.update(
+          tableName,
+          {'server_id': serverId, 'is_synced': 1},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      }
+    });
   }
 }

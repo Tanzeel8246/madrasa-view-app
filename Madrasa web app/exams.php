@@ -1,9 +1,20 @@
-<?php include 'header.php'; ?>
 <?php
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once 'db.php';
+$is_admin = (($_SESSION['role'] ?? '') === 'admin');
+if (!isset($_SESSION['user_id']) || (!$is_admin && !app_has_perm('manage_exams') && !app_has_perm('manage_masjid_exams'))) {
+    $sys = $_SESSION['system_type'] ?? 'Madrasa';
+    header("Location: " . ($sys === 'Masjid' ? "masjid_dashboard.php" : "dashboard.php"));
+    exit;
+}
+include 'header.php';
+?>
+$cur_tenant_id = (int)get_current_tenant_id();
 if (isset($_POST['add_exam'])) {
     try {
-        $stmt = $pdo->prepare("INSERT INTO exams (exam_name, exam_date, total_marks, passing_marks) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$_POST['name'], $_POST['date'], $_POST['total_marks'], $_POST['passing_marks']]);
+        $sys = $_SESSION['system_type'] ?? 'Madrasa';
+        $stmt = $pdo->prepare("INSERT INTO exams (exam_name, exam_date, total_marks, passing_marks, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$_POST['name'], $_POST['date'], $_POST['total_marks'], $_POST['passing_marks'], $sys, $cur_tenant_id]);
         echo "<div class='alert alert-info shadow-sm fw-bold'>✅ نیا امتحان شامل کر دیا گیا!</div>";
     } catch (Exception $e) {
         echo "<div class='alert alert-danger shadow-sm fw-bold'>❌ غلطی: ڈیٹا بیس اپڈیٹ نہیں ہو سکا۔ برائے مہربانی <a href='fix_schema.php' class='alert-link'>یہاں کلک کر کے</a> ڈیٹا بیس فکس کریں۔<br><small>Error: {$e->getMessage()}</small></div>";
@@ -46,10 +57,16 @@ if (isset($_POST['add_exam'])) {
         </thead>
         <tbody>
             <?php
+            $sys = $_SESSION['system_type'] ?? 'Madrasa';
+            $sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+            $allowed_classes = get_allowed_classes($pdo);
+            $allowed_class_names = array_column($allowed_classes, 'name');
+            $class_condition = empty($allowed_class_names) ? "1=0" : "class IN (" . implode(',', array_map(function($c) use ($pdo) { return $pdo->quote($c); }, $allowed_class_names)) . ")";
+            
             $sql = "SELECT e.*, 
-                    (SELECT COUNT(*) FROM exam_results WHERE exam_id = e.id) as result_count,
-                    (SELECT COUNT(*) FROM students WHERE status='Active' AND is_deleted=0) as total_students
-                    FROM exams e WHERE is_deleted = 0 ORDER BY id DESC";
+                    (SELECT COUNT(*) FROM exam_results WHERE exam_id = e.id AND tenant_id = $cur_tenant_id) as result_count,
+                    (SELECT COUNT(*) FROM students WHERE tenant_id = $cur_tenant_id AND status='Active' AND (is_deleted=0 OR is_deleted IS NULL) AND $sys_cond AND ($class_condition)) as total_students
+                    FROM exams e WHERE e.tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL) AND $sys_cond ORDER BY id DESC";
             foreach($pdo->query($sql) as $row) {
                 $perc = $row['total_students'] > 0 ? round(($row['result_count'] / $row['total_students']) * 100) : 0;
                 $status_color = ($perc == 100) ? 'success' : 'warning';

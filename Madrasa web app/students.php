@@ -1,9 +1,7 @@
 <?php 
-// ایرر رپورٹنگ
-ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_reporting(E_ALL);
-
 require_once 'db.php'; 
 include 'header.php'; 
+$cur_tenant_id = (int)get_current_tenant_id();
 
 // --- ایکشنز (Actions) ---
 
@@ -11,18 +9,22 @@ include 'header.php';
 if (isset($_POST['graduate_student'])) {
     $id = $_POST['student_id'];
     $g_date = !empty($_POST['graduation_date']) ? $_POST['graduation_date'] : null;
-    $reason = $_POST['reason'];
+    $category = $_POST['alumni_category'] ?? 'completed';
+    $reason = $_POST['reason'] ?? '';
     $duration = !empty($_POST['duration']) ? $_POST['duration'] : null;
+    $wifaq_exam = isset($_POST['wifaq_exam']) ? 1 : 0;
+    $wifaq_marks = ($wifaq_exam && !empty($_POST['wifaq_marks'])) ? trim($_POST['wifaq_marks']) : null;
+    $mehrab = !empty($_POST['mehrab_recitation']) ? trim($_POST['mehrab_recitation']) : null;
 
-    $stmt = $pdo->prepare("UPDATE students SET status = 'Alumni', graduation_date = ?, leaving_reason = ?, duration = ? WHERE id = ?");
-    $stmt->execute([$g_date, $reason, $duration, $id]);
+    $stmt = $pdo->prepare("UPDATE students SET status = 'Alumni', alumni_category = ?, graduation_date = ?, leaving_reason = ?, duration = ?, wifaq_exam = ?, wifaq_marks = ?, mehrab_recitation = ? WHERE id = ? AND tenant_id = ?");
+    $stmt->execute([$category, $g_date, $reason, $duration, $wifaq_exam, $wifaq_marks, $mehrab, $id, $cur_tenant_id]);
     echo "<script>window.location='students.php';</script>";
 }
 
 // 2. بحال کرنا (Restore - اگر غلطی سے فارغ ہو گیا ہو)
 if (isset($_GET['restore'])) {
-    $stmt = $pdo->prepare("UPDATE students SET status = 'Active' WHERE id = ?");
-    $stmt->execute([$_GET['restore']]);
+    $stmt = $pdo->prepare("UPDATE students SET status = 'Active' WHERE id = ? AND tenant_id = ?");
+    $stmt->execute([$_GET['restore'], $cur_tenant_id]);
     echo "<script>window.location='students.php';</script>";
 }
 
@@ -30,15 +32,24 @@ if (isset($_GET['restore'])) {
 if (isset($_POST['promote_student'])) {
     $id = $_POST['student_id'];
     $new_class = $_POST['new_class'];
-    $stmt = $pdo->prepare("UPDATE students SET class = ? WHERE id = ?");
-    $stmt->execute([$new_class, $id]);
+    $quran_edition = !empty($_POST['quran_edition']) ? trim($_POST['quran_edition']) : null;
+    $hifz_sequence = !empty($_POST['hifz_sequence']) ? trim($_POST['hifz_sequence']) : 'reverse';
+    $hifz_section = !empty($_POST['hifz_section']) ? trim($_POST['hifz_section']) : 'regular';
+    $is_quran_class = (mb_stripos($new_class, 'حفظ') !== false || mb_stripos($new_class, 'ناظرہ') !== false || mb_stripos($new_class, 'گردان') !== false);
+    if ($is_quran_class && $quran_edition) {
+        $stmt = $pdo->prepare("UPDATE students SET class = ?, quran_edition = ?, hifz_sequence = ?, hifz_section = ? WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$new_class, $quran_edition, $hifz_sequence, $hifz_section, $id, $cur_tenant_id]);
+    } else {
+        $stmt = $pdo->prepare("UPDATE students SET class = ?, hifz_section = ? WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$new_class, $hifz_section, $id, $cur_tenant_id]);
+    }
     echo "<script>window.location='students.php';</script>";
 }
 
 // 3. ڈیلیٹ کرنا (Delete)
 if (isset($_GET['delete'])) {
-    $stmt = $pdo->prepare("UPDATE students SET is_deleted = 1 WHERE id = ?");
-    $stmt->execute([$_GET['delete']]);
+    $stmt = $pdo->prepare("UPDATE students SET is_deleted = 1 WHERE id = ? AND tenant_id = ?");
+    $stmt->execute([$_GET['delete'], $cur_tenant_id]);
     echo "<script>window.location='students.php';</script>";
 }
 
@@ -52,6 +63,16 @@ if (isset($_POST['save_student'])) {
         $contact = $_POST['contact_number'];
         $addr = $_POST['address'];
         $residence_status = $_POST['residence_status'] ?? '';
+        $hifz_sequence = !empty($_POST['hifz_sequence']) ? $_POST['hifz_sequence'] : 'reverse';
+        $hifz_section = !empty($_POST['hifz_section']) ? $_POST['hifz_section'] : 'regular';
+
+        // Auto self-heal columns if not present
+        try {
+            $pdo->exec("ALTER TABLE students ADD COLUMN hifz_sequence VARCHAR(50) DEFAULT 'reverse'");
+        } catch (Throwable $eSeq) {}
+        try {
+            $pdo->exec("ALTER TABLE students ADD COLUMN hifz_section VARCHAR(50) DEFAULT 'regular'");
+        } catch (Throwable $eSec) {}
 
         // Photo Handling
         $photo_path = $_POST['old_photo'] ?? '';
@@ -77,18 +98,39 @@ if (isset($_POST['save_student'])) {
         
         // اپڈیٹ
         if(!empty($_POST['edit_id'])) {
-            $sql = "UPDATE students SET name=?, father_name=?, admission_number=?, class=?, contact_number=?, address=?, admission_date=?, graduation_date=?, duration=?, photo=?, residence_status=? WHERE id=?";
+            $sql = "UPDATE students SET name=?, father_name=?, admission_number=?, class=?, contact_number=?, address=?, admission_date=?, graduation_date=?, duration=?, photo=?, residence_status=?, quran_edition=?, hifz_sequence=?, hifz_section=? WHERE id=? AND tenant_id=?";
             $adm_date = !empty($_POST['admission_date']) ? $_POST['admission_date'] : null;
             $grad_date = !empty($_POST['graduation_date']) ? $_POST['graduation_date'] : null;
             $duration = !empty($_POST['duration']) ? $_POST['duration'] : null;
-            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $cls, $contact, $addr, $adm_date, $grad_date, $duration, $photo_path, $residence_status, $_POST['edit_id']]);
+            $quran_edition = !empty($_POST['quran_edition']) ? $_POST['quran_edition'] : '16 سطری';
+            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $cls, $contact, $addr, $adm_date, $grad_date, $duration, $photo_path, $residence_status, $quran_edition, $hifz_sequence, $hifz_section, $_POST['edit_id'], $cur_tenant_id]);
             $msg = "<div class='alert alert-success fw-bold'>✅ ریکارڈ اپڈیٹ ہو گیا!</div>";
         } 
         // نیا داخلہ
         else {
-            // Check for duplicate admission number
-            $check = $pdo->prepare("SELECT id FROM students WHERE admission_number = ?");
-            $check->execute([$adm_no]);
+            // Drop legacy single-column unique index on students(admission_number) if still present
+            try {
+                $indexes = $pdo->query("SHOW INDEX FROM `students`")->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($indexes as $idx) {
+                    if ($idx['Non_unique'] == 0 && $idx['Key_name'] !== 'PRIMARY' && $idx['Column_name'] === 'admission_number') {
+                        $kName = $idx['Key_name'];
+                        $hasTenant = false;
+                        foreach ($indexes as $idx2) {
+                            if ($idx2['Key_name'] === $kName && $idx2['Column_name'] === 'tenant_id') {
+                                $hasTenant = true;
+                            }
+                        }
+                        if (!$hasTenant) {
+                            try { $pdo->exec("ALTER TABLE `students` DROP INDEX `$kName`"); } catch (Throwable $eDrop) {}
+                        }
+                    }
+                }
+                try { $pdo->exec("ALTER TABLE `students` ADD UNIQUE KEY `idx_tenant_adm_no` (`tenant_id`, `admission_number`)"); } catch (Throwable $eAddIdx) {}
+            } catch (Throwable $eIdx) {}
+
+            // Check for duplicate admission number within current tenant
+            $check = $pdo->prepare("SELECT id FROM students WHERE admission_number = ? AND tenant_id = ?");
+            $check->execute([$adm_no, $cur_tenant_id]);
             if($check->fetch()) {
                 throw new Exception("یہ داخلہ نمبر پہلے ہی موجود ہے!");
             }
@@ -99,8 +141,10 @@ if (isset($_POST['save_student'])) {
             $s_no = isset($parts[1]) ? (int)$parts[1] : 0;
 
             $adm_date = !empty($_POST['admission_date']) ? $_POST['admission_date'] : date('Y-m-d');
-            $sql = "INSERT INTO students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, photo, residence_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?)";
-            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $s_no, $h_year, $cls, $contact, $addr, $adm_date, $photo_path, $residence_status]);
+            $quran_edition = !empty($_POST['quran_edition']) ? $_POST['quran_edition'] : '16 سطری';
+            $sys = $_SESSION['system_type'] ?? 'Madrasa';
+            $sql = "INSERT INTO students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, photo, residence_status, quran_edition, hifz_sequence, hifz_section, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?)";
+            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $s_no, $h_year, $cls, $contact, $addr, $adm_date, $photo_path, $residence_status, $quran_edition, $hifz_sequence, $hifz_section, $sys, $cur_tenant_id]);
             $msg = "<div class='alert alert-success fw-bold'>✅ نیا طالب علم ایڈ ہو گیا!</div>";
         }
         echo "<script>window.location='students.php';</script>";
@@ -112,32 +156,105 @@ if (isset($_POST['save_student'])) {
 
 // --- ڈیٹا لائیں (دو الگ الگ لسٹیں) ---
 // رجسٹریشن نمبر لاجک
-$current_hijri_year = $pdo->query("SELECT current_hijri_year FROM settings LIMIT 1")->fetchColumn() ?: '1447';
-$last_serial = $pdo->query("SELECT MAX(serial_no) FROM (SELECT serial_no FROM students UNION SELECT serial_no FROM admission_applications) as combined_serials")->fetchColumn() ?: 0;
+$current_hijri_year = '1447';
+try {
+    $current_hijri_year = $pdo->query("SELECT current_hijri_year FROM settings WHERE tenant_id = $cur_tenant_id LIMIT 1")->fetchColumn() ?: '1447';
+} catch (Throwable $e) {
+    try {
+        $current_hijri_year = $pdo->query("SELECT current_hijri_year FROM settings LIMIT 1")->fetchColumn() ?: '1447';
+    } catch (Throwable $e2) {
+        $current_hijri_year = '1447';
+    }
+}
+
+$last_serial = 0;
+try {
+    // 1. طلبہ ٹیبل سے سب سے بڑا سیریل نمبر لائیں
+    $last_serial = (int)($pdo->query("SELECT MAX(serial_no) FROM students WHERE tenant_id = $cur_tenant_id")->fetchColumn() ?: 0);
+    // 2. داخلہ درخواستوں کے ٹیبل سے موازنہ کریں (اگر کالم موجود ہو)
+    try {
+        $app_serial = (int)($pdo->query("SELECT MAX(serial_no) FROM admission_applications WHERE tenant_id = $cur_tenant_id")->fetchColumn() ?: 0);
+        $last_serial = max($last_serial, $app_serial);
+    } catch (Throwable $eApp) {
+        try {
+            $app_serial = (int)($pdo->query("SELECT MAX(serial_no) FROM admission_applications")->fetchColumn() ?: 0);
+            $last_serial = max($last_serial, $app_serial);
+        } catch (Throwable $eApp2) {}
+    }
+} catch (Throwable $e) {
+    $last_serial = 0;
+}
 $next_serial = $last_serial + 1;
 $suggested_adm_no = $current_hijri_year . "-" . sprintf("%02d", $next_serial);
 
 // 1. موجودہ طلباء (Active)
-$is_admin = ($_SESSION['role'] ?? '') === 'admin';
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$user_role_lower = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($user_role_lower, ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim']);
+
+// Dynamic column checking to prevent any SQL errors on unmigrated schemas
+$std_cols = [];
+try {
+    $std_cols = $pdo->query("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Throwable $e) {}
+
+$has_tenant_col = in_array('tenant_id', $std_cols);
+$has_sys_col    = in_array('system_type', $std_cols);
+$has_del_col    = in_array('is_deleted', $std_cols);
+$has_status_col = in_array('status', $std_cols);
+$has_adm_col    = in_array('admission_number', $std_cols);
+$has_class_col  = in_array('class', $std_cols);
+
+$tenant_cond = ($has_tenant_col)
+    ? (($cur_tenant_id == 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $cur_tenant_id")
+    : "1=1";
+
+$sys_cond = ($has_sys_col)
+    ? (($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')")
+    : "1=1";
+
+$del_cond = ($has_del_col) ? "(is_deleted = 0 OR is_deleted IS NULL)" : "1=1";
+
+$active_status_cond = ($has_status_col) 
+    ? "(LOWER(TRIM(status)) = 'active' OR status = 'حاضر' OR status IS NULL OR status = '')" 
+    : "1=1";
+
+$order_by = ($has_adm_col) ? "ORDER BY admission_number DESC" : "ORDER BY id DESC";
+
 $allowed_classes = get_allowed_classes($pdo);
 $allowed_class_names = array_column($allowed_classes, 'name');
 
 $class_condition = "1=1";
 if (!$is_admin) {
     if (empty($allowed_class_names)) {
-        $class_condition = "1=0"; // No access
+        $class_condition = "1=0"; // No access or no classes for this teacher
     } else {
         $inClasses = implode(',', array_map(function($c) use ($pdo) { return $pdo->quote($c); }, $allowed_class_names));
         $class_condition = "class IN ($inClasses)";
     }
 }
 
-if (!empty($_GET['class_filter'])) {
-    $stmt = $pdo->prepare("SELECT * FROM students WHERE status = 'Active' AND is_deleted = 0 AND class = ? AND ($class_condition) ORDER BY admission_number DESC");
-    $stmt->execute([$_GET['class_filter']]);
-    $active_students = $stmt->fetchAll();
-} else {
-    $active_students = $pdo->query("SELECT * FROM students WHERE status = 'Active' AND is_deleted = 0 AND ($class_condition) ORDER BY admission_number DESC")->fetchAll();
+$active_students = [];
+try {
+    if (!empty($_GET['class_filter']) && $has_class_col) {
+        $stmt = $pdo->prepare("SELECT * FROM students WHERE $active_status_cond AND $tenant_cond AND $del_cond AND $sys_cond AND class = ? AND ($class_condition) $order_by");
+        $stmt->execute([$_GET['class_filter']]);
+        $active_students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $active_students = $pdo->query("SELECT * FROM students WHERE $active_status_cond AND $tenant_cond AND $del_cond AND $sys_cond AND ($class_condition) $order_by")->fetchAll(PDO::FETCH_ASSOC);
+    }
+} catch (Throwable $eAct) {
+    try {
+        // Fallback without class_condition or sys_cond
+        $active_students = $pdo->query("SELECT * FROM students WHERE $active_status_cond AND $del_cond $order_by")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $eAct2) {
+        try {
+            // Absolute bare fallback: load any existing student records
+            $active_students = $pdo->query("SELECT * FROM students ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $eAct3) {
+            $active_students = [];
+        }
+    }
 }
 
 // Group active students by class
@@ -164,16 +281,56 @@ foreach (array_keys($grouped_students) as $c) {
 }
 
 // 2. فارغ التحصیل طلباء (Alumni)
-$alumni_students = $pdo->query("SELECT * FROM students WHERE status = 'Alumni' AND is_deleted = 0 AND ($class_condition) ORDER BY graduation_date DESC")->fetchAll();
+try {
+    // Auto-heal dropped & expelled students' categories in DB
+    $pdo->exec("UPDATE students SET alumni_category = 'dropped' 
+        WHERE (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
+          AND (
+            LOWER(TRIM(status)) IN ('left', 'dropped') 
+            OR leaving_reason LIKE '%چھوڑ%' 
+            OR leaving_reason LIKE '%ترک%' 
+            OR leaving_reason LIKE '%شوقیہ%'
+            OR leaving_reason LIKE '%left%'
+            OR leaving_reason LIKE '%drop%'
+          )");
+    $pdo->exec("UPDATE students SET alumni_category = 'expelled' 
+        WHERE (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
+          AND (
+            LOWER(TRIM(status)) IN ('expelled', 'struck off', 'خارج') 
+            OR leaving_reason LIKE '%خارج%' 
+            OR leaving_reason LIKE '%اخراج%' 
+            OR leaving_reason LIKE '%expel%'
+            OR leaving_reason LIKE '%struck%'
+          )");
+} catch (Throwable $eAlmSync) {}
+
+$alumni_students = [];
+$alumni_status_cond = ($has_status_col) 
+    ? "(LOWER(TRIM(status)) IN ('alumni', 'left', 'struck off', 'خارج', 'فارغ', 'فارغ التحصیل') OR (graduation_date IS NOT NULL AND graduation_date != ''))"
+    : "(graduation_date IS NOT NULL AND graduation_date != '')";
+
+try {
+    $alumni_students = $pdo->query("SELECT * FROM students WHERE $alumni_status_cond AND $tenant_cond AND $del_cond AND ($class_condition) ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $eAlm) {
+    try {
+        $alumni_students = $pdo->query("SELECT * FROM students WHERE $alumni_status_cond ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $eAlm2) {
+        $alumni_students = [];
+    }
+}
 
 // --- ایڈٹ موڈ ---
 $edit_data = null;
 $show_form = false; 
 if(isset($_GET['edit'])) {
-    $stmt = $pdo->prepare("SELECT * FROM students WHERE id=?");
-    $stmt->execute([$_GET['edit']]);
-    $edit_data = $stmt->fetch();
-    $show_form = true;
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM students WHERE id=? " . ($has_tenant_col ? " AND $tenant_cond" : ""));
+        $stmt->execute([$_GET['edit']]);
+        $edit_data = $stmt->fetch();
+        $show_form = true;
+    } catch (Throwable $e) {
+        $edit_data = null;
+    }
 }
 ?>
 
@@ -228,7 +385,7 @@ if(isset($_GET['edit'])) {
                     </div>
                     <div class="col-md-3">
                         <label class="fw-bold">کلاس / درجہ</label>
-                        <select name="class" id="s_class" class="form-control">
+                        <select name="class" id="s_class" class="form-control" onchange="toggleQuranEdition(this.value)">
                             <option value="">کلاس منتخب کریں</option>
                             <?php 
                             foreach($allowed_classes as $cl) {
@@ -251,6 +408,36 @@ if(isset($_GET['edit'])) {
                         </select>
                     </div>
                     
+                    <div class="col-md-8" id="quran_edition_group" style="display: none;">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="fw-bold text-success"><i class="fas fa-quran me-1"></i> قرآن کریم نسخہ / لائنز (Quran Edition)</label>
+                                <select name="quran_edition" id="s_quran_edition" class="form-control border-success">
+                                    <option value="13 سطری" <?php echo (isset($edit_data['quran_edition']) && $edit_data['quran_edition'] == '13 سطری') ? 'selected' : ''; ?>>13 سطری قرآن کریم (13 Lines)</option>
+                                    <option value="15 سطری" <?php echo (isset($edit_data['quran_edition']) && $edit_data['quran_edition'] == '15 سطری') ? 'selected' : ''; ?>>15 سطری قرآن کریم (15 Lines)</option>
+                                    <option value="16 سطری" <?php echo (!isset($edit_data['quran_edition']) || $edit_data['quran_edition'] == '16 سطری') ? 'selected' : ''; ?>>16 سطری قرآن کریم (16 Lines - عام فہم)</option>
+                                    <option value="18 سطری" <?php echo (isset($edit_data['quran_edition']) && $edit_data['quran_edition'] == '18 سطری') ? 'selected' : ''; ?>>18 سطری قرآن کریم (18 Lines)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold text-success"><i class="fas fa-sort-amount-down me-1"></i> طریقۂ حفظ / ترتیب (Hifz Order)</label>
+                                <select name="hifz_sequence" id="s_hifz_sequence" class="form-control border-success">
+                                    <option value="reverse" <?php echo (!isset($edit_data['hifz_sequence']) || $edit_data['hifz_sequence'] == 'reverse') ? 'selected' : ''; ?>>طریقہ 1: پارہ 30 تا 1 (عم سے الٹی ترتیب)</option>
+                                    <option value="forward" <?php echo (isset($edit_data['hifz_sequence']) && $edit_data['hifz_sequence'] == 'forward') ? 'selected' : ''; ?>>طریقہ 2: پارہ 1 تا 30 (شروع سے سیدھی ترتیب)</option>
+                                    <option value="thirty_then_forward" <?php echo (isset($edit_data['hifz_sequence']) && $edit_data['hifz_sequence'] == 'thirty_then_forward') ? 'selected' : ''; ?>>طریقہ 3: پارہ عم (30) پھر 1 تا 29</option>
+                                </select>
+                            </div>
+                            <div class="col-md-12 mt-2">
+                                <label class="fw-bold text-primary"><i class="fas fa-layer-group me-1"></i> حفظ سیکشن / نوعیت (Hifz Section):</label>
+                                <select name="hifz_section" id="s_hifz_section" class="form-select border-primary fw-bold">
+                                    <option value="regular" <?php echo (!isset($edit_data['hifz_section']) || $edit_data['hifz_section'] == 'regular') ? 'selected' : ''; ?>>سیکشن A: ریگولر حفظ (مکمل وقت)</option>
+                                    <option value="manzil_gardan" <?php echo (isset($edit_data['hifz_section']) && $edit_data['hifz_section'] == 'manzil_gardan') ? 'selected' : ''; ?>>سیکشن B: منزل / گردان (پارٹ ٹائم / سکول طلبہ)</option>
+                                </select>
+                                <small class="text-muted">منزل/گردان کے طلبہ کا تعلیمی ریکارڈ بنیادی طور پر منزل/گردان کی دہرائی پر مشتمل ہوتا ہے اور نیا سبق نہ سنانے پر ناغہ شمار نہیں ہوتا۔</small>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-md-4">
                         <label class="fw-bold">رابطہ نمبر <span class="text-danger">*</span></label>
                         <input type="text" name="contact_number" id="s_contact" class="form-control" required placeholder="0300xxxxxxx" value="<?php echo $edit_data['contact_number']??''; ?>">
@@ -299,13 +486,14 @@ if(isset($_GET['edit'])) {
         'residential_aided' => 'اقامتی، امدادی',
         'non_residential_non_aided' => 'غیر اقامتی، غیر امدادی',
         'residential_non_aided' => 'اقامتی، غیر امدادی',
-        'non_residential_aided' => 'غیر اقامتی، امدادی'
+        'non_residential_aided' => 'غیر اقامتی، امدادی',
+        'alumni' => 'فارغ التحصیل'
     ];
     ?>
-    <ul class="nav nav-tabs mb-4" id="residenceTabs" role="tablist">
+    <ul class="nav nav-tabs mb-4 flex-nowrap overflow-x-auto text-nowrap border-bottom" id="residenceTabs" role="tablist" style="overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: thin;">
         <?php $tab_first = true; foreach($residence_tabs as $tab_key => $tab_label): ?>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link fw-bold <?php echo $tab_first ? 'active' : ''; ?>" id="<?php echo $tab_key; ?>-tab" data-bs-toggle="tab" data-bs-target="#<?php echo $tab_key; ?>" type="button" role="tab" aria-controls="<?php echo $tab_key; ?>" aria-selected="<?php echo $tab_first ? 'true' : 'false'; ?>"><?php echo $tab_label; ?></button>
+            <li class="nav-item" role="presentation" style="flex: 0 0 auto;">
+                <button class="nav-link fw-bold <?php echo $tab_first ? 'active' : ''; ?>" id="<?php echo $tab_key; ?>-tab" data-bs-toggle="tab" data-bs-target="#<?php echo $tab_key; ?>" type="button" role="tab" aria-controls="<?php echo $tab_key; ?>" aria-selected="<?php echo $tab_first ? 'true' : 'false'; ?>" style="white-space: nowrap;"><?php echo $tab_label; ?></button>
             </li>
         <?php $tab_first = false; endforeach; ?>
     </ul>
@@ -313,7 +501,95 @@ if(isset($_GET['edit'])) {
     <div class="tab-content" id="residenceTabsContent">
         <?php $tab_first = true; foreach($residence_tabs as $tab_key => $tab_label): ?>
             <div class="tab-pane fade <?php echo $tab_first ? 'show active' : ''; ?>" id="<?php echo $tab_key; ?>" role="tabpanel" aria-labelledby="<?php echo $tab_key; ?>-tab">
-                <?php if(empty($ordered_classes)): ?>
+                <?php if ($tab_key === 'alumni'): ?>
+                    <?php 
+                    $alumni_counts = ['all' => count($alumni_students), 'completed' => 0, 'dropped' => 0, 'expelled' => 0];
+                    foreach ($alumni_students as $as) {
+                        $cat = resolve_alumni_category($as);
+                        if (!isset($alumni_counts[$cat])) $alumni_counts[$cat] = 0;
+                        $alumni_counts[$cat]++;
+                    }
+                    ?>
+                    <?php if(count($alumni_students) > 0): ?>
+    <div class="card shadow-sm border-0 border-top border-5 border-secondary">
+        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+            <h5 class="m-0 fw-bold"><i class="fas fa-graduation-cap me-2"></i> فارغ التحصیل طلباء (Alumni / Passed Out)</h5>
+            <span class="badge bg-light text-dark fw-bold">کل طلباء: <?php echo count($alumni_students); ?></span>
+        </div>
+        <div class="card-body p-3">
+            <!-- 3 Alumni Sub-category Filter Buttons -->
+            <div class="d-flex flex-wrap gap-2 mb-3 align-items-center bg-light p-2 rounded border">
+                <span class="fw-bold text-secondary me-2"><i class="fas fa-filter me-1"></i> کیٹیگری فلٹر:</span>
+                <button type="button" class="btn btn-sm btn-primary active alumni-filter-btn" onclick="filterAlumniCategory('all', this)">تمام (<?php echo $alumni_counts['all']; ?>)</button>
+                <button type="button" class="btn btn-sm btn-outline-success alumni-filter-btn" onclick="filterAlumniCategory('completed', this)">🎓 تکمیلِ تعلیم (<?php echo $alumni_counts['completed']; ?>)</button>
+                <button type="button" class="btn btn-sm btn-outline-warning text-dark alumni-filter-btn" onclick="filterAlumniCategory('dropped', this)">⏸️ ترکِ تعلیم (<?php echo $alumni_counts['dropped']; ?>)</button>
+                <button type="button" class="btn btn-sm btn-outline-danger alumni-filter-btn" onclick="filterAlumniCategory('expelled', this)">❌ اخراج (<?php echo $alumni_counts['expelled']; ?>)</button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle text-center m-0 bg-white">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th>نمبرشمار</th>
+                            <th>رول نمبر</th>
+                            <th class="text-start ps-3">نام طالب علم</th>
+                            <th>ولدیت</th>
+                            <th>رابطہ نمبر</th>
+                            <th>کیٹیگری</th>
+                            <th>تاریخ داخلہ</th>
+                            <th>تاریخ فراغت</th>
+                            <th>دورانیہ</th>
+                            <th><?php echo t('action_col'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php $serial_num_alumni = 1; foreach($alumni_students as $s): 
+                            $cat = resolve_alumni_category($s);
+                            if ($cat === 'completed') {
+                                $catBadge = '<span class="badge bg-success"><i class="fas fa-graduation-cap me-1"></i> تکمیلِ تعلیم</span>';
+                            } elseif ($cat === 'dropped') {
+                                $catBadge = '<span class="badge bg-warning text-dark"><i class="fas fa-pause-circle me-1"></i> ترکِ تعلیم</span>';
+                            } elseif ($cat === 'expelled') {
+                                $catBadge = '<span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i> اخراج</span>';
+                            } else {
+                                $catBadge = '<span class="badge bg-secondary">سابقہ</span>';
+                            }
+                        ?>
+                        <tr class="text-muted alumni-row" data-category="<?php echo htmlspecialchars($cat); ?>">
+                            <td class="fw-bold"><?php echo $serial_num_alumni++; ?></td>
+                            <td><span class="badge bg-light text-dark border"><?php echo htmlspecialchars($s['admission_number']); ?></span></td>
+                            <td class="text-start ps-3 fw-bold text-dark"><?php echo htmlspecialchars($s['name']); ?></td>
+                            <td><?php echo htmlspecialchars($s['father_name'] ?? '-'); ?></td>
+                            <td dir="ltr"><?php echo htmlspecialchars($s['contact_number'] ?? '-'); ?></td>
+                            <td><?php echo $catBadge; ?></td>
+                            <td><?php echo !empty($s['admission_date']) ? date('d-m-Y', strtotime($s['admission_date'])) : '-'; ?></td>
+                            <td><?php echo !empty($s['graduation_date']) ? date('d-m-Y', strtotime($s['graduation_date'])) : '-'; ?></td>
+                            <td><?php echo htmlspecialchars($s['duration'] ?? '-'); ?></td>
+                            <td>
+                                <div class="btn-group">
+                                    <?php if ($cat === 'completed'): ?>
+                                        <a href="print_sanad.php?student_id=<?php echo $s['id']; ?>" target="_blank" class="btn btn-sm btn-warning text-dark fw-bold" title="سند جاری و پرنٹ کریں">
+                                            <i class="fas fa-certificate me-1"></i> سند
+                                        </a>
+                                    <?php endif; ?>
+                                    <a href="students.php?restore=<?php echo $s['id']; ?>" class="btn btn-sm btn-success" title="دوبارہ داخل (Restore)" onclick="return confirm('کیا اسے دوبارہ موجودہ لسٹ میں شامل کرنا ہے؟')">
+                                        <i class="fas fa-undo"></i>
+                                    </a>
+                                    <a href="students.php?delete=<?php echo $s['id']; ?>" class="btn btn-sm btn-outline-danger" title="ہمیشہ کے لیے ڈیلیٹ" onclick="return confirm('ڈیلیٹ؟')"><i class="fas fa-trash"></i></a>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+                    <?php else: ?>
+                        <div class="alert alert-info text-center">کوئی فارغ التحصیل طالب علم موجود نہیں ہے۔</div>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <?php if(empty($ordered_classes)): ?>
                     <div class="alert alert-info text-center fw-bold">کوئی موجودہ طالب علم نہیں</div>
                 <?php else: ?>
                     <?php foreach($ordered_classes as $cName): ?>
@@ -356,7 +632,12 @@ if(isset($_GET['edit'])) {
                                                         <div class="bg-secondary text-white rounded-circle d-inline-block text-center" style="width:35px; height:35px; line-height:35px;"><i class="fas fa-user"></i></div>
                                                     <?php endif; ?>
                                                 </td>
-                                                <td class="text-start ps-3 fw-bold"><?php echo e($s['name']); ?></td>
+                                                <td class="text-start ps-3 fw-bold">
+                                                    <?php echo e($s['name']); ?>
+                                                    <?php if (($s['hifz_section'] ?? 'regular') === 'manzil_gardan'): ?>
+                                                        <span class="badge bg-warning text-dark ms-1" style="font-size:0.75rem;"><i class="fas fa-book-reader me-1"></i>منزل/گردان</span>
+                                                    <?php endif; ?>
+                                                </td>
                                                 <td><?php echo e($s['father_name']); ?></td>
                                                 <td><?php echo e($s['contact_number']); ?></td>
                                                 <td>
@@ -373,7 +654,7 @@ if(isset($_GET['edit'])) {
                                                             <i class="fas fa-user-graduate"></i>
                                                         </button>
                                                         
-                                                        <button type="button" class="btn btn-sm btn-info text-white" title="پروموٹ کریں" onclick="openPromoteModal('<?php echo $s['id']; ?>', '<?php echo addslashes($s['name']); ?>')">
+                                                        <button type="button" class="btn btn-sm btn-info text-white" title="پروموٹ کریں" onclick="openPromoteModal('<?php echo $s['id']; ?>', '<?php echo addslashes($s['name']); ?>', '<?php echo addslashes($s['quran_edition'] ?? '16 سطری'); ?>', '<?php echo addslashes($s['hifz_sequence'] ?? 'reverse'); ?>', '<?php echo addslashes($s['hifz_section'] ?? 'regular'); ?>')">
                                                             <i class="fas fa-level-up-alt"></i>
                                                         </button>
                                                         
@@ -389,55 +670,146 @@ if(isset($_GET['edit'])) {
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
+            <?php endif; // end alumni else ?>
             </div>
         <?php $tab_first = false; endforeach; ?>
     </div>
 
-    <?php if(count($alumni_students) > 0): ?>
-    <div class="card shadow-sm border-0 border-top border-5 border-secondary">
-        <div class="card-header bg-secondary text-white">
-            <h5 class="m-0 fw-bold"><i class="fas fa-graduation-cap me-2"></i> فارغ التحصیل طلباء (Alumni / Passed Out)</h5>
-        </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover align-middle text-center m-0 bg-light">
-                    <thead class="table-secondary">
-                        <tr>
-                            <th>نمبرشمار</th>
-                            <th>رول نمبر</th>
-                            <th>نام طالب علم</th>
-                            <th>تاریخ داخلہ</th>
-                            <th>تاریخ فراغت</th>
-                            <th>دورانیہ</th>
-                            <th><?php echo t('action_col'); ?></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php $serial_num_alumni = 1; foreach($alumni_students as $s): ?>
-                        <tr class="text-muted">
-                            <td class="fw-bold"><?php echo $serial_num_alumni++; ?></td>
-                            <td><?php echo $s['admission_number']; ?></td>
-                            <td class="text-start ps-3 fw-bold"><?php echo $s['name']; ?></td>
-                            <td><?php echo $s['admission_date']; ?></td>
-                            <td><?php echo $s['graduation_date']; ?></td>
-                            <td><?php echo $s['duration']; ?></td>
-                            <td>
-                                <div class="btn-group">
-                                    <a href="students.php?restore=<?php echo $s['id']; ?>" class="btn btn-sm btn-success" title="دوبارہ داخل (Restore)" onclick="return confirm('کیا اسے دوبارہ موجودہ لسٹ میں شامل کرنا ہے؟')">
-                                        <i class="fas fa-undo"></i>
-                                    </a>
-                                    <a href="students.php?delete=<?php echo $s['id']; ?>" class="btn btn-sm btn-outline-danger" title="ہمیشہ کے لیے ڈیلیٹ" onclick="return confirm('ڈیلیٹ؟')"><i class="fas fa-trash"></i></a>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+    <!-- Graduation Modal -->
+<div class="modal fade" id="graduateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" class="modal-content shadow-lg border-0" style="border-radius: 15px;">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-user-graduate me-2 text-warning"></i> فارغ التحصیل / خارج ریکارڈ (Alumni & Migration)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-        </div>
-    </div>
-    <?php endif; ?>
+            <div class="modal-body p-4">
+                <input type="hidden" name="student_id" id="grad_std_id">
+                <div class="mb-3">
+                    <label class="fw-bold mb-1">نام طالب علم:</label>
+                    <input type="text" id="grad_name" class="form-control bg-light fw-bold" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="fw-bold mb-1 text-primary">نوعیت / کیٹیگری:*</label>
+                    <select name="alumni_category" id="grad_category" class="form-select border-primary fw-bold" required onchange="onCategoryChange()">
+                        <option value="completed">🎓 تعلیم مکمل کرنے والے (تکمیلِ تعلیم)</option>
+                        <option value="dropped">⏸️ درمیان میں چھوڑ کر جانے والے (ترکِ تعلیم)</option>
+                        <option value="expelled">❌ مدرسہ سے خارج کیے جانے والے (اخراج)</option>
+                    </select>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="fw-bold mb-1">تاریخ داخلہ:*</label>
+                        <input type="date" name="admission_date" id="grad_adm_date" class="form-control border-primary" required onchange="calcDuration()">
+                    </div>
+                    <div class="col-6">
+                        <label class="fw-bold mb-1 text-primary">تاریخ فراغت / اخراج:*</label>
+                        <input type="date" name="graduation_date" id="grad_date" class="form-control border-primary" required onchange="calcDuration()">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="fw-bold mb-1">کل تعلیمی دورانیہ (خودکار):</label>
+                    <input type="text" name="duration" id="grad_duration" class="form-control fw-bold text-success bg-light" readonly placeholder="خودکار کیلکولیٹ ہوگا">
+                </div>
 
+                <!-- تکمیلِ تعلیم کے اضافی فیلڈز -->
+                <div id="completed_fields" class="mb-3">
+                    <div class="card p-3 bg-light border-primary shadow-sm" style="border-radius: 10px;">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="wifaq_exam" id="grad_wifaq_exam" onchange="toggleWifaqMarks()">
+                            <label class="form-check-label fw-bold text-dark" for="grad_wifaq_exam">کیا طالب علم نے وفاق کا امتحان دیا ہے؟</label>
+                        </div>
+                        <div id="wifaq_marks_box" style="display: none;" class="mb-2">
+                            <label class="fw-bold mb-1 small text-primary">وفاق امتحان میں حاصل کردہ نمبرات / پوزیشن:</label>
+                            <input type="text" name="wifaq_marks" id="grad_wifaq_marks" class="form-control form-control-sm" placeholder="مثال: 450 یا ممتاز">
+                        </div>
+                        <div class="mt-2">
+                            <label class="fw-bold mb-1 small text-dark">محراب (تراویح میں قرآن سنایا؟):</label>
+                            <select name="mehrab_recitation" id="grad_mehrab" class="form-select form-select-sm border-secondary">
+                                <option value="">منتخب کریں...</option>
+                                <option value="ہاں">ہاں</option>
+                                <option value="نہیں">نہیں</option>
+                                <option value="سنا ہے">سنا ہے</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="fw-bold mb-1">فراغت / اخراج کی وجہ:*</label>
+                    <input type="text" name="reason" id="grad_reason" class="form-control border-primary" required value="تعلیم مکمل ہونے کی وجہ سے">
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">کینسل</button>
+                <button type="submit" name="graduate_student" class="btn btn-dark text-warning fw-bold px-4">محفوظ کریں</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Promote Modal -->
+<div class="modal fade" id="promoteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-level-up-alt me-2"></i> طالب علم کو پروموٹ کریں</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <input type="hidden" name="student_id" id="promote_std_id">
+                <div class="mb-3">
+                    <label class="fw-bold mb-1">نام طالب علم:</label>
+                    <input type="text" id="promote_name" class="form-control bg-light" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="fw-bold mb-1 text-primary">نئی کلاس منتخب کریں:*</label>
+                    <select name="new_class" id="promote_new_class" class="form-select border-primary" required onchange="togglePromoteQuranEdition(this.value)">
+                        <option value="">منتخب کریں...</option>
+                        <?php 
+                        foreach($allowed_classes as $cl) {
+                            if ($cl['status'] !== 'Active') continue;
+                            echo "<option value='{$cl['name']}'>{$cl['name']}</option>";
+                        }
+                        ?>
+                    </select>
+                </div>
+                <div class="mb-3" id="promote_quran_container" style="display: none;">
+                    <div class="row g-2">
+                        <div class="col-sm-6">
+                            <label class="fw-bold mb-1 text-success"><i class="fas fa-quran me-1"></i> تعلیمی نسخہ قرآن کریم:*</label>
+                            <select name="quran_edition" id="promote_quran_edition" class="form-select border-success">
+                                <option value="13 سطری">13 سطری قرآن کریم (13 Lines)</option>
+                                <option value="15 سطری">15 سطری قرآن کریم (15 Lines)</option>
+                                <option value="16 سطری" selected>16 سطری قرآن کریم (16 Lines - عام فہم)</option>
+                                <option value="18 سطری">18 سطری قرآن کریم (18 Lines)</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="fw-bold mb-1 text-success"><i class="fas fa-sort-amount-down me-1"></i> طریقۂ حفظ:*</label>
+                            <select name="hifz_sequence" id="promote_hifz_sequence" class="form-select border-success">
+                                <option value="reverse" selected>طریقہ 1: پارہ 30 تا 1 (عم سے الٹی ترتیب)</option>
+                                <option value="forward">طریقہ 2: پارہ 1 تا 30 (شروع سے سیدھی ترتیب)</option>
+                                <option value="thirty_then_forward">طریقہ 3: پارہ عم (30) پھر 1 تا 29</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-12 mt-2">
+                            <label class="fw-bold mb-1 text-primary"><i class="fas fa-layer-group me-1"></i> حفظ سیکشن / نوعیت:*</label>
+                            <select name="hifz_section" id="promote_hifz_section" class="form-select border-primary">
+                                <option value="regular" selected>سیکشن A: ریگولر حفظ (مکمل وقت)</option>
+                                <option value="manzil_gardan">سیکشن B: منزل / گردان (پارٹ ٹائم / سکول)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <small class="text-muted">حفظ، ناظرہ یا گردان میں پروموشن پر قرآنی نسخہ اور طریقۂ حفظ ریکارڈ میں خودکار شامل ہو جائے گا۔</small>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">کینسل</button>
+                <button type="submit" name="promote_student" class="btn btn-info text-white fw-bold px-4">پروموٹ کریں</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script>
@@ -510,105 +882,84 @@ function processStudentData(text) {
 }
 
 function highlight(id) { var el = document.getElementById(id); el.style.border = "2px solid green"; setTimeout(function(){ el.style.border = ""; }, 1000); }
-function urduToNum(str) { if(str.match(/^\d+$/)) return parseInt(str); var map = {'ایک':1,'دو':2,'پاںچ':5,'دس':10}; for(var k in map) if(str.includes(k)) return map[k]; return str; } 
-</script>
+function urduToNum(str) { if(str.match(/^\d+$/)) return parseInt(str); var map = {'ایک':1,'دو':2,'پاںچ':5,'دس':10}; for(var k in map) if(str.includes(k)) return map[k]; return str; }
 
-<!-- Graduation Modal -->
-<div class="modal fade" id="graduateModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <form method="POST" class="modal-content shadow-lg border-0" style="border-radius: 15px;">
-            <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title fw-bold">فارغ التحصیل ریکارڈ (Alumni Details)</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4">
-                <input type="hidden" name="student_id" id="grad_std_id">
-                <div class="mb-3">
-                    <label class="fw-bold mb-1">نام طالب علم:</label>
-                    <input type="text" id="grad_name" class="form-control bg-light" readonly>
-                </div>
-                <div class="row g-3 mb-3">
-                    <div class="col-6">
-                        <label class="fw-bold mb-1">تاریخ داخلہ:*</label>
-                        <input type="date" name="admission_date" id="grad_adm_date" class="form-control border-primary" required onchange="calcDuration()">
-                    </div>
-                    <div class="col-6">
-                        <label class="fw-bold mb-1 text-primary">تاریخ فراغت:*</label>
-                        <input type="date" name="graduation_date" id="grad_date" class="form-control border-primary" required onchange="calcDuration()">
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="fw-bold mb-1">کل تعلیمی دورانیہ (تیار شدہ):</label>
-                    <input type="text" name="duration" id="grad_duration" class="form-control fw-bold text-success" readonly placeholder="خودکار کیلکولیٹ ہوگا">
-                </div>
-                <div class="mb-3">
-                    <label class="fw-bold mb-1">فراغت کی وجہ:*</label>
-                    <select name="reason" class="form-select border-primary" required>
-                        <option value="">منتخب کریں...</option>
-                        <option value="تعلیم مکمل ہونے کی وجہ سے">تعلیم مکمل ہونے کی وجہ سے</option>
-                        <option value="بغیر تعلیم مکمل کیے (درمیان میں چھوڑا)">بغیر تعلیم مکمل کیے (درمیان میں چھوڑا)</option>
-                        <option value="مدرسہ سے خارج کیا گیا (تادیبی کارروائی)">مدرسہ سے خارج کیا گیا (تادیبی کارروائی)</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">کینسل</button>
-                <button type="submit" name="graduate_student" class="btn btn-dark text-warning fw-bold px-4">فارغ التحصیل کریں</button>
-            </div>
-        </form>
-    </div>
-</div>
+function isQuranClass(cls) {
+    if (!cls) return false;
+    return cls.includes('حفظ') || cls.includes('ناظرہ') || cls.includes('گردان');
+}
 
-<!-- Promote Modal -->
-<div class="modal fade" id="promoteModal" tabindex="-1">
-    <div class="modal-dialog">
-        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title fw-bold"><i class="fas fa-level-up-alt me-2"></i> طالب علم کو پروموٹ کریں</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4 bg-light">
-                <input type="hidden" name="student_id" id="promote_std_id">
-                <div class="mb-3">
-                    <label class="fw-bold mb-1">نام طالب علم:</label>
-                    <input type="text" id="promote_name" class="form-control bg-light" readonly>
-                </div>
-                <div class="mb-3">
-                    <label class="fw-bold mb-1 text-primary">نئی کلاس منتخب کریں:*</label>
-                    <select name="new_class" class="form-select border-primary" required>
-                        <option value="">منتخب کریں...</option>
-                        <?php 
-                        foreach($allowed_classes as $cl) {
-                            if ($cl['status'] !== 'Active') continue;
-                            echo "<option value='{$cl['name']}'>{$cl['name']}</option>";
-                        }
-                        ?>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">کینسل</button>
-                <button type="submit" name="promote_student" class="btn btn-info text-white fw-bold px-4">پروموٹ کریں</button>
-            </div>
-        </form>
-    </div>
-</div>
+function toggleQuranEdition(cls) {
+    const el = document.getElementById('quran_edition_group');
+    if (!el) return;
+    el.style.display = isQuranClass(cls) ? 'block' : 'none';
+}
 
-<script>
+function togglePromoteQuranEdition(cls) {
+    const el = document.getElementById('promote_quran_container');
+    if (!el) return;
+    el.style.display = isQuranClass(cls) ? 'block' : 'none';
+}
+
 function openGraduateModal(id, name, admDate) {
     document.getElementById('grad_std_id').value = id;
     document.getElementById('grad_name').value = name;
     document.getElementById('grad_adm_date').value = admDate;
     document.getElementById('grad_date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('grad_category').value = 'completed';
+    document.getElementById('grad_wifaq_exam').checked = false;
+    document.getElementById('grad_wifaq_marks').value = '';
+    document.getElementById('grad_mehrab').value = '';
+    document.getElementById('wifaq_marks_box').style.display = 'none';
+    document.getElementById('completed_fields').style.display = 'block';
+    document.getElementById('grad_reason').value = 'تعلیم مکمل ہونے کی وجہ سے';
     calcDuration();
     new bootstrap.Modal(document.getElementById('graduateModal')).show();
 }
 
-function openPromoteModal(id, name) {
+function onCategoryChange() {
+    const cat = document.getElementById('grad_category').value;
+    const completedFields = document.getElementById('completed_fields');
+    const reasonInput = document.getElementById('grad_reason');
+    
+    if (cat === 'completed') {
+        completedFields.style.display = 'block';
+        reasonInput.value = 'تعلیم مکمل ہونے کی وجہ سے';
+    } else if (cat === 'dropped') {
+        completedFields.style.display = 'none';
+        reasonInput.value = 'بغیر تعلیم مکمل کیے (درمیان میں چھوڑا)';
+    } else if (cat === 'expelled') {
+        completedFields.style.display = 'none';
+        reasonInput.value = 'مدرسہ سے خارج کیا گیا (تادیبی کارروائی)';
+    }
+}
+
+function toggleWifaqMarks() {
+    const isChecked = document.getElementById('grad_wifaq_exam').checked;
+    document.getElementById('wifaq_marks_box').style.display = isChecked ? 'block' : 'none';
+}
+
+function openPromoteModal(id, name, currentQuran, currentSequence, currentSection) {
     document.getElementById('promote_std_id').value = id;
     document.getElementById('promote_name').value = name;
+    document.getElementById('promote_new_class').value = '';
+    document.getElementById('promote_quran_container').style.display = 'none';
+    if (currentQuran && document.getElementById('promote_quran_edition')) {
+        document.getElementById('promote_quran_edition').value = currentQuran;
+    }
+    if (currentSequence && document.getElementById('promote_hifz_sequence')) {
+        document.getElementById('promote_hifz_sequence').value = currentSequence;
+    }
+    if (currentSection && document.getElementById('promote_hifz_section')) {
+        document.getElementById('promote_hifz_section').value = currentSection;
+    }
     new bootstrap.Modal(document.getElementById('promoteModal')).show();
 }
+
+document.addEventListener("DOMContentLoaded", function() {
+    const sClass = document.getElementById('s_class');
+    if (sClass) toggleQuranEdition(sClass.value);
+});
 
 function calcDuration() {
     let admDateVal = document.getElementById('grad_adm_date').value;
@@ -638,6 +989,25 @@ function calcDuration() {
     if(days > 0) res += days + " دن";
     
     document.getElementById('grad_duration').value = res.trim() || "0 دن";
+}
+
+function filterAlumniCategory(category, btn) {
+    document.querySelectorAll('.alumni-filter-btn').forEach(b => {
+        b.classList.remove('btn-primary', 'active');
+        b.classList.add('btn-outline-secondary');
+    });
+    btn.classList.add('btn-primary', 'active');
+    btn.classList.remove('btn-outline-secondary');
+
+    const rows = document.querySelectorAll('.alumni-row');
+    rows.forEach(row => {
+        const cat = row.getAttribute('data-category') || 'completed';
+        if (category === 'all' || cat === category) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
 }
 </script>
 

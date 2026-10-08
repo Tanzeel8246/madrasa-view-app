@@ -10,6 +10,7 @@ if (!$can_teacher_attendance_page) {
 }
 
 $date = $_GET['date'] ?? $_POST['date'] ?? date('Y-m-d');
+$cur_tenant_id = (int)get_current_tenant_id();
 $success_msg = '';
 
 function ta_status_label($status) {
@@ -40,11 +41,11 @@ function ta_class_text($classRowOrName) {
 }
 
 function ta_is_hifz_class($classRowOrName) {
-    return ta_text_has(ta_class_text($classRowOrName), ['حفظ', 'گردان', 'حسن', 'Ø­ÙØ¸', 'Ã˜Â­Ã™ÂÃ˜Â¸', 'hifz', 'gardan', 'husn']);
+    return ta_text_has(ta_class_text($classRowOrName), ['حفظ', 'گردان', 'حسن', 'Ø­Ù Ø¸', 'Ã˜Â­Ã™Â Ã˜Â¸', 'hifz', 'gardan', 'husn']);
 }
 
 function ta_is_nazira_class($classRowOrName) {
-    return ta_text_has(ta_class_text($classRowOrName), ['ناظرہ', 'Ù†Ø§Ø¸Ø±Û', 'Ã™â€ Ã˜Â§Ã˜Â¸Ã˜Â±Ã›Â', 'nazira']);
+    return ta_text_has(ta_class_text($classRowOrName), ['ناظرہ', 'Ù†Ø§Ø¸Ø±Û ', 'Ã™â€ Ã˜Â§Ã˜Â¸Ã˜Â±ÛÂ ', 'nazira']);
 }
 
 function ta_period_label($className, $periodNo) {
@@ -65,9 +66,9 @@ function ta_period_label($className, $periodNo) {
     return 'پیریڈ ' . $p;
 }
 
-function ta_sync_daily_summary(PDO $pdo, $teacherId, $date) {
-    $stmt = $pdo->prepare("SELECT status, late_minutes FROM teacher_period_attendance WHERE teacher_id = ? AND date = ?");
-    $stmt->execute([$teacherId, $date]);
+function ta_sync_daily_summary(PDO $pdo, $teacherId, $date, $tenantId = 1) {
+    $stmt = $pdo->prepare("SELECT status, late_minutes FROM teacher_period_attendance WHERE teacher_id = ? AND date = ? AND tenant_id = ?");
+    $stmt->execute([$teacherId, $date, $tenantId]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if (!$rows) return;
     $status = 'A';
@@ -77,15 +78,15 @@ function ta_sync_daily_summary(PDO $pdo, $teacherId, $date) {
         elseif ($status !== 'P' && ($r['status'] ?? '') === 'L') $status = 'L';
         $late = max($late, (int)($r['late_minutes'] ?? 0));
     }
-    $check = $pdo->prepare("SELECT id FROM attendance_teachers WHERE teacher_id = ? AND date = ? LIMIT 1");
-    $check->execute([$teacherId, $date]);
+    $check = $pdo->prepare("SELECT id FROM attendance_teachers WHERE teacher_id = ? AND date = ? AND tenant_id = ? LIMIT 1");
+    $check->execute([$teacherId, $date, $tenantId]);
     $id = $check->fetchColumn();
     if ($id) {
-        $pdo->prepare("UPDATE attendance_teachers SET status = ?, late_minutes = ?, remarks = ? WHERE id = ?")
-            ->execute([$status, $late, '', $id]);
+        $pdo->prepare("UPDATE attendance_teachers SET status = ?, late_minutes = ?, remarks = ? WHERE id = ? AND tenant_id = ?")
+            ->execute([$status, $late, '', $id, $tenantId]);
     } else {
-        $pdo->prepare("INSERT INTO attendance_teachers (teacher_id, date, status, late_minutes, remarks) VALUES (?, ?, ?, ?, ?)")
-            ->execute([$teacherId, $date, $status, $late, '']);
+        $pdo->prepare("INSERT INTO attendance_teachers (teacher_id, date, status, late_minutes, remarks, tenant_id) VALUES (?, ?, ?, ?, ?, ?)")
+            ->execute([$teacherId, $date, $status, $late, '', $tenantId]);
     }
 }
 
@@ -175,27 +176,31 @@ if (isset($_POST['save_teacher_period_attendance'])) {
         $late = (int)($lateMins[$key] ?? 0);
         if ($status !== 'P') $late = 0;
         $rem = trim((string)($remarks[$key] ?? ''));
-        $check = $pdo->prepare("SELECT id FROM teacher_period_attendance WHERE teacher_id = ? AND class_id = ? AND date = ? AND period_no = ? LIMIT 1");
-        $check->execute([$teacherId, $classId, $date, $periodNo]);
+        $check = $pdo->prepare("SELECT id FROM teacher_period_attendance WHERE teacher_id = ? AND class_id = ? AND date = ? AND period_no = ? AND tenant_id = ? LIMIT 1");
+        $check->execute([$teacherId, $classId, $date, $periodNo, $cur_tenant_id]);
         $id = $check->fetchColumn();
         if ($id) {
-            $pdo->prepare("UPDATE teacher_period_attendance SET status = ?, late_minutes = ?, remarks = ? WHERE id = ?")
-                ->execute([$status, $late, $rem, $id]);
+            $pdo->prepare("UPDATE teacher_period_attendance SET status = ?, late_minutes = ?, remarks = ? WHERE id = ? AND tenant_id = ?")
+                ->execute([$status, $late, $rem, $id, $cur_tenant_id]);
         } else {
-            $pdo->prepare("INSERT INTO teacher_period_attendance (teacher_id, class_id, date, period_no, status, late_minutes, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                ->execute([$teacherId, $classId, $date, $periodNo, $status, $late, $rem]);
+            $pdo->prepare("INSERT INTO teacher_period_attendance (teacher_id, class_id, date, period_no, status, late_minutes, remarks, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                ->execute([$teacherId, $classId, $date, $periodNo, $status, $late, $rem, $cur_tenant_id]);
         }
         $teacherTouched[$teacherId] = true;
     }
-    foreach (array_keys($teacherTouched) as $teacherId) ta_sync_daily_summary($pdo, $teacherId, $date);
+    foreach (array_keys($teacherTouched) as $teacherId) ta_sync_daily_summary($pdo, $teacherId, $date, $cur_tenant_id);
     $success_msg = 'اساتذہ کی پیریڈ وار حاضری محفوظ ہو گئی';
 }
+
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+$sys_c_cond = ($sys === 'Masjid') ? "c.system_type = 'Masjid'" : "(c.system_type = 'Madrasa' OR c.system_type IS NULL OR c.system_type = '')";
 
 $assignments = [];
 $sql = "SELECT cp.class_id, cp.period_no, cp.teacher_id, cp.teacher_ids, c.name AS class_name, c.main_teacher_ids
         FROM class_periods cp
         JOIN classes c ON c.id = cp.class_id
-        WHERE (c.status = 'Active' OR c.status IS NULL OR c.status = '')
+        WHERE c.tenant_id = $cur_tenant_id AND $sys_c_cond AND (c.status = 'Active' OR c.status IS NULL OR c.status = '')
         ORDER BY c.name ASC, cp.period_no ASC";
 $all_cp = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
@@ -255,7 +260,7 @@ foreach ($all_cp as $row) {
     }
 }
 
-$all_classes_for_profiles = $pdo->query("SELECT id, name, class_type, section, main_teacher_ids FROM classes WHERE (status = 'Active' OR status IS NULL OR status = '')")->fetchAll(PDO::FETCH_ASSOC);
+$all_classes_for_profiles = $pdo->query("SELECT id, name, class_type, section, main_teacher_ids FROM classes WHERE tenant_id = $cur_tenant_id AND $sys_cond AND (status = 'Active' OR status IS NULL OR status = '')")->fetchAll(PDO::FETCH_ASSOC);
 $classes_by_name = [];
 foreach ($all_classes_for_profiles as $classRow) {
     if (!empty($classRow['name'])) $classes_by_name[$classRow['name']] = $classRow;
@@ -263,7 +268,9 @@ foreach ($all_classes_for_profiles as $classRow) {
 
 $profile_explicit_periods = [];
 $profile_assignments = [];
-$teacher_profiles = $pdo->query("SELECT id, assigned_classes, assigned_periods FROM teachers WHERE (status='Active' OR status='' OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL)")->fetchAll(PDO::FETCH_ASSOC);
+$t_stmt = $pdo->prepare("SELECT id, assigned_classes, assigned_periods FROM teachers WHERE tenant_id = ? AND $sys_cond AND (status='Active' OR status='حاضر' OR status='فعال' OR status='' OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND (joining_date IS NULL OR joining_date = '' OR joining_date <= ?)");
+$t_stmt->execute([$cur_tenant_id, $date]);
+$teacher_profiles = $t_stmt->fetchAll(PDO::FETCH_ASSOC);
 foreach ($teacher_profiles as $teacher) {
     $tid = (int)$teacher['id'];
     foreach ($classes_by_name as $className => $classRow) {
@@ -339,8 +346,8 @@ usort($assignments, function($a, $b) {
 if ($assignments) {
     $teacherIds = array_values(array_unique(array_column($assignments, 'teacher_id')));
     $placeholders = implode(',', array_fill(0, count($teacherIds), '?'));
-    $stmt = $pdo->prepare("SELECT id, name, phone FROM teachers WHERE id IN ($placeholders) AND (status='Active' OR status='' OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL)");
-    $stmt->execute($teacherIds);
+    $stmt = $pdo->prepare("SELECT id, name, phone FROM teachers WHERE id IN ($placeholders) AND tenant_id = ? AND (status='Active' OR status='حاضر' OR status='فعال' OR status='' OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND (joining_date IS NULL OR joining_date = '' OR joining_date <= ?)");
+    $stmt->execute(array_merge($teacherIds, [$cur_tenant_id, $date]));
     $teacherMap = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $t) $teacherMap[(int)$t['id']] = $t;
 } else {
@@ -348,8 +355,8 @@ if ($assignments) {
 }
 
 $existing = [];
-$stmt = $pdo->prepare("SELECT * FROM teacher_period_attendance WHERE date = ?");
-$stmt->execute([$date]);
+$stmt = $pdo->prepare("SELECT * FROM teacher_period_attendance WHERE date = ? AND tenant_id = ?");
+$stmt->execute([$date, $cur_tenant_id]);
 foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
     $existing[$r['teacher_id'].'|'.$r['class_id'].'|'.$r['period_no']] = $r;
 }

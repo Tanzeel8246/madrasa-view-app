@@ -11,9 +11,21 @@ try {
 } catch (Exception $e) {}
 
 
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'administrator'], true);
+$p_needed = ($sys === 'Masjid') ? 'manage_masjid_exams' : 'manage_exams';
+if (!$is_admin && !app_has_perm($p_needed)) {
+    echo "<div class='alert alert-danger m-4 text-center fw-bold'>آپ کو رزلٹ رجسٹر دیکھنے کی اجازت نہیں ہے۔</div>";
+    include 'footer.php';
+    exit;
+}
+
 $exam_id = isset($_GET['exam_id']) ? (int)$_GET['exam_id'] : 0;
 $selected_class_name = $_GET['class'] ?? '';
 $selected_subject = $_GET['subject'] ?? '';
+
+$cur_tenant_id = (int)get_current_tenant_id();
 
 if (!$exam_id) {
     echo "<div class='alert alert-danger'>امتحان منتخب نہیں۔</div>";
@@ -24,8 +36,8 @@ if (!$exam_id) {
 // کلاس کا ڈیٹا حاصل کریں
 $class_data = null;
 if ($selected_class_name) {
-    $stmt = $pdo->prepare("SELECT * FROM classes WHERE name = ?");
-    $stmt->execute([$selected_class_name]);
+    $stmt = $pdo->prepare("SELECT * FROM classes WHERE name = ? AND tenant_id = ?");
+    $stmt->execute([$selected_class_name, $cur_tenant_id]);
     $class_data = $stmt->fetch();
 }
 
@@ -60,11 +72,21 @@ if ($class_data) {
     }
 }
 
-$exam = $pdo->prepare("SELECT * FROM exams WHERE id = ?");
-$exam->execute([$exam_id]);
+$exam = $pdo->prepare("SELECT * FROM exams WHERE id = ? AND tenant_id = ?");
+$exam->execute([$exam_id, $cur_tenant_id]);
 $exam_data = $exam->fetch();
 
-$classes = get_allowed_classes($pdo);
+$classes = get_allowed_classes($pdo, 'id ASC', null, null, $sys);
+$allowed_class_names = array_values(array_filter(array_unique(array_column($classes, 'name'))));
+
+if (!$is_admin) {
+    if (!empty($selected_class_name) && !in_array($selected_class_name, $allowed_class_names, true)) {
+        $selected_class_name = '';
+    }
+    if (empty($selected_class_name) && !empty($allowed_class_names)) {
+        $selected_class_name = $allowed_class_names[0];
+    }
+}
 
 $current_subject = $is_hifz_class ? 'Quran' : ($selected_subject ?: 'Final');
 
@@ -74,8 +96,8 @@ $total_dynamic_marks = 0;
 
 if ($class_data) {
     // 1. Query class_periods for the given class id
-    $stmt_cp = $pdo->prepare("SELECT books FROM class_periods WHERE class_id = ? ORDER BY period_no ASC");
-    $stmt_cp->execute([$class_data['id']]);
+    $stmt_cp = $pdo->prepare("SELECT books FROM class_periods WHERE class_id = ? AND tenant_id = ? ORDER BY period_no ASC");
+    $stmt_cp->execute([$class_data['id'], $cur_tenant_id]);
     $periods_books = $stmt_cp->fetchAll(PDO::FETCH_COLUMN);
     
     $books_found = array_filter(array_map('trim', $periods_books));
@@ -111,13 +133,18 @@ if ($class_data) {
     }
 }
 
+$sys_cond = ($sys === 'Masjid') ? "s.system_type = 'Masjid'" : "(s.system_type = 'Madrasa' OR s.system_type IS NULL OR s.system_type = '')";
+$privacy_sql = get_student_class_privacy_sql($pdo, 's.class');
+
 $sql = "SELECT er.*, s.name, s.father_name, s.admission_number, $student_roll_select, s.class 
         FROM exam_results er 
         JOIN students s ON er.student_id = s.id 
-        WHERE er.exam_id = ? AND er.subject = ?";
+        WHERE er.exam_id = ? AND er.subject = ? AND er.tenant_id = $cur_tenant_id AND s.tenant_id = $cur_tenant_id AND $sys_cond AND ($privacy_sql) AND (s.is_deleted = 0 OR s.is_deleted IS NULL)";
 
 if ($selected_class_name) {
     $sql .= " AND s.class = " . $pdo->quote($selected_class_name);
+} elseif (!$is_admin) {
+    $sql .= " AND 1=0";
 }
 
 $sql .= " ORDER BY er.marks_obtained DESC, s.name ASC";

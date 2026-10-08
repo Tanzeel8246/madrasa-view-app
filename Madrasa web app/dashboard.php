@@ -1,25 +1,61 @@
-<?php require_once 'db.php'; include 'header.php'; 
+<?php 
+ob_start();
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once 'db.php'; 
 
-$settings = $pdo->query("SELECT * FROM settings WHERE id=1")->fetch();
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+if ($sys === 'Masjid') {
+    if (!headers_sent()) {
+        header("Location: masjid_dashboard.php");
+    }
+    echo "<script>window.location.replace('masjid_dashboard.php');</script>";
+    exit;
+}
 
-$role = $_SESSION['role'] ?? 'parent';
+include 'header.php'; 
 
-if (in_array($role, ['admin', 'nazim', 'teacher'], true)) {
+$total_students=0; $total_alumni=0; $total_teachers=0; $present_today_pct=0; $absent_today_pct=0; $leave_today_pct=0; $late_today_pct=0; 
+$total_notices=0; $monthly_att_percent=0; $total_classes=0; 
+$management_insight="رپورٹ تیار کی جا رہی ہے..."; $monthly_expense=0;
+
+$role = strtolower((string)($_SESSION['role'] ?? 'parent'));
+
+if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin'], true)) {
     try {
-        // صرف فعال اور غیر ڈیلیٹ شدہ طلباء گنیں
-        $total_students = $pdo->query("SELECT COUNT(*) FROM students WHERE is_deleted=0 AND (status='Active' OR status='' OR status IS NULL)")->fetchColumn();
-        $total_alumni   = $pdo->query("SELECT COUNT(*) FROM students WHERE is_deleted=0 AND status='Alumni'")->fetchColumn();
-        $total_teachers = $pdo->query("SELECT COUNT(*) FROM teachers WHERE is_deleted=0 AND (status='Active' OR status='' OR status IS NULL)")->fetchColumn();
-        $total_notices  = $pdo->query("SELECT COUNT(*) FROM notices WHERE is_deleted=0")->fetchColumn();
-        $total_classes  = $pdo->query("SELECT COUNT(*) FROM classes WHERE status='Active' OR status='' OR status IS NULL")->fetchColumn();
+        $tenant_id_dash = get_current_tenant_id();
+        $st_set = $pdo->prepare("SELECT * FROM settings WHERE tenant_id = ? ORDER BY id ASC LIMIT 1");
+        $st_set->execute([$tenant_id_dash]);
+        $settings = $st_set->fetch();
+        if (!$settings) {
+            $settings = ['madrasa_name' => ($_SESSION['tenant_name'] ?? 'مدرسہ'), 'current_hijri_year' => '1447'];
+        }
+
+        $privacy_std_cond = get_student_class_privacy_sql($pdo, 'class');
+        $privacy_s_std_cond = get_student_class_privacy_sql($pdo, 's.class');
+        $allowed_classes_list = get_allowed_classes($pdo, 'name ASC', null, null, 'Madrasa');
+        $allowed_cls_count = count($allowed_classes_list);
+
+        $t_dash_cond = " AND tenant_id = $tenant_id_dash";
+
+        // صرف مدرسہ کے فعال اور غیر ڈیلیٹ شدہ طلباء گنیں (بلحاظ پرائیویسی فلٹر)
+        $total_students = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE (is_deleted=0 OR is_deleted IS NULL) AND (status='Active' OR status='' OR status IS NULL) AND (system_type='Madrasa' OR system_type IS NULL OR system_type='') $t_dash_cond AND ($privacy_std_cond)")->fetchColumn();
+        $total_alumni   = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE (is_deleted=0 OR is_deleted IS NULL) AND status='Alumni' AND (system_type='Madrasa' OR system_type IS NULL OR system_type='') $t_dash_cond AND ($privacy_std_cond)")->fetchColumn();
+        $total_teachers = (int)$pdo->query("SELECT COUNT(*) FROM teachers WHERE (is_deleted=0 OR is_deleted IS NULL) AND (status='Active' OR status='' OR status IS NULL) AND (system_type='Madrasa' OR system_type IS NULL OR system_type='') $t_dash_cond")->fetchColumn();
+        $total_notices  = (int)$pdo->query("SELECT COUNT(*) FROM notices WHERE (is_deleted=0 OR is_deleted IS NULL) $t_dash_cond")->fetchColumn();
+        $total_classes  = $allowed_cls_count;
         
         $today = date('Y-m-d');
-        // آج کی حاضری: حاضر، غیر حاضر، رخصت، تاخیر فیصد
-        $today_rows = $pdo->query("
-            SELECT status_1, status_2, status_3, status_4, late_1, late_2, late_3, late_4
-            FROM attendance
-            WHERE date = '$today' AND is_deleted=0
-        ")->fetchAll(PDO::FETCH_ASSOC);
+        // آج کی حاضری: خالص مدرسہ طلبہ بلحاظ پرائیویسی
+        $stmt_today = $pdo->prepare("
+            SELECT a.status_1, a.status_2, a.status_3, a.status_4, a.late_1, a.late_2, a.late_3, a.late_4
+            FROM attendance a
+            JOIN students s ON a.student_id = s.id
+            WHERE a.date = ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL)
+              AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+              AND ($privacy_s_std_cond)
+        ");
+        $stmt_today->execute([$today, $tenant_id_dash, $tenant_id_dash]);
+        $today_rows = $stmt_today->fetchAll(PDO::FETCH_ASSOC);
         $today_present = 0; $today_absent = 0; $today_leave = 0; $today_late = 0; $today_total = 0;
         foreach ($today_rows as $att_row) {
             for ($i = 1; $i <= 4; $i++) {
@@ -46,28 +82,125 @@ if (in_array($role, ['admin', 'nazim', 'teacher'], true)) {
         $leave_today_pct = $pct($today_leave);
         $late_today_pct = $pct($today_late);
         
-        // Monthly Attendance
+        // Monthly Attendance (Madrasa)
         $first_day = date('Y-m-01');
-        $total_possible = $pdo->query("SELECT COUNT(*) FROM attendance WHERE date >= '$first_day' AND is_deleted=0")->fetchColumn();
-        $total_present  = $pdo->query("
-            SELECT COUNT(*) FROM attendance 
-            WHERE date >= '$first_day' AND is_deleted=0
-              AND (status_1='P' OR status_2='P' OR status_3='P' OR status_4='P')
-        ")->fetchColumn();
+        $stmt_pos = $pdo->prepare("
+            SELECT COUNT(*) FROM attendance a 
+            JOIN students s ON a.student_id = s.id 
+            WHERE a.date >= ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL)
+              AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+              AND ($privacy_s_std_cond)
+        ");
+        $stmt_pos->execute([$first_day, $tenant_id_dash, $tenant_id_dash]);
+        $total_possible = (int)$stmt_pos->fetchColumn();
+
+        $stmt_pres = $pdo->prepare("
+            SELECT COUNT(*) FROM attendance a
+            JOIN students s ON a.student_id = s.id
+            WHERE a.date >= ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL)
+              AND (a.status_1='P' OR a.status_2='P' OR a.status_3='P' OR a.status_4='P')
+              AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+              AND ($privacy_s_std_cond)
+        ");
+        $stmt_pres->execute([$first_day, $tenant_id_dash, $tenant_id_dash]);
+        $total_present = (int)$stmt_pres->fetchColumn();
         $monthly_att_percent = $total_possible > 0 ? round(($total_present / $total_possible) * 100, 1) : 0;
 
-        $management_insight = "رپورٹ تیار کی جا رہی ہے...";
+        // رواں ماہ کے خالص آپریشنل اخراجات (مدرسہ - قرضہ جات کی ادائیگی کو الگ رکھتے ہوئے)
+        try {
+            $stmt_exp = $pdo->prepare("SELECT SUM(amount) FROM finance WHERE LOWER(type)='expense' AND tenant_id = ? AND (is_loan = 0 OR is_loan IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND date >= ? AND (system_type='Madrasa' OR system_type IS NULL OR system_type='')");
+            $stmt_exp->execute([$tenant_id_dash, $first_day]);
+            $current_month_expense = $stmt_exp->fetchColumn();
+            $monthly_expense = (float)($current_month_expense ?? 0);
+        } catch (Throwable $eExp) {
+            $stmt_exp = $pdo->prepare("SELECT SUM(amount) FROM finance WHERE LOWER(type)='expense' AND tenant_id = ? AND (is_deleted=0 OR is_deleted IS NULL) AND date >= ? AND (system_type='Madrasa' OR system_type IS NULL OR system_type='')");
+            $stmt_exp->execute([$tenant_id_dash, $first_day]);
+            $current_month_expense = $stmt_exp->fetchColumn();
+            $monthly_expense = (float)($current_month_expense ?? 0);
+        }
 
-        // رواں ماہ کے اخراجات
-        $current_month_expense = $pdo->query("SELECT SUM(amount) FROM finance WHERE LOWER(type)='expense' AND is_deleted=0 AND date >= '$first_day'")->fetchColumn();
-        $monthly_expense = (float)($current_month_expense ?? 0);
+        // Phase 1: Today's Attendance Situation (صرف مجاز مدرسہ کلاسز کی حاضری صورتحال)
+        $classes_all = $allowed_classes_list;
+        $marked_class_names = [];
+        $remaining_classes = [];
+        $done_classes = [];
+        try {
+            $stmt_m1 = $pdo->prepare("SELECT DISTINCT TRIM(s.class) FROM period_attendance pa JOIN students s ON pa.student_id = s.id WHERE pa.date = ? AND pa.tenant_id = ? AND s.tenant_id = ? AND s.class IS NOT NULL AND s.class != '' AND (s.system_type='Madrasa' OR s.system_type IS NULL OR system_type='')");
+            $stmt_m1->execute([$today, $tenant_id_dash, $tenant_id_dash]);
+            $m1 = $stmt_m1->fetchAll(PDO::FETCH_COLUMN);
 
-    } catch (PDOException $e) { 
-        // ایرر لاگ کریں تاکہ debugging آسان ہو
-        error_log("Dashboard PDO Error: " . $e->getMessage());
-        $total_students=0; $total_alumni=0; $total_teachers=0; $present_today_pct=0; $absent_today_pct=0; $leave_today_pct=0; $late_today_pct=0; 
-        $total_notices=0; $monthly_att_percent=0; $total_classes=0; 
-        $management_insight="ڈیٹا بیس سے رابطہ نہ ہو سکا۔"; $finance_balance=0;
+            $stmt_m2 = $pdo->prepare("SELECT DISTINCT TRIM(s.class) FROM attendance a JOIN students s ON a.student_id = s.id WHERE a.date = ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL) AND s.class IS NOT NULL AND s.class != '' AND (s.system_type='Madrasa' OR s.system_type IS NULL OR system_type='')");
+            $stmt_m2->execute([$today, $tenant_id_dash, $tenant_id_dash]);
+            $m2 = $stmt_m2->fetchAll(PDO::FETCH_COLUMN);
+
+            $marked_class_names = array_unique(array_filter(array_merge($m1, $m2)));
+            foreach ($classes_all as $c) {
+                if (in_array(trim($c['name']), $marked_class_names)) {
+                    $done_classes[] = $c;
+                } else {
+                    $remaining_classes[] = $c;
+                }
+            }
+        } catch (Throwable $e) {}
+
+        // Phase 1: Today's Teacher Attendance (صرف مدرسہ اساتذہ)
+        $t_today_present = 0; $t_today_leave = 0; $t_today_absent = 0;
+        try {
+            $stmt_tp = $pdo->prepare("SELECT COUNT(*) FROM attendance_teachers at JOIN teachers t ON at.teacher_id = t.id WHERE at.date = ? AND at.tenant_id = ? AND t.tenant_id = ? AND at.status = 'P' AND (t.system_type='Madrasa' OR t.system_type IS NULL OR t.system_type='')");
+            $stmt_tp->execute([$today, $tenant_id_dash, $tenant_id_dash]);
+            $t_today_present = (int)$stmt_tp->fetchColumn();
+
+            $stmt_tl = $pdo->prepare("SELECT COUNT(*) FROM attendance_teachers at JOIN teachers t ON at.teacher_id = t.id WHERE at.date = ? AND at.tenant_id = ? AND t.tenant_id = ? AND at.status IN ('L', 'LA') AND (t.system_type='Madrasa' OR t.system_type IS NULL OR t.system_type='')");
+            $stmt_tl->execute([$today, $tenant_id_dash, $tenant_id_dash]);
+            $t_today_leave = (int)$stmt_tl->fetchColumn();
+
+            $stmt_ta = $pdo->prepare("SELECT COUNT(*) FROM attendance_teachers at JOIN teachers t ON at.teacher_id = t.id WHERE at.date = ? AND at.tenant_id = ? AND t.tenant_id = ? AND at.status = 'A' AND (t.system_type='Madrasa' OR t.system_type IS NULL OR t.system_type='')");
+            $stmt_ta->execute([$today, $tenant_id_dash, $tenant_id_dash]);
+            $t_today_absent = (int)$stmt_ta->fetchColumn();
+        } catch (Throwable $e) {}
+
+        // Phase 1: Top 5 Students (صرف مدرسہ طلبہ)
+        $top_students = [];
+        try {
+            $stmt_top = $pdo->prepare("
+                SELECT s.id, s.name, s.father_name, s.class, 
+                       ROUND(AVG(er.marks_obtained), 1) as avg_marks,
+                       COUNT(er.id) as exams_count
+                FROM exam_results er
+                JOIN students s ON er.student_id = s.id
+                WHERE s.tenant_id = ? AND (s.is_deleted=0 OR s.is_deleted IS NULL) AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+                GROUP BY s.id, s.name, s.father_name, s.class
+                ORDER BY avg_marks DESC
+                LIMIT 5
+            ");
+            $stmt_top->execute([$tenant_id_dash]);
+            $top_students = $stmt_top->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {}
+        if (empty($top_students)) {
+            try {
+                $stmt_top2 = $pdo->prepare("
+                    SELECT id, name, father_name, class, NULL as avg_marks, 0 as exams_count
+                    FROM students
+                    WHERE tenant_id = ? AND (is_deleted=0 OR is_deleted IS NULL) AND (status='Active' OR status='' OR status IS NULL)
+                      AND (system_type='Madrasa' OR system_type IS NULL OR system_type='')
+                    ORDER BY id DESC LIMIT 5
+                ");
+                $stmt_top2->execute([$tenant_id_dash]);
+                $top_students = $stmt_top2->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable $e) {}
+        }
+
+        // Phase 1: Recent Activity Logs
+        $recent_activities = [];
+        try {
+            if (function_exists('ensure_phase1_tables')) ensure_phase1_tables($pdo);
+            $rec_act_stmt = $pdo->prepare("SELECT * FROM activity_logs WHERE tenant_id = ? ORDER BY id DESC LIMIT 8");
+            $rec_act_stmt->execute([$tenant_id_dash]);
+            $recent_activities = $rec_act_stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {}
+
+    } catch (Throwable $e) { 
+        error_log("Dashboard Data Error: " . $e->getMessage());
     }
 }
 ?>
@@ -91,7 +224,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher'], true)) {
         <?php endif; ?>
     </div>
 
-    <?php if(in_array($role, ['admin', 'nazim', 'teacher'], true)): ?>
+    <?php if(in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin'], true)): ?>
     <!-- 8 Stat Cards Grid (Admin) -->
     <div class="row g-4 mb-5">
         <?php if(has_perm('manage_students')): ?>
@@ -152,7 +285,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher'], true)) {
             </a>
         </div>
         <?php endif; ?>
-        <?php if(has_perm('manage_finance')): ?>
+        <?php if(has_perm('manage_finance') || has_perm('manage_finance_entry') || has_perm('manage_finance_report') || has_perm('manage_financial_reports')): ?>
         <div class="col-md-3 col-sm-6">
             <a href="simple_finance.php" class="text-decoration-none">
                 <div class="stat-card bg-gradient-success h-100" style="background: linear-gradient(135deg, #d31027 0%, #ea384d 100%);">
@@ -187,6 +320,100 @@ if (in_array($role, ['admin', 'nazim', 'teacher'], true)) {
         <?php endif; ?>
     </div>
 
+    <!-- Phase 1: Today's Attendance Situation Widget (آج کی حاضری صورتحال و ناظم الرٹ) -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary">
+                        <i class="fas fa-tasks fa-lg"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark">آج کی مجموعی حاضری صورتحال (Today's Situation)</h5>
+                        <small class="text-muted"><?php echo translateDate($today); ?> کے لیے حاضری اندراج کی لائیو صورتحال</small>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="attendance.php" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold">
+                        <i class="fas fa-clipboard-check me-1"></i> حاضری رجسٹر
+                    </a>
+                    <a href="teachers_attendance.php" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold">
+                        <i class="fas fa-user-clock me-1"></i> اساتذہ حاضری
+                    </a>
+                </div>
+            </div>
+
+            <div class="row g-3 align-items-stretch">
+                <!-- طلبہ کلاسز حاضری پیش رفت -->
+                <div class="col-lg-7 col-12">
+                    <div class="p-3 bg-light rounded-3 h-100 border">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold text-dark small"><i class="fas fa-chalkboard text-info me-1"></i> قرآنی و درسی کلاسز کی حاضری:</span>
+                            <span class="badge <?php echo empty($remaining_classes) ? 'bg-success' : 'bg-warning text-dark'; ?> rounded-pill">
+                                <?php echo count($done_classes); ?> / <?php echo count($classes_all); ?> کلاسز مکمل
+                            </span>
+                        </div>
+                        <?php 
+                        $cls_total = count($classes_all);
+                        $cls_done = count($done_classes);
+                        $cls_pct = $cls_total > 0 ? round(($cls_done / $cls_total) * 100) : 0;
+                        ?>
+                        <div class="progress mb-2" style="height: 10px; border-radius: 5px;">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo $cls_pct; ?>%" aria-valuenow="<?php echo $cls_pct; ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+
+                        <?php if (!empty($remaining_classes)): ?>
+                            <div class="mt-2">
+                                <span class="text-danger small fw-bold"><i class="fas fa-exclamation-circle me-1"></i> غیر درج شدہ کلاسز (ایکشن مطلوب):</span>
+                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                    <?php foreach ($remaining_classes as $rc): ?>
+                                        <a href="attendance.php?class=<?php echo urlencode($rc['name']); ?>" class="badge bg-danger-subtle text-danger border border-danger text-decoration-none py-1 px-2 rounded-pill small">
+                                            <i class="fas fa-pen-nib me-1 fa-xs"></i><?php echo htmlspecialchars($rc['name']); ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php else: ?>
+                            <div class="text-success small fw-bold mt-2">
+                                <i class="fas fa-check-circle me-1"></i> ماشاءاللہ! آج تمام کلاسز کی حاضری مکمل ہو چکی ہے۔
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- اساتذہ حاضری کا جائزہ -->
+                <div class="col-lg-5 col-12">
+                    <div class="p-3 bg-light rounded-3 h-100 border d-flex flex-column justify-content-between">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold text-dark small"><i class="fas fa-chalkboard-teacher text-primary me-1"></i> اساتذہ کرام کی حاضری:</span>
+                            <a href="teacher_leaves.php" class="small text-decoration-none fw-bold text-primary">چھٹیوں کا ریکارڈ &larr;</a>
+                        </div>
+                        <div class="row g-2 text-center my-auto">
+                            <div class="col-4">
+                                <div class="bg-white p-2 rounded-3 border">
+                                    <span class="text-success fw-bold d-block h5 mb-0"><?php echo $t_today_present; ?></span>
+                                    <small class="text-muted" style="font-size: 11px;">حاضر</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="bg-white p-2 rounded-3 border">
+                                    <span class="text-warning fw-bold d-block h5 mb-0"><?php echo $t_today_leave; ?></span>
+                                    <small class="text-muted" style="font-size: 11px;">رخصت</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="bg-white p-2 rounded-3 border">
+                                    <span class="text-danger fw-bold d-block h5 mb-0"><?php echo $t_today_absent; ?></span>
+                                    <small class="text-muted" style="font-size: 11px;">غیر حاضر</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row">
         <?php if(has_perm('manage_students')): ?>
         <div class="col-lg-8 mb-4">
@@ -207,7 +434,8 @@ if (in_array($role, ['admin', 'nazim', 'teacher'], true)) {
                         </thead>
                         <tbody>
                             <?php
-                            $stmt_recent = $pdo->query("SELECT * FROM students WHERE is_deleted=0 ORDER BY id DESC LIMIT 5");
+                            $stmt_recent = $pdo->prepare("SELECT * FROM students WHERE tenant_id = ? AND (is_deleted=0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5");
+                            $stmt_recent->execute([$tenant_id_dash]);
                             while($row = $stmt_recent->fetch(PDO::FETCH_ASSOC)) {
                                 echo "<tr><td class='px-4 text-muted'>#{$row['id']}</td><td class='fw-bold text-primary'>{$row['name']}</td><td>{$row['father_name']}</td><td>".translateDate($row['admission_date'])."</td></tr>";
                             }
@@ -253,11 +481,109 @@ if (in_array($role, ['admin', 'nazim', 'teacher'], true)) {
                         <i class="fas fa-chevron-left small opacity-50"></i>
                     </a>
                     <?php endif; ?>
+                    <?php if(has_perm('manage_teachers') || has_perm('manage_attendance')): ?>
+                    <a href="teacher_leaves.php" class="list-group-item list-group-item-action py-3 border-0 border-bottom d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-calendar-minus me-2 text-primary"></i> اساتذہ رخصت مینیجمنٹ</span>
+                        <i class="fas fa-chevron-left small opacity-50"></i>
+                    </a>
+                    <?php endif; ?>
                     <?php if(has_perm('manage_notices')): ?>
                     <a href="manage_notices.php" class="list-group-item list-group-item-action py-3 border-0 d-flex justify-content-between align-items-center">
                         <span><i class="fas fa-bullhorn me-2 text-danger"></i> <?php echo t('notices'); ?> بورڈ</span>
                         <i class="fas fa-chevron-left small opacity-50"></i>
                     </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 1: Recent Activity Timeline & Top 5 Students Row -->
+    <div class="row mb-4">
+        <!-- Activity Timeline -->
+        <div class="col-lg-6 mb-4">
+            <div class="neobox p-0 overflow-hidden h-100">
+                <div class="bg-light fw-bold py-3 px-4 border-bottom d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-stream me-2 text-primary"></i> حالیہ سرگرمیاں (Recent Activities)</span>
+                    <span class="badge bg-primary-subtle text-primary rounded-pill small">لائیو لاگ</span>
+                </div>
+                <div class="p-3">
+                    <?php if (empty($recent_activities)): ?>
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-history fa-2x mb-2 opacity-50"></i>
+                            <p class="mb-0 small fw-bold">فی الوقت کوئی نئی سرگرمی درج نہیں ہے۔</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="timeline-list">
+                            <?php foreach ($recent_activities as $act): 
+                                $act_type = strtolower($act['action_type'] ?? '');
+                                $icon = 'fas fa-dot-circle text-secondary';
+                                if (strpos($act_type, 'leave') !== false) $icon = 'fas fa-calendar-minus text-warning';
+                                elseif (strpos($act_type, 'att') !== false) $icon = 'fas fa-clipboard-check text-primary';
+                                elseif (strpos($act_type, 'fee') !== false || strpos($act_type, 'finance') !== false) $icon = 'fas fa-money-bill-wave text-success';
+                                elseif (strpos($act_type, 'admiss') !== false) $icon = 'fas fa-graduation-cap text-info';
+                            ?>
+                                <div class="d-flex align-items-start gap-3 py-2 border-bottom border-light">
+                                    <div class="rounded-circle bg-light p-2 text-center" style="width: 36px; height: 36px;">
+                                        <i class="<?php echo $icon; ?> fa-sm"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="fw-bold small text-dark"><?php echo htmlspecialchars($act['user_name'] ?? 'سسٹم'); ?></span>
+                                            <small class="text-muted" style="font-size: 11px;"><?php echo date('d M, h:i A', strtotime($act['created_at'])); ?></small>
+                                        </div>
+                                        <p class="mb-0 small text-secondary"><?php echo htmlspecialchars($act['description']); ?></p>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top 5 Students Card -->
+        <div class="col-lg-6 mb-4">
+            <div class="neobox p-0 overflow-hidden h-100">
+                <div class="bg-light fw-bold py-3 px-4 border-bottom d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-award me-2 text-warning"></i> نمایاں طلبہ (Top 5 Students)</span>
+                    <a href="students.php" class="btn btn-sm btn-outline-primary rounded-pill">تمام طلبہ</a>
+                </div>
+                <div class="p-3">
+                    <?php if (empty($top_students)): ?>
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-user-graduate fa-2x mb-2 opacity-50"></i>
+                            <p class="mb-0 small fw-bold">طلبہ کا ڈیٹا دستیاب نہیں ہے۔</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="list-group list-group-flush">
+                            <?php $pos = 1; foreach ($top_students as $std): 
+                                $badgeColor = ($pos === 1) ? 'bg-warning text-dark' : (($pos === 2) ? 'bg-secondary text-white' : (($pos === 3) ? 'bg-danger text-white' : 'bg-primary bg-opacity-10 text-primary'));
+                            ?>
+                                <div class="list-group-item px-0 py-2 border-0 border-bottom d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <span class="badge rounded-circle <?php echo $badgeColor; ?> d-flex align-items-center justify-content-center" style="width: 28px; height: 28px; font-size: 12px;">
+                                            <?php echo $pos++; ?>
+                                        </span>
+                                        <div>
+                                            <span class="fw-bold text-dark d-block"><?php echo htmlspecialchars($std['name']); ?></span>
+                                            <small class="text-muted">ولدیت: <?php echo htmlspecialchars($std['father_name'] ?: '—'); ?> | کلاس: <?php echo htmlspecialchars($std['class'] ?: '—'); ?></small>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <?php if (!empty($std['avg_marks'])): ?>
+                                            <span class="badge bg-success-subtle text-success border border-success px-2 py-1 rounded-pill fw-bold">
+                                                <?php echo $std['avg_marks']; ?> نمبر
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="badge bg-info-subtle text-info border border-info px-2 py-1 rounded-pill small">
+                                                فعال طالب علم
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>

@@ -1,3 +1,1 @@
-require 'db.php';
-\ = \->query("SHOW COLUMNS FROM daily_hifz LIKE 'date'");
-print_r(\->fetch(PDO::FETCH_ASSOC));
+<?php http_response_code(403); exit("Access Denied: This test script has been archived."); ?>

@@ -11,12 +11,14 @@ extension DbSyncSave on DBHelper {
     final Database db = await database;
     final Batch batch = db.batch();
     final List<List<int>> teacherIdRemaps = <List<int>>[];
+    final List<List<int>> studentIdRemaps = <List<int>>[];
+    final List<List<int>> maktabStudentIdRemaps = <List<int>>[];
 
     // 1. Students & Academics Domain
-    await StudentsSyncSaver.save(db, batch, data);
+    await StudentsSyncSaver.save(db, batch, data, studentIdRemaps);
 
     // 2. Maktab & Masjid Education Domain
-    await MaktabSyncSaver.save(db, batch, data);
+    await MaktabSyncSaver.save(db, batch, data, maktabStudentIdRemaps);
 
     // 3. Attendance & Staff Domain
     await AttendanceSyncSaver.save(db, batch, data, teacherIdRemaps);
@@ -33,6 +35,16 @@ extension DbSyncSave on DBHelper {
     // Remap any teacher IDs if changed during server reconciliation
     for (final remap in teacherIdRemaps) {
       await markTeacherAsSynced(remap[0], remap[1]);
+    }
+
+    // Remap any Madrasa student IDs if changed during server reconciliation
+    for (final remap in studentIdRemaps) {
+      await markStudentAsSynced(remap[0], remap[1], isMaktab: false);
+    }
+
+    // Remap any Maktab student IDs if changed during server reconciliation
+    for (final remap in maktabStudentIdRemaps) {
+      await markStudentAsSynced(remap[0], remap[1], isMaktab: true);
     }
   }
 }

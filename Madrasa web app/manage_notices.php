@@ -1,23 +1,37 @@
-<?php require_once 'db.php'; include 'header.php'; 
+<?php require_once 'db.php'; include 'header.php'; require_once 'notifications.php';
 
-// صرف ایڈمن کو اجازت ہے
-if ($_SESSION['role'] != 'admin') { echo "<script>window.location='index.php';</script>"; exit; }
+// ایڈمن یا مجاز ناظم/اسٹاف کو اجازت ہے
+if (!isset($_SESSION['user_id']) || (!has_perm('manage_notices') && ($_SESSION['role'] ?? '') !== 'admin')) {
+    echo "<script>window.location='index.php';</script>";
+    exit;
+}
+
+$cur_tenant_id = (int)get_current_tenant_id();
+if (function_exists('ensure_column')) {
+    ensure_column($pdo, 'notices', 'system_type', "VARCHAR(50) DEFAULT 'Madrasa'");
+    ensure_column($pdo, 'notices', 'tenant_id', "INT DEFAULT 1");
+}
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
 
 // نوٹس محفوظ کرنا
 if (isset($_POST['add_notice'])) {
-    $stmt = $pdo->prepare("INSERT INTO notices (title, message, date) VALUES (?, ?, ?)");
-    $stmt->execute([$_POST['title'], $_POST['message'], $_POST['date']]);
-    echo "<div class='alert alert-success'>✅ نوٹس بورڈ پر اعلان لگ گیا!</div>";
+    $stmt = $pdo->prepare("INSERT INTO notices (title, message, date, system_type, tenant_id) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$_POST['title'], $_POST['message'], $_POST['date'], $sys, $cur_tenant_id]);
+    sendPushNotificationFCM($pdo, $_POST['title'], $_POST['message'], 'new_notice');
+    echo "<div class='alert alert-success'>✅ نوٹس بورڈ پر اعلان لگ گیا اور پش نوٹیفکیشن بھیج دیا گیا!</div>";
 }
 
 // نوٹس ڈیلیٹ کرنا
 if (isset($_GET['del'])) {
-    $pdo->prepare("UPDATE notices SET is_deleted = 1 WHERE id=?")->execute([$_GET['del']]);
+    $pdo->prepare("UPDATE notices SET is_deleted = 1 WHERE id=? AND tenant_id=?")->execute([$_GET['del'], $cur_tenant_id]);
     echo "<script>window.location='manage_notices.php';</script>";
 }
 
 // لسٹ لائیں
-$notices = $pdo->query("SELECT * FROM notices WHERE is_deleted = 0 ORDER BY date DESC")->fetchAll();
+$notices_stmt = $pdo->prepare("SELECT * FROM notices WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND $sys_cond ORDER BY date DESC");
+$notices_stmt->execute([$cur_tenant_id]);
+$notices = $notices_stmt->fetchAll();
 ?>
 
 <div class="row">

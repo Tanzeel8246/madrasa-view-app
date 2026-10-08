@@ -1,10 +1,6 @@
 <?php
 require 'db.php';
 
-// پروڈکشن سرور پر ایررز دکھانے کے لیے
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
 echo "<h1>Data Reset and Import Script</h1>";
 
 $tables_to_truncate = [

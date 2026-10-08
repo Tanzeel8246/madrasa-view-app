@@ -1,7 +1,7 @@
 name: madrasa_app
 description: "Madrasa Ashraf-ul-Madaris Management System"
-publish_to: 'none'
-version: 5.5.14+55
+version: 5.7.114+333
+
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -12,6 +12,7 @@ dependencies:
 
   # 🌟 ڈیٹا بیس، تاریخ اور ویب سرور کے لیے
   sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.3
   path: ^1.9.0
   intl: ^0.19.0
   http: ^1.1.0 
@@ -33,12 +34,12 @@ dependencies:
   url_launcher: ^6.3.2
   pdf: ^3.12.0
   printing: ^5.14.3
+  flutter_native_splash: ^2.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
-  flutter_native_splash: ^2.4.0
 
 flutter_native_splash:
   color: "#284D3D"

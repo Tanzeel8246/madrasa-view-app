@@ -42,6 +42,12 @@ class MadrasaScaffold extends StatelessWidget {
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
 
+        // اگر پچھلی اسکرین موجود ہے تو پچھلی اسکرین پر واپس جائیں
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+          return;
+        }
+
         // ڈیش بورڈ پر ہیں تو ایپ بند کرنے کی پرمیشن مانگیں
         final currentRoute = ModalRoute.of(context)?.settings.name;
         if (currentRoute == '/dashboard' || context.widget is DashboardPage) {
@@ -71,7 +77,7 @@ class MadrasaScaffold extends StatelessWidget {
             SystemNavigator.pop();
           }
         } else {
-          // کسی اور صفحے پر ہیں تو ڈیش بورڈ پر واپس جائیں
+          // اگر پچھلی اسکرین نہیں اور ڈیش بورڈ پر بھی نہیں تو ڈیش بورڈ پر جائیں
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const DashboardPage()),

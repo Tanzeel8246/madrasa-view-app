@@ -31,9 +31,11 @@ class _ComplaintsHistoryPageState extends State<ComplaintsHistoryPage> {
         where: widget.studentId != null ? 'student_id = ?' : null,
         whereArgs: widget.studentId != null ? [widget.studentId] : null,
         orderBy: 'date DESC');
-    final students = await db.getStudents();
+    final students = await db.getStudentsForUser();
+    final allowedStudentIds = students.map((s) => s['id']).toSet();
     final historyWithStudent = <Map<String, dynamic>>[];
     for (final item in res) {
+      if (!allowedStudentIds.contains(item['student_id'])) continue;
       final student = students.firstWhere(
         (s) => s['id'] == item['student_id'],
         orElse: () => <String, dynamic>{},
