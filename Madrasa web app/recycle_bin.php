@@ -15,7 +15,11 @@ if (session_status() === PHP_SESSION_NONE) { session_start(); }
 // 1. Strict Admin Authentication Guard
 $u_role_check = strtolower(trim((string)($_SESSION['role'] ?? '')));
 $is_admin = in_array($u_role_check, ['admin', 'superadmin', 'super_admin', 'administrator']);
-if (!isset($_SESSION['user_id']) || !$is_admin) {
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+if (!$is_admin) {
     header("Location: dashboard.php?error=unauthorized");
     exit;
 }

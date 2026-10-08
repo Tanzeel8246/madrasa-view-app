@@ -1,11 +1,16 @@
 <?php
 require_once 'db.php';
-session_start();
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
 
 $system_type = $_SESSION['system_type'] ?? 'Madrasa';
-$is_admin = (($_SESSION['role'] ?? '') === 'admin');
+$is_admin = in_array(strtolower(trim((string)($_SESSION['role'] ?? ''))), ['admin', 'superadmin', 'super_admin', 'administrator'], true);
 $perm_key = ($system_type === 'Masjid') ? 'manage_masjid_in_kind_donations' : 'manage_in_kind_donations';
-if (!isset($_SESSION['user_id']) || (!$is_admin && !app_has_perm($perm_key) && !app_has_perm('manage_in_kind_donations') && !app_has_perm('manage_masjid_in_kind_donations'))) {
+if (!$is_admin && !app_has_perm($perm_key) && !app_has_perm('manage_in_kind_donations') && !app_has_perm('manage_masjid_in_kind_donations')) {
     header("Location: " . ($system_type === 'Masjid' ? "masjid_dashboard.php" : "dashboard.php"));
     exit;
 }

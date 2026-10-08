@@ -20,9 +20,13 @@ $user = ['id' => $_SESSION['user_id'], 'role' => $role];
 
 finance_accounting_backfill($pdo);
 
+$cur_tenant_id = (int)get_current_tenant_id();
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+
 // Master Finance Totals (Accurate & Synced with Finance Ledger)
-$total_income = (float)($pdo->query("SELECT SUM(amount) FROM finance WHERE type = 'Income' AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn() ?? 0);
-$total_expense = (float)($pdo->query("SELECT SUM(amount) FROM finance WHERE type = 'Expense' AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn() ?? 0);
+$total_income = (float)($pdo->query("SELECT SUM(amount) FROM finance WHERE type = 'Income' AND tenant_id = $cur_tenant_id AND $sys_cond AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn() ?? 0);
+$total_expense = (float)($pdo->query("SELECT SUM(amount) FROM finance WHERE type = 'Expense' AND tenant_id = $cur_tenant_id AND $sys_cond AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn() ?? 0);
 $net_balance = $total_income - $total_expense;
 
 $summary = [
@@ -38,11 +42,12 @@ $cash_bank = [
     ['name' => 'Cash in Hand (نقد رقم)', 'bal' => $net_balance]
 ];
 
+$v_sys_cond = ($sys === 'Masjid') ? "v.system_type = 'Masjid'" : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
 $recent_vouchers = $pdo->query("
     SELECT v.*, u.name as creator 
     FROM acc_vouchers v 
     LEFT JOIN admins u ON v.created_by = u.id 
-    WHERE (v.is_deleted = 0 OR v.is_deleted IS NULL)
+    WHERE v.tenant_id = $cur_tenant_id AND $v_sys_cond AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
     ORDER BY v.id DESC LIMIT 5
 ")->fetchAll(PDO::FETCH_ASSOC);
 

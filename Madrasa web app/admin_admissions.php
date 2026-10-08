@@ -8,10 +8,16 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Access control - admin, superadmin, or users with manage_admissions permission
-$role = strtolower((string)($_SESSION['role'] ?? ''));
-$can_manage_adm = in_array($role, ['admin', 'superadmin'], true) || has_permission($role, $_SESSION['permissions'] ?? [], 'manage_admissions') || has_permission($role, $_SESSION['permissions'] ?? [], 'manage_students');
-if (!isset($_SESSION['user_id']) || !$can_manage_adm) {
+if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
+    exit;
+}
+
+$role = strtolower((string)($_SESSION['role'] ?? ''));
+$is_admin = in_array($role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+$can_manage_adm = $is_admin || (function_exists('app_has_perm') && (app_has_perm('manage_admissions') || app_has_perm('manage_students'))) || has_permission($role, $_SESSION['permissions'] ?? [], 'manage_admissions') || has_permission($role, $_SESSION['permissions'] ?? [], 'manage_students');
+if (!$can_manage_adm) {
+    header("Location: dashboard.php");
     exit;
 }
 

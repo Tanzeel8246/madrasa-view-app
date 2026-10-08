@@ -11,7 +11,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $role = strtolower((string)($_SESSION['role'] ?? 'parent'));
-$can_manage_alumni = in_array($role, ['admin', 'superadmin', 'nazim'], true) || has_permission($role, $_SESSION['permissions'] ?? [], 'manage_students');
+$can_manage_alumni = in_array($role, ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim'], true) || (function_exists('app_has_perm') && app_has_perm('manage_students')) || has_permission($role, $_SESSION['permissions'] ?? [], 'manage_students');
 if (!$can_manage_alumni) {
     header("Location: dashboard.php");
     exit;

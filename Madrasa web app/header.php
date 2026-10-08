@@ -25,20 +25,29 @@ if (isset($_SESSION['user_id'])) {
     }
     $_SESSION['last_activity'] = time();
 
-    // Auto-heal session ID if user ID in database was reassigned (multi-tenant safe)
-    if (!empty($_SESSION['username'])) {
+    // Auto-refresh admin session permissions & role safely
+    if (!empty($_SESSION['user_id']) && (!isset($_SESSION['role']) || $_SESSION['role'] !== 'teacher')) {
         try {
             $sessTid = (int)($_SESSION['tenant_id'] ?? 1);
-            $checkUser = $pdo->prepare("SELECT id, role, name, permissions FROM admins WHERE username = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
-            $checkUser->execute([$_SESSION['username'], $sessTid]);
+            $checkUser = $pdo->prepare("SELECT id, role, name, permissions FROM admins WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+            $checkUser->execute([(int)$_SESSION['user_id'], $sessTid]);
             $cuRow = $checkUser->fetch(PDO::FETCH_ASSOC);
-            if ($cuRow && (int)$cuRow['id'] !== (int)($_SESSION['user_id'] ?? 0)) {
-                $_SESSION['user_id'] = (int)$cuRow['id'];
-                $_SESSION['role'] = $cuRow['role'];
-                $_SESSION['name'] = $cuRow['name'];
-                if (!empty($cuRow['permissions'])) {
-                    $_SESSION['permissions'] = json_decode($cuRow['permissions'], true) ?: [];
+            if ($cuRow) {
+                $_SESSION['role'] = $cuRow['role'] ?: ($_SESSION['role'] ?? 'admin');
+                $_SESSION['name'] = $cuRow['name'] ?: ($_SESSION['name'] ?? 'Admin');
+                $perms = json_decode($cuRow['permissions'] ?? '[]', true) ?: [];
+                if (in_array(strtolower((string)$_SESSION['role']), ['admin', 'superadmin', 'super_admin', 'administrator'], true) && empty($perms)) {
+                    $perms = [
+                        'manage_students', 'manage_teachers', 'manage_attendance', 'manage_teacher_attendance',
+                        'manage_hifz', 'manage_academics', 'manage_finance', 'manage_erp',
+                        'manage_classes', 'manage_notices', 'manage_exams', 'manage_requests',
+                        'manage_settings', 'manage_stipends', 'manage_hostel', 'manage_library',
+                        'manage_inventory', 'manage_shop', 'manage_cms', 'manage_admissions',
+                        'manage_assets', 'manage_in_kind_donations', 'manage_loans', 'manage_website',
+                        'manage_complaints', 'add_complaint'
+                    ];
                 }
+                $_SESSION['permissions'] = $perms;
             }
         } catch (Throwable $e) {}
     }
@@ -134,7 +143,7 @@ require_once __DIR__ . '/services/NotificationBadgeService.php';
 $pending_count = 0;
 $smart_alerts_count = 0;
 $daily_naaghah = 0;
-if (isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin', 'nazim', 'teacher'])) {
+if (isset($_SESSION['role']) && (in_array(strtolower(trim((string)$_SESSION['role'])), ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim', 'teacher', 'mudarris']))) {
     try {
         $sys_val = $_SESSION['system_type'] ?? 'Madrasa';
         $is_mas = ($sys_val === 'Masjid');
@@ -175,11 +184,16 @@ if (isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin', 'nazim', '
 if (isset($_GET['lang'])) { $_SESSION['lang'] = $_GET['lang']; }
 $lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : 'ur';
 $role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
+$is_admin = in_array(strtolower(trim((string)$role)), ['admin', 'superadmin', 'super_admin', 'administrator'], true);
 $user_name = isset($_SESSION['name']) ? $_SESSION['name'] : 'Guest';
 
 
 function has_perm($perm) {
     if (!isset($_SESSION['role'])) return false;
+    $role_lower = strtolower(trim((string)$_SESSION['role']));
+    if (in_array($role_lower, ['admin', 'superadmin', 'super_admin', 'administrator'], true)) {
+        return true;
+    }
     
     // Map individual permission to its parent module
     $permToModuleMap = [
@@ -424,7 +438,7 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                     </a>
                 <?php endif; ?>
 
-                <?php if(in_array($role, ['admin', 'nazim', 'teacher'])): 
+                <?php if($is_admin || in_array(strtolower(trim((string)$role)), ['nazim', 'teacher', 'mudarris'])): 
                     $cur_p = basename($_SERVER['PHP_SELF']);
                     $maktab_pages = [
                         'manage_classes.php', 'maktab_classes.php', 'students.php', 'teachers.php', 'teacher_leaves.php',
@@ -513,7 +527,7 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                     <!-- اعتکاف ریکارڈ -->
                     <a href="masjid_itikaf.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='masjid_itikaf.php'?'active-link':''; ?>"><i class="fas fa-user-clock me-2 text-success"></i> <?php echo ($lang=='ur') ? 'اعتکاف ریکارڈ' : 'Itikaf Record'; ?></a>
 
-                    <?php if($role == 'admin'): ?>
+                    <?php if($is_admin): ?>
                     <a href="manage_users.php" class="list-group-item"><i class="fas fa-users-cog me-2"></i> <?php echo t('manage_users'); ?></a>
                     <a href="settings.php" class="list-group-item"><i class="fas fa-cog me-2"></i> <?php echo t('settings'); ?></a>
                     <?php endif; ?>
@@ -531,7 +545,7 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                     </a>
                 <?php endif; ?>
 
-                <?php if(in_array($role, ['admin', 'nazim', 'teacher'])): ?>
+                <?php if($is_admin || in_array(strtolower(trim((string)$role)), ['nazim', 'teacher', 'mudarris'])): ?>
                     <?php if(has_perm('manage_requests')): ?>
                     <a href="admin_requests.php" class="list-group-item d-flex justify-content-between align-items-center <?php echo basename($_SERVER['PHP_SELF'])=='admin_requests.php'?'active-link':''; ?>">
                         <span><i class="fas fa-bell me-2"></i> <?php echo t('requests'); ?></span>
@@ -709,7 +723,7 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                     <?php if(has_perm('manage_complaints') || in_array($role, ['admin', 'nazim'])): ?>
                     <a href="manage_complaints.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='manage_complaints.php'?'active-link':''; ?>"><i class="fas fa-exclamation-triangle me-2 text-danger"></i> <?php echo ($lang=='ur') ? 'شکایات کا ریکارڈ' : 'Complaints Record'; ?></a>
                     <?php endif; ?>
-                    <?php if($role == 'admin'): ?>
+                    <?php if($is_admin): ?>
                     <a href="manage_users.php" class="list-group-item"><i class="fas fa-users-cog me-2"></i> <?php echo t('manage_users'); ?></a>
                     <a href="settings.php" class="list-group-item"><i class="fas fa-cog me-2"></i> <?php echo t('settings'); ?></a>
                     <a href="subscription_status.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='subscription_status.php'?'active-link':''; ?>"><i class="fas fa-gem me-2 text-warning"></i> <?php echo ($lang=='ur') ? 'سبسکرپشن و فیس کیفیت' : 'Subscription & Status'; ?></a>

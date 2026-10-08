@@ -1,14 +1,20 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 require_once 'db.php';
-$is_admin = (($_SESSION['role'] ?? '') === 'admin');
-if (!isset($_SESSION['user_id']) || (!$is_admin && !app_has_perm('manage_exams') && !app_has_perm('manage_masjid_exams'))) {
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_exams') && !app_has_perm('manage_masjid_exams')) {
     $sys = $_SESSION['system_type'] ?? 'Madrasa';
     header("Location: " . ($sys === 'Masjid' ? "masjid_dashboard.php" : "dashboard.php"));
     exit;
 }
 include 'header.php';
-?>
+
 $cur_tenant_id = (int)get_current_tenant_id();
 if (isset($_POST['add_exam'])) {
     try {

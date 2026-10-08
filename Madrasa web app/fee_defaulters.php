@@ -6,7 +6,7 @@ $sys = $_SESSION['system_type'] ?? 'Madrasa';
 $sys_cond = ($sys === 'Masjid') ? "s.system_type = 'Masjid'" : "(s.system_type = 'Madrasa' OR s.system_type IS NULL OR s.system_type = '')";
 
 $u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
-$is_admin = in_array($u_role, ['admin', 'superadmin', 'administrator'], true);
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
 $p_needed = ($sys === 'Masjid') ? 'manage_masjid_fee_defaulters' : 'manage_fee_defaulters';
 $p_alt1 = ($sys === 'Masjid') ? 'manage_masjid_finance' : 'manage_finance';
 $p_alt2 = ($sys === 'Masjid') ? 'manage_masjid_finance_report' : 'manage_finance_report';

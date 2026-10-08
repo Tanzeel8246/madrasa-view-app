@@ -11,16 +11,16 @@ error_reporting(0);
 if (session_status() === PHP_SESSION_NONE) {
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
     if (PHP_VERSION_ID >= 70300) {
-        @session_set_cookie_params([
+        $sessParams = [
             'lifetime' => 86400 * 30,
             'path' => '/',
-            'domain' => '',
-            'secure' => $isHttps,
             'httponly' => true,
             'samesite' => 'Lax'
-        ]);
+        ];
+        if ($isHttps) $sessParams['secure'] = true;
+        @session_set_cookie_params($sessParams);
     } else {
-        @session_set_cookie_params(86400 * 30, '/; samesite=Lax', '', $isHttps, true);
+        @session_set_cookie_params(86400 * 30, '/; samesite=Lax', null, $isHttps, true);
     }
     session_start();
 }
@@ -312,7 +312,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         madrasa_set_auth_cookies($token, $tCode);
                     } else {
                         $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
-                        setcookie('last_tenant_code', $tCode, time() + (86400 * 30), '/', '', $isHttps, false);
+                        setcookie('last_tenant_code', $tCode, time() + (86400 * 30), '/', null, $isHttps, false);
                     }
                     session_write_close();
 
@@ -388,7 +388,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             madrasa_set_auth_cookies($token, $tCode);
                         } else {
                             $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
-                            setcookie('last_tenant_code', $tCode, time() + (86400 * 30), '/', '', $isHttps, false);
+                            setcookie('last_tenant_code', $tCode, time() + (86400 * 30), '/', null, $isHttps, false);
                         }
                         session_write_close();
 
@@ -528,7 +528,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             madrasa_set_auth_cookies($token, $tCode);
                         } else {
                             $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
-                            setcookie('last_tenant_code', $tCode, time() + (86400 * 30), '/', '', $isHttps, false);
+                            setcookie('last_tenant_code', $tCode, time() + (86400 * 30), '/', null, $isHttps, false);
                         }
                         session_write_close();
 

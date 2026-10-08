@@ -5,7 +5,7 @@ require_once 'db.php';
 include 'header.php';
 
 $role = strtolower((string)($_SESSION['role'] ?? 'parent'));
-$can_manage = in_array($role, ['admin', 'superadmin'], true) || has_perm('manage_recruitment');
+$can_manage = in_array($role, ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim'], true) || has_perm('manage_recruitment') || (function_exists('app_has_perm') && app_has_perm('manage_recruitment'));
 if (!$can_manage) {
     echo "<script>window.location='dashboard.php';</script>";
     exit;

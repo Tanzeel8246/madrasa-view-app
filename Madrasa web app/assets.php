@@ -9,11 +9,16 @@ try {
     $pdo->exec("ALTER TABLE assets ADD COLUMN system_type VARCHAR(50) DEFAULT 'Masjid' AFTER name");
 } catch (Exception $e) {}
 
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
 $system_type = $_SESSION['system_type'] ?? 'Madrasa';
 $cur_tenant_id = (int)get_current_tenant_id();
-$is_admin = (($_SESSION['role'] ?? '') === 'admin');
+$is_admin = in_array(strtolower(trim((string)($_SESSION['role'] ?? ''))), ['admin', 'superadmin', 'super_admin', 'administrator'], true);
 $perm_key = ($system_type === 'Masjid') ? 'manage_masjid_assets' : 'manage_assets';
-if (!isset($_SESSION['user_id']) || (!$is_admin && !app_has_perm($perm_key) && !app_has_perm('manage_assets') && !app_has_perm('manage_masjid_assets'))) {
+if (!$is_admin && !app_has_perm($perm_key) && !app_has_perm('manage_assets') && !app_has_perm('manage_masjid_assets')) {
     header("Location: " . ($system_type === 'Masjid' ? "masjid_dashboard.php" : "dashboard.php"));
     exit;
 }

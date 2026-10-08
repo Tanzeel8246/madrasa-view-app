@@ -19,6 +19,8 @@ $as_of_date = $_GET['as_of'] ?? date('Y-m-d');
 
 finance_accounting_backfill($pdo, null, $as_of_date);
 
+$cur_tenant_id = (int)get_current_tenant_id($pdo);
+
 // Fetch Trial Balance
 $query = "
     SELECT a.code, a.name, a.type, 
@@ -26,14 +28,14 @@ $query = "
            SUM(CASE WHEN v.id IS NOT NULL THEN e.credit ELSE 0 END) as total_credit
     FROM acc_chart_of_accounts a
     LEFT JOIN acc_ledger_entries e ON a.id = e.account_id
-    LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status != 'Rejected' AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.date <= ?
-    WHERE a.is_deleted = 0
+    LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status != 'Rejected' AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ? AND v.date <= ?
+    WHERE a.is_deleted = 0 AND a.tenant_id = ?
     GROUP BY a.id, a.code, a.name, a.type
     ORDER BY a.type, a.code
 ";
 
 $stmt = $pdo->prepare($query);
-$stmt->execute([$as_of_date]);
+$stmt->execute([$cur_tenant_id, $as_of_date, $cur_tenant_id]);
 $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $total_dr = 0;

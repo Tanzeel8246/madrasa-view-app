@@ -1,8 +1,15 @@
 <?php
 require_once 'db.php';
-session_start();
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
-if (!isset($_SESSION['user_id']) || (!has_perm('manage_complaints') && ($_SESSION['role'] ?? '') !== 'admin')) {
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !has_perm('manage_complaints') && !app_has_perm('manage_complaints')) {
     header("Location: dashboard.php");
     exit;
 }

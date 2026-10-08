@@ -3,7 +3,8 @@ if (session_status() === PHP_SESSION_NONE) { session_start(); }
 require_once 'db.php';
 require_once 'middleware/tenant.php';
 
-$is_admin = (($_SESSION['role'] ?? '') === 'admin');
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;

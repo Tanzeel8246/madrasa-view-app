@@ -228,8 +228,18 @@ if (!function_exists('get_student_class_privacy_sql')) {
 if (!function_exists('app_has_perm')) {
     function app_has_perm($perm) {
         if (!isset($_SESSION['role'])) return false;
+        $uRole = strtolower(trim((string)$_SESSION['role']));
+        if (in_array($uRole, ['admin', 'superadmin', 'super_admin', 'administrator'], true)) {
+            return true;
+        }
         $perms = $_SESSION['permissions'] ?? [];
-        return has_permission($_SESSION['role'], $perms, $perm);
+        return has_permission($uRole, $perms, $perm);
+    }
+}
+
+if (!function_exists('has_perm')) {
+    function has_perm($perm) {
+        return app_has_perm($perm);
     }
 }
 
@@ -282,16 +292,18 @@ if (!function_exists('madrasa_ensure_session_started')) {
         if (session_status() === PHP_SESSION_NONE) {
             $isHttps = madrasa_is_https();
             if (PHP_VERSION_ID >= 70300) {
-                @session_set_cookie_params([
+                $params = [
                     'lifetime' => 86400 * 30,
                     'path' => '/',
-                    'domain' => '',
-                    'secure' => $isHttps,
                     'httponly' => true,
                     'samesite' => 'Lax'
-                ]);
+                ];
+                if ($isHttps) {
+                    $params['secure'] = true;
+                }
+                @session_set_cookie_params($params);
             } else {
-                @session_set_cookie_params(86400 * 30, '/; samesite=Lax', '', $isHttps, true);
+                @session_set_cookie_params(86400 * 30, '/', '', $isHttps, true);
             }
             @session_start();
         }
@@ -322,28 +334,28 @@ if (!function_exists('madrasa_set_auth_cookies')) {
         $isHttps = madrasa_is_https();
         $expire = time() + (86400 * 30);
         if (PHP_VERSION_ID >= 70300) {
-            @setcookie('madrasa_auth_token', $token, [
+            $cookieOpt = [
                 'expires'  => $expire,
                 'path'     => '/',
-                'domain'   => '',
-                'secure'   => $isHttps,
                 'httponly' => true,
                 'samesite' => 'Lax'
-            ]);
+            ];
+            if ($isHttps) $cookieOpt['secure'] = true;
+            @setcookie('madrasa_auth_token', $token, $cookieOpt);
             if (!empty($tenantCode)) {
-                @setcookie('last_tenant_code', (string)$tenantCode, [
+                $tCookieOpt = [
                     'expires'  => $expire,
                     'path'     => '/',
-                    'domain'   => '',
-                    'secure'   => $isHttps,
                     'httponly' => false,
                     'samesite' => 'Lax'
-                ]);
+                ];
+                if ($isHttps) $tCookieOpt['secure'] = true;
+                @setcookie('last_tenant_code', (string)$tenantCode, $tCookieOpt);
             }
         } else {
-            @setcookie('madrasa_auth_token', $token, $expire, '/; samesite=Lax', '', $isHttps, true);
+            @setcookie('madrasa_auth_token', $token, $expire, '/', '', $isHttps, true);
             if (!empty($tenantCode)) {
-                @setcookie('last_tenant_code', (string)$tenantCode, $expire, '/; samesite=Lax', '', $isHttps, false);
+                @setcookie('last_tenant_code', (string)$tenantCode, $expire, '/', '', $isHttps, false);
             }
         }
         $_COOKIE['madrasa_auth_token'] = $token;
@@ -358,25 +370,25 @@ if (!function_exists('madrasa_clear_auth_cookies')) {
         $isHttps = madrasa_is_https();
         $past = time() - 86400;
         if (PHP_VERSION_ID >= 70300) {
-            @setcookie('madrasa_auth_token', '', [
+            $clearOpt = [
                 'expires'  => $past,
                 'path'     => '/',
-                'domain'   => '',
-                'secure'   => $isHttps,
                 'httponly' => true,
                 'samesite' => 'Lax'
-            ]);
-            @setcookie('last_tenant_code', '', [
+            ];
+            if ($isHttps) $clearOpt['secure'] = true;
+            @setcookie('madrasa_auth_token', '', $clearOpt);
+            $clearTOpt = [
                 'expires'  => $past,
                 'path'     => '/',
-                'domain'   => '',
-                'secure'   => $isHttps,
                 'httponly' => false,
                 'samesite' => 'Lax'
-            ]);
+            ];
+            if ($isHttps) $clearTOpt['secure'] = true;
+            @setcookie('last_tenant_code', '', $clearTOpt);
         } else {
-            @setcookie('madrasa_auth_token', '', $past, '/; samesite=Lax', '', $isHttps, true);
-            @setcookie('last_tenant_code', '', $past, '/; samesite=Lax', '', $isHttps, false);
+            @setcookie('madrasa_auth_token', '', $past, '/', '', $isHttps, true);
+            @setcookie('last_tenant_code', '', $past, '/', '', $isHttps, false);
         }
         unset($_COOKIE['madrasa_auth_token']);
         unset($_COOKIE['last_tenant_code']);
@@ -443,7 +455,7 @@ if (!function_exists('madrasa_restore_session_from_cookie')) {
                     $_SESSION['last_activity'] = time();
                     return true;
                 }
-            } elseif (in_array($role, ['admin', 'nazim', 'mudarris'])) {
+            } elseif (in_array($role, ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim', 'mudarris', 'accountant', 'staff'])) {
                 $stmt = $pdo->prepare("
                     SELECT a.*, t.id as t_id, t.code as t_code, t.name as t_name, t.system_type as t_system_type
                     FROM admins a
@@ -457,12 +469,25 @@ if (!function_exists('madrasa_restore_session_from_cookie')) {
                     $tCode = !empty($adm['t_code']) ? $adm['t_code'] : 'MAIN01';
                     $tName = !empty($adm['t_name']) ? $adm['t_name'] : 'کلاؤڈ ساس ادارہ';
                     $tSysType = !empty($adm['t_system_type']) ? $adm['t_system_type'] : 'Madrasa';
+                    $admRole = !empty($adm['role']) ? $adm['role'] : 'admin';
 
                     $_SESSION['user_id'] = (int)$adm['id'];
-                    $_SESSION['role'] = !empty($adm['role']) ? $adm['role'] : 'admin';
+                    $_SESSION['role'] = $admRole;
                     $_SESSION['name'] = $adm['name'];
                     $_SESSION['username'] = $adm['username'] ?? $adm['name'];
-                    $_SESSION['permissions'] = json_decode($adm['permissions'] ?? '[]', true) ?: [];
+                    $perms = json_decode($adm['permissions'] ?? '[]', true) ?: [];
+                    if (in_array(strtolower((string)$admRole), ['admin', 'superadmin', 'super_admin', 'administrator'], true) && empty($perms)) {
+                        $perms = [
+                            'manage_students', 'manage_teachers', 'manage_attendance', 'manage_teacher_attendance',
+                            'manage_hifz', 'manage_academics', 'manage_finance', 'manage_erp',
+                            'manage_classes', 'manage_notices', 'manage_exams', 'manage_requests',
+                            'manage_settings', 'manage_stipends', 'manage_hostel', 'manage_library',
+                            'manage_inventory', 'manage_shop', 'manage_cms', 'manage_admissions',
+                            'manage_assets', 'manage_in_kind_donations', 'manage_loans', 'manage_website',
+                            'manage_complaints', 'add_complaint'
+                        ];
+                    }
+                    $_SESSION['permissions'] = $perms;
                     $_SESSION['system_type'] = (!empty($adm['system_type']) && $adm['system_type'] !== 'Both') ? $adm['system_type'] : ($tSysType === 'Masjid' ? 'Masjid' : 'Madrasa');
                     $_SESSION['tenant_system_type'] = $tSysType;
                     $_SESSION['tenant_id'] = (int)($adm['t_id'] ?? $adm['tenant_id'] ?? $tid);

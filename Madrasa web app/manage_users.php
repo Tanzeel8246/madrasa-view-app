@@ -4,24 +4,14 @@ session_start();
 require_once 'db.php';
 require_once 'finance_accounting_bridge.php';
 
-// Auto-heal session ID if user ID in database was reassigned (e.g. Tanzeel moved from ID 3 to ID 1)
-if (!empty($_SESSION['username'])) {
-    try {
-        $checkUser = $pdo->prepare("SELECT id, role, name, permissions FROM admins WHERE username = ? LIMIT 1");
-        $checkUser->execute([$_SESSION['username']]);
-        $cuRow = $checkUser->fetch(PDO::FETCH_ASSOC);
-        if ($cuRow && (int)$cuRow['id'] !== (int)($_SESSION['user_id'] ?? 0)) {
-            $_SESSION['user_id'] = (int)$cuRow['id'];
-            $_SESSION['role'] = $cuRow['role'];
-            $_SESSION['name'] = $cuRow['name'];
-            if (!empty($cuRow['permissions'])) {
-                $_SESSION['permissions'] = json_decode($cuRow['permissions'], true) ?: [];
-            }
-        }
-    } catch (Throwable $e) {}
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
 }
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin) {
     header("Location: dashboard.php");
     exit;
 }

@@ -5,12 +5,11 @@ global $system_type;
 $system_type = $_SESSION['system_type'] ?? 'Madrasa';
 
 if (!isset($_SESSION['user_id'])) { header("Location: login.php"); exit; }
-$user = $pdo->prepare("SELECT role, permissions FROM admins WHERE id = ?");
-$user->execute([$_SESSION['user_id']]);
-$user = $user->fetch(PDO::FETCH_ASSOC);
-$permissions = $user['permissions'] ? explode(',', $user['permissions']) : [];
-if ($user['role'] !== 'admin' && !in_array('manage_finance', $permissions) && !in_array('manage_erp', $permissions)) {
-    die("Access Denied.");
+$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+if (!$is_admin && !app_has_perm('manage_loans') && !app_has_perm('manage_masjid_loans') && !app_has_perm('manage_finance') && !app_has_perm('manage_erp')) {
+    header("Location: dashboard.php");
+    exit;
 }
 
 $msg = '';

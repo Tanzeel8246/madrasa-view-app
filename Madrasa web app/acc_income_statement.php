@@ -21,11 +21,13 @@ $dept_id = !empty($_GET['department_id']) ? (int)$_GET['department_id'] : null;
 
 finance_accounting_backfill($pdo, $from_date, $to_date);
 
+$cur_tenant_id = (int)get_current_tenant_id($pdo);
+
 // Fetch Departments
 $departments = $pdo->query("SELECT id, name FROM departments WHERE status = 'Active'")->fetchAll(PDO::FETCH_ASSOC);
 
 // Prepare Query
-$params = [$from_date, $to_date];
+$params = [$cur_tenant_id, $from_date, $to_date, $cur_tenant_id];
 $dept_sql = "";
 if ($dept_id) {
     $dept_sql = " AND e.department_id = ? ";
@@ -38,8 +40,8 @@ $query = "
            SUM(e.credit) as total_credit
     FROM acc_chart_of_accounts a
     JOIN acc_ledger_entries e ON a.id = e.account_id
-    JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status != 'Rejected' AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
-    WHERE a.type IN ('Revenue', 'Expense') AND v.date BETWEEN ? AND ? AND a.is_deleted = 0
+    JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status != 'Rejected' AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ?
+    WHERE a.type IN ('Revenue', 'Expense') AND v.date BETWEEN ? AND ? AND a.is_deleted = 0 AND a.tenant_id = ?
     $dept_sql
     GROUP BY a.id, a.code, a.name, a.type
     ORDER BY a.type DESC, a.code
