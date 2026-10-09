@@ -339,6 +339,16 @@ if (!function_exists('is_module_allowed_for_tenant')) {
     }
 }
 
+if (!function_exists('is_mod_allowed')) {
+    function is_mod_allowed($moduleKey, $tenantId = null) {
+        global $pdo;
+        if (function_exists('is_module_allowed_for_tenant') && isset($pdo)) {
+            return is_module_allowed_for_tenant($pdo, $moduleKey, $tenantId);
+        }
+        return true;
+    }
+}
+
 if (!function_exists('ensure_tenant_isolation_schema')) {
     function ensure_tenant_isolation_schema($pdo, $force = false) {
         static $executed = false;

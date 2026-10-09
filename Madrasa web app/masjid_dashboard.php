@@ -49,7 +49,7 @@ $t_today_absent = 0;
 $top_students = [];
 $recent_activities = [];
 
-if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin'], true)) {
+if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'super_admin', 'administrator'], true)) {
     try {
         $masjid_tenant_id = get_current_tenant_id();
         $t_mas_cond = " AND tenant_id = $masjid_tenant_id";

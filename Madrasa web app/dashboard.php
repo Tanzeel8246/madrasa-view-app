@@ -20,7 +20,7 @@ $management_insight="رپورٹ تیار کی جا رہی ہے..."; $monthly_exp
 
 $role = strtolower((string)($_SESSION['role'] ?? 'parent'));
 
-if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin'], true)) {
+if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'super_admin', 'administrator'], true)) {
     try {
         $tenant_id_dash = get_current_tenant_id();
         $st_set = $pdo->prepare("SELECT * FROM settings WHERE tenant_id = ? ORDER BY id ASC LIMIT 1");

@@ -188,58 +188,60 @@ $is_admin = in_array(strtolower(trim((string)$role)), ['admin', 'superadmin', 's
 $user_name = isset($_SESSION['name']) ? $_SESSION['name'] : 'Guest';
 
 
-function has_perm($perm) {
-    if (!isset($_SESSION['role'])) return false;
-    $role_lower = strtolower(trim((string)$_SESSION['role']));
-    if (in_array($role_lower, ['admin', 'superadmin', 'super_admin', 'administrator'], true)) {
-        return true;
-    }
-    
-    // Map individual permission to its parent module
-    $permToModuleMap = [
-        'manage_classes' => 'classes',
-        'manage_students' => 'students',
-        'manage_teachers' => 'teachers',
-        'manage_teacher_attendance' => 'attendance',
-        'manage_attendance' => 'attendance',
-        'manage_attendance_report' => 'attendance',
-        'manage_hifz' => 'hifz',
-        'manage_hifz_daily' => 'hifz',
-        'manage_hifz_report' => 'hifz',
-        'manage_academic_dashboard' => 'hifz',
-        'manage_academic_entry' => 'hifz',
-        'manage_academic_view' => 'hifz',
-        'manage_academics' => 'hifz',
-        'manage_exams' => 'exams',
-        'manage_admissions' => 'admissions',
-        'manage_notices' => 'notices',
-        'manage_requests' => 'requests',
-        'add_complaint' => 'requests',
-        'manage_complaints' => 'requests',
-        'manage_finance' => 'simple_finance',
-        'manage_finance_entry' => 'simple_finance',
-        'manage_finance_report' => 'simple_finance',
-        'manage_financial_reports' => 'simple_finance',
-        'manage_fee_defaulters' => 'simple_finance',
-        'manage_assets' => 'assets_donations',
-        'manage_in_kind_donations' => 'assets_donations',
-        'manage_stipends' => 'payroll',
-        'manage_loans' => 'loans',
-        'manage_erp' => 'erp_accounts',
-        'manage_library' => 'library',
-        'manage_inventory' => 'inventory',
-        'manage_hostel' => 'hostel',
-        'manage_recruitment' => 'recruitment',
-        'manage_website' => 'cms',
-        'manage_saas' => 'saas',
-    ];
+if (!function_exists('has_perm')) {
+    function has_perm($perm) {
+        if (!isset($_SESSION['role'])) return false;
+        $role_lower = strtolower(trim((string)$_SESSION['role']));
+        if (in_array($role_lower, ['admin', 'superadmin', 'super_admin', 'administrator'], true)) {
+            return true;
+        }
+        
+        // Map individual permission to its parent module
+        $permToModuleMap = [
+            'manage_classes' => 'classes',
+            'manage_students' => 'students',
+            'manage_teachers' => 'teachers',
+            'manage_teacher_attendance' => 'attendance',
+            'manage_attendance' => 'attendance',
+            'manage_attendance_report' => 'attendance',
+            'manage_hifz' => 'hifz',
+            'manage_hifz_daily' => 'hifz',
+            'manage_hifz_report' => 'hifz',
+            'manage_academic_dashboard' => 'hifz',
+            'manage_academic_entry' => 'hifz',
+            'manage_academic_view' => 'hifz',
+            'manage_academics' => 'hifz',
+            'manage_exams' => 'exams',
+            'manage_admissions' => 'admissions',
+            'manage_notices' => 'notices',
+            'manage_requests' => 'requests',
+            'add_complaint' => 'requests',
+            'manage_complaints' => 'requests',
+            'manage_finance' => 'simple_finance',
+            'manage_finance_entry' => 'simple_finance',
+            'manage_finance_report' => 'simple_finance',
+            'manage_financial_reports' => 'simple_finance',
+            'manage_fee_defaulters' => 'simple_finance',
+            'manage_assets' => 'assets_donations',
+            'manage_in_kind_donations' => 'assets_donations',
+            'manage_stipends' => 'payroll',
+            'manage_loans' => 'loans',
+            'manage_erp' => 'erp_accounts',
+            'manage_library' => 'library',
+            'manage_inventory' => 'inventory',
+            'manage_hostel' => 'hostel',
+            'manage_recruitment' => 'recruitment',
+            'manage_website' => 'cms',
+            'manage_saas' => 'saas',
+        ];
 
-    if (isset($permToModuleMap[$perm]) && !is_mod_allowed($permToModuleMap[$perm])) {
-        return false;
-    }
+        if (isset($permToModuleMap[$perm]) && function_exists('is_mod_allowed') && !is_mod_allowed($permToModuleMap[$perm])) {
+            return false;
+        }
 
-    $perms = $_SESSION['permissions'] ?? [];
-    return has_permission($_SESSION['role'], $perms, $perm);
+        $perms = $_SESSION['permissions'] ?? [];
+        return has_permission($_SESSION['role'], $perms, $perm);
+    }
 }
 
 if (!function_exists('get_today_hijri_date')) {
