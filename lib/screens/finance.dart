@@ -49,14 +49,14 @@ class _FinancePageState extends State<FinancePage> {
       FROM acc_ledger_entries e
       JOIN acc_chart_of_accounts a ON e.account_id = a.id
       JOIN acc_vouchers v ON e.voucher_id = v.id
-      WHERE a.type = 'Revenue' AND v.status = 'Approved' AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+      WHERE a.type = 'Revenue' AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
     ''');
     final expQuery = await db.rawQuery('''
       SELECT SUM(e.debit - e.credit) as exp_total
       FROM acc_ledger_entries e
       JOIN acc_chart_of_accounts a ON e.account_id = a.id
       JOIN acc_vouchers v ON e.voucher_id = v.id
-      WHERE a.type = 'Expense' AND v.status = 'Approved' AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+      WHERE a.type = 'Expense' AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
     ''');
     double inc = double.tryParse(revQuery.first['rev_total']?.toString() ?? '0') ?? 0.0;
     double exp = double.tryParse(expQuery.first['exp_total']?.toString() ?? '0') ?? 0.0;

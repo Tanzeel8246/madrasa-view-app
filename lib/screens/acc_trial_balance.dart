@@ -36,7 +36,7 @@ class _AccTrialBalancePageState extends State<AccTrialBalancePage> {
       FROM acc_chart_of_accounts a
       JOIN acc_ledger_entries e ON a.id = e.account_id
       JOIN acc_vouchers v ON e.voucher_id = v.id
-      WHERE v.status = 'Approved'
+      WHERE v.status IN ('Approved', 'Reversed')
         AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
         AND (a.is_deleted = 0 OR a.is_deleted IS NULL)
         AND v.date <= ?

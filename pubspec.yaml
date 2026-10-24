@@ -1,6 +1,6 @@
 name: madrasa_app
 description: "Mindcrafts AI Madrasa Management System (SaaS)"
-version: 5.7.123+342
+version: 5.7.124+343
 
 
 environment:
