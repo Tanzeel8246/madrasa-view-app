@@ -37,7 +37,21 @@ class _ClassesPageState extends State<ClassesPage> {
 
   List<Map<String, dynamic>> _classes = [];
   List<Map<String, dynamic>> _teachers = [];
+  List<Map<String, dynamic>> _courses = [];
   bool _isLoading = true;
+
+  static const Map<int, String> _defaultYearNames = {
+    1: 'سال اول (درجہ اولیٰ)',
+    2: 'سال دوم (درجہ ثانیہ)',
+    3: 'سال سوم (درجہ ثالثہ)',
+    4: 'سال چہارم (درجہ رابعہ)',
+    5: 'سال پنجم (درجہ خامسہ)',
+    6: 'سال ششم (درجہ سادسہ)',
+    7: 'سال ہفتم (درجہ عالیہ)',
+    8: 'سال ہشتم (درجہ عالمیہ / دورۂ حدیث)',
+    9: 'سال نہم (تخصص فی الفقہ)',
+    10: 'سال دہم (تخصص فی الحدیث)',
+  };
 
   @override
   void initState() {
@@ -49,10 +63,12 @@ class _ClassesPageState extends State<ClassesPage> {
     final isMasjid = SystemTypeGlobal.currentSystemType.value == 'Masjid';
     var classes = isMasjid ? await DBHelper().getMaktabClasses() : await DBHelper().getClasses();
     var teachers = isMasjid ? await DBHelper().getMaktabTeachers() : await DBHelper().getTeachers();
+    var courses = isMasjid ? <Map<String, dynamic>>[] : await DBHelper().getCourses();
     if (!mounted) return;
     setState(() {
       _classes = classes;
       _teachers = teachers;
+      _courses = courses;
       _isLoading = false;
     });
 
@@ -61,10 +77,12 @@ class _ClassesPageState extends State<ClassesPage> {
         if (!mounted) return;
         final refreshedClasses = isMasjid ? await DBHelper().getMaktabClasses() : await DBHelper().getClasses();
         final refreshedTeachers = isMasjid ? await DBHelper().getMaktabTeachers() : await DBHelper().getTeachers();
+        final refreshedCourses = isMasjid ? <Map<String, dynamic>>[] : await DBHelper().getCourses();
         if (mounted && refreshedClasses.isNotEmpty) {
           setState(() {
             _classes = refreshedClasses;
             _teachers = refreshedTeachers;
+            _courses = refreshedCourses;
           });
         }
       }).catchError((_) {});
@@ -164,7 +182,36 @@ class _ClassesPageState extends State<ClassesPage> {
     final subjectsController =
         TextEditingController(text: klass?['subjects_list']?.toString() ?? '');
     String classType = klass?['class_type']?.toString() ?? 'Darse Nizami';
-    if (!_classTypes.contains(classType)) classType = 'Darse Nizami';
+
+    // Build dynamic class type list combining default items and active courses
+    final List<String> allClassTypes = List<String>.from(_classTypes);
+    for (final c in _courses) {
+      final cName = c['name']?.toString().trim() ?? '';
+      if (cName.isNotEmpty && !allClassTypes.contains(cName)) {
+        allClassTypes.add(cName);
+      }
+    }
+    if (!allClassTypes.contains(classType)) {
+      allClassTypes.add(classType);
+    }
+
+    // Determine initial linked course if any
+    Map<String, dynamic>? matchedCourse;
+    for (final c in _courses) {
+      if (c['name'] == classType) {
+        matchedCourse = c;
+        break;
+      }
+    }
+    if (matchedCourse == null && classType == 'Darse Nizami') {
+      matchedCourse = _courses.firstWhere(
+        (c) => (c['course_type'] ?? '') == 'Darse_Nizami',
+        orElse: () => _courses.isNotEmpty ? _courses.first : <String, dynamic>{},
+      );
+      if (matchedCourse.isEmpty) matchedCourse = null;
+    }
+
+    int? selectedYearNo;
     String status = klass?['status']?.toString() ?? 'Active';
     final selectedTeacherIds =
         _decodeTeacherIds(klass?['main_teacher_ids']).toSet();
@@ -201,6 +248,10 @@ class _ClassesPageState extends State<ClassesPage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           dialogSetState = setDialogState;
+          final isLinkedCourse = (matchedCourse != null) || (classType == 'Darse Nizami' && _courses.isNotEmpty);
+          final activeCourse = matchedCourse ?? (_courses.isNotEmpty ? _courses.first : null);
+          final totalYears = activeCourse != null ? (int.tryParse(activeCourse['total_years']?.toString() ?? '8') ?? 8) : 8;
+
           return AlertDialog(
             title: Text(klass == null
                 ? (isUrdu ? 'نئی کلاس شامل کریں' : 'Add New Class')
@@ -211,10 +262,80 @@ class _ClassesPageState extends State<ClassesPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    DropdownButtonFormField<String>(
+                      value: classType,
+                      decoration: InputDecoration(
+                        labelText: isUrdu ? 'کلاس قسم / کورس' : 'Class Type / Course',
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.school_outlined),
+                      ),
+                      items: allClassTypes
+                          .map((type) =>
+                              DropdownMenuItem(value: type, child: Text(type)))
+                          .toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          classType = value ?? classType;
+                          matchedCourse = null;
+                          for (final c in _courses) {
+                            if (c['name'] == classType) {
+                              matchedCourse = c;
+                              break;
+                            }
+                          }
+                          selectedYearNo = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    if (isLinkedCourse && activeCourse != null) ...[
+                      DropdownButtonFormField<int>(
+                        value: selectedYearNo,
+                        decoration: InputDecoration(
+                          labelText: isUrdu ? 'سال / درجہ منتخب کریں' : 'Select Year / Grade',
+                          hintText: isUrdu ? 'مطلوبہ سال / درجہ چنیں...' : 'Choose grade...',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.calendar_month_outlined),
+                        ),
+                        items: List.generate(totalYears, (index) {
+                          final yNo = index + 1;
+                          final yLabel = _defaultYearNames[yNo] ?? 'سال $yNo';
+                          return DropdownMenuItem<int>(
+                            value: yNo,
+                            child: Text(yLabel),
+                          );
+                        }),
+                        onChanged: (val) async {
+                          if (val == null) return;
+                          final yLabel = _defaultYearNames[val] ?? 'سال $val';
+                          // Fetch subjects of this course and year to auto-populate
+                          final subjects = await DBHelper().getCourseSubjects(
+                            activeCourse['id'] as int,
+                            yearNo: val,
+                          );
+                          final subjectNames = subjects
+                              .map((s) => s['subject_name']?.toString() ?? '')
+                              .where((s) => s.isNotEmpty)
+                              .toList();
+
+                          setDialogState(() {
+                            selectedYearNo = val;
+                            if (nameController.text.trim().isEmpty || klass == null) {
+                              nameController.text = yLabel;
+                            }
+                            if (subjectNames.isNotEmpty && (subjectsController.text.trim().isEmpty || klass == null)) {
+                              subjectsController.text = subjectNames.join('، ');
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     TextField(
                       controller: nameController,
                       decoration: InputDecoration(
                         labelText: isUrdu ? 'کلاس کا نام' : 'Class Name',
+                        hintText: isUrdu ? 'مثلاً سال اول (درجہ اولیٰ)' : 'e.g. Grade 1',
                         border: const OutlineInputBorder(),
                       ),
                     ),
@@ -223,23 +344,9 @@ class _ClassesPageState extends State<ClassesPage> {
                       controller: sectionController,
                       decoration: InputDecoration(
                         labelText: isUrdu ? 'سیکشن' : 'Section',
-                        hintText: isUrdu ? 'مثلاً A، B' : 'e.g. A, B',
+                        hintText: isUrdu ? 'مثلاً A، B، بنین' : 'e.g. A, B',
                         border: const OutlineInputBorder(),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      value: classType,
-                      decoration: InputDecoration(
-                        labelText: isUrdu ? 'کلاس قسم' : 'Class Type',
-                        border: const OutlineInputBorder(),
-                      ),
-                      items: _classTypes
-                          .map((type) =>
-                              DropdownMenuItem(value: type, child: Text(type)))
-                          .toList(),
-                      onChanged: (value) =>
-                          setDialogState(() => classType = value ?? classType),
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
@@ -384,6 +491,36 @@ class _ClassesPageState extends State<ClassesPage> {
                   };
 
                   if (klass == null) {
+                    final isSuper = currentUserRole.value == 'superadmin' || 
+                        (currentUserRole.value == 'admin' && currentUserId.value == 1);
+                    final maxCls = currentTenantMaxClasses.value;
+                    if (!isSuper && _classes.length >= maxCls) {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Row(
+                            children: [
+                              const Icon(Icons.lock, color: Colors.red),
+                              const SizedBox(width: 8),
+                              Text(isUrdu ? 'کلاسز کی حد مکمل' : 'Class Limit Reached'),
+                            ],
+                          ),
+                          content: Text(
+                            isUrdu
+                                ? 'آپ کے موجودہ پلان (${currentTenantPlanName.value}) میں کلاسز کی زیادہ سے زیادہ حد ($maxCls) مکمل ہو چکی ہے۔\nمزید کلاسز کے اندراج کے لیے براہ کرم اپنا سبسکرپشن پلان اپ گریڈ کریں۔'
+                                : 'You have reached the maximum class limit ($maxCls) for your plan (${currentTenantPlanName.value}). Please upgrade your plan to add more classes.',
+                          ),
+                          actions: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
+                              onPressed: () => Navigator.pop(ctx),
+                              child: Text(isUrdu ? 'سمجھ گیا' : 'OK', style: const TextStyle(color: Colors.white)),
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
                     await DBHelper().insertClass(data);
                   } else {
                     await DBHelper().updateClass(klass['id'] as int, data);

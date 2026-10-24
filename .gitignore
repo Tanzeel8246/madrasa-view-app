@@ -71,6 +71,7 @@ temp.json
 frames_list.txt
 
 # Backup & Old files
+backups/
 *.bak
 *.old
 

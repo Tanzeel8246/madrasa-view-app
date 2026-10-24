@@ -505,6 +505,36 @@ class _MaktabTeachersPageState extends State<MaktabTeachersPage>
                   final nav = Navigator.of(context);
                   final messenger = ScaffoldMessenger.of(context);
                   if (teacher == null) {
+                    final isSuper = currentUserRole.value == 'superadmin' || 
+                        (currentUserRole.value == 'admin' && currentUserId.value == 1);
+                    final maxTch = currentTenantMaxTeachers.value;
+                    if (!isSuper && _allTeachers.length >= maxTch) {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Row(
+                            children: [
+                              const Icon(Icons.lock, color: Colors.red),
+                              const SizedBox(width: 8),
+                              Text(isUrduGlobal.value ? 'اساتذہ کی حد مکمل' : 'Teacher Limit Reached'),
+                            ],
+                          ),
+                          content: Text(
+                            isUrduGlobal.value
+                                ? 'آپ کے موجودہ پلان (${currentTenantPlanName.value}) میں اساتذہ کی زیادہ سے زیادہ حد ($maxTch) مکمل ہو چکی ہے۔\nمزید اساتذہ کے اندراج کے لیے براہ کرم اپنا سبسکرپشن پلان اپ گریڈ کریں۔'
+                                : 'You have reached the maximum teacher limit ($maxTch) for your plan (${currentTenantPlanName.value}). Please upgrade your plan to add more teachers.',
+                          ),
+                          actions: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF284D3D)),
+                              onPressed: () => Navigator.pop(ctx),
+                              child: Text(isUrduGlobal.value ? 'سمجھ گیا' : 'OK', style: const TextStyle(color: Colors.white)),
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
                     await DBHelper().insertMaktabTeacher(data);
                   } else {
                     await DBHelper().updateMaktabTeacher(teacher['id'], data);

@@ -66,10 +66,15 @@ header("X-XSS-Protection: 1; mode=block");
 
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
-// سیکیورٹی کی (Security Key Configuration)
-$envSecret = trim(function_exists('get_env_val') ? get_env_val('MADRASA_API_SECRET', 'u349923428_madrasau349923428_madrasa') : (getenv('MADRASA_API_SECRET') ?: 'u349923428_madrasau349923428_madrasa'));
-if ($envSecret === '') {
-    $envSecret = 'u349923428_madrasau349923428_madrasa';
+// سیکیورٹی کی (Security Key Configuration) - No Hardcoded Fallback
+$envSecret = trim(function_exists('get_env_val') ? (string)get_env_val('MADRASA_API_SECRET', '') : (string)(getenv('MADRASA_API_SECRET') ?: ''));
+if ($envSecret === '' || strlen($envSecret) < 16) {
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Cryptographic Configuration Error: MADRASA_API_SECRET is missing or insufficiently strong in environment (.env).'
+    ]);
+    exit;
 }
 define('API_SECRET_KEY', $envSecret);
 
@@ -444,12 +449,11 @@ function authenticate() {
     // Check Authorization header
     $authHeader = $normHeaders['authorization'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
     
-    // Check X-API-KEY header / param
+    // Check X-API-KEY header only (disallow query string parameter leakage)
     $xApiKey = trim($normHeaders['x-api-key'] ?? 
                ($_SERVER['HTTP_X_API_KEY'] ?? 
                ($_SERVER['REDIRECT_HTTP_X_API_KEY'] ?? 
-               ($_SERVER['X-API-KEY'] ?? 
-               ($_REQUEST['api_key'] ?? '')))));
+               ($_SERVER['X-API-KEY'] ?? ''))));
     
     $expectedBearer = 'Bearer ' . API_SECRET_KEY;
     
@@ -576,33 +580,21 @@ function ensure_head_id(PDO $pdo, $type) {
 
 function next_user_receipt_no(PDO $pdo, $userId, $preferredNo = null, $excludeFinanceId = null, $systemType = 'Madrasa', $tenant_id = null) {
     $userId = max(1, (int)$userId);
-    if ($userId === 1) {
-        // تنزیل الرحمن (ایڈمن ID 1) کا رسید تسلسل سابقہ 300000 سیریز (300041 آگے) سے جاری رہے
-        $minNo = 300000;
-        $maxNo = 400000;
-    } elseif ($userId === 3) {
-        // قاری سلیم اللہ صاحب (ID 3) کے لیے 700000 بلاک تاکہ تنزیل کے نمبرز سے تصادم نہ ہو
-        $minNo = 700000;
-        $maxNo = 800000;
-    } else {
-        $minNo = $userId * 100000;
-        $maxNo = ($userId + 1) * 100000;
-    }
-    $preferredNo = to_int_or_null($preferredNo);
+    $tId = $tenant_id !== null ? (int)$tenant_id : (function_exists('get_current_tenant_id') ? (int)get_current_tenant_id() : 1);
     $sysCond = ($systemType === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
-    $tCond = $tenant_id ? "AND (tenant_id = " . (int)$tenant_id . " OR tenant_id IS NULL OR tenant_id = 0)" : "";
+    $tCond = ($tId === 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $tId";
 
-    // Always find current highest active receipt number
-    $stmt = $pdo->prepare("SELECT MAX(computer_receipt_no) FROM finance WHERE computer_receipt_no > ? AND computer_receipt_no < ? AND $sysCond $tCond AND (is_deleted = 0 OR is_deleted IS NULL)");
-    $stmt->execute([$minNo, $maxNo]);
+    // 1. Query highest existing active computer_receipt_no for this tenant & system
+    $stmt = $pdo->prepare("SELECT MAX(computer_receipt_no) FROM finance WHERE $tCond AND $sysCond AND (is_deleted = 0 OR is_deleted IS NULL)");
+    $stmt->execute();
     $currentMax = (int)$stmt->fetchColumn();
 
     if ($systemType === 'Masjid') {
         try {
             $hasMasjidFinTable = !empty($pdo->query("SHOW TABLES LIKE 'masjid_finance'")->fetchAll());
             if ($hasMasjidFinTable) {
-                $mStmt = $pdo->prepare("SELECT MAX(computer_receipt_no) FROM masjid_finance WHERE computer_receipt_no > ? AND computer_receipt_no < ? $tCond AND (is_deleted = 0 OR is_deleted IS NULL)");
-                $mStmt->execute([$minNo, $maxNo]);
+                $mStmt = $pdo->prepare("SELECT MAX(computer_receipt_no) FROM masjid_finance WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)");
+                $mStmt->execute();
                 $mMax = (int)$mStmt->fetchColumn();
                 if ($mMax > $currentMax) {
                     $currentMax = $mMax;
@@ -611,11 +603,14 @@ function next_user_receipt_no(PDO $pdo, $userId, $preferredNo = null, $excludeFi
         } catch (Exception $e) {}
     }
 
-    $expectedNext = ($currentMax > $minNo) ? ($currentMax + 1) : ($minNo + 1);
+    $baseStart = ($currentMax > 0) ? $currentMax : 1000;
+    $expectedNext = ($currentMax > 0) ? ($currentMax + 1) : 1001;
 
-    // If a preferred number is requested by mobile app, only accept it if it does not conflict AND is not jumping ahead of expected next
-    if ($preferredNo !== null && $preferredNo > $minNo && $preferredNo < $maxNo && $preferredNo <= $expectedNext) {
-        $sql = "SELECT id FROM finance WHERE computer_receipt_no = ? AND $sysCond $tCond AND (is_deleted = 0 OR is_deleted IS NULL)";
+    $preferredNo = to_int_or_null($preferredNo);
+
+    // 2. If client supplied a valid preferred number, ensure it does not collide within this tenant
+    if ($preferredNo !== null && $preferredNo > 0) {
+        $sql = "SELECT id FROM finance WHERE computer_receipt_no = ? AND $sysCond AND $tCond AND (is_deleted = 0 OR is_deleted IS NULL)";
         $args = [$preferredNo];
         if ($excludeFinanceId) {
             $sql .= " AND id <> ?";
@@ -624,14 +619,26 @@ function next_user_receipt_no(PDO $pdo, $userId, $preferredNo = null, $excludeFi
         $sql .= " LIMIT 1";
         $checkStmt = $pdo->prepare($sql);
         $checkStmt->execute($args);
-        if (!$checkStmt->fetchColumn()) return $preferredNo;
+        $exists = $checkStmt->fetchColumn();
+
+        if (!$exists && $systemType === 'Masjid') {
+            try {
+                $hasMasjidFinTable = !empty($pdo->query("SHOW TABLES LIKE 'masjid_finance'")->fetchAll());
+                if ($hasMasjidFinTable) {
+                    $mCheck = $pdo->prepare("SELECT id FROM masjid_finance WHERE computer_receipt_no = ? AND $tCond AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+                    $mCheck->execute([$preferredNo]);
+                    $exists = $mCheck->fetchColumn();
+                }
+            } catch (Exception $e) {}
+        }
+
+        if (!$exists) {
+            return $preferredNo;
+        }
     }
 
-    $nextNo = $expectedNext;
-    if ($nextNo >= $maxNo) {
-        throw new Exception("Receipt number quota exhausted for user " . $userId);
-    }
-    return $nextNo;
+    // 3. Fallback to monotonic sequence
+    return $expectedNext;
 }
 
 function ai_provider_key_list($value) {
@@ -1137,7 +1144,7 @@ try {
         $input = json_decode(file_get_contents("php://input"), true) ?: $_POST;
         
         $uploadDir = __DIR__ . '/uploads/branding/';
-        if (!is_dir($uploadDir)) @mkdir($uploadDir, 0777, true);
+        if (!is_dir($uploadDir)) @mkdir($uploadDir, 0755, true);
 
         // 1. Handle base64 images from Mobile
         $base64Map = [
@@ -1162,7 +1169,7 @@ try {
             }
         }
 
-        // 2. Handle multipart $_FILES from Web / Mobile Form
+        // 2. Handle multipart $_FILES from Web / Mobile Form (Strict image extensions only, NO SVG)
         $fileMap = [
             'logo_file' => 'logo_path',
             'signature_stamp_file' => 'signature_stamp_path',
@@ -1175,7 +1182,7 @@ try {
         foreach ($fileMap as $fKey => $targetCol) {
             if (isset($_FILES[$fKey]) && $_FILES[$fKey]['error'] === UPLOAD_ERR_OK) {
                 $ext = strtolower(pathinfo($_FILES[$fKey]['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['png', 'jpg', 'jpeg', 'webp', 'svg'])) {
+                if (in_array($ext, ['png', 'jpg', 'jpeg', 'webp'], true)) {
                     $fn = $targetCol . '_' . $tenantId . '_' . time() . '.' . $ext;
                     if (move_uploaded_file($_FILES[$fKey]['tmp_name'], $uploadDir . $fn)) {
                         $input[$targetCol] = 'uploads/branding/' . $fn;

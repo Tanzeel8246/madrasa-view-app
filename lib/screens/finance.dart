@@ -41,25 +41,25 @@ class _FinancePageState extends State<FinancePage> {
   }
 
   Future<void> _loadData() async {
-    final db = DBHelper();
-    await db.ensureSimpleFinanceAccountingBackfill();
-    final records = await db.getFinance(
-        userRole: 'admin'); // Assuming admin can see all for ERP dashboard
-
-    double inc = 0;
-    double exp = 0;
-
-    for (var r in records) {
-      if (r['is_deleted'] == 1) continue;
-      final type = r['type']?.toString().toLowerCase() ?? '';
-      final amount = double.tryParse(r['amount']?.toString() ?? '0') ?? 0;
-      if (type == 'income') {
-        inc += amount;
-      } else if (type == 'expense') {
-        exp += amount;
-      }
-    }
-
+    final dbHelper = DBHelper();
+    await dbHelper.ensureSimpleFinanceAccountingBackfill();
+    final db = await dbHelper.database;
+    final revQuery = await db.rawQuery('''
+      SELECT SUM(e.credit - e.debit) as rev_total
+      FROM acc_ledger_entries e
+      JOIN acc_chart_of_accounts a ON e.account_id = a.id
+      JOIN acc_vouchers v ON e.voucher_id = v.id
+      WHERE a.type = 'Revenue' AND v.status = 'Approved' AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+    ''');
+    final expQuery = await db.rawQuery('''
+      SELECT SUM(e.debit - e.credit) as exp_total
+      FROM acc_ledger_entries e
+      JOIN acc_chart_of_accounts a ON e.account_id = a.id
+      JOIN acc_vouchers v ON e.voucher_id = v.id
+      WHERE a.type = 'Expense' AND v.status = 'Approved' AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+    ''');
+    double inc = double.tryParse(revQuery.first['rev_total']?.toString() ?? '0') ?? 0.0;
+    double exp = double.tryParse(expQuery.first['exp_total']?.toString() ?? '0') ?? 0.0;
     setState(() {
       totalRevenue = inc;
       totalExpenses = exp;

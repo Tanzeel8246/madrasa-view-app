@@ -31,6 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $city = trim($_POST['city'] ?? '');
+        $system_type = trim($_POST['system_type'] ?? 'Madrasa');
+        if (!in_array($system_type, ['Madrasa', 'Masjid', 'Both'])) {
+            $system_type = 'Madrasa';
+        }
         $plan_id = (int)($_POST['plan_id'] ?? 1);
         $duration_months = (int)($_POST['duration_months'] ?? 1);
         $admin_username = trim($_POST['admin_username'] ?? '');
@@ -47,23 +51,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $pdo->beginTransaction();
 
-                    $selected_modules = isset($_POST['modules']) && is_array($_POST['modules']) 
-                        ? json_encode(array_values($_POST['modules'])) 
-                        : json_encode(get_default_module_keys());
+                    $allMods = function_exists('get_default_module_keys') ? get_default_module_keys() : [];
+                    $rawMods = isset($_POST['modules']) && is_array($_POST['modules']) ? array_values($_POST['modules']) : $allMods;
+                    if ($system_type === 'Madrasa') {
+                        $rawMods = array_values(array_diff($rawMods, ['masjid_wing']));
+                    } elseif ($system_type === 'Masjid') {
+                        $rawMods = array_values(array_diff($rawMods, ['darse_nizami_academics', 'hostel', 'admissions', 'recruitment', 'library']));
+                        if (!in_array('masjid_wing', $rawMods)) {
+                            $rawMods[] = 'masjid_wing';
+                        }
+                    }
+                    $selected_modules = json_encode($rawMods);
 
                     try {
-                        $stmt = $pdo->prepare("INSERT INTO tenants (name, code, contact_person, email, phone, city, status, allowed_modules, created_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, NOW())");
-                        $stmt->execute([$name, $code, $contact_person, $email, $phone, $city, $selected_modules]);
+                        $stmt = $pdo->prepare("INSERT INTO tenants (name, code, contact_person, email, phone, city, system_type, status, allowed_modules, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, NOW())");
+                        $stmt->execute([$name, $code, $contact_person, $email, $phone, $city, $system_type, $selected_modules]);
                     } catch (Throwable $eIns) {
                         $pdo->exec("ALTER TABLE `tenants` ADD COLUMN `allowed_modules` TEXT DEFAULT NULL");
-                        $stmt = $pdo->prepare("INSERT INTO tenants (name, code, contact_person, email, phone, city, status, allowed_modules, created_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, NOW())");
-                        $stmt->execute([$name, $code, $contact_person, $email, $phone, $city, $selected_modules]);
+                        $pdo->exec("ALTER TABLE `tenants` ADD COLUMN `system_type` VARCHAR(50) DEFAULT 'Madrasa'");
+                        $stmt = $pdo->prepare("INSERT INTO tenants (name, code, contact_person, email, phone, city, system_type, status, allowed_modules, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, NOW())");
+                        $stmt->execute([$name, $code, $contact_person, $email, $phone, $city, $system_type, $selected_modules]);
                     }
                     $newTenantId = (int)$pdo->lastInsertId();
 
+                    $adminSysType = ($system_type === 'Masjid') ? 'Masjid' : 'Madrasa';
                     $hash = password_hash($admin_password, PASSWORD_DEFAULT);
-                    $admStmt = $pdo->prepare("INSERT INTO admins (tenant_id, name, username, password, role, system_type, created_at) VALUES (?, ?, ?, ?, 'admin', 'Madrasa', NOW())");
-                    $admStmt->execute([$newTenantId, $contact_person ?: $name, $admin_username, $hash]);
+                    $admStmt = $pdo->prepare("INSERT INTO admins (tenant_id, name, username, password, role, system_type, created_at) VALUES (?, ?, ?, ?, 'admin', ?, NOW())");
+                    $admStmt->execute([$newTenantId, $contact_person ?: $name, $admin_username, $hash, $adminSysType]);
 
                     $startDate = date('Y-m-d');
                     $endDate = date('Y-m-d', strtotime("+{$duration_months} months"));
@@ -74,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $setStmt->execute([$newTenantId, $name, $phone, $city]);
 
                     $logStmt = $pdo->prepare("INSERT INTO tenant_activity_log (tenant_id, user_id, action, details, ip_address, created_at) VALUES (?, ?, 'tenant_created', ?, ?, NOW())");
-                    $logStmt->execute([$newTenantId, $_SESSION['super_admin_id'] ?? 1, "نیا ادارہ {$name} ({$code}) بنایا گیا مع مخصوص ماڈیولز", $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1']);
+                    $logStmt->execute([$newTenantId, $_SESSION['super_admin_id'] ?? 1, "نیا ادارہ {$name} ({$code}) بنایا گیا مع سسٹم ٹائپ {$system_type}", $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1']);
 
                     $pdo->commit();
                     $msg = "نیا ادارہ '{$name}' باکامیاب شامل کر دیا گیا ہے! کوڈ: {$code}";
@@ -119,22 +133,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $plan_id = (int)($_POST['plan_id'] ?? 1);
         $months = (int)($_POST['months'] ?? 1);
         try {
-            $curSub = $pdo->prepare("SELECT ends_at FROM subscriptions WHERE tenant_id = ? ORDER BY id DESC LIMIT 1");
+            $curSub = $pdo->prepare("SELECT id, ends_at FROM subscriptions WHERE tenant_id = ? ORDER BY id DESC LIMIT 1");
             $curSub->execute([$tenant_id]);
-            $lastEnd = $curSub->fetchColumn();
+            $lastSubRow = $curSub->fetch(PDO::FETCH_ASSOC);
+            $lastEnd = $lastSubRow ? $lastSubRow['ends_at'] : null;
 
             $baseDate = ($lastEnd && strtotime($lastEnd) > time()) ? $lastEnd : date('Y-m-d');
             $newEnd = date('Y-m-d', strtotime("{$baseDate} +{$months} months"));
 
-            $upSub = $pdo->prepare("INSERT INTO subscriptions (tenant_id, plan_id, status, starts_at, ends_at, created_at) 
-                                    VALUES (?, ?, 'active', CURDATE(), ?, NOW()) 
-                                    ON DUPLICATE KEY UPDATE plan_id = VALUES(plan_id), status = 'active', ends_at = VALUES(ends_at)");
-            $upSub->execute([$tenant_id, $plan_id, $newEnd]);
+            if ($lastSubRow && !empty($lastSubRow['id'])) {
+                $upSub = $pdo->prepare("UPDATE subscriptions SET plan_id = ?, status = 'active', ends_at = ? WHERE id = ?");
+                $upSub->execute([$plan_id, $newEnd, $lastSubRow['id']]);
+            } else {
+                $upSub = $pdo->prepare("INSERT INTO subscriptions (tenant_id, plan_id, status, starts_at, ends_at, created_at) VALUES (?, ?, 'active', CURDATE(), ?, NOW())");
+                $upSub->execute([$tenant_id, $plan_id, $newEnd]);
+            }
 
             $pdo->prepare("UPDATE tenants SET status = 'active' WHERE id = ?")->execute([$tenant_id]);
 
             $logStmt = $pdo->prepare("INSERT INTO tenant_activity_log (tenant_id, user_id, action, details, ip_address, created_at) VALUES (?, ?, 'subscription_extended', ?, ?, NOW())");
-            $logStmt->execute([$tenant_id, $_SESSION['super_admin_id'] ?? 1, "سبسکرپشن {$newEnd} تک بڑھائی گئی", $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1']);
+            $logStmt->execute([$tenant_id, $_SESSION['super_admin_id'] ?? 1, "سبسکرپشن پلان ID {$plan_id} کے ساتھ {$newEnd} تک بڑھائی گئی", $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1']);
 
             $msg = "سبسکرپشن کامیابی سے {$newEnd} تک بڑھا دی گئی ہے۔";
         } catch (Throwable $e) {
@@ -175,6 +193,126 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "خرابی: " . $e->getMessage();
         }
     }
+
+    // 6. ایڈمن کے یوزرنیم و پاسورڈ تبدیل کرنا (Update Admin Credentials)
+    if ($action === 'update_admin_credentials') {
+        $tenant_id = (int)($_POST['tenant_id'] ?? 0);
+        $admin_username = trim($_POST['admin_username'] ?? '');
+        $admin_password = $_POST['admin_password'] ?? '';
+        $admin_name = trim($_POST['admin_name'] ?? '');
+
+        if ($tenant_id <= 0 || empty($admin_username)) {
+            $error = "ادارے کا انتخاب اور ایڈمن یوزرنیم درج کرنا لازمی ہے۔";
+        } else {
+            try {
+                // Check if username is already taken by another tenant admin
+                $chkUser = $pdo->prepare("SELECT id FROM admins WHERE username = ? AND tenant_id != ? LIMIT 1");
+                $chkUser->execute([$admin_username, $tenant_id]);
+                if ($chkUser->fetch()) {
+                    $error = "یہ یوزرنیم ({$admin_username}) پہلے سے کسی دوسرے ادارے یا صارف کے لیے زیرِ استعمال ہے۔";
+                } else {
+                    // Check super_admins table as well
+                    $chkSa = $pdo->prepare("SELECT id FROM super_admins WHERE username = ? LIMIT 1");
+                    $chkSa->execute([$admin_username]);
+                    if ($chkSa->fetch()) {
+                        $error = "یہ یوزرنیم سوپر ایڈمن کے لیے مخصوص ہے۔ براہ کرم کوئی دوسرا یوزرنیم منتخب کریں۔";
+                    } else {
+                        // Find existing admin for this tenant
+                        $admStmt = $pdo->prepare("SELECT id, name FROM admins WHERE tenant_id = ? ORDER BY id ASC LIMIT 1");
+                        $admStmt->execute([$tenant_id]);
+                        $existingAdmin = $admStmt->fetch(PDO::FETCH_ASSOC);
+
+                        if ($existingAdmin) {
+                            $aId = (int)$existingAdmin['id'];
+                            $targetName = !empty($admin_name) ? $admin_name : $existingAdmin['name'];
+                            if (!empty($admin_password)) {
+                                $hash = password_hash($admin_password, PASSWORD_DEFAULT);
+                                $up = $pdo->prepare("UPDATE admins SET name = ?, username = ?, password = ? WHERE id = ? AND tenant_id = ?");
+                                $up->execute([$targetName, $admin_username, $hash, $aId, $tenant_id]);
+                            } else {
+                                $up = $pdo->prepare("UPDATE admins SET name = ?, username = ? WHERE id = ? AND tenant_id = ?");
+                                $up->execute([$targetName, $admin_username, $aId, $tenant_id]);
+                            }
+                        } else {
+                            // Provision new admin if none exists
+                            $passToUse = !empty($admin_password) ? $admin_password : 'admin123';
+                            $hash = password_hash($passToUse, PASSWORD_DEFAULT);
+                            $ins = $pdo->prepare("INSERT INTO admins (tenant_id, name, username, password, role, system_type, created_at) VALUES (?, ?, ?, ?, 'admin', 'Madrasa', NOW())");
+                            $ins->execute([$tenant_id, $admin_name ?: 'ایڈمنسٹریٹر', $admin_username, $hash]);
+                        }
+
+                        $logStmt = $pdo->prepare("INSERT INTO tenant_activity_log (tenant_id, user_id, action, details, ip_address, created_at) VALUES (?, ?, 'credentials_updated', ?, ?, NOW())");
+                        $logStmt->execute([$tenant_id, $_SESSION['super_admin_id'] ?? 1, "ایڈمن یوزرنیم ({$admin_username}) اور کوائف تبدیل کیے گئے", $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1']);
+
+                        $msg = "ادارے کے ایڈمن کے یوزرنیم و لاگ ان کوائف کامیابی سے اپڈیٹ کر دیے گئے!";
+                    }
+                }
+            } catch (Throwable $e) {
+                $error = "خرابی: " . $e->getMessage();
+            }
+        }
+    }
+
+    // 7. ادارہ اور تمام متعلقہ ڈیٹا مستقل ڈیلیٹ کرنا (Hard Delete Tenant)
+    if ($action === 'delete_tenant') {
+        $tenant_id = (int)($_POST['tenant_id'] ?? 0);
+        if ($tenant_id <= 1) {
+            $error = "مرکزی سسٹم یا ابتدائی ڈیفالٹ ادارے (MAIN01) کو ڈیلیٹ کرنے کی اجازت نہیں ہے۔";
+        } else {
+            try {
+                // Get tenant info for logging
+                $tInfoStmt = $pdo->prepare("SELECT name, code FROM tenants WHERE id = ? LIMIT 1");
+                $tInfoStmt->execute([$tenant_id]);
+                $tInfo = $tInfoStmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$tInfo) {
+                    $error = "ادارہ موجود نہیں ہے یا پہلے ہی حذف ہو چکا ہے۔";
+                } else {
+                    $tName = $tInfo['name'];
+                    $tCode = $tInfo['code'];
+
+                    $pdo->beginTransaction();
+
+                    // Complete cascade cleanup of all tenant-scoped tables
+                    $tenantTables = [
+                        'admins', 'students', 'teachers', 'classes', 'class_periods', 'attendance', 'period_attendance',
+                        'attendance_teachers', 'teacher_period_attendance', 'teacher_leaves', 'daily_hifz', 'daily_nazira',
+                        'qaida_records', 'academic_reports', 'exams', 'exam_results',
+                        'parent_complaints', 'complaints', 'fee_submissions', 'admission_applications', 'admission_inquiries',
+                        'notices', 'activity_logs', 'leave_applications', 'heads', 'finance', 'masjid_finance',
+                        'staff_loans', 'loan_transactions', 'staff_salaries', 'staff_stipends', 'assets',
+                        'in_kind_donations', 'inventory_items', 'inventory_sales', 'hostel_rooms',
+                        'hostel_allocations', 'lib_books', 'lib_issues', 'web_pages', 'announcements',
+                        'job_postings', 'job_applicants', 'settings', 'smart_notification_reads',
+                        'acc_chart_of_accounts', 'acc_vouchers', 'acc_ledger_entries', 'acc_invoices',
+                        'acc_payroll', 'acc_departments', 'maktab_classes', 'maktab_teachers',
+                        'course_structure', 'course_subjects', 'student_course_enrollment', 'exam_subject_results', 'student_year_promotion',
+                        'subscriptions', 'payments', 'tenant_activity_log'
+                    ];
+
+                    foreach ($tenantTables as $tbl) {
+                        try {
+                            $delStmt = $pdo->prepare("DELETE FROM `$tbl` WHERE tenant_id = ?");
+                            $delStmt->execute([$tenant_id]);
+                        } catch (Throwable $eTbl) {
+                            // Skip if table does not exist
+                        }
+                    }
+
+                    // Delete from tenants table itself
+                    $delTenant = $pdo->prepare("DELETE FROM tenants WHERE id = ?");
+                    $delTenant->execute([$tenant_id]);
+
+                    $pdo->commit();
+
+                    $msg = "ادارہ '{$tName}' ({$tCode}) مع تمام متعلقہ طلبہ، اساتذہ، فنانس، ریکارڈز اور ایڈمن اکاؤنٹس مکمل طور پر ڈیلیٹ کر دیا گیا!";
+                }
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                $error = "ڈیلیٹ کرنے میں خرابی: " . $e->getMessage();
+            }
+        }
+    }
 }
 
 // Fetch all plans
@@ -188,6 +326,8 @@ $allow_public_reg = (int)get_saas_setting($pdo, 'allow_public_registration', 1);
 
 // Search & Filter Tenants
 $search = trim($_GET['search'] ?? '');
+$cleanSearch = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{061C}\x{FEFF}\x{00A0}]/u', '', $search);
+$alnumSearch = preg_replace('/[^a-zA-Z0-9]/', '', $cleanSearch);
 $statusFilter = $_GET['status'] ?? '';
 
 $sql = "SELECT t.*, 
@@ -195,16 +335,26 @@ $sql = "SELECT t.*,
                s.ends_at as subscription_ends,
                s.status as subscription_status,
                (SELECT COUNT(*) FROM students st WHERE st.tenant_id = t.id AND (st.is_deleted = 0 OR st.is_deleted IS NULL)) as student_count,
-               (SELECT COUNT(*) FROM teachers tc WHERE tc.tenant_id = t.id AND (tc.is_deleted = 0 OR tc.is_deleted IS NULL)) as teacher_count
+               (SELECT COUNT(*) FROM teachers tc WHERE tc.tenant_id = t.id AND (tc.is_deleted = 0 OR tc.is_deleted IS NULL)) as teacher_count,
+               (SELECT a.username FROM admins a WHERE a.tenant_id = t.id ORDER BY a.id ASC LIMIT 1) as admin_username,
+               (SELECT a.name FROM admins a WHERE a.tenant_id = t.id ORDER BY a.id ASC LIMIT 1) as admin_name
         FROM tenants t
         LEFT JOIN subscriptions s ON t.id = s.tenant_id AND s.id = (SELECT MAX(id) FROM subscriptions WHERE tenant_id = t.id)
         LEFT JOIN subscription_plans p ON s.plan_id = p.id
         WHERE 1=1";
 
 $params = [];
-if (!empty($search)) {
-    $sql .= " AND (t.name LIKE ? OR t.code LIKE ? OR t.contact_person LIKE ? OR t.phone LIKE ?)";
-    $params = array_merge($params, ["%{$search}%", "%{$search}%", "%{$search}%", "%{$search}%"]);
+if (!empty($cleanSearch)) {
+    $searchPattern = "%{$cleanSearch}%";
+    $alnumPattern = !empty($alnumSearch) ? "%{$alnumSearch}%" : $searchPattern;
+    $sql .= " AND (
+        t.name LIKE ? OR 
+        t.code LIKE ? OR 
+        t.contact_person LIKE ? OR 
+        t.phone LIKE ? OR
+        REPLACE(REPLACE(REPLACE(t.code, '-', ''), ' ', ''), '_', '') LIKE ?
+    )";
+    $params = array_merge($params, [$searchPattern, $searchPattern, $searchPattern, $searchPattern, $alnumPattern]);
 }
 if (!empty($statusFilter)) {
     $sql .= " AND t.status = ?";
@@ -350,15 +500,45 @@ try {
                             ?>
                         </td>
                         <td>
-                            <?php if ($t['status'] === 'active'): ?>
-                                <span class="badge bg-success px-3 py-1">فعال (Active)</span>
-                            <?php elseif ($t['status'] === 'trial'): ?>
-                                <span class="badge bg-warning text-dark px-3 py-1">ٹرائل (Trial)</span>
-                            <?php elseif ($t['status'] === 'suspended'): ?>
-                                <span class="badge bg-danger px-3 py-1">معطل (Suspended)</span>
-                            <?php else: ?>
-                                <span class="badge bg-secondary px-3 py-1"><?php echo htmlspecialchars($t['status']); ?></span>
-                            <?php endif; ?>
+                            <div class="dropdown d-inline-block">
+                                <button class="btn btn-sm dropdown-toggle rounded-pill px-3 py-1 fw-bold shadow-sm <?php echo $t['status'] === 'active' ? 'btn-success' : ($t['status'] === 'trial' ? 'btn-warning text-dark' : 'btn-danger'); ?>" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="اسٹیٹس تبدیل کرنے کے لیے کلک کریں">
+                                    <i class="fas <?php echo $t['status'] === 'active' ? 'fa-check-circle' : ($t['status'] === 'trial' ? 'fa-clock' : 'fa-ban'); ?> me-1"></i>
+                                    <?php echo $t['status'] === 'active' ? 'فعال (Active)' : ($t['status'] === 'trial' ? 'ٹرائل (Trial)' : 'معطل (Suspended)'); ?>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow border">
+                                    <li><h6 class="dropdown-header text-muted small">نیا اسٹیٹس منتخب کریں:</h6></li>
+                                    <li>
+                                        <form method="POST" class="m-0 p-0">
+                                            <input type="hidden" name="action" value="update_status">
+                                            <input type="hidden" name="tenant_id" value="<?php echo $t['id']; ?>">
+                                            <input type="hidden" name="status" value="active">
+                                            <button type="submit" class="dropdown-item py-2 text-success <?php echo $t['status'] === 'active' ? 'fw-bold active' : ''; ?>">
+                                                <i class="fas fa-check-circle me-2"></i> فعال کریں (Active)
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form method="POST" class="m-0 p-0">
+                                            <input type="hidden" name="action" value="update_status">
+                                            <input type="hidden" name="tenant_id" value="<?php echo $t['id']; ?>">
+                                            <input type="hidden" name="status" value="trial">
+                                            <button type="submit" class="dropdown-item py-2 text-warning <?php echo $t['status'] === 'trial' ? 'fw-bold active' : ''; ?>">
+                                                <i class="fas fa-clock me-2"></i> ٹرائل موڈ (Trial)
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form method="POST" class="m-0 p-0">
+                                            <input type="hidden" name="action" value="update_status">
+                                            <input type="hidden" name="tenant_id" value="<?php echo $t['id']; ?>">
+                                            <input type="hidden" name="status" value="suspended">
+                                            <button type="submit" class="dropdown-item py-2 text-danger <?php echo $t['status'] === 'suspended' ? 'fw-bold active' : ''; ?>">
+                                                <i class="fas fa-ban me-2"></i> معطل کریں (Suspend)
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
                         </td>
                         <td class="text-center">
                             <div class="d-flex justify-content-center gap-1">
@@ -383,6 +563,11 @@ try {
                                             </a>
                                         </li>
                                         <li>
+                                            <a class="dropdown-item py-2" href="javascript:void(0)" onclick="openCredentialsModal(<?php echo $t['id']; ?>, '<?php echo htmlspecialchars(addslashes($t['name'])); ?>', '<?php echo htmlspecialchars(addslashes($t['admin_username'] ?? '')); ?>', '<?php echo htmlspecialchars(addslashes($t['admin_name'] ?? '')); ?>')">
+                                                <i class="fas fa-key me-2 text-info"></i> یوزرنیم و پاسورڈ تبدیل کریں
+                                            </a>
+                                        </li>
+                                        <li>
                                             <a class="dropdown-item py-2" href="payments.php?search=<?php echo urlencode($t['code']); ?>">
                                                 <i class="fas fa-receipt me-2 text-success"></i> ادائیگیاں دیکھیں
                                             </a>
@@ -401,6 +586,14 @@ try {
                                                 <?php endif; ?>
                                             </form>
                                         </li>
+                                        <?php if ($t['id'] != 1 && strtoupper((string)$t['code']) !== 'MAIN01'): ?>
+                                            <li><hr class="dropdown-divider my-1"></li>
+                                            <li>
+                                                <a class="dropdown-item py-2 text-danger fw-bold" href="javascript:void(0)" onclick="openDeleteTenantModal(<?php echo $t['id']; ?>, '<?php echo htmlspecialchars(addslashes($t['name'])); ?>', '<?php echo htmlspecialchars(addslashes($t['code'])); ?>')">
+                                                    <i class="fas fa-trash-alt me-2"></i> ادارہ مکمل ڈیلیٹ کریں
+                                                </a>
+                                            </li>
+                                        <?php endif; ?>
                                     </ul>
                                 </div>
                             </div>
@@ -463,7 +656,17 @@ try {
                         </div>
 
                         <div class="col-12"><hr style="border-color: var(--sa-border);"></div>
-                        <h6 class="fw-bold text-primary mb-1">سبسکرپشن پلان</h6>
+                        <h6 class="fw-bold text-primary mb-1">نوعیتِ ادارہ و سبسکرپشن پلان</h6>
+
+                        <div class="col-12">
+                            <label class="form-label stat-label">نوعیتِ ادارہ (System Type) *</label>
+                            <select name="system_type" class="form-select fw-bold">
+                                <option value="Madrasa" selected>مدرسہ نظام (Madrasa Only — مسجد و مکتب فیچرز مکمل لاکڈ)</option>
+                                <option value="Masjid">مسجد و مکتب نظام (Masjid/Maktab Only — مدرسہ فیچرز مکمل لاکڈ)</option>
+                                <option value="Both">مشترکہ نظام (Both — مدرسہ + مسجد و مکتب دونوں فعال)</option>
+                            </select>
+                            <small style="color: var(--sa-text-muted);">جس نوعیت کا انتخاب کریں گے، کلائنٹ پینل میں صرف اسی کے فیچرز فعال ہوں گے اور دوسرا حصہ مکمل لاک رہے گا۔</small>
+                        </div>
 
                         <div class="col-md-6">
                             <label class="form-label stat-label">پیکج منتخب کریں *</label>
@@ -627,6 +830,110 @@ try {
     </div>
 </div>
 
+<!-- Modal: Edit Tenant Admin Credentials -->
+<div class="modal fade" id="editCredentialsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="action" value="update_admin_credentials">
+                <input type="hidden" name="tenant_id" id="credTenantId">
+                <div class="modal-header" style="border-color: var(--sa-border);">
+                    <h5 class="modal-title fw-bold" style="color: var(--sa-text-main);">
+                        <i class="fas fa-key me-2 text-info"></i> ایڈمن یوزرنیم و پاسورڈ تبدیل کریں
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 p-3 rounded" style="background: var(--sa-input-bg); border: 1px solid var(--sa-border);">
+                        <span style="color: var(--sa-text-muted);">ادارہ:</span>
+                        <strong id="credTenantName" class="text-primary fs-6 ms-1"></strong>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label stat-label">ایڈمن کا نام (Admin Full Name)</label>
+                        <input type="text" name="admin_name" id="credAdminName" class="form-control" placeholder="مثال: مولانا عبداللہ">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label stat-label">لاگ ان یوزرنیم (Username) *</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0" style="color: var(--sa-text-muted);"><i class="fas fa-user"></i></span>
+                            <input type="text" name="admin_username" id="credAdminUsername" class="form-control font-monospace border-start-0" required placeholder="admin_code">
+                        </div>
+                        <small style="color: var(--sa-text-muted);">یہ یوزرنیم تمام اداروں میں منفرد ہونا ضروری ہے</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label stat-label">نیا پاسورڈ (New Password)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0" style="color: var(--sa-text-muted);"><i class="fas fa-lock"></i></span>
+                            <input type="password" name="admin_password" id="credAdminPassword" class="form-control font-monospace border-start-0 border-end-0" placeholder="نیا پاسورڈ درج کریں">
+                            <button class="btn btn-outline-secondary border-start-0" type="button" onclick="togglePasswordVisibility('credAdminPassword', 'credEyeIcon')">
+                                <i class="fas fa-eye" id="credEyeIcon"></i>
+                            </button>
+                        </div>
+                        <small class="text-warning">اگر موجودہ پرانا پاسورڈ برقرار رکھنا ہے تو اسے خالی چھوڑ دیں</small>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-color: var(--sa-border);">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">منسوخ</button>
+                    <button type="submit" class="btn btn-info px-4 fw-bold text-white">
+                        <i class="fas fa-check-circle me-1"></i> کوائف محفوظ کریں
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Delete Tenant Confirmation -->
+<div class="modal fade" id="deleteTenantModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-danger">
+            <form method="POST">
+                <input type="hidden" name="action" value="delete_tenant">
+                <input type="hidden" name="tenant_id" id="delTenantId">
+                <div class="modal-header bg-danger bg-opacity-10 border-danger">
+                    <h5 class="modal-title fw-bold text-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i> ادارہ ڈیلیٹ کرنے کی حتمی تصدیق
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center my-3">
+                        <div class="rounded-circle bg-danger bg-opacity-20 d-inline-flex p-3 mb-3 text-danger">
+                            <i class="fas fa-trash-alt fa-3x"></i>
+                        </div>
+                        <h5 class="fw-bold" style="color: var(--sa-text-main);">کیا آپ واقعی اس ادارے کو مکمل ڈیلیٹ کرنا چاہتے ہیں؟</h5>
+                    </div>
+
+                    <div class="p-3 rounded mb-3" style="background: var(--sa-input-bg); border: 1px solid var(--sa-border);">
+                        <div class="mb-1">
+                            <span style="color: var(--sa-text-muted);">ادارے کا نام:</span>
+                            <strong id="delTenantName" class="text-white fs-6 ms-1"></strong>
+                        </div>
+                        <div>
+                            <span style="color: var(--sa-text-muted);">ادارہ کوڈ:</span>
+                            <strong id="delTenantCode" class="text-danger font-monospace fs-6 ms-1"></strong>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-danger border-0 d-flex align-items-center gap-2 mb-0 py-2">
+                        <i class="fas fa-shield-virus fa-lg text-danger"></i>
+                        <small class="mb-0"><strong>تنبیہ:</strong> اس ادارے کا تمام ڈیٹا (طلبہ، اساتذہ، حاضری، فنانس، فیسیں، کلاسز اور ایڈمن اکاؤنٹس) مستقل طور پر صاف ہو جائے گا۔ یہ عمل ناقابلِ واپسی ہے!</small>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-color: var(--sa-border);">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">منسوخ</button>
+                    <button type="submit" class="btn btn-danger px-4 fw-bold">
+                        <i class="fas fa-trash me-1"></i> جی ہاں، مکمل ڈیلیٹ کریں
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function openExtendModal(tenantId, tenantName) {
     document.getElementById('extendTenantId').value = tenantId;
@@ -658,6 +965,37 @@ function openModulesModal(tenantId, tenantName, allowedModulesRaw) {
     });
 
     new bootstrap.Modal(modal).show();
+}
+
+function openCredentialsModal(tenantId, tenantName, adminUsername, adminName) {
+    document.getElementById('credTenantId').value = tenantId;
+    document.getElementById('credTenantName').innerText = tenantName;
+    document.getElementById('credAdminUsername').value = adminUsername || '';
+    document.getElementById('credAdminName').value = adminName || '';
+    document.getElementById('credAdminPassword').value = '';
+    new bootstrap.Modal(document.getElementById('editCredentialsModal')).show();
+}
+
+function openDeleteTenantModal(tenantId, tenantName, tenantCode) {
+    document.getElementById('delTenantId').value = tenantId;
+    document.getElementById('delTenantName').innerText = tenantName;
+    document.getElementById('delTenantCode').innerText = tenantCode;
+    new bootstrap.Modal(document.getElementById('deleteTenantModal')).show();
+}
+
+function togglePasswordVisibility(inputId, iconId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
+    if (!input || !icon) return;
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
 }
 
 function toggleAllCheckboxes(modalId, state) {

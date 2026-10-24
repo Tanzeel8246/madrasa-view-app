@@ -669,6 +669,37 @@ class _StudentsPageState extends State<StudentsPage> {
                         return;
                       }
 
+                      final isSuper = currentUserRole.value == 'superadmin' || 
+                          (currentUserRole.value == 'admin' && currentUserId.value == 1);
+                      final maxStd = currentTenantMaxStudents.value;
+                      if (!isSuper && (_activeStudents.length + _alumniStudents.length) >= maxStd) {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: Row(
+                              children: [
+                                const Icon(Icons.lock, color: Colors.red),
+                                const SizedBox(width: 8),
+                                Text(isUrduGlobal.value ? 'طلبہ کی حد مکمل' : 'Student Limit Reached'),
+                              ],
+                            ),
+                            content: Text(
+                              isUrduGlobal.value
+                                  ? 'آپ کے موجودہ پلان (${currentTenantPlanName.value}) میں طلبہ کی زیادہ سے زیادہ حد ($maxStd) مکمل ہو چکی ہے۔\nمزید طلبہ کے داخلے کے لیے براہ کرم اپنا سبسکرپشن پلان اپ گریڈ کریں۔'
+                                  : 'You have reached the maximum student limit ($maxStd) for your plan (${currentTenantPlanName.value}). Please upgrade your plan to admit more students.',
+                            ),
+                            actions: [
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF284D3D)),
+                                onPressed: () => Navigator.pop(ctx),
+                                child: Text(isUrduGlobal.value ? 'سمجھ گیا' : 'OK', style: const TextStyle(color: Colors.white)),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+
                       setDialogState(() => isSaving = true);
 
                       try {

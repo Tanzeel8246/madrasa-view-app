@@ -18,28 +18,33 @@ if (!$is_admin && !app_has_perm('manage_erp') && !app_has_perm('manage_finance')
 $role = $_SESSION['role'] ?? '';
 $user = ['id' => $_SESSION['user_id'], 'role' => $role];
 
-finance_accounting_backfill($pdo);
-
 $cur_tenant_id = (int)get_current_tenant_id();
 $sys = $_SESSION['system_type'] ?? 'Madrasa';
-$sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
 
-// Master Finance Totals (Accurate & Synced with Finance Ledger)
-$total_income = (float)($pdo->query("SELECT SUM(amount) FROM finance WHERE type = 'Income' AND tenant_id = $cur_tenant_id AND $sys_cond AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn() ?? 0);
-$total_expense = (float)($pdo->query("SELECT SUM(amount) FROM finance WHERE type = 'Expense' AND tenant_id = $cur_tenant_id AND $sys_cond AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn() ?? 0);
-$net_balance = $total_income - $total_expense;
+require_once 'financial_audit_helper.php';
+if (function_exists('acc_ensure_standard_chart_and_orphans_repaired')) {
+    acc_ensure_standard_chart_and_orphans_repaired($pdo, $cur_tenant_id);
+}
+
+// D3 Fix: Master Finance Totals derived directly from Single Source of Truth: The General Ledger!
+$truth = finance_get_unified_accounting_truth($pdo, $cur_tenant_id, $sys);
+
+$total_income = $truth['revenue'];
+$total_expense = $truth['expense'];
+$net_balance = $truth['net_surplus'];
 
 $summary = [
-    'assets' => $net_balance,
-    'liabilities' => 0,
-    'equity' => 0,
+    'assets' => $truth['total_liquid_cash'] + $truth['receivables'],
+    'liabilities' => $truth['other_liabilities'] + $truth['zakat_fund'] + $truth['sadaqah_fund'],
+    'equity' => $net_balance,
     'revenue' => $total_income,
     'expense' => $total_expense
 ];
 
-// Cash/Bank Balances
+// Cash/Bank Balances strictly tied to ledger
 $cash_bank = [
-    ['name' => 'Cash in Hand (نقد رقم)', 'bal' => $net_balance]
+    ['name' => 'Cash in Hand (نقد رقم)', 'bal' => $truth['cash_in_hand']],
+    ['name' => 'Bank Account (بینک کھاتہ)', 'bal' => $truth['bank_balances']]
 ];
 
 $v_sys_cond = ($sys === 'Masjid') ? "v.system_type = 'Masjid'" : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";

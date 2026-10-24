@@ -1,6 +1,7 @@
 <?php
 ob_start();
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once __DIR__ . '/session_init.php';
+if (session_status() === PHP_SESSION_NONE) { madrasa_safe_session_start(); }
 require_once 'db.php';
 
 $cur_tenant_id = (int)get_current_tenant_id();
@@ -271,7 +272,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
         // 10. Phase 1: Recent Activity Logs
         try {
             if (function_exists('ensure_phase1_tables')) ensure_phase1_tables($pdo);
-            $recent_activities = $pdo->query("SELECT * FROM activity_logs ORDER BY id DESC LIMIT 8")->fetchAll(PDO::FETCH_ASSOC);
+            $recent_activities = $pdo->query("SELECT * FROM activity_logs WHERE system_type='Masjid' ORDER BY id DESC LIMIT 8")->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $e) {}
 
     } catch (Throwable $e) {

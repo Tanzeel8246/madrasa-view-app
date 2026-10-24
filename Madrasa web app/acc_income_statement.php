@@ -19,7 +19,10 @@ $from_date = $_GET['from'] ?? date('Y-m-01');
 $to_date = $_GET['to'] ?? date('Y-m-t');
 $dept_id = !empty($_GET['department_id']) ? (int)$_GET['department_id'] : null;
 
-finance_accounting_backfill($pdo, $from_date, $to_date);
+$cur_tenant_id = (int)get_current_tenant_id($pdo);
+$sys = $_SESSION['system_type'] ?? 'Madrasa';
+$sys_cond = ($sys === 'Masjid') ? "v.system_type = 'Masjid'" : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
+finance_accounting_backfill($pdo, $from_date, $to_date, $cur_tenant_id);
 
 $cur_tenant_id = (int)get_current_tenant_id($pdo);
 
@@ -27,7 +30,7 @@ $cur_tenant_id = (int)get_current_tenant_id($pdo);
 $departments = $pdo->query("SELECT id, name FROM departments WHERE status = 'Active'")->fetchAll(PDO::FETCH_ASSOC);
 
 // Prepare Query
-$params = [$cur_tenant_id, $from_date, $to_date, $cur_tenant_id];
+$params = [$cur_tenant_id, $cur_tenant_id, $from_date, $to_date, $cur_tenant_id];
 $dept_sql = "";
 if ($dept_id) {
     $dept_sql = " AND e.department_id = ? ";
@@ -39,9 +42,9 @@ $query = "
            SUM(e.debit) as total_debit, 
            SUM(e.credit) as total_credit
     FROM acc_chart_of_accounts a
-    JOIN acc_ledger_entries e ON a.id = e.account_id
-    JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status != 'Rejected' AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ?
-    WHERE a.type IN ('Revenue', 'Expense') AND v.date BETWEEN ? AND ? AND a.is_deleted = 0 AND a.tenant_id = ?
+    JOIN acc_ledger_entries e ON a.id = e.account_id AND e.tenant_id = ?
+    JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ? AND $sys_cond
+    WHERE a.type IN ('Revenue', 'Expense') AND v.date BETWEEN ? AND ? AND (a.is_deleted = 0 OR a.is_deleted IS NULL) AND a.tenant_id = ?
     $dept_sql
     GROUP BY a.id, a.code, a.name, a.type
     ORDER BY a.type DESC, a.code
@@ -83,17 +86,17 @@ $net_income = $total_revenue - $total_expense;
         <h4 class="mb-3 text-success fw-bold"><i class="fas fa-chart-pie me-2"></i> Income Statement (آمدن و اخراجات)</h4>
         <form method="GET" class="row g-2 align-items-end">
             <div class="col-md-3">
-                <label class="fw-bold">From Date</label>
+                <label class="fw-bold"><?php echo ($lang=='ur') ? 'تاریخ سے' : 'From Date'; ?></label>
                 <input type="date" name="from" id="incFrom" class="form-control" value="<?php echo e($from_date); ?>" onchange="if(this.value && document.getElementById('incTo').value) this.form.submit();" required>
             </div>
             <div class="col-md-3">
-                <label class="fw-bold">To Date</label>
+                <label class="fw-bold"><?php echo ($lang=='ur') ? 'تاریخ تک' : 'To Date'; ?></label>
                 <input type="date" name="to" id="incTo" class="form-control" value="<?php echo e($to_date); ?>" onchange="if(this.value && document.getElementById('incFrom').value) this.form.submit();" required>
             </div>
             <div class="col-md-3">
-                <label class="fw-bold">شعبہ (Department Filter)</label>
+                <label class="fw-bold"><?php echo ($lang=='ur') ? 'شعبہ' : 'Department'; ?></label>
                 <select name="department_id" class="form-select" onchange="this.form.submit()">
-                    <option value="">-- All Departments --</option>
+                    <option value=""><?php echo ($lang=='ur') ? '-- تمام شعبہ جات --' : '-- All Departments --'; ?></option>
                     <?php foreach($departments as $d): ?>
                         <option value="<?php echo $d['id']; ?>" <?php echo $dept_id == $d['id'] ? 'selected' : ''; ?>><?php echo $d['name']; ?></option>
                     <?php endforeach; ?>
@@ -108,7 +111,8 @@ $net_income = $total_revenue - $total_expense;
 
     <div id="printableArea" class="bg-white p-5 border rounded shadow-sm">
         <div class="text-center border-bottom border-2 border-dark mb-4 pb-3">
-            <h2 class="fw-bold text-success m-0">مدرسہ اشرف المدارس</h2>
+            <?php $inst_brand = !empty($app_settings['madrasa_name']) ? $app_settings['madrasa_name'] : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : 'ادارہ'); ?>
+            <h2 class="fw-bold text-success m-0"><?php echo htmlspecialchars($inst_brand); ?></h2>
             <h4 class="mt-2 fw-bold">Income Statement / گوشوارہ آمدن و اخراجات</h4>
             <p class="mb-1 fw-bold fs-6 text-muted">
                 Period: <?php echo date('d-M-Y', strtotime($from_date)); ?> to <?php echo date('d-M-Y', strtotime($to_date)); ?>

@@ -79,8 +79,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 }
 
 try {
+    require_once __DIR__ . '/financial_audit_helper.php';
+    if (function_exists('acc_ensure_standard_chart_and_orphans_repaired')) {
+        acc_ensure_standard_chart_and_orphans_repaired($pdo, $cur_tenant_id);
+    }
     sync_all_heads_with_chart_and_departments($pdo, $cur_tenant_id);
-    $acc_stmt = $pdo->prepare("SELECT a.*, p.name as parent_name FROM acc_chart_of_accounts a LEFT JOIN acc_chart_of_accounts p ON a.parent_id = p.id WHERE (a.is_deleted = 0 OR a.is_deleted IS NULL) AND a.tenant_id = ? ORDER BY CAST(a.code AS UNSIGNED) ASC, a.code ASC");
+    $acc_stmt = $pdo->prepare("SELECT a.*, p.name as parent_name FROM acc_chart_of_accounts a LEFT JOIN acc_chart_of_accounts p ON a.parent_id = p.id WHERE (a.is_deleted = 0 OR a.is_deleted IS NULL) AND (a.is_active = 1 OR a.is_active IS NULL) AND (a.tenant_id = ? OR a.tenant_id IS NULL OR a.tenant_id = 0) AND a.code NOT IN ('1101', '1201', '1301', '2101', '2102', '2103', '5010', '5011') ORDER BY CAST(a.code AS UNSIGNED) ASC, a.code ASC");
     $acc_stmt->execute([$cur_tenant_id]);
     $accounts = $acc_stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {

@@ -398,20 +398,16 @@ if (isset($_POST['save_teacher'])) {
 
 
         } else {
-
-
-            $sql = "INSERT INTO maktab_teachers (name, father_name, phone, cnic, qualification, address, salary, house_rent, medical_allowance, travel_allowance, daily_deduction_rate, joining_date, status, responsibilities, staff_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Teacher')";
-
-
-            $pdo->prepare($sql)->execute([$name, $fname, $phone, $cnic, $qual, $addr, $salary, $house_rent, $medical_allowance, $travel_allowance, $daily_deduction_rate, $j_date, $status, $responsibilities]);
-
-
-            $teacher_id = $pdo->lastInsertId();
-
-
-            $msg = "<div class='alert alert-success fw-bold'>      !</div>";
-
-
+            $quotaCheck = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'teachers', $cur_tenant_id) : ['allowed' => true];
+            if (!$quotaCheck['allowed']) {
+                $pdo->rollBack();
+                $msg = "<div class='alert alert-danger fw-bold shadow-sm'><i class='fas fa-lock me-2'></i> " . htmlspecialchars($quotaCheck['message']) . " <a href='subscription_status.php' class='alert-link text-decoration-underline ms-2'>سبسکرپشن اپ گریڈ کریں</a></div>";
+            } else {
+                $sql = "INSERT INTO maktab_teachers (name, father_name, phone, cnic, qualification, address, salary, house_rent, medical_allowance, travel_allowance, daily_deduction_rate, joining_date, status, responsibilities, staff_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Teacher')";
+                $pdo->prepare($sql)->execute([$name, $fname, $phone, $cnic, $qual, $addr, $salary, $house_rent, $medical_allowance, $travel_allowance, $daily_deduction_rate, $j_date, $status, $responsibilities]);
+                $teacher_id = $pdo->lastInsertId();
+                $msg = "<div class='alert alert-success fw-bold'>✅ نیا استاد شامل کر لیا گیا!</div>";
+            }
         }
 
 

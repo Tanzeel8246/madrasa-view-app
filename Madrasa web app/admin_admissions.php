@@ -88,29 +88,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $checkAdm = $pdo->prepare("SELECT id FROM $targetTable WHERE name = ? AND father_name = ? AND tenant_id = ? LIMIT 1");
                 $checkAdm->execute([$app['student_name'], $app['father_name'], $cur_tenant_id]);
                 if (!$checkAdm->fetch()) {
-                    $current_hijri = $app['hijri_year'] ?? '1447';
-                    $max_stmt = $pdo->prepare("SELECT MAX(id) FROM $targetTable WHERE tenant_id = ?");
-                    $max_stmt->execute([$cur_tenant_id]);
-                    $maxId = $max_stmt->fetchColumn() ?: 0;
-                    $admNo = $current_hijri . "-" . str_pad($maxId + 1, 3, "0", STR_PAD_LEFT);
-                    $today = date('Y-m-d');
+                    $quotaCheck = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'students', $cur_tenant_id) : ['allowed' => true];
+                    if (!$quotaCheck['allowed']) {
+                        $_SESSION['flash'] = [
+                            'type' => 'warning',
+                            'msg' => "درخواست منظور ہو گئی لیکن طلبہ کی کوٹہ حد مکمل ہونے کے باعث طالب علم کو رجسٹر میں داخل نہیں کیا جا سکا۔ برائے مہربانی سبسکرپشن پلان اپ گریڈ کریں۔"
+                        ];
+                    } else {
+                        $current_hijri = $app['hijri_year'] ?? '1447';
+                        $max_stmt = $pdo->prepare("SELECT MAX(id) FROM $targetTable WHERE tenant_id = ?");
+                        $max_stmt->execute([$cur_tenant_id]);
+                        $maxId = $max_stmt->fetchColumn() ?: 0;
+                        $admNo = $current_hijri . "-" . str_pad($maxId + 1, 3, "0", STR_PAD_LEFT);
+                        $today = date('Y-m-d');
 
-                    $insStmt = $pdo->prepare("INSERT INTO $targetTable 
-                        (name, father_name, admission_number, class, class_name, contact_number, address, status, admission_date, photo, system_type, residence_status, tenant_id) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, 'residential_aided', ?)");
-                    $insStmt->execute([
-                        $app['student_name'],
-                        $app['father_name'],
-                        $admNo,
-                        $app['department'] ?: 'حفظ',
-                        $app['department'] ?: 'حفظ',
-                        $mobile,
-                        $app['address'] ?? '',
-                        $today,
-                        $app['photo'] ?? '',
-                        $isMaktab ? 'Masjid' : 'Madrasa',
-                        $cur_tenant_id
-                    ]);
+                        $insStmt = $pdo->prepare("INSERT INTO $targetTable 
+                            (name, father_name, admission_number, class, class_name, contact_number, address, status, admission_date, photo, system_type, residence_status, tenant_id) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, 'residential_aided', ?)");
+                        $insStmt->execute([
+                            $app['student_name'],
+                            $app['father_name'],
+                            $admNo,
+                            $app['department'] ?: 'حفظ',
+                            $app['department'] ?: 'حفظ',
+                            $mobile,
+                            $app['address'] ?? '',
+                            $today,
+                            $app['photo'] ?? '',
+                            $isMaktab ? 'Masjid' : 'Madrasa',
+                            $cur_tenant_id
+                        ]);
+                    }
                 }
             } catch (Throwable $e) {}
         }

@@ -13,44 +13,90 @@ class AuthController {
     public static function login(PDO $pdo, array $input): array {
         $username = trim((string)($input['username'] ?? $input['phone'] ?? ''));
         $password = trim((string)($input['password'] ?? ''));
-        $tenantCode = strtoupper(trim((string)($input['tenant_code'] ?? $input['institute_code'] ?? $_SERVER['HTTP_X_TENANT_CODE'] ?? '')));
+        $rawTenantCode = (string)($input['tenant_code'] ?? $input['institute_code'] ?? $_SERVER['HTTP_X_TENANT_CODE'] ?? '');
 
         if ($username === '' || $password === '') {
             return ['status' => 'error', 'message' => 'یوزر نیم اور پاس ورڈ درج کرنا لازمی ہے۔'];
         }
 
+        // سمارٹ صفائی: غیر مرئی یونیکوڈ حروف، اردو/عربی ہندسے اور ڈیش درست کریں
+        $cleanCode = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{061C}\x{FEFF}\x{00A0}]/u', '', $rawTenantCode);
+        $cleanCode = preg_replace('/[\x{2010}-\x{2015}\x{2212}]/u', '-', $cleanCode);
+        $easternDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹','٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        $westernDigits = ['0','1','2','3','4','5','6','7','8','9','0','1','2','3','4','5','6','7','8','9'];
+        $cleanCode = str_replace($easternDigits, $westernDigits, $cleanCode);
+        $tenantCode = strtoupper(trim(preg_replace('/\s+/', '', $cleanCode)));
+
         // ٹیننٹ ریزولوشن اور سبسکرپشن جانچ
         $tenantId = 1;
         $resolvedTenantCode = 'MAIN01';
-        $tenantName = 'مدرسہ اشرف المدارس';
+        $tenantName = 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)';
 
         $clientPlat = strtolower(trim((string)($input['client_platform'] ?? $_SERVER['HTTP_X_CLIENT_PLATFORM'] ?? '')));
 
+        $tRow = null;
         if ($tenantCode !== '') {
             $tRow = function_exists('resolve_tenant_by_code') ? resolve_tenant_by_code($pdo, $tenantCode) : null;
+        }
+
+        // اگر ٹیننٹ کوڈ نہیں ملا یا نامعلوم ہے، تو یوزر نیم کی بنیاد پر ٹیننٹ خودکار دریافت کریں (Universal Tenant Auto-Discovery)
+        if (!$tRow && !empty($username)) {
+            try {
+                // 1. ایڈمنز میں تلاش
+                $uStmt = $pdo->prepare("
+                    SELECT t.* FROM admins a 
+                    JOIN tenants t ON a.tenant_id = t.id 
+                    WHERE LOWER(a.username) = LOWER(?) OR LOWER(a.email) = LOWER(?) OR a.phone = ?
+                    LIMIT 1
+                ");
+                $uStmt->execute([$username, $username, $username]);
+                $tRow = $uStmt->fetch(PDO::FETCH_ASSOC);
+            } catch (Throwable $eAdmT) {}
+
+            // 2. اساتذہ میں تلاش
             if (!$tRow) {
+                try {
+                    $tStmt = $pdo->prepare("
+                        SELECT t.* FROM teachers tch 
+                        JOIN tenants t ON tch.tenant_id = t.id 
+                        WHERE LOWER(tch.phone) = LOWER(?) OR LOWER(tch.email) = LOWER(?)
+                        LIMIT 1
+                    ");
+                    $tStmt->execute([$username, $username]);
+                    $tRow = $tStmt->fetch(PDO::FETCH_ASSOC);
+                } catch (Throwable $eTchT) {}
+            }
+
+            // 3. طلباء میں تلاش
+            if (!$tRow) {
+                try {
+                    $sStmt = $pdo->prepare("
+                        SELECT t.* FROM students s 
+                        JOIN tenants t ON s.tenant_id = t.id 
+                        WHERE LOWER(s.roll_no) = LOWER(?) OR LOWER(s.admission_number) = LOWER(?) OR s.phone = ?
+                        LIMIT 1
+                    ");
+                    $sStmt->execute([$username, $username, $username]);
+                    $tRow = $sStmt->fetch(PDO::FETCH_ASSOC);
+                } catch (Throwable $eStuT) {}
+            }
+        }
+
+        if (!$tRow) {
+            if ($tenantCode !== '' && $tenantCode !== 'MAIN01') {
                 return ['status' => 'error', 'message' => "ادارہ کوڈ '$tenantCode' درست نہیں ہے!"];
             }
-            if (function_exists('check_tenant_subscription')) {
-                $subChk = check_tenant_subscription($pdo, $tRow['id'], $clientPlat);
-                if (!$subChk['ok']) {
-                    return ['status' => 'error', 'message' => $subChk['message']];
-                }
-            }
+            $tRow = function_exists('resolve_tenant_by_code') ? resolve_tenant_by_code($pdo, 'MAIN01') : null;
+        }
+
+        if ($tRow) {
             $tenantId = (int)$tRow['id'];
             $resolvedTenantCode = $tRow['code'];
             $tenantName = $tRow['name'];
-        } else {
-            $tRow = function_exists('resolve_tenant_by_code') ? resolve_tenant_by_code($pdo, 'MAIN01') : null;
-            if ($tRow) {
-                $tenantId = (int)$tRow['id'];
-                $resolvedTenantCode = $tRow['code'];
-                $tenantName = $tRow['name'];
-                if ($tenantId > 1 && function_exists('check_tenant_subscription')) {
-                    $subChk = check_tenant_subscription($pdo, $tenantId, $clientPlat);
-                    if (!$subChk['ok']) {
-                        return ['status' => 'error', 'message' => $subChk['message']];
-                    }
+            if ($tenantId > 1 && function_exists('check_tenant_subscription')) {
+                $subChk = check_tenant_subscription($pdo, $tenantId, $clientPlat);
+                if (!$subChk['ok']) {
+                    return ['status' => 'error', 'message' => $subChk['message']];
                 }
             }
         }
@@ -73,10 +119,23 @@ class AuthController {
             'plan_name' => 'بنیادی پیکج (Basic)',
             'plan_code' => 'basic',
             'subscription_ends_at' => '',
-            'subscription_status' => 'active'
+            'subscription_status' => 'active',
+            'max_students' => 50,
+            'max_classes' => 3,
+            'max_teachers' => 4,
+            'tenant_system_type' => $tRow['system_type'] ?? 'Both'
         ];
         try {
-            $sStmt = $pdo->prepare("SELECT s.*, p.name as plan_name, p.code as plan_code FROM subscriptions s LEFT JOIN subscription_plans p ON s.plan_id = p.id WHERE s.tenant_id = ? ORDER BY s.id DESC LIMIT 1");
+            if (function_exists('get_tenant_plan_limits')) {
+                $pLimits = get_tenant_plan_limits($pdo, $tenantId);
+                $tenantSubData['plan_name'] = $pLimits['plan_name'];
+                $tenantSubData['plan_code'] = $pLimits['plan_code'];
+                $tenantSubData['max_students'] = $pLimits['max_students'];
+                $tenantSubData['max_classes'] = $pLimits['max_classes'];
+                $tenantSubData['max_teachers'] = $pLimits['max_teachers'];
+                $tenantSubData['tenant_system_type'] = $pLimits['system_type'] ?: ($tRow['system_type'] ?? 'Both');
+            }
+            $sStmt = $pdo->prepare("SELECT s.*, p.name as plan_name, p.code as plan_code, p.max_students as p_max_students, p.max_classes as p_max_classes, p.max_teachers as p_max_teachers FROM subscriptions s LEFT JOIN subscription_plans p ON s.plan_id = p.id WHERE s.tenant_id = ? AND s.status IN ('active', 'trial') ORDER BY s.id DESC LIMIT 1");
             $sStmt->execute([$tenantId]);
             $sRow = $sStmt->fetch(PDO::FETCH_ASSOC);
             if ($sRow) {
@@ -84,6 +143,9 @@ class AuthController {
                 $tenantSubData['subscription_status'] = $sRow['status'];
                 if (!empty($sRow['plan_name'])) $tenantSubData['plan_name'] = $sRow['plan_name'];
                 if (!empty($sRow['plan_code'])) $tenantSubData['plan_code'] = $sRow['plan_code'];
+                if (!empty($sRow['p_max_students'])) $tenantSubData['max_students'] = (int)$sRow['p_max_students'];
+                if (!empty($sRow['p_max_classes'])) $tenantSubData['max_classes'] = (int)$sRow['p_max_classes'];
+                if (!empty($sRow['p_max_teachers'])) $tenantSubData['max_teachers'] = (int)$sRow['p_max_teachers'];
                 $tenantSubData['subscription_ends_at'] = $sRow['ends_at'] ?: '';
                 if ($sRow['ends_at']) {
                     $tenantSubData['days_left'] = max(0, (int)ceil((strtotime($sRow['ends_at']) - time()) / 86400));
@@ -164,6 +226,10 @@ class AuthController {
                 'plan_code' => (string)$tenantSubData['plan_code'],
                 'subscription_ends_at' => (string)$tenantSubData['subscription_ends_at'],
                 'subscription_status' => (string)$tenantSubData['subscription_status'],
+                'tenant_system_type' => (string)$tenantSubData['tenant_system_type'],
+                'max_students' => (int)$tenantSubData['max_students'],
+                'max_classes' => (int)$tenantSubData['max_classes'],
+                'max_teachers' => (int)$tenantSubData['max_teachers'],
                 'token' => function_exists('issue_user_token') ? issue_user_token($admin['id'], $role, $permissions, $tenantId, $resolvedTenantCode) : ''
             ];
         }

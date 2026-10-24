@@ -302,11 +302,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                 // 1. Create Tenant with 14-day trial (Dynamic Safe Column Mapping)
                 $trialEnds = date('Y-m-d', strtotime('+14 days'));
                 $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '-', $instituteCode));
-                $defaultModules = function_exists('get_default_module_keys') ? get_default_module_keys() : [];
-                if ($systemType === 'Both' || $systemType === 'Masjid') {
+                $allMods = function_exists('get_default_module_keys') ? get_default_module_keys() : [];
+                $defaultModules = [];
+                if ($systemType === 'Madrasa') {
+                    // Exclude masjid_wing strictly
+                    $defaultModules = array_values(array_diff($allMods, ['masjid_wing']));
+                } elseif ($systemType === 'Masjid') {
+                    // Exclude madrasa-only modules strictly
+                    $defaultModules = array_values(array_diff($allMods, ['darse_nizami_academics', 'hostel', 'admissions', 'recruitment', 'library']));
                     if (!in_array('masjid_wing', $defaultModules)) {
                         $defaultModules[] = 'masjid_wing';
                     }
+                } else {
+                    $defaultModules = $allMods;
                 }
                 $defaultModulesJson = json_encode($defaultModules);
 

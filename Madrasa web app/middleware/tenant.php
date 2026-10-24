@@ -55,13 +55,31 @@ if (!function_exists('get_current_tenant_code')) {
 
 if (!function_exists('resolve_tenant_by_code')) {
     function resolve_tenant_by_code($pdo, $code) {
-        $c = strtoupper(trim((string)$code));
+        $raw = (string)$code;
+        // 1. Remove invisible Unicode directional formatting characters (LRM, RLM, ALM, ZWSP, BOM, etc.)
+        $clean = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{061C}\x{FEFF}\x{00A0}]/u', '', $raw);
+        // 2. Normalize Unicode dashes/hyphens to ASCII hyphen
+        $clean = preg_replace('/[\x{2010}-\x{2015}\x{2212}]/u', '-', $clean);
+        // 3. Convert Eastern Arabic & Urdu digits to ASCII digits
+        $easternDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹','٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        $westernDigits = ['0','1','2','3','4','5','6','7','8','9','0','1','2','3','4','5','6','7','8','9'];
+        $clean = str_replace($easternDigits, $westernDigits, $clean);
+        $c = strtoupper(trim(preg_replace('/\s+/', '', $clean)));
         if (empty($c)) $c = 'MAIN01';
         try {
             $stmt = $pdo->prepare("SELECT * FROM tenants WHERE UPPER(code) = ? OR UPPER(slug) = ? LIMIT 1");
             $stmt->execute([$c, $c]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($row) return $row;
+
+            // Hyphen & whitespace agnostic match (e.g. M-26-001 vs M26001 vs M_26_001)
+            $cNoHyphen = str_replace(['-', '_'], '', $c);
+            if (!empty($cNoHyphen)) {
+                $stmt2 = $pdo->prepare("SELECT * FROM tenants WHERE UPPER(REPLACE(REPLACE(code, '-', ''), '_', '')) = ? OR UPPER(REPLACE(REPLACE(slug, '-', ''), '_', '')) = ? LIMIT 1");
+                $stmt2->execute([$cNoHyphen, $cNoHyphen]);
+                $row2 = $stmt2->fetch(PDO::FETCH_ASSOC);
+                if ($row2) return $row2;
+            }
 
             // Fallback for default tenant / single-madrasa mode
             if ($c === 'MAIN01' || $c === 'DEFAULT') {
@@ -323,18 +341,44 @@ if (!function_exists('get_tenant_allowed_modules')) {
 
 if (!function_exists('is_module_allowed_for_tenant')) {
     function is_module_allowed_for_tenant($pdo, $moduleKey, $tenantId = null) {
+        $tid = ($tenantId !== null) ? (int)$tenantId : (int)get_current_tenant_id();
+
+        // 1. Super admin global override (only when super admin is logged in or impersonating)
         if (!empty($_SESSION['is_super_admin']) || !empty($_SESSION['impersonated_by_super_admin'])) {
             return true;
         }
-        $uRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
-        if (in_array($uRole, ['admin', 'superadmin', 'super_admin', 'administrator'], true)) {
-            return true;
-        }
-        $tid = ($tenantId !== null) ? (int)$tenantId : (int)get_current_tenant_id();
+
+        // 2. Default root tenant 1 has full master access
         if ($tid <= 1) {
             return true;
         }
-        $allowed = get_tenant_allowed_modules($pdo, $tenantId);
+
+        // 3. Strict System Type Isolation Guard
+        // If tenant is Madrasa-only, masjid_wing is strictly forbidden
+        $sysType = $_SESSION['tenant_system_type'] ?? null;
+        if (!$sysType) {
+            try {
+                $stStmt = $pdo->prepare("SELECT system_type FROM tenants WHERE id = ? LIMIT 1");
+                $stStmt->execute([$tid]);
+                $stVal = $stStmt->fetchColumn();
+                if ($stVal) $sysType = $stVal;
+            } catch (Throwable $eSt) {}
+        }
+        if (!$sysType) $sysType = 'Madrasa';
+
+        if ($sysType === 'Madrasa' && $moduleKey === 'masjid_wing') {
+            return false;
+        }
+
+        if ($sysType === 'Masjid') {
+            $madrasaOnlyModules = ['darse_nizami_academics', 'hostel', 'admissions', 'recruitment', 'library'];
+            if (in_array($moduleKey, $madrasaOnlyModules, true)) {
+                return false;
+            }
+        }
+
+        // 4. Check tenant allowed modules list
+        $allowed = get_tenant_allowed_modules($pdo, $tid);
         return in_array($moduleKey, $allowed, true);
     }
 }
@@ -346,6 +390,199 @@ if (!function_exists('is_mod_allowed')) {
             return is_module_allowed_for_tenant($pdo, $moduleKey, $tenantId);
         }
         return true;
+    }
+}
+
+/**
+ * ٹیننٹ کے فعال سبسکرپشن پلان اور مقررہ حدود حاصل کرنے کا مرکزی فنکشن
+ */
+if (!function_exists('get_tenant_plan_limits')) {
+    function get_tenant_plan_limits($pdo, $tenantId = null) {
+        $tid = ($tenantId !== null) ? (int)$tenantId : (int)get_current_tenant_id();
+        if ($tid <= 1) {
+            return [
+                'plan_name' => 'مرکزی انٹرپرائز (Master Enterprise)',
+                'plan_code' => 'enterprise',
+                'max_students' => 99999,
+                'max_classes' => 99999,
+                'max_teachers' => 99999,
+                'has_mobile_app' => 1,
+                'has_desktop_app' => 1,
+                'status' => 'active',
+                'system_type' => 'Both'
+            ];
+        }
+
+        try {
+            // First check active or trial subscription
+            $stmt = $pdo->prepare("
+                SELECT s.status as sub_status, s.ends_at, s.plan_id,
+                       p.id as p_id, p.name as plan_name, p.code as plan_code,
+                       p.max_students, p.max_classes, p.max_teachers,
+                       p.has_mobile_app, p.has_desktop_app,
+                       t.status as tenant_status, t.system_type as tenant_system_type
+                FROM tenants t
+                LEFT JOIN subscriptions s ON t.id = s.tenant_id AND s.status IN ('active', 'trial')
+                LEFT JOIN subscription_plans p ON s.plan_id = p.id
+                WHERE t.id = ?
+                ORDER BY s.id DESC LIMIT 1
+            ");
+            $stmt->execute([$tid]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row && !empty($row['plan_name'])) {
+                return [
+                    'plan_name' => $row['plan_name'],
+                    'plan_code' => $row['plan_code'] ?: 'basic',
+                    'max_students' => (int)($row['max_students'] ?: 50),
+                    'max_classes' => (int)($row['max_classes'] ?: 3),
+                    'max_teachers' => (int)($row['max_teachers'] ?: 4),
+                    'has_mobile_app' => (int)($row['has_mobile_app'] ?? 1),
+                    'has_desktop_app' => (int)($row['has_desktop_app'] ?? 1),
+                    'status' => $row['sub_status'] ?: ($row['tenant_status'] ?: 'trial'),
+                    'system_type' => $row['tenant_system_type'] ?: 'Madrasa'
+                ];
+            }
+
+            // Fallback to latest subscription row regardless of status
+            $stmt2 = $pdo->prepare("
+                SELECT s.status as sub_status, s.ends_at, s.plan_id,
+                       p.id as p_id, p.name as plan_name, p.code as plan_code,
+                       p.max_students, p.max_classes, p.max_teachers,
+                       p.has_mobile_app, p.has_desktop_app,
+                       t.status as tenant_status, t.system_type as tenant_system_type
+                FROM tenants t
+                LEFT JOIN subscriptions s ON t.id = s.tenant_id
+                LEFT JOIN subscription_plans p ON s.plan_id = p.id
+                WHERE t.id = ?
+                ORDER BY s.id DESC LIMIT 1
+            ");
+            $stmt2->execute([$tid]);
+            $row2 = $stmt2->fetch(PDO::FETCH_ASSOC);
+            if ($row2 && !empty($row2['plan_name'])) {
+                return [
+                    'plan_name' => $row2['plan_name'],
+                    'plan_code' => $row2['plan_code'] ?: 'basic',
+                    'max_students' => (int)($row2['max_students'] ?: 50),
+                    'max_classes' => (int)($row2['max_classes'] ?: 3),
+                    'max_teachers' => (int)($row2['max_teachers'] ?: 4),
+                    'has_mobile_app' => (int)($row2['has_mobile_app'] ?? 1),
+                    'has_desktop_app' => (int)($row2['has_desktop_app'] ?? 1),
+                    'status' => $row2['sub_status'] ?: ($row2['tenant_status'] ?: 'trial'),
+                    'system_type' => $row2['tenant_system_type'] ?: 'Madrasa'
+                ];
+            }
+        } catch (Throwable $e) {}
+
+        return [
+            'plan_name' => 'بنیادی پیکج (Basic)',
+            'plan_code' => 'basic',
+            'max_students' => 50,
+            'max_classes' => 3,
+            'max_teachers' => 4,
+            'has_mobile_app' => 1,
+            'has_desktop_app' => 1,
+            'status' => 'trial',
+            'system_type' => 'Madrasa'
+        ];
+    }
+}
+
+/**
+ * کسی بھی نئے ریکارڈ (کلاس، استاد، طالب علم) کے اندراج سے پہلے کوٹہ لِمٹ کی سخت جانچ
+ */
+if (!function_exists('check_quota_limit')) {
+    function check_quota_limit($pdo, $type, $tenantId = null) {
+        $tid = ($tenantId !== null) ? (int)$tenantId : (int)get_current_tenant_id();
+        if ($tid <= 1 || !empty($_SESSION['is_super_admin'])) {
+            return ['allowed' => true, 'current' => 0, 'max' => 99999];
+        }
+
+        $limits = get_tenant_plan_limits($pdo, $tid);
+
+        // 1. درجات و کلاسز کی حد (Classes Quota)
+        if ($type === 'classes') {
+            $totalClasses = 0;
+            try {
+                // Count active classes in classes table
+                $stmt1 = $pdo->prepare("SELECT COUNT(*) FROM classes WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
+                $stmt1->execute([$tid]);
+                $totalClasses += (int)$stmt1->fetchColumn();
+
+                // Also check maktab_classes table if exists
+                try {
+                    $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM maktab_classes WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
+                    $stmt2->execute([$tid]);
+                    $totalClasses += (int)$stmt2->fetchColumn();
+                } catch (Throwable $eMak) {}
+            } catch (Throwable $e) {}
+
+            $max = (int)$limits['max_classes'];
+            if ($totalClasses >= $max) {
+                return [
+                    'allowed' => false,
+                    'current' => $totalClasses,
+                    'max' => $max,
+                    'message' => "آپ کے موجودہ پلان ({$limits['plan_name']}) میں کلاسز کی زیادہ سے زیادہ حد ({$max}) مکمل ہو چکی ہے۔ نئی کلاس شامل کرنے کے لیے سبسکرپشن پلان اپ گریڈ کریں۔"
+                ];
+            }
+            return ['allowed' => true, 'current' => $totalClasses, 'max' => $max];
+        }
+
+        // 2. اساتذہ کی حد (Teachers Quota)
+        if ($type === 'teachers') {
+            $totalTeachers = 0;
+            try {
+                $stmt1 = $pdo->prepare("SELECT COUNT(*) FROM teachers WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
+                $stmt1->execute([$tid]);
+                $totalTeachers += (int)$stmt1->fetchColumn();
+
+                try {
+                    $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM maktab_teachers WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
+                    $stmt2->execute([$tid]);
+                    $totalTeachers += (int)$stmt2->fetchColumn();
+                } catch (Throwable $eMak) {}
+            } catch (Throwable $e) {}
+
+            $max = (int)$limits['max_teachers'];
+            if ($totalTeachers >= $max) {
+                return [
+                    'allowed' => false,
+                    'current' => $totalTeachers,
+                    'max' => $max,
+                    'message' => "آپ کے موجودہ پلان ({$limits['plan_name']}) میں اساتذہ و عملہ کی زیادہ سے زیادہ حد ({$max}) مکمل ہو چکی ہے۔ مزید اساتذہ شامل کرنے کے لیے سبسکرپشن پلان اپ گریڈ کریں۔"
+                ];
+            }
+            return ['allowed' => true, 'current' => $totalTeachers, 'max' => $max];
+        }
+
+        // 3. طلبہ کی حد (Students Quota)
+        if ($type === 'students') {
+            $totalStudents = 0;
+            try {
+                $stmt1 = $pdo->prepare("SELECT COUNT(*) FROM students WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
+                $stmt1->execute([$tid]);
+                $totalStudents += (int)$stmt1->fetchColumn();
+
+                try {
+                    $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM maktab_students WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
+                    $stmt2->execute([$tid]);
+                    $totalStudents += (int)$stmt2->fetchColumn();
+                } catch (Throwable $eMak) {}
+            } catch (Throwable $e) {}
+
+            $max = (int)$limits['max_students'];
+            if ($totalStudents >= $max) {
+                return [
+                    'allowed' => false,
+                    'current' => $totalStudents,
+                    'max' => $max,
+                    'message' => "آپ کے موجودہ پلان ({$limits['plan_name']}) میں طلبہ کی زیادہ سے زیادہ حد ({$max}) مکمل ہو چکی ہے۔ مزید طلبہ داخل کرنے کے لیے سبسکرپشن پلان اپ گریڈ کریں۔"
+                ];
+            }
+            return ['allowed' => true, 'current' => $totalStudents, 'max' => $max];
+        }
+
+        return ['allowed' => true, 'current' => 0, 'max' => 99999];
     }
 }
 
@@ -662,7 +899,7 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                 'admins', 'students', 'teachers', 'classes', 'class_periods', 'attendance', 'period_attendance',
                 'attendance_teachers', 'teacher_period_attendance', 'teacher_leaves', 'daily_hifz', 'daily_nazira',
                 'qaida_records', 'academic_reports', 'exams', 'exam_results',
-                'parent_complaints', 'complaints', 'fee_submissions', 'admission_applications', 'admission_inquiries',
+                'parent_complaints', 'complaints', 'parents', 'fee_submissions', 'admission_applications', 'admission_inquiries',
                 'notices', 'activity_logs', 'leave_applications', 'heads', 'finance',
                 'staff_loans', 'loan_transactions', 'staff_salaries', 'staff_stipends', 'assets',
                 'in_kind_donations', 'inventory_items', 'inventory_sales', 'hostel_rooms',
@@ -696,7 +933,9 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                     'is_deleted' => "TINYINT DEFAULT 0",
                     'head_name' => "VARCHAR(255) DEFAULT NULL",
                     'account_id' => "INT DEFAULT NULL",
-                    'payment_method' => "VARCHAR(50) DEFAULT 'Cash'"
+                    'payment_method' => "VARCHAR(50) DEFAULT 'Cash'",
+                    'deleted_at' => "DATETIME DEFAULT NULL",
+                    'original_receipt_no' => "VARCHAR(100) DEFAULT NULL"
                 ],
                 'heads' => [
                     'is_deleted' => "TINYINT DEFAULT 0"
@@ -741,7 +980,8 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                 'classes' => ['name', 'idx_tenant_class', "(`tenant_id`, `name`, `section`, `system_type`)"],
                 'students' => ['admission_number', 'idx_tenant_adm_no', "(`tenant_id`, `admission_number`)"],
                 'maktab_students' => ['admission_number', 'idx_tenant_maktab_adm_no', "(`tenant_id`, `admission_number`)"],
-                'admission_applications' => ['admission_number', 'idx_tenant_app_adm_no', "(`tenant_id`, `admission_number`)"]
+                'admission_applications' => ['admission_number', 'idx_tenant_app_adm_no', "(`tenant_id`, `admission_number`)"],
+                'acc_chart_of_accounts' => ['code', 'idx_tenant_acc_code', "(`tenant_id`, `code`)"]
             ];
 
             foreach ($uniqueFixes as $tbl => $fix) {

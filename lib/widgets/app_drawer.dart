@@ -64,6 +64,7 @@ import '../screens/academic_reports_view.dart';
 import '../utils/system_type_global.dart';
 import '../utils/globals.dart';
 import '../utils/session.dart';
+import 'app_brand_logo.dart';
 import 'sync_health_modal.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -123,86 +124,92 @@ class AppDrawer extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Image.asset('assets/logo.png', height: 46),
+                          const AppBrandLogo(size: 46),
                           const SizedBox(height: 6),
-                          Text(
-                            isUrdu
-                                ? (isMasjid ? 'مسجد اشرف المدارس' : 'مدرسہ اشرف المدارس')
-                                : (isMasjid ? 'Masjid Ashraf-ul-Madaris' : 'Madrasa Ashraf-ul-Madaris'),
-                            style: TextStyle(
-                              color: primaryGreen,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
+                          ValueListenableBuilder<String?>(
+                            valueListenable: currentTenantName,
+                            builder: (context, tName, _) {
+                              final defaultName = isUrdu
+                                  ? (isMasjid ? 'MC-MMS (جامع مسجد)' : 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)')
+                                  : (isMasjid ? 'MC-MMS (Masjid)' : 'MC-MMS (Mindcrafts Madrasa Management System)');
+                              final title = (tName != null && tName.trim().isNotEmpty) ? tName.trim() : defaultName;
+                              return Text(
+                                title,
+                                style: TextStyle(
+                                  color: primaryGreen,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              );
+                            },
                           ),
-                          const SizedBox(height: 8),
-                          // Masjid / Madrasa Switcher Tabs
                           Container(
-                            decoration: BoxDecoration(
-                              color: primaryGreen.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: primaryGreen.withValues(alpha: 0.3)),
-                            ),
-                            padding: const EdgeInsets.all(2),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GestureDetector(
-                                  onTap: () {
-                                    SystemTypeGlobal.currentSystemType.value = 'Madrasa';
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: !isMasjid ? primaryGreen : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.school, size: 14, color: !isMasjid ? Colors.white : primaryGreen),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          isUrdu ? 'مدرسہ' : 'Madrasa',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: !isMasjid ? Colors.white : primaryGreen,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                            margin: const EdgeInsets.only(top: 8),
+                                decoration: BoxDecoration(
+                                  color: primaryGreen.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: primaryGreen.withValues(alpha: 0.3)),
                                 ),
-                                GestureDetector(
-                                  onTap: () {
-                                    SystemTypeGlobal.currentSystemType.value = 'Masjid';
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: isMasjid ? primaryGreen : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.mosque, size: 14, color: isMasjid ? Colors.white : primaryGreen),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          isUrdu ? 'مسجد' : 'Masjid',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: isMasjid ? Colors.white : primaryGreen,
-                                          ),
+                                padding: const EdgeInsets.all(2),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () {
+                                        SystemTypeGlobal.currentSystemType.value = 'Madrasa';
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: !isMasjid ? primaryGreen : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(16),
                                         ),
-                                      ],
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.school, size: 14, color: !isMasjid ? Colors.white : primaryGreen),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              isUrdu ? 'مدرسہ' : 'Madrasa',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                color: !isMasjid ? Colors.white : primaryGreen,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    GestureDetector(
+                                      onTap: () {
+                                        SystemTypeGlobal.currentSystemType.value = 'Masjid';
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: isMasjid ? primaryGreen : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.mosque, size: 14, color: isMasjid ? Colors.white : primaryGreen),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              isUrdu ? 'مسجد' : 'Masjid',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                color: isMasjid ? Colors.white : primaryGreen,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
                           const SizedBox(height: 8),
                           InkWell(
                             onTap: () {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../db_helper.dart';
 import 'sync_savers/core_sync_saver.dart';
@@ -29,8 +30,16 @@ extension DbSyncSave on DBHelper {
     // 5. Core & Metadata Domain
     await CoreSyncSaver.save(db, batch, data);
 
-    // Commit all batch operations
-    await batch.commit(continueOnError: true, noResult: true);
+    // Commit all batch operations with results inspection
+    final List<Object?> results =
+        await batch.commit(continueOnError: true, noResult: false);
+
+    // Inspect individual batch execution results and log any DatabaseException
+    for (final Object? res in results) {
+      if (res is DatabaseException) {
+        debugPrint('⚠️ [DbSyncSaver] Batch operation failed: $res');
+      }
+    }
 
     // Remap any teacher IDs if changed during server reconciliation
     for (final remap in teacherIdRemaps) {

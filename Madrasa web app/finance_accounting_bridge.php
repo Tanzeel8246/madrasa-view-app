@@ -9,14 +9,81 @@ if (!function_exists('finance_accounting_reference')) {
 if (!function_exists('finance_accounting_ensure_account')) {
     function finance_accounting_ensure_account(PDO $pdo, $code, $name, $type, $tenant_id = null) {
         if ($tenant_id === null) $tenant_id = (int)get_current_tenant_id();
-        $stmt = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE code = ? AND tenant_id = ? LIMIT 1");
-        $stmt->execute([$code, $tenant_id]);
-        $id = $stmt->fetchColumn();
-        if ($id) return (int)$id;
 
-        $insert = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, tenant_id, is_deleted) VALUES (?, ?, ?, ?, 0)");
-        $insert->execute([$code, $name, $type, $tenant_id]);
-        return (int)$pdo->lastInsertId();
+        // 1. Check by exact code and tenant_id
+        $stmt = $pdo->prepare("SELECT id, is_deleted FROM acc_chart_of_accounts WHERE code = ? AND tenant_id = ? LIMIT 1");
+        $stmt->execute([$code, $tenant_id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            if ((int)($row['is_deleted'] ?? 0) === 1) {
+                try {
+                    $pdo->prepare("UPDATE acc_chart_of_accounts SET is_deleted = 0 WHERE id = ?")->execute([$row['id']]);
+                } catch (Throwable $e) {}
+            }
+            return (int)$row['id'];
+        }
+
+        // 2. Check by name and tenant_id
+        $stmtName = $pdo->prepare("SELECT id, is_deleted FROM acc_chart_of_accounts WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND tenant_id = ? LIMIT 1");
+        $stmtName->execute([$name, $tenant_id]);
+        $rowName = $stmtName->fetch(PDO::FETCH_ASSOC);
+        if ($rowName) {
+            if ((int)($rowName['is_deleted'] ?? 0) === 1) {
+                try {
+                    $pdo->prepare("UPDATE acc_chart_of_accounts SET is_deleted = 0 WHERE id = ?")->execute([$rowName['id']]);
+                } catch (Throwable $e) {}
+            }
+            return (int)$rowName['id'];
+        }
+
+        // 3. Attempt insertion with fallback for duplicate code
+        try {
+            $insert = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, tenant_id, is_deleted) VALUES (?, ?, ?, ?, 0)");
+            $insert->execute([$code, $name, $type, $tenant_id]);
+            return (int)$pdo->lastInsertId();
+        } catch (Throwable $eIns) {
+            // Self-heal: Drop legacy global unique key on code if it doesn't include tenant_id
+            try {
+                $indexes = $pdo->query("SHOW INDEX FROM acc_chart_of_accounts")->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($indexes as $idx) {
+                    if ($idx['Non_unique'] == 0 && $idx['Key_name'] !== 'PRIMARY' && $idx['Column_name'] === 'code') {
+                        $kName = $idx['Key_name'];
+                        $hasTenant = false;
+                        foreach ($indexes as $idx2) {
+                            if ($idx2['Key_name'] === $kName && $idx2['Column_name'] === 'tenant_id') {
+                                $hasTenant = true;
+                            }
+                        }
+                        if (!$hasTenant) {
+                            try { $pdo->exec("ALTER TABLE acc_chart_of_accounts DROP INDEX `$kName`"); } catch (Throwable $eDrop) {}
+                        }
+                    }
+                }
+                try {
+                    $pdo->exec("ALTER TABLE acc_chart_of_accounts ADD UNIQUE KEY idx_tenant_acc_code (tenant_id, code)");
+                } catch (Throwable $eAddIdx) {}
+
+                // Retry original insert after index fix
+                $insert = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, tenant_id, is_deleted) VALUES (?, ?, ?, ?, 0)");
+                $insert->execute([$code, $name, $type, $tenant_id]);
+                return (int)$pdo->lastInsertId();
+            } catch (Throwable $eRetry) {
+                // If code still collides, generate next safe sequential code
+                try {
+                    $safeCode = function_exists('get_next_chart_code') ? get_next_chart_code($pdo, $type, $tenant_id) : ($code . '_' . $tenant_id);
+                    $insFallback = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, tenant_id, is_deleted) VALUES (?, ?, ?, ?, 0)");
+                    $insFallback->execute([$safeCode, $name, $type, $tenant_id]);
+                    return (int)$pdo->lastInsertId();
+                } catch (Throwable $eFinal) {
+                    // Final safe fallback: find any active account of this type or tenant
+                    $fbStmt = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE tenant_id = ? AND (type = ? OR type = 'Asset') AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+                    $fbStmt->execute([$tenant_id, $type]);
+                    $fbId = $fbStmt->fetchColumn();
+                    if ($fbId) return (int)$fbId;
+                    return 1;
+                }
+            }
+        }
     }
 }
 
@@ -77,7 +144,17 @@ if (!function_exists('finance_accounting_post')) {
             } catch (Throwable $e) {}
         }
         $targetType = $isExpense ? 'Expense' : 'Revenue';
+        $is_zakat = (strpos($headName, 'زکوۃ') !== false || strpos($headName, 'زکوٰۃ') !== false || stripos($headName, 'zakat') !== false);
+        $is_sadaqah = (strpos($headName, 'صدقات') !== false || stripos($headName, 'sadaqah') !== false || strpos($headName, 'صدقہ') !== false);
+        $is_fee = (strpos($headName, 'فیس') !== false || stripos($headName, 'fee') !== false);
         $offsetId = 0;
+        if (!$isExpense && $is_zakat) {
+            $offsetId = finance_accounting_ensure_account($pdo, '2101', 'Zakat Fund (فنڈ زکوٰۃ - امانت)', 'Liability', $tenant_id);
+        } elseif (!$isExpense && $is_sadaqah) {
+            $offsetId = finance_accounting_ensure_account($pdo, '2102', 'Sadaqah Fund (فنڈ صدقات و خیرات)', 'Liability', $tenant_id);
+        } elseif (!$isExpense && $is_fee) {
+            $offsetId = finance_accounting_ensure_account($pdo, '4001', 'Fee Income (آمدن تعلیمی فیس)', 'Revenue', $tenant_id);
+        }
         if ($headName !== '') {
             try {
                 $findAcc = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
@@ -88,9 +165,7 @@ if (!function_exists('finance_accounting_post')) {
                     $maxCodeStmt = $pdo->query("SELECT MAX(CAST(code AS UNSIGNED)) FROM acc_chart_of_accounts WHERE code LIKE '{$codePrefix}%' AND LENGTH(code) = 4 AND tenant_id = $tenant_id");
                     $maxCode = (int)($maxCodeStmt ? $maxCodeStmt->fetchColumn() : 0);
                     $nextCode = $maxCode > 0 ? (string)($maxCode + 1) : ($isExpense ? '5010' : '4010');
-                    $insAcc = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, tenant_id, is_deleted) VALUES (?, ?, ?, ?, 0)");
-                    $insAcc->execute([$nextCode, $headName, $targetType, $tenant_id]);
-                    $offsetId = (int)$pdo->lastInsertId();
+                    $offsetId = finance_accounting_ensure_account($pdo, $nextCode, $headName, $targetType, $tenant_id);
                 }
             } catch (Throwable $e) {}
         }
@@ -149,19 +224,25 @@ if (!function_exists('finance_accounting_post')) {
 }
 
 if (!function_exists('finance_accounting_backfill')) {
-    function finance_accounting_backfill(PDO $pdo, $fromDate = null, $toDate = null) {
+    function finance_accounting_backfill(PDO $pdo, $fromDate = null, $toDate = null, $tenant_id = null) {
+        if ($tenant_id === null && function_exists('get_current_tenant_id')) {
+            $tenant_id = (int)get_current_tenant_id();
+        }
+        $tenant_id = (int)($tenant_id ?: 1);
+        $t_clause = ($tenant_id == 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $tenant_id";
+
         // 1. Sync deleted vouchers with deleted finance entries (Cross-DB safe)
         try {
-            $pdo->exec("UPDATE acc_vouchers SET is_deleted = 1 WHERE reference IN (SELECT CONCAT('FIN-', id) FROM finance WHERE is_deleted = 1)");
+            $pdo->exec("UPDATE acc_vouchers SET is_deleted = 1 WHERE reference IN (SELECT CONCAT('FIN-', id) FROM finance WHERE is_deleted = 1 AND $t_clause)");
         } catch (Throwable $e) {
             try {
-                $pdo->exec("UPDATE acc_vouchers SET is_deleted = 1 WHERE reference LIKE 'FIN-%' AND CAST(SUBSTR(reference, 5) AS INTEGER) IN (SELECT id FROM finance WHERE is_deleted = 1)");
+                $pdo->exec("UPDATE acc_vouchers SET is_deleted = 1 WHERE reference LIKE 'FIN-%' AND CAST(SUBSTR(reference, 5) AS INTEGER) IN (SELECT id FROM finance WHERE is_deleted = 1 AND $t_clause)");
             } catch (Throwable $e2) {}
         }
 
         // 2. Clean orphan/unlinked SF- and FIN- vouchers whose finance record is deleted or missing
         try {
-            $pdo->exec("UPDATE acc_vouchers SET is_deleted = 1 WHERE reference LIKE 'FIN-%' AND CAST(SUBSTR(reference, 5) AS UNSIGNED) NOT IN (SELECT id FROM finance WHERE (is_deleted = 0 OR is_deleted IS NULL))");
+            $pdo->exec("UPDATE acc_vouchers SET is_deleted = 1 WHERE reference LIKE 'FIN-%' AND CAST(SUBSTR(reference, 5) AS UNSIGNED) NOT IN (SELECT id FROM finance WHERE (is_deleted = 0 OR is_deleted IS NULL) AND $t_clause) AND $t_clause");
         } catch (Throwable $e) {}
         
         // 3. Sync deleted vouchers with deleted/cancelled payroll entries (Cross-DB safe)
@@ -184,7 +265,7 @@ if (!function_exists('finance_accounting_backfill')) {
             ");
         } catch (Throwable $e) {}
 
-        $where = ["(is_deleted = 0 OR is_deleted IS NULL)", "amount > 0"];
+        $where = ["(is_deleted = 0 OR is_deleted IS NULL)", "amount > 0", $t_clause];
         $args = [];
 
         if ($fromDate !== null && $fromDate !== '') {
@@ -887,4 +968,100 @@ if (!function_exists('finance_resequence_all_receipt_numbers')) {
     }
 }
 
+if (!function_exists('finance_get_unified_accounting_truth')) {
+    function finance_get_unified_accounting_truth(PDO $pdo, $tenant_id = null, $sys = 'Madrasa', $fromDate = null, $toDate = null) {
+        if ($tenant_id === null && function_exists('get_current_tenant_id')) {
+            $tenant_id = (int)get_current_tenant_id();
+        }
+        $tenant_id = (int)($tenant_id ?: 1);
 
+        finance_accounting_backfill($pdo, $fromDate, $toDate);
+
+        $sys_cond = ($sys === 'Masjid') ? "v.system_type = 'Masjid'" : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
+        
+        $date_cond = "";
+        $params = [$tenant_id, $tenant_id];
+        if (!empty($fromDate)) {
+            $date_cond .= " AND v.date >= ?";
+            $params[] = $fromDate;
+        }
+        if (!empty($toDate)) {
+            $date_cond .= " AND v.date <= ?";
+            $params[] = $toDate;
+        }
+
+        // Query all approved ledger entries with account details
+        $sql = "
+            SELECT a.id, a.code, a.name, a.type, 
+                   SUM(e.debit) as total_debit, 
+                   SUM(e.credit) as total_credit
+            FROM acc_chart_of_accounts a
+            JOIN acc_ledger_entries e ON a.id = e.account_id AND e.tenant_id = ?
+            JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ? AND $sys_cond $date_cond
+            WHERE a.is_deleted = 0
+            GROUP BY a.id, a.code, a.name, a.type
+            ORDER BY a.code ASC
+        ";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $total_revenue = 0.0;
+        $total_expense = 0.0;
+        $cash_in_hand = 0.0;
+        $bank_balances = 0.0;
+        $receivables = 0.0;
+        $zakat_fund = 0.0;
+        $sadaqah_fund = 0.0;
+        $liabilities = 0.0;
+
+        foreach ($rows as $r) {
+            $dr = (float)($r['total_debit'] ?? 0);
+            $cr = (float)($r['total_credit'] ?? 0);
+            $type = ucfirst(strtolower(trim((string)$r['type'])));
+            $code = trim((string)$r['code']);
+            $name = trim((string)$r['name']);
+
+            if ($type === 'Revenue' || $type === 'Income') {
+                $total_revenue += ($cr - $dr);
+            } elseif ($type === 'Expense') {
+                $total_expense += ($dr - $cr);
+            } elseif ($type === 'Asset') {
+                $asset_bal = ($dr - $cr);
+                if ($code === '1001' || strpos($name, 'Cash') !== false || strpos($name, 'نقد') !== false) {
+                    $cash_in_hand += $asset_bal;
+                } elseif ($code === '1002' || strpos($name, 'Bank') !== false || strpos($name, 'بینک') !== false) {
+                    $bank_balances += $asset_bal;
+                } elseif ($code === '1101' || strpos($name, 'Receivable') !== false || strpos($name, 'وصول') !== false) {
+                    $receivables += $asset_bal;
+                }
+            } elseif ($type === 'Liability') {
+                $liab_bal = ($cr - $dr);
+                if ($code === '2101' || strpos($name, 'زکوٰۃ') !== false || strpos($name, 'زکوۃ') !== false || strpos($name, 'Zakat') !== false) {
+                    $zakat_fund += $liab_bal;
+                } elseif ($code === '2102' || strpos($name, 'صدقات') !== false || strpos($name, 'Sadaqah') !== false) {
+                    $sadaqah_fund += $liab_bal;
+                } else {
+                    $liabilities += $liab_bal;
+                }
+            }
+        }
+
+        $net_balance = $total_revenue - $total_expense;
+
+        return [
+            'revenue' => $total_revenue,
+            'expense' => $total_expense,
+            'net_surplus' => $net_balance,
+            'cash_in_hand' => $cash_in_hand,
+            'bank_balances' => $bank_balances,
+            'total_liquid_cash' => ($cash_in_hand + $bank_balances),
+            'receivables' => $receivables,
+            'zakat_fund' => $zakat_fund,
+            'sadaqah_fund' => $sadaqah_fund,
+            'other_liabilities' => $liabilities,
+            'accounts_breakdown' => $rows
+        ];
+    }
+}

@@ -8,21 +8,9 @@ header("Expires: 0");
 ini_set('display_errors', 0);
 error_reporting(0);
 
+require_once __DIR__ . '/session_init.php';
 if (session_status() === PHP_SESSION_NONE) {
-    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
-    if (PHP_VERSION_ID >= 70300) {
-        $sessParams = [
-            'lifetime' => 86400 * 30,
-            'path' => '/',
-            'httponly' => true,
-            'samesite' => 'Lax'
-        ];
-        if ($isHttps) $sessParams['secure'] = true;
-        @session_set_cookie_params($sessParams);
-    } else {
-        @session_set_cookie_params(86400 * 30, '/; samesite=Lax', null, $isHttps, true);
-    }
-    session_start();
+    madrasa_safe_session_start();
 }
 
 try {
@@ -31,7 +19,7 @@ try {
     die("<div style='font-family:sans-serif;padding:40px;text-align:center;direction:rtl;'><h2>ڈیٹابیس رابطہ کی خرابی</h2><p style='color:#c00;font-size:16px;'>" . htmlspecialchars($e->getMessage()) . " (" . basename($e->getFile()) . ":" . $e->getLine() . ")</p></div>");
 }
 
-if (isset($_GET['logout'])) {
+if (isset($_GET['logout']) || isset($_GET['logged_out'])) {
     session_unset();
     session_destroy();
     if (function_exists('madrasa_clear_auth_cookies')) {
@@ -42,8 +30,13 @@ if (isset($_GET['logout'])) {
     }
 }
 
-// اگر پہلے سے لاگ ان ہے تو ڈیش بورڈ پر بھیج دیں
-if (isset($_SESSION['user_id'])) {
+// زبان کا انتخاب اور کُکی پر پائیداری
+if (isset($_GET['lang'])) {
+    $_SESSION['lang'] = $_GET['lang'];
+    @setcookie('app_language', $_GET['lang'], time() + (86400 * 365), '/');
+}
+$lang = $_SESSION['lang'] ?? ($_COOKIE['app_language'] ?? 'ur');
+if (!isset($_GET['logout']) && !isset($_GET['logged_out']) && isset($_SESSION['user_id'])) {
     $dest = (($_SESSION['system_type'] ?? '') === 'Masjid') ? 'masjid_dashboard.php' : 'dashboard.php';
     if (!headers_sent()) {
         header("Location: $dest");
@@ -57,8 +50,27 @@ $error = '';
 // خودکار ڈیٹابیس اسکیما اصلاح برائے فول پروف پاسورڈ و ملٹی ٹیننسی
 try { $pdo->exec("ALTER TABLE admins MODIFY COLUMN password VARCHAR(255) NOT NULL"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE teachers MODIFY COLUMN password VARCHAR(255) NOT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE teachers ADD COLUMN username VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE teachers ADD COLUMN email VARCHAR(150) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE teachers ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE students MODIFY COLUMN password VARCHAR(255) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE students ADD COLUMN tenant_id INT DEFAULT 1"); } catch (Throwable $e) {}
+try {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `parents` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `tenant_id` INT DEFAULT 1,
+            `name` VARCHAR(150) NOT NULL,
+            `phone` VARCHAR(50) DEFAULT NULL,
+            `password` VARCHAR(255) DEFAULT NULL,
+            `is_active` TINYINT(1) DEFAULT 1,
+            `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ");
+} catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE parents MODIFY COLUMN password VARCHAR(255) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE parents ADD COLUMN tenant_id INT DEFAULT 1"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE parents ADD COLUMN is_active TINYINT(1) DEFAULT 1"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE admins ADD COLUMN email VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE admins ADD COLUMN phone VARCHAR(50) DEFAULT NULL"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE admins ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
@@ -68,7 +80,7 @@ $cookieTenant = $_COOKIE['last_tenant_code'] ?? '';
 if ($cookieTenant === 'MAIN01') {
     $cookieTenant = '';
 }
-$tenant_code = strtoupper(trim($_POST['tenant_code'] ?? ($_GET['code'] ?? ($_GET['tenant_code'] ?? $cookieTenant))));
+$tenant_code = strtoupper(trim($_POST['tenant_code'] ?? ($_GET['code'] ?? ($_GET['tenant_code'] ?? ''))));
 
 /**
  * فول پروف پاسورڈ ویریفکیشن ہیلپر (بمع خودکار مرمت برائے Truncated/MD5/Plaintext)
@@ -120,6 +132,27 @@ try {
     $adminCols = $pdo->query("SHOW COLUMNS FROM admins")->fetchAll(PDO::FETCH_COLUMN) ?: [];
 } catch (Throwable $eCols) {
     $adminCols = ['id', 'username', 'password', 'tenant_id', 'role', 'name'];
+}
+
+$teacherCols = [];
+try {
+    $teacherCols = $pdo->query("SHOW COLUMNS FROM teachers")->fetchAll(PDO::FETCH_COLUMN) ?: [];
+} catch (Throwable $eTcols) {
+    $teacherCols = ['id', 'name', 'phone', 'tenant_id'];
+}
+
+$studentCols = [];
+try {
+    $studentCols = $pdo->query("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN) ?: [];
+} catch (Throwable $eScols) {
+    $studentCols = ['id', 'name', 'admission_number', 'phone', 'tenant_id'];
+}
+
+$parentCols = [];
+try {
+    $parentCols = $pdo->query("SHOW COLUMNS FROM parents")->fetchAll(PDO::FETCH_COLUMN) ?: [];
+} catch (Throwable $ePcols) {
+    $parentCols = ['id', 'name', 'phone', 'password', 'tenant_id'];
 }
 
 $tenantCols = [];
@@ -203,11 +236,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            $hasATenant = in_array('tenant_id', $adminCols);
+
             // Columns to check in tenants table
-            foreach (['name', 'email', 'phone', 'whatsapp', 'code', 'slug'] as $tc) {
-                if (in_array($tc, $tenantCols)) {
-                    $admWhereParts[] = "LOWER(t.`$tc`) = LOWER(?)";
-                    $adminParams[] = $username;
+            if ($hasATenant) {
+                foreach (['name', 'email', 'phone', 'whatsapp', 'code', 'slug'] as $tc) {
+                    if (in_array($tc, $tenantCols)) {
+                        $admWhereParts[] = "LOWER(t.`$tc`) = LOWER(?)";
+                        $adminParams[] = $username;
+                    }
                 }
             }
 
@@ -215,16 +252,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $admWhereParts[] = "LOWER(a.username) = LOWER(?)";
                 $adminParams[] = $username;
             }
+
             $adminWhereSql = '(' . implode(' OR ', $admWhereParts) . ')';
 
-            $adminQuery = "
-                SELECT a.*, 
-                       t.id as t_id, t.code as t_code, t.name as t_name, 
-                       t.system_type as t_system_type, t.status as t_status
-                FROM admins a
-                LEFT JOIN tenants t ON a.tenant_id = t.id
-                WHERE $adminWhereSql
-            ";
+            if ($hasATenant) {
+                $adminQuery = "
+                    SELECT a.*, 
+                           t.id as t_id, t.code as t_code, t.name as t_name, 
+                           t.system_type as t_system_type, t.status as t_status
+                    FROM admins a
+                    LEFT JOIN tenants t ON a.tenant_id = t.id
+                    WHERE $adminWhereSql
+                ";
+            } else {
+                $adminQuery = "
+                    SELECT a.*, 
+                           1 as t_id, 'MAIN01' as t_code, 'کلاؤڈ ساس ادارہ' as t_name, 
+                           'Madrasa' as t_system_type, 'active' as t_status
+                    FROM admins a
+                    WHERE $adminWhereSql
+                ";
+            }
             if (in_array('is_deleted', $adminCols)) {
                 $adminQuery .= " AND (a.is_deleted = 0 OR a.is_deleted IS NULL)";
             }
@@ -233,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $prefCode = (!empty($tenant_input) && strtoupper($tenant_input) !== 'MAIN01') ? strtoupper($tenant_input) : '';
             $admOrderParts = [];
             $admOrderParams = [];
-            if (!empty($prefCode)) {
+            if (!empty($prefCode) && $hasATenant) {
                 if (in_array('code', $tenantCols)) {
                     $admOrderParts[] = "WHEN UPPER(t.code) = UPPER(?) THEN 1";
                     $admOrderParams[] = $prefCode;
@@ -255,9 +303,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $adminQuery .= " ORDER BY a.id DESC LIMIT 25";
             }
 
-            $stmtAdmins = $pdo->prepare($adminQuery);
-            $stmtAdmins->execute($adminParams);
-            $candidateAdmins = $stmtAdmins->fetchAll(PDO::FETCH_ASSOC);
+            $candidateAdmins = [];
+            try {
+                $stmtAdmins = $pdo->prepare($adminQuery);
+                $stmtAdmins->execute($adminParams);
+                $candidateAdmins = $stmtAdmins->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable $eAdmExec) {
+                $candidateAdmins = [];
+            }
 
             // تمام میچنگ ایڈمنز میں پاسورڈ کی فول پروف جانچ
             $matchedAdmin = null;
@@ -327,32 +380,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // 2. اساتذہ چیک کریں (Teachers table)
             if (empty($error)) {
-                $tQuery = "
-                    SELECT tc.*, 
-                           tn.id as t_id, tn.code as t_code, tn.name as t_name, 
-                           tn.system_type as t_system_type
-                    FROM teachers tc
-                    LEFT JOIN tenants tn ON tc.tenant_id = tn.id
-                    WHERE (
-                        LOWER(tc.username) = LOWER(?) OR 
-                        LOWER(tc.name) = LOWER(?) OR 
-                        tc.email = ? OR 
-                        tc.phone = ? OR 
-                        UPPER(tn.code) = UPPER(?)
-                    )
-                    AND (tc.is_deleted = 0 OR tc.is_deleted IS NULL)
-                    ORDER BY 
-                        CASE 
-                            WHEN ? != '' AND UPPER(tn.code) = UPPER(?) THEN 1 
-                            ELSE 2 
-                        END, 
-                        tc.id DESC
-                    LIMIT 15
-                ";
-                $tParams = [$username, $username, $username, $username, $username, $prefCode, $prefCode];
-                $stmtTeachers = $pdo->prepare($tQuery);
-                $stmtTeachers->execute($tParams);
-                $candTeachers = $stmtTeachers->fetchAll(PDO::FETCH_ASSOC);
+                $hasTTenant = in_array('tenant_id', $teacherCols);
+                $tWhereParts = [];
+                $tParams = [];
+
+                if (in_array('username', $teacherCols)) {
+                    $tWhereParts[] = "LOWER(tc.username) = LOWER(?)";
+                    $tParams[] = $username;
+                }
+                if (in_array('name', $teacherCols)) {
+                    $tWhereParts[] = "LOWER(tc.name) = LOWER(?)";
+                    $tParams[] = $username;
+                }
+                if (in_array('email', $teacherCols)) {
+                    $tWhereParts[] = "tc.email = ?";
+                    $tParams[] = $username;
+                }
+                if (in_array('phone', $teacherCols)) {
+                    $tWhereParts[] = "tc.phone = ?";
+                    $tParams[] = $username;
+                }
+                if ($hasTTenant && in_array('code', $tenantCols)) {
+                    $tWhereParts[] = "UPPER(tn.code) = UPPER(?)";
+                    $tParams[] = $username;
+                }
+
+                if (empty($tWhereParts)) {
+                    $tWhereParts[] = "LOWER(tc.name) = LOWER(?)";
+                    $tParams[] = $username;
+                }
+
+                $tWhereSql = '(' . implode(' OR ', $tWhereParts) . ')';
+                $tDelSql = in_array('is_deleted', $teacherCols) ? "AND (tc.is_deleted = 0 OR tc.is_deleted IS NULL)" : "";
+
+                if ($hasTTenant) {
+                    $tQuery = "
+                        SELECT tc.*, 
+                               tn.id as t_id, tn.code as t_code, tn.name as t_name, 
+                               tn.system_type as t_system_type
+                        FROM teachers tc
+                        LEFT JOIN tenants tn ON tc.tenant_id = tn.id
+                        WHERE $tWhereSql $tDelSql
+                        ORDER BY 
+                            CASE 
+                                WHEN ? != '' AND UPPER(tn.code) = UPPER(?) THEN 1 
+                                ELSE 2 
+                            END, 
+                            tc.id DESC
+                        LIMIT 15
+                    ";
+                    $tParams[] = $prefCode;
+                    $tParams[] = $prefCode;
+                } else {
+                    $tQuery = "
+                        SELECT tc.*, 
+                               1 as t_id, 'MAIN01' as t_code, 'کلاؤڈ ساس ادارہ' as t_name, 
+                               'Madrasa' as t_system_type
+                        FROM teachers tc
+                        WHERE $tWhereSql $tDelSql
+                        ORDER BY tc.id DESC
+                        LIMIT 15
+                    ";
+                }
+
+                $candTeachers = [];
+                try {
+                    $stmtTeachers = $pdo->prepare($tQuery);
+                    $stmtTeachers->execute($tParams);
+                    $candTeachers = $stmtTeachers->fetchAll(PDO::FETCH_ASSOC);
+                } catch (Throwable $eTcExec) {
+                    $candTeachers = [];
+                }
 
                 foreach ($candTeachers as $teacher) {
                     $tRehash = false;
@@ -404,29 +502,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // 3. طلبہ چیک کریں (Students table)
             if (empty($error)) {
-                $stdQuery = "
-                    SELECT s.*, tn.id as t_id, tn.code as t_code, tn.name as t_name, tn.system_type as t_system_type
-                    FROM students s
-                    LEFT JOIN tenants tn ON s.tenant_id = tn.id
-                    WHERE (
-                        s.admission_number = ? OR 
-                        s.phone = ? OR 
-                        LOWER(s.name) = LOWER(?) OR 
-                        UPPER(tn.code) = UPPER(?)
-                    )
-                    AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
-                    ORDER BY 
-                        CASE 
-                            WHEN ? != '' AND UPPER(tn.code) = UPPER(?) THEN 1 
-                            ELSE 2 
-                        END, 
-                        s.id DESC
-                    LIMIT 15
-                ";
-                $stdParams = [$username, $username, $username, $username, $prefCode, $prefCode];
-                $stmtStudents = $pdo->prepare($stdQuery);
-                $stmtStudents->execute($stdParams);
-                $candStudents = $stmtStudents->fetchAll(PDO::FETCH_ASSOC);
+                $hasSTenant = in_array('tenant_id', $studentCols);
+                $sWhereParts = [];
+                $stdParams = [];
+
+                if (in_array('admission_number', $studentCols)) {
+                    $sWhereParts[] = "s.admission_number = ?";
+                    $stdParams[] = $username;
+                }
+                if (in_array('phone', $studentCols)) {
+                    $sWhereParts[] = "s.phone = ?";
+                    $stdParams[] = $username;
+                }
+                if (in_array('name', $studentCols)) {
+                    $sWhereParts[] = "LOWER(s.name) = LOWER(?)";
+                    $stdParams[] = $username;
+                }
+                if ($hasSTenant && in_array('code', $tenantCols)) {
+                    $sWhereParts[] = "UPPER(tn.code) = UPPER(?)";
+                    $stdParams[] = $username;
+                }
+
+                if (empty($sWhereParts)) {
+                    $sWhereParts[] = "s.id = ?";
+                    $stdParams[] = (int)$username;
+                }
+
+                $sWhereSql = '(' . implode(' OR ', $sWhereParts) . ')';
+                $sDelSql = in_array('is_deleted', $studentCols) ? "AND (s.is_deleted = 0 OR s.is_deleted IS NULL)" : "";
+
+                if ($hasSTenant) {
+                    $stdQuery = "
+                        SELECT s.*, tn.id as t_id, tn.code as t_code, tn.name as t_name, tn.system_type as t_system_type
+                        FROM students s
+                        LEFT JOIN tenants tn ON s.tenant_id = tn.id
+                        WHERE $sWhereSql $sDelSql
+                        ORDER BY 
+                            CASE 
+                                WHEN ? != '' AND UPPER(tn.code) = UPPER(?) THEN 1 
+                                ELSE 2 
+                            END, 
+                            s.id DESC
+                        LIMIT 15
+                    ";
+                    $stdParams[] = $prefCode;
+                    $stdParams[] = $prefCode;
+                } else {
+                    $stdQuery = "
+                        SELECT s.*, 1 as t_id, 'MAIN01' as t_code, 'کلاؤڈ ساس ادارہ' as t_name, 'Madrasa' as t_system_type
+                        FROM students s
+                        WHERE $sWhereSql $sDelSql
+                        ORDER BY s.id DESC
+                        LIMIT 15
+                    ";
+                }
+
+                $candStudents = [];
+                try {
+                    $stmtStudents = $pdo->prepare($stdQuery);
+                    $stmtStudents->execute($stdParams);
+                    $candStudents = $stmtStudents->fetchAll(PDO::FETCH_ASSOC);
+                } catch (Throwable $eStdExec) {
+                    $candStudents = [];
+                }
 
                 foreach ($candStudents as $student) {
                     $sRehash = false;
@@ -473,71 +611,111 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // 4. والدین چیک کریں (Parents table)
-            if (empty($error)) {
-                $pQuery = "
-                    SELECT p.*, tn.id as t_id, tn.code as t_code, tn.name as t_name
-                    FROM parents p
-                    LEFT JOIN tenants tn ON p.tenant_id = tn.id
-                    WHERE (
-                        p.phone = ? OR 
-                        LOWER(p.name) = LOWER(?) OR 
-                        UPPER(tn.code) = UPPER(?)
-                    )
-                    AND (p.is_active = 1 OR p.is_active IS NULL)
-                    ORDER BY 
-                        CASE 
-                            WHEN ? != '' AND UPPER(tn.code) = UPPER(?) THEN 1 
-                            ELSE 2 
-                        END, 
-                        p.id DESC
-                    LIMIT 15
-                ";
-                $pParams = [$username, $username, $username, $prefCode, $prefCode];
-                $stmtParents = $pdo->prepare($pQuery);
-                $stmtParents->execute($pParams);
-                $candParents = $stmtParents->fetchAll(PDO::FETCH_ASSOC);
+            // 4. والدین چیک کریں (Parents table - Dynamic & Fail-Safe)
+            if (empty($error) && !empty($parentCols)) {
+                try {
+                    $hasPTenant = in_array('tenant_id', $parentCols);
+                    $hasPActive = in_array('is_active', $parentCols);
+                    $hasPPhone  = in_array('phone', $parentCols);
+                    $hasPName   = in_array('name', $parentCols);
 
-                foreach ($candParents as $parent) {
-                    $pRehash = false;
-                    if (!empty($parent['password']) && smart_verify_login_password($password, $parent['password'], $pRehash)) {
-                        $tId = (int)($parent['t_id'] ?? $parent['tenant_id'] ?? 1);
-                        $tCode = !empty($parent['t_code']) ? $parent['t_code'] : 'MAIN01';
-                        $tName = !empty($parent['t_name']) ? $parent['t_name'] : 'کلاؤڈ ساس ادارہ';
+                    $pWhereParts = [];
+                    $pParams = [];
 
-                        if (session_status() === PHP_SESSION_NONE) { session_start(); }
-
-                        $_SESSION['user_id'] = (int)$parent['id'];
-                        $_SESSION['role'] = 'parent';
-                        $_SESSION['name'] = $parent['name'] ?? 'والد/سرپرست';
-                        $_SESSION['tenant_id'] = $tId;
-                        $_SESSION['tenant_code'] = $tCode;
-                        $_SESSION['tenant_name'] = $tName;
-                        $_SESSION['last_activity'] = time();
-
-                        if ($pRehash) {
-                            try {
-                                $newHash = password_hash($password, PASSWORD_DEFAULT);
-                                $pdo->prepare("UPDATE parents SET password = ? WHERE id = ?")->execute([$newHash, $parent['id']]);
-                            } catch (Throwable $eUpPar) {}
-                        }
-
-                        // Set persistent dual-layer authentication token
-                        if (function_exists('madrasa_generate_auth_token') && function_exists('madrasa_set_auth_cookies')) {
-                            $token = madrasa_generate_auth_token($parent['id'], $tId, 'parent', $parent['phone'] ?? $parent['name'], $parent['password'], 'Madrasa');
-                            madrasa_set_auth_cookies($token, $tCode);
-                        } else {
-                            $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
-                            setcookie('last_tenant_code', $tCode, time() + (86400 * 30), '/', null, $isHttps, false);
-                        }
-                        session_write_close();
-
-                        if (!headers_sent()) {
-                            header("Location: dashboard.php");
-                        }
-                        echo "<!DOCTYPE html><html lang='ur' dir='rtl'><head><meta charset='UTF-8'><meta http-equiv='refresh' content='0;url=dashboard.php'></head><body><script>window.location.replace('dashboard.php');</script></body></html>";
-                        exit;
+                    if ($hasPPhone) {
+                        $pWhereParts[] = "p.phone = ?";
+                        $pParams[] = $username;
                     }
+                    if ($hasPName) {
+                        $pWhereParts[] = "LOWER(p.name) = LOWER(?)";
+                        $pParams[] = $username;
+                    }
+                    if ($hasPTenant && in_array('code', $tenantCols)) {
+                        $pWhereParts[] = "UPPER(tn.code) = UPPER(?)";
+                        $pParams[] = $username;
+                    }
+
+                    if (empty($pWhereParts)) {
+                        $pWhereParts[] = "p.id = ?";
+                        $pParams[] = (int)$username;
+                    }
+
+                    $pWhereSql = '(' . implode(' OR ', $pWhereParts) . ')';
+                    $pActiveSql = $hasPActive ? "AND (p.is_active = 1 OR p.is_active IS NULL)" : "";
+
+                    if ($hasPTenant) {
+                        $pQuery = "
+                            SELECT p.*, tn.id as t_id, tn.code as t_code, tn.name as t_name
+                            FROM parents p
+                            LEFT JOIN tenants tn ON p.tenant_id = tn.id
+                            WHERE $pWhereSql $pActiveSql
+                            ORDER BY 
+                                CASE 
+                                    WHEN ? != '' AND UPPER(tn.code) = UPPER(?) THEN 1 
+                                    ELSE 2 
+                                END, 
+                                p.id DESC
+                            LIMIT 15
+                        ";
+                        $pParams[] = $prefCode;
+                        $pParams[] = $prefCode;
+                    } else {
+                        $pQuery = "
+                            SELECT p.*, 1 as t_id, 'MAIN01' as t_code, 'کلاؤڈ ساس ادارہ' as t_name
+                            FROM parents p
+                            WHERE $pWhereSql $pActiveSql
+                            ORDER BY p.id DESC
+                            LIMIT 15
+                        ";
+                    }
+
+                    $stmtParents = $pdo->prepare($pQuery);
+                    $stmtParents->execute($pParams);
+                    $candParents = $stmtParents->fetchAll(PDO::FETCH_ASSOC);
+
+                    foreach ($candParents as $parent) {
+                        $pRehash = false;
+                        if (!empty($parent['password']) && smart_verify_login_password($password, $parent['password'], $pRehash)) {
+                            $tId = (int)($parent['t_id'] ?? $parent['tenant_id'] ?? 1);
+                            $tCode = !empty($parent['t_code']) ? $parent['t_code'] : 'MAIN01';
+                            $tName = !empty($parent['t_name']) ? $parent['t_name'] : 'کلاؤڈ ساس ادارہ';
+
+                            if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
+                            $_SESSION['user_id'] = (int)$parent['id'];
+                            $_SESSION['role'] = 'parent';
+                            $_SESSION['name'] = $parent['name'] ?? 'والد/سرپرست';
+                            $_SESSION['tenant_id'] = $tId;
+                            $_SESSION['tenant_code'] = $tCode;
+                            $_SESSION['tenant_name'] = $tName;
+                            $_SESSION['last_activity'] = time();
+
+                            if ($pRehash) {
+                                try {
+                                    $newHash = password_hash($password, PASSWORD_DEFAULT);
+                                    $pdo->prepare("UPDATE parents SET password = ? WHERE id = ?")->execute([$newHash, $parent['id']]);
+                                } catch (Throwable $eUpPar) {}
+                            }
+
+                            // Set persistent dual-layer authentication token
+                            if (function_exists('madrasa_generate_auth_token') && function_exists('madrasa_set_auth_cookies')) {
+                                $token = madrasa_generate_auth_token($parent['id'], $tId, 'parent', $parent['phone'] ?? $parent['name'], $parent['password'], 'Madrasa');
+                                madrasa_set_auth_cookies($token, $tCode);
+                            } else {
+                                $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+                                setcookie('last_tenant_code', $tCode, time() + (86400 * 30), '/', null, $isHttps, false);
+                            }
+                            session_write_close();
+
+                            if (!headers_sent()) {
+                                header("Location: dashboard.php");
+                            }
+                            echo "<!DOCTYPE html><html lang='ur' dir='rtl'><head><meta charset='UTF-8'><meta http-equiv='refresh' content='0;url=dashboard.php'></head><body><script>window.location.replace('dashboard.php');</script></body></html>";
+                            exit;
+                        }
+                    }
+                } catch (Throwable $eParent) {
+                    // Safe failover: parent login check error gracefully ignored
                 }
             }
 
@@ -651,6 +829,11 @@ if (!empty($tenant_code)) {
 </head>
 <body>
     <div class="login-box text-center">
+        <div class="d-flex justify-content-end mb-2">
+            <a href="?lang=<?php echo ($lang=='ur')?'en':'ur'; ?>" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-bold" style="font-size: 11px;">
+                <i class="fas fa-globe me-1"></i> <?php echo ($lang=='ur') ? 'English' : 'اردو'; ?>
+            </a>
+        </div>
         <div class="mb-3">
             <div style="display: inline-block; position: relative; margin-bottom: 12px;">
                 <img src="<?php echo htmlspecialchars($portal_logo); ?>" alt="Mindcrafts AI Logo" style="width: 88px; height: 88px; border-radius: 22px; border: 2px solid rgba(16, 185, 129, 0.4); background: #061814; object-fit: contain; box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25); padding: 4px;">
@@ -728,8 +911,12 @@ if (!empty($tenant_code)) {
                 <a href="register.php" class="text-success text-decoration-none small fw-bold"><i class="fas fa-plus-circle me-1"></i> نیا ادارہ رجسٹر کریں</a>
                 <a href="forgot_password.php" class="text-danger text-decoration-none small">پاسورڈ بھول گئے؟</a>
             </div>
-            <div class="text-center mt-2">
+            <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top border-secondary border-opacity-10">
                 <a href="index.php" class="small text-muted text-decoration-none">← ہوم لینڈنگ پیج پر جائیں</a>
+                <a href="super_admin.php" class="small text-info text-opacity-75 text-decoration-none"><i class="fas fa-shield-alt me-1"></i> سپر ایڈمن پورٹل</a>
+            </div>
+            <div class="text-center mt-3 pt-2 border-top border-secondary border-opacity-10">
+                <span class="badge bg-secondary bg-opacity-25 text-secondary border font-monospace" style="font-size: 11px;">v5.7.123 (SaaS Edition)</span>
             </div>
         </div>
     </div>

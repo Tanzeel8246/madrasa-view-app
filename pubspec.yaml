@@ -1,6 +1,6 @@
 name: madrasa_app
-description: "Madrasa Ashraf-ul-Madaris Management System"
-version: 5.7.114+333
+description: "Mindcrafts AI Madrasa Management System (SaaS)"
+version: 5.7.123+342
 
 
 environment:

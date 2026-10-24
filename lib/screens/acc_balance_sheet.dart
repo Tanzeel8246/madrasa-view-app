@@ -49,7 +49,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                SUM(CASE WHEN v.id IS NOT NULL THEN e.credit ELSE 0 END) as total_credit
         FROM acc_chart_of_accounts a
         LEFT JOIN acc_ledger_entries e ON a.id = e.account_id
-        LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND (v.status IS NULL OR v.status != 'Rejected') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.date <= ?
+        LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status = 'Approved' AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.date <= ?
         WHERE a.is_deleted = 0
         GROUP BY a.id, a.code, a.name, a.type
       ''';

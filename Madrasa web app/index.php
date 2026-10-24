@@ -155,9 +155,149 @@ if (empty($plans)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="MAMFSS Cloud Madrasa — پاکستان کا سب سے جدید اور جامع کلاؤڈ مدرسہ و مسجد ERP مینیجمنٹ سسٹم۔ ویب، اینڈرائڈ اور ونڈوز ہم آہنگ۔">
-    <meta name="keywords" content="مدرسہ سافٹ ویئر, مسجد مینیجمنٹ سسٹم, حفظ قرآن ٹریکر, مدرسہ اکاؤنٹنگ, مدرسہ ERP, کلاؤڈ مدرسہ">
-    <title>MAMFSS Cloud Madrasa — جدید کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم</title>
+    
+    <!-- Primary SEO Meta Tags -->
+    <title>MC-MMS — مائنڈکرافٹ کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم | جدید دینی تعلیمی ERP سافٹ ویئر</title>
+    <meta name="title" content="MC-MMS — مائنڈکرافٹ کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم | جدید دینی تعلیمی ERP سافٹ ویئر">
+    <meta name="description" content="پاکستان کا جدید ترین کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم (MC-MMS)۔ طلبہ داخلہ، روزانہ حاضری، آن لائن حفظ و ناظرہ ٹریکر، شرعی ڈبل انٹری اکاؤنٹنگ، فیس وصولی، دارالاقامہ، کتب خانہ، امتحانات اور AI خودکار رپورٹنگ۔ ویب، اینڈرائڈ اور ونڈوز ہم آہنگ۔ مفت ٹرائل حاصل کریں۔">
+    <meta name="keywords" content="مدرسہ سافٹ ویئر, مسجد مینیجمنٹ سسٹم, حفظ قرآن ٹریکر, مدرسہ اکاؤنٹنگ سافٹ ویئر, مدرسہ ERP پاکستان, کلاؤڈ مدرسہ سافٹ ویئر, جامعہ مینیجمنٹ سسٹم, دارالعلوم سافٹ ویئر, دینی مدارس ریکارڈ سسٹم, Islamic School Management Software, Madrasa ERP, Masjid Management System, Maktab App, Hifz Quran Tracker, Urdu Madrasa Software, MC-MMS">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+    <meta name="googlebot" content="index, follow">
+    <meta name="author" content="MindCrafts AI (مائنڈکرافٹ)">
+    <meta name="application-name" content="MC-MMS">
+    <link rel="canonical" href="https://madrasa.mamfss.com/">
+
+    <!-- Open Graph / Facebook / WhatsApp / LinkedIn -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://madrasa.mamfss.com/">
+    <meta property="og:site_name" content="MC-MMS Mindcrafts">
+    <meta property="og:locale" content="ur_PK">
+    <meta property="og:title" content="MC-MMS — مائنڈکرافٹ کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم | پاکستان کا نمبر 1 تعلیمی ERP">
+    <meta property="og:description" content="دینی مدارس، جامعات اور مساجد کے تمام انتظامی، تعلیمی اور مالیاتی امور کا یکجا کلاؤڈ حل۔ ویب، موبائل ایپ اور ونڈوز ڈیسک ٹاپ کے ساتھ۔ 20 طلبہ کے لیے بالکل مفت۔">
+    <meta property="og:image" content="https://madrasa.mamfss.com/logo_mindcrafts.svg">
+    <meta property="og:image:alt" content="MC-MMS Madrasa Management System Logo">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://madrasa.mamfss.com/">
+    <meta name="twitter:title" content="MC-MMS — جدید کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم">
+    <meta name="twitter:description" content="حفظ و ناظرہ ٹریکنگ، بائیو میٹرک حاضری، ڈبل انٹری اکاؤنٹنگ اور AI فیچرز کے ساتھ جدید ترین سافٹ ویئر۔">
+    <meta name="twitter:image" content="https://madrasa.mamfss.com/logo_mindcrafts.svg">
+
+    <!-- Schema.org Structured Data (JSON-LD) for Google Rich Snippets -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://madrasa.mamfss.com/#software",
+          "name": "MC-MMS (مائنڈکرافٹ مدرسہ و مسجد مینیجمنٹ سسٹم)",
+          "operatingSystem": "Web Browser, Android, Windows Desktop",
+          "applicationCategory": "EducationalApplication, BusinessApplication",
+          "description": "پاکستان و دنیا بھر کے دینی مدارس، جامعات اور مساجد کے لیے کلاؤڈ بیسڈ مکمل تعلیمی، مالیاتی اور انتظامی ERP حل۔",
+          "offers": [
+            {
+              "@type": "Offer",
+              "name": "Free Trial (مفت ٹرائل)",
+              "price": "0",
+              "priceCurrency": "PKR",
+              "description": "20 طلبہ، 1 کلاس، 2 اساتذہ — لائف ٹائم فری"
+            },
+            {
+              "@type": "Offer",
+              "name": "Basic (بنیادی پیکج)",
+              "price": "1500",
+              "priceCurrency": "PKR",
+              "description": "50 طلبہ، 3 کلاسز، 4 اساتذہ"
+            },
+            {
+              "@type": "Offer",
+              "name": "Standard (معیاری پیکج)",
+              "price": "2500",
+              "priceCurrency": "PKR",
+              "description": "100 طلبہ، 6 کلاسز، 8 اساتذہ"
+            },
+            {
+              "@type": "Offer",
+              "name": "Premium (پریمیم پیکج)",
+              "price": "4000",
+              "priceCurrency": "PKR",
+              "description": "200 طلبہ، 12 کلاسز، 16 اساتذہ"
+            }
+          ],
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "reviewCount": "180",
+            "bestRating": "5",
+            "worstRating": "1"
+          }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://madrasa.mamfss.com/#organization",
+          "name": "MindCrafts AI",
+          "url": "https://madrasa.mamfss.com",
+          "logo": "https://madrasa.mamfss.com/logo_mindcrafts.svg",
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "telephone": "+923000000000",
+            "contactType": "customer service",
+            "availableLanguage": ["Urdu", "English", "Arabic"]
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://madrasa.mamfss.com/#website",
+          "url": "https://madrasa.mamfss.com/",
+          "name": "MC-MMS",
+          "publisher": {
+            "@id": "https://madrasa.mamfss.com/#organization"
+          },
+          "inLanguage": "ur-PK"
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://madrasa.mamfss.com/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "کیا 20 طلبہ کا فری ٹرائل واقعی ہمیشہ کے لیے مفت ہے؟",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "جی ہاں، 20 طلبہ اور 1 کلاس کے لیے ہمارا بنیادی پیکج بغیر کسی کریڈٹ کارڈ یا وقتی پابندی کے بالکل مفت ہے۔ آپ جب چاہیں ادارہ بڑھنے پر اسے باآسانی اپ گریڈ کر سکتے ہیں۔"
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "کیا انٹرنیٹ منقطع ہونے کی صورت میں بھی سافٹ ویئر کام کرتا ہے؟",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "جی ہاں! ونڈوز ڈیسک ٹاپ سافٹ ویئر اور موبائل ایپ میں مکمل آف لائن لوکل ڈیٹابیس سپورٹ موجود ہے، انٹرنیٹ بحال ہوتے ہی تمام ڈیٹا خودکار سنک ہو جاتا ہے۔"
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "کیا اس میں مسجد اور مکتب کا انتظام الگ سے موجود ہے؟",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "جی ہاں! سسٹم میں مدرسہ موڈ اور مسجد/مکتب موڈ کا الگ الگ مکمل فریم ورک موجود ہے جو نمازیوں، چندہ جات، امام و موذن کے معاملات اور جزوقتی مکتب کو الگ الگ سنبھالتا ہے۔"
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "اس سسٹم میں اے آئی (AI) کے کیا کیا فیچرز شامل ہیں؟",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "سسٹم میں سمارٹ اے آئی اسسٹنٹ شامل ہے جو حفظ قرآن کی پیشرفت کا جائزہ لیتا ہے، تعلیمی کمزوریوں کی نشاندہی کرتا ہے، فنانس کے بجٹ الرٹس دیتا ہے اور خودکار اردو و عربی سرٹیفکیٹس و رپورٹس تیار کرتا ہے۔"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
     
     <!-- CSS & Fonts -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
@@ -530,7 +670,7 @@ if (empty($plans)) {
                 <img src="logo_mindcrafts.svg" alt="Mindcrafts AI" style="width: 44px; height: 44px; border-radius: 12px; object-fit: contain; background: #061814; border: 1px solid rgba(16, 185, 129, 0.4); padding: 2px;">
                 <div>
                     <span class="fw-bold fs-5 tracking-tight" style="color: #fff;">مدرسہ مینیجمنٹ <span style="color: var(--sa-primary);">سسٹم</span></span>
-                    <small class="d-block text-muted" style="font-size: 11px; margin-top: -4px;">بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)</small>
+                    <small class="d-block text-muted" style="font-size: 11px; margin-top: -4px;">بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI) — <span class="badge bg-success bg-opacity-25 text-success font-monospace" style="font-size: 10px;">v5.7.123 (SaaS Edition)</span></small>
                 </div>
             </a>
 
@@ -542,6 +682,7 @@ if (empty($plans)) {
                 <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
                     <li class="nav-item"><a class="nav-link nav-link-custom" href="#home">ہوم</a></li>
                     <li class="nav-item"><a class="nav-link nav-link-custom" href="#platforms">پلیٹ فارمز</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#ai-features"><i class="fas fa-sparkles text-warning me-1"></i> AI فیچرز</a></li>
                     <li class="nav-item"><a class="nav-link nav-link-custom" href="#features">خصوصیات</a></li>
                     <li class="nav-item"><a class="nav-link nav-link-custom" href="#how-it-works">طریقہ کار</a></li>
                     <li class="nav-item"><a class="nav-link nav-link-custom" href="#pricing">پیکجز و قیمتیں</a></li>
@@ -681,6 +822,94 @@ if (empty($plans)) {
                             <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> تھرمل رول اور A4 رسید پرنٹنگ</li>
                             <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> کلاؤڈ کے ساتھ بیک گراؤنڈ خودکار سنک</li>
                         </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 🌟 AI Powered Innovation Showcase -->
+    <section id="ai-features" class="py-5" style="background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.08) 0%, transparent 70%);">
+        <div class="container py-4">
+            <div class="glass-panel p-4 p-md-5" style="border: 1px solid rgba(212, 172, 13, 0.4); box-shadow: 0 10px 40px rgba(0,0,0,0.4);">
+                <div class="row align-items-center mb-4">
+                    <div class="col-12 col-lg-8">
+                        <span class="badge-pill-glow mb-2" style="background: rgba(212, 172, 13, 0.15); border-color: rgba(212, 172, 13, 0.4); color: #facc15;">
+                            <i class="fas fa-wand-magic-sparkles"></i> جدید مصنوعی ذہانت (AI) انضمام — MC-MMS 2026
+                        </span>
+                        <h2 class="fw-bold urdu-font fs-1 text-white mt-2">
+                            مصنوعی ذہانت (AI) سے لیس پاکستان کا پہلا جامع مدرسہ ERP
+                        </h2>
+                        <p class="text-muted urdu-font fs-6 mb-0">
+                            تعلیمی رفتار کے سمارٹ تجزیے، آواز سے اردو ٹائپنگ اور خودکار واٹس ایپ الرٹس کے ساتھ اپنے ادارے کا 70% قیمتی وقت اور افرادی قوت بچائیں۔
+                        </p>
+                    </div>
+                    <div class="col-12 col-lg-4 text-lg-start mt-3 mt-lg-0">
+                        <div class="d-inline-flex align-items-center gap-2 p-2 px-3 rounded-pill" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
+                            <i class="fas fa-microchip text-warning fs-4"></i>
+                            <div class="text-end">
+                                <div class="text-white small fw-bold">100% کلاؤڈ سمارٹ اے آئی</div>
+                                <div class="text-muted" style="font-size: 11px;">خودکار ڈیٹا پروسیسنگ</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mt-2">
+                    <div class="col-12 col-md-6 col-lg-3">
+                        <div class="p-3 rounded-4 h-100" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);">
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <div class="rounded-circle p-2 text-center" style="width: 42px; height: 42px; background: rgba(13, 148, 136, 0.2); color: #2dd4bf;">
+                                    <i class="fas fa-microphone-lines"></i>
+                                </div>
+                                <h6 class="fw-bold text-white mb-0 urdu-font">AI وائس ٹائپنگ</h6>
+                            </div>
+                            <p class="text-muted small urdu-font mb-0">
+                                بغیر کی بورڈ کے بول کر اسباق، حاضری، نوٹسز اور طلباء کے کوائف کا فوری اردو و انگریزی اندراج۔
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-lg-3">
+                        <div class="p-3 rounded-4 h-100" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);">
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <div class="rounded-circle p-2 text-center" style="width: 42px; height: 42px; background: rgba(124, 58, 237, 0.2); color: #a78bfa;">
+                                    <i class="fas fa-brain"></i>
+                                </div>
+                                <h6 class="fw-bold text-white mb-0 urdu-font">AI تعلیمی پیشین گوئی</h6>
+                            </div>
+                            <p class="text-muted small urdu-font mb-0">
+                                طلباء کے حفظ و ناظرہ کی رفتار کا سمارٹ تجزیہ، غلطیوں کی نشاندہی اور حفظ کی تکمیل کا تخمینہ۔
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-lg-3">
+                        <div class="p-3 rounded-4 h-100" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);">
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <div class="rounded-circle p-2 text-center" style="width: 42px; height: 42px; background: rgba(37, 99, 235, 0.2); color: #60a5fa;">
+                                    <i class="fas fa-bell"></i>
+                                </div>
+                                <h6 class="fw-bold text-white mb-0 urdu-font">AI سمارٹ الرٹس</h6>
+                            </div>
+                            <p class="text-muted small urdu-font mb-0">
+                                غیر حاضری، فیس کے بقایا جات اور اسباق کی کمی پر والدین اور اساتذہ کو فوری خودکار واٹس ایپ پیغامات۔
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-lg-3">
+                        <div class="p-3 rounded-4 h-100" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);">
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <div class="rounded-circle p-2 text-center" style="width: 42px; height: 42px; background: rgba(217, 119, 6, 0.2); color: #fbbf24;">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <h6 class="fw-bold text-white mb-0 urdu-font">AI مالیاتی اینالیٹکس</h6>
+                            </div>
+                            <p class="text-muted small urdu-font mb-0">
+                                اخراجات اور آمدن کا خودکار تقابلی جائزہ، مالیاتی خسارے کی پیشگی تنبیہ اور سمارٹ بجٹ پلاننگ۔
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1168,8 +1397,8 @@ if (empty($plans)) {
                 <div>
                     &copy; <?php echo date('Y'); ?> MAMFSS Cloud Madrasa Management System. تمام جملہ حقوق محفوظ ہیں۔
                 </div>
-                <div class="d-flex gap-3">
-                    <span>ورژن: 5.7.104 (SaaS Edition)</span>
+                <div class="d-flex gap-3 align-items-center">
+                    <span class="badge bg-secondary bg-opacity-25 text-white border border-secondary font-monospace" style="font-size: 11px;">ورژن: 5.7.123 (SaaS Edition)</span>
                     <span>|</span>
                     <a href="#rules" class="text-muted text-decoration-none">پرائیویسی پالیسی</a>
                 </div>

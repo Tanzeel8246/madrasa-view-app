@@ -26,7 +26,11 @@ if (function_exists('madrasa_ensure_session_started')) {
     madrasa_ensure_session_started();
 }
 if (isset($pdo) && function_exists('madrasa_restore_session_from_cookie')) {
-    madrasa_restore_session_from_cookie($pdo);
+    $curr_script = basename($_SERVER['PHP_SELF'] ?? '');
+    $is_login_page = ($curr_script === 'login.php' || $curr_script === 'logout.php');
+    if (!$is_login_page && !isset($_GET['logged_out']) && !isset($_GET['logout'])) {
+        madrasa_restore_session_from_cookie($pdo);
+    }
 }
 
 if (!function_exists('format_urdu_month_year')) {
@@ -389,7 +393,13 @@ function e($value) {
 
 // =================================================================
 
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
+if (session_status() === PHP_SESSION_NONE) {
+    if (function_exists('madrasa_safe_session_start')) {
+        madrasa_safe_session_start();
+    } else {
+        @session_start();
+    }
+}
 if (isset($_GET['lang'])) { $_SESSION['lang'] = $_GET['lang']; }
 $lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : 'ur';
 
@@ -917,12 +927,39 @@ $trans = [
 'q_2' => ['ur' => '2 پارے', 'en' => '2 Parahs'],
 'q_2_5' => ['ur' => 'ڈھائی (2.5) پارے', 'en' => '2.5 Parahs'],
 'q_3' => ['ur' => '3 پارے', 'en' => '3 Parahs'],
+'recent_admissions' => ['ur' => 'حالیہ داخلے', 'en' => 'Recent Admissions'],
+'quick_links' => ['ur' => 'فوری روابط', 'en' => 'Quick Links'],
+'student_id' => ['ur' => 'طالب علم کوڈ', 'en' => 'Student ID'],
+'admission_date' => ['ur' => 'تاریخِ داخلہ', 'en' => 'Admission Date'],
+'reversed' => ['ur' => 'تنسیخ شدہ', 'en' => 'Reversed'],
+'cancelled' => ['ur' => 'منسوخ شدہ', 'en' => 'Cancelled'],
+'sabqi' => ['ur' => 'سبقی', 'en' => 'Sabqi (Revision)'],
+'on_time' => ['ur' => 'بروقت', 'en' => 'On Time'],
+'teachers_record' => ['ur' => 'اساتذہ ریکارڈ', 'en' => 'Teachers Record'],
+'attendance_register' => ['ur' => 'حاضری رجسٹر', 'en' => 'Attendance Register'],
 ];
 
 function t($key) { 
     global $lang, $trans; 
     // اگر لفظ ڈکشنری میں ہے تو واپس کرو، ورنہ وہی انگریزی لفظ دکھا دو تاکہ ایرر نہ آئے
-    return $trans[$key][$lang] ?? $key; 
+    $cur_lang = !empty($lang) ? $lang : ($_SESSION['lang'] ?? ($_COOKIE['app_language'] ?? 'ur'));
+    if (isset($trans[$key][$cur_lang])) {
+        return $trans[$key][$cur_lang];
+    }
+    $human = ucwords(str_replace('_', ' ', (string)$key));
+    if ($cur_lang === 'ur') {
+        $fallbacks_ur = [
+            'recent admissions' => 'حالیہ داخلے',
+            'quick links' => 'فوری روابط',
+            'student id' => 'طالب علم کوڈ',
+            'admission date' => 'تاریخِ داخلہ',
+            'attendance register' => 'حاضری رجسٹر',
+            'teachers record' => 'اساتذہ ریکارڈ',
+            'sabqi' => 'سبقی',
+        ];
+        return $fallbacks_ur[strtolower($human)] ?? $human;
+    }
+    return $human; 
 }
 
 // فنکشن: تاریخ کو اردو مہینوں میں دکھانے کے لیے

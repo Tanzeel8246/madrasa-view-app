@@ -11,7 +11,10 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$settings = $pdo->query("SELECT * FROM settings WHERE id=1")->fetch();
+$current_tid = (int)get_current_tenant_id($pdo);
+$st_q = $pdo->prepare("SELECT * FROM settings WHERE tenant_id = ? ORDER BY id ASC LIMIT 1");
+$st_q->execute([$current_tid]);
+$settings = $st_q->fetch(PDO::FETCH_ASSOC) ?: [];
 $provider = $settings['ai_provider'] ?? 'gemini';
 $gemini_key = $settings['gemini_api_key'] ?? '';
 $groq_key = $settings['groq_api_key'] ?? '';
@@ -67,14 +70,14 @@ try {
                 if(!empty($selected_gemini_key)) {
                     $useGemini = true; $useGroq = false; $response_text = '';
                 } else {
-                    $response_text = "Groq Error: " . ($res['error']['message'] ?? "ڈیٹا مسنگ ہے۔");
+                    $response_text = "اے آئی سروس فی الوقت دستیاب نہیں ہے۔ برائے مہربانی بعد میں کوشش کریں۔";
                 }
             }
         } else {
             if(!empty($selected_gemini_key)) {
                 $useGemini = true; $useGroq = false; $response_text = '';
             } else {
-                $response_text = "Groq رابطہ فیل: " . $err;
+                $response_text = "اے آئی سرور سے رابطہ قائم نہیں ہو سکا۔";
             }
         }
     } 
@@ -97,16 +100,16 @@ try {
             if (isset($res['candidates'][0]['content']['parts'][0]['text'])) {
                 $response_text = $res['candidates'][0]['content']['parts'][0]['text'];
             } else {
-                $response_text = "Gemini Error: " . ($res['error']['message'] ?? "ڈیٹا مسنگ ہے۔");
+                $response_text = "اے آئی سروس فی الوقت دستیاب نہیں ہے۔ برائے مہربانی بعد میں کوشش کریں۔";
             }
         } else {
-            $response_text = "Gemini رابطہ فیل: " . $err;
+            $response_text = "اے آئی سرور سے رابطہ قائم نہیں ہو سکا۔";
         }
     } else if (!$useGroq && !$useGemini) {
-        $response_text = "اے آئی کی سیٹنگز نامکمل ہیں۔ (API Key غائب ہے)";
+        $response_text = "اے آئی رہنمائی کے لیے ترتیبات میں API کلید درج کریں۔";
     }
     echo trim($response_text);
 } catch (Exception $e) {
-    echo "رپورٹ تیار کرنے میں خرابی: " . $e->getMessage();
+    error_log("AI Insight Error: " . $e->getMessage()); echo "انتظامی تجاویز فی الوقت دستیاب نہیں ہیں۔";
 }
 ?>

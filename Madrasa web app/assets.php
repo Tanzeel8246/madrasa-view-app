@@ -67,8 +67,8 @@ include 'header.php';
 
 <div class="container py-4" dir="rtl">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold text-danger"><i class="fas fa-boxes me-2"></i>   (Assets)</h3>
-        <button class="btn btn-danger fw-bold" onclick="openAddModal()"><i class="fas fa-plus me-1"></i>    </button>
+        <h3 class="fw-bold text-danger"><i class="fas fa-boxes me-2"></i> <?php echo (isset($lang) && $lang=='en') ? 'Assets Management' : 'اثاثہ جات (Assets)'; ?></h3>
+        <button class="btn btn-danger fw-bold" onclick="openAddModal()"><i class="fas fa-plus me-1"></i> <?php echo (isset($lang) && $lang=='en') ? 'Add Asset' : 'نیا اثاثہ شامل کریں'; ?></button>
     </div>
 
     <div class="card shadow-sm border-0 neobox">
@@ -76,12 +76,12 @@ include 'header.php';
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th> </th>
-                        <th></th>
-                        <th> / </th>
-                        <th> (Type)</th>
-                        <th> (  )</th>
-                        <th class="text-center"></th>
+                        <th><?php echo (isset($lang) && $lang=='en') ? 'Asset Name' : 'اثاثہ کا نام'; ?></th>
+                        <th><?php echo (isset($lang) && $lang=='en') ? 'Category' : 'شعبہ / کیٹیگری'; ?></th>
+                        <th><?php echo (isset($lang) && $lang=='en') ? 'Quantity / Condition' : 'تعداد / حالت'; ?></th>
+                        <th><?php echo (isset($lang) && $lang=='en') ? 'Asset Type' : 'قسم (Type)'; ?></th>
+                        <th><?php echo (isset($lang) && $lang=='en') ? 'Donor / Source' : 'واقف / ذریعہ'; ?></th>
+                        <th class="text-center"><?php echo (isset($lang) && $lang=='en') ? 'Actions' : 'کارروائی'; ?></th>
                     </tr>
                 </thead>
                 <tbody>

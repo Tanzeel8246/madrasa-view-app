@@ -244,7 +244,7 @@ function translateDateUrduFull($dateStr) {
         <div class="d-flex justify-content-between align-items-center border-bottom border-2 border-dark mb-4 pb-2">
             <div>
                 <h3 class="m-0 fw-bold text-primary"><i class="fas fa-chart-line me-2"></i> عمومی تعلیمی رپورٹ - <?= htmlspecialchars($selected_class) ?></h3>
-                <small class="text-muted fw-bold">مدرسہ اشرف المدارس</small>
+                <small class="text-muted fw-bold"><?php echo htmlspecialchars($header_madrasa_name ?? ($_SESSION['tenant_name'] ?? 'ادارہ')); ?></small>
             </div>
             <div class="text-start">
                 <p class="mb-0 fw-bold fs-6">دورانیہ: <span dir="ltr"><?php echo date('d-M-Y', strtotime($start_date)); ?></span> سے <span dir="ltr"><?php echo date('d-M-Y', strtotime($end_date)); ?></span></p>

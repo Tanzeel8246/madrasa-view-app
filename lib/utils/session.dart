@@ -26,6 +26,10 @@ class SessionManager {
     String? planCode,
     String? subscriptionEndsAt,
     String? subscriptionStatus,
+    String? systemType,
+    int? maxStudents,
+    int? maxClasses,
+    int? maxTeachers,
   }) async {
     final data = {
       'role': role,
@@ -46,6 +50,10 @@ class SessionManager {
       'planCode': planCode ?? 'basic',
       'subscriptionEndsAt': subscriptionEndsAt ?? '',
       'subscriptionStatus': subscriptionStatus ?? 'active',
+      'systemType': systemType ?? 'Both',
+      'maxStudents': maxStudents ?? 50,
+      'maxClasses': maxClasses ?? 3,
+      'maxTeachers': maxTeachers ?? 4,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
     await _storage.write(key: _sessionKey, value: jsonEncode(data));
@@ -109,6 +117,10 @@ class SessionManager {
     currentTenantPlanCode.value = 'basic';
     currentTenantSubscriptionEndsAt.value = '';
     currentTenantSubscriptionStatus.value = 'active';
+    currentTenantSystemType.value = 'Both';
+    currentTenantMaxStudents.value = 50;
+    currentTenantMaxClasses.value = 3;
+    currentTenantMaxTeachers.value = 4;
 
     // ملٹی ٹیننٹ ڈیٹا آئسولیشن: لاگ آؤٹ پر لوکل ڈیٹا بیس مکمل ری سیٹ
     try {

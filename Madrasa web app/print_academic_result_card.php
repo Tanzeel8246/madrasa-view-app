@@ -32,7 +32,7 @@ $student_id = (int)($_GET['student_id'] ?? 0);
 $stmt = $pdo->prepare("SELECT * FROM settings WHERE tenant_id = ? LIMIT 1");
 $stmt->execute([$tenant_id]);
 $settings = $stmt->fetch(PDO::FETCH_ASSOC) ?: [
-    'madrasa_name' => 'جامعہ / مدرسہ اشرف المدارس',
+    'madrasa_name' => (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : 'ادارہ'),
     'phone' => '',
     'address' => ''
 ];
@@ -298,7 +298,7 @@ $darse_nizami_year_names = [
                     <!-- Header Section (Can be hidden for pre-printed letterhead) -->
                     <div class="header-section">
                         <div style="font-size: 13px; color: #1b4332;">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
-                        <h1 class="header-title"><?php echo htmlspecialchars($settings['madrasa_name'] ?? 'جامعہ اشرف المدارس'); ?></h1>
+                        <h1 class="header-title"><?php echo htmlspecialchars($settings['madrasa_name'] ?? ($_SESSION['tenant_name'] ?? 'ادارہ')); ?></h1>
                         <div class="sub-title">شعبہ درس نظامی و عصری علوم • سالانہ امتحانی نتیجہ نامہ</div>
                         <div class="card-badge"><?php echo htmlspecialchars($exam['exam_name'] ?? 'امتحانی نتیجہ کارڈ'); ?></div>
                     </div>

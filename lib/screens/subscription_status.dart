@@ -105,6 +105,10 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
               _maxTeachers =
                   int.tryParse(data['max_teachers']?.toString() ?? '4') ?? 4;
 
+              currentTenantMaxStudents.value = _maxStudents;
+              currentTenantMaxClasses.value = _maxClasses;
+              currentTenantMaxTeachers.value = _maxTeachers;
+
               _priceMonthly = double.tryParse(
                       data['price_monthly']?.toString() ?? '1500') ??
                   1500;

@@ -4,12 +4,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../db_helper.dart';
 import '../utils/globals.dart';
 import '../utils/session.dart';
 import '../utils/network_service.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../utils/system_type_global.dart';
+import '../widgets/app_brand_logo.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/neo_box.dart';
 import 'dashboard.dart';
@@ -80,14 +82,17 @@ class _SettingsPageState extends State<SettingsPage> {
             await DBHelper().saveServerData(body['data']);
             if (mounted) {
               setState(() {
-                _madrasaNameController.text = s['madrasa_name']?.toString() ?? '';
-                _masjidNameController.text = s['masjid_name']?.toString() ?? 'مسجد اشرف المدارس';
+                _madrasaNameController.text =
+                    s['madrasa_name']?.toString() ?? '';
+                _masjidNameController.text =
+                    s['masjid_name']?.toString() ?? 'مسجد اشرف المدارس';
                 _taglineController.text = s['tagline']?.toString() ?? '';
                 _phoneController.text = s['phone']?.toString() ?? '';
                 _addressController.text = s['address']?.toString() ?? '';
                 _hijriYearController.text =
                     s['current_hijri_year']?.toString() ?? '1447';
-                _geminiKeyController.text = s['gemini_api_key']?.toString() ?? '';
+                _geminiKeyController.text =
+                    s['gemini_api_key']?.toString() ?? '';
                 _groqKeyController.text = s['groq_api_key']?.toString() ?? '';
                 _whatsappKeyController.text =
                     s['whatsapp_api_key']?.toString() ?? '';
@@ -112,11 +117,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 _isLoading = false;
 
                 // Keep live branding notifiers in sync
-                if (_logoPath != null && _logoPath!.isNotEmpty) currentTenantLogoPath.value = _logoPath;
-                if (s['masjid_name'] != null && s['masjid_name'].toString().trim().isNotEmpty) {
-                  currentTenantMasjidName.value = s['masjid_name'].toString().trim();
+                if (_logoPath != null && _logoPath!.isNotEmpty)
+                  currentTenantLogoPath.value = _logoPath;
+                if (s['masjid_name'] != null &&
+                    s['masjid_name'].toString().trim().isNotEmpty) {
+                  currentTenantMasjidName.value =
+                      s['masjid_name'].toString().trim();
                 }
-                if (_masjidLogoPath != null && _masjidLogoPath!.isNotEmpty) currentTenantMasjidLogoPath.value = _masjidLogoPath;
+                if (_masjidLogoPath != null && _masjidLogoPath!.isNotEmpty)
+                  currentTenantMasjidLogoPath.value = _masjidLogoPath;
               });
             }
             return;
@@ -129,7 +138,8 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         setState(() {
           _madrasaNameController.text = s['madrasa_name']?.toString() ?? '';
-          _masjidNameController.text = s['masjid_name']?.toString() ?? 'مسجد اشرف المدارس';
+          _masjidNameController.text =
+              s['masjid_name']?.toString() ?? 'مسجد اشرف المدارس';
           _taglineController.text = s['tagline']?.toString() ?? '';
           _phoneController.text = s['phone']?.toString() ?? '';
           _addressController.text = s['address']?.toString() ?? '';
@@ -158,11 +168,14 @@ class _SettingsPageState extends State<SettingsPage> {
           _isLoading = false;
 
           // Keep live branding notifiers in sync
-          if (_logoPath != null && _logoPath!.isNotEmpty) currentTenantLogoPath.value = _logoPath;
-          if (s['masjid_name'] != null && s['masjid_name'].toString().trim().isNotEmpty) {
+          if (_logoPath != null && _logoPath!.isNotEmpty)
+            currentTenantLogoPath.value = _logoPath;
+          if (s['masjid_name'] != null &&
+              s['masjid_name'].toString().trim().isNotEmpty) {
             currentTenantMasjidName.value = s['masjid_name'].toString().trim();
           }
-          if (_masjidLogoPath != null && _masjidLogoPath!.isNotEmpty) currentTenantMasjidLogoPath.value = _masjidLogoPath;
+          if (_masjidLogoPath != null && _masjidLogoPath!.isNotEmpty)
+            currentTenantMasjidLogoPath.value = _masjidLogoPath;
         });
       }
     } catch (e) {
@@ -253,7 +266,7 @@ class _SettingsPageState extends State<SettingsPage> {
         final data = jsonDecode(res.body);
         if (data['status'] == 'success') {
           final serverSettings = data['settings'];
-          
+
           final localMap = <String, dynamic>{
             'madrasa_name': _madrasaNameController.text,
             'masjid_name': _masjidNameController.text,
@@ -277,7 +290,8 @@ class _SettingsPageState extends State<SettingsPage> {
               _masjidLogoPath = serverSettings['masjid_logo_path'];
             }
             if (serverSettings['signature_stamp_path'] != null) {
-              localMap['signature_stamp_path'] = serverSettings['signature_stamp_path'];
+              localMap['signature_stamp_path'] =
+                  serverSettings['signature_stamp_path'];
               _signatureStampPath = serverSettings['signature_stamp_path'];
             }
             if (serverSettings['receipt_bg'] != null) {
@@ -308,11 +322,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 await SessionManager.saveSession(
                   sess['role']?.toString() ?? '',
                   int.tryParse(sess['userId']?.toString() ?? '0') ?? 0,
-                  permissions: (sess['permissions'] as List?)?.map((e) => e.toString()).toList(),
+                  permissions: (sess['permissions'] as List?)
+                      ?.map((e) => e.toString())
+                      .toList(),
                   token: sess['token']?.toString(),
                   name: sess['name']?.toString(),
-                  assignedClasses: (sess['assignedClasses'] as List?)?.map((e) => e.toString()).toList(),
-                  studentIds: (sess['studentIds'] as List?)?.map((e) => int.tryParse(e.toString()) ?? 0).toList(),
+                  assignedClasses: (sess['assignedClasses'] as List?)
+                      ?.map((e) => e.toString())
+                      .toList(),
+                  studentIds: (sess['studentIds'] as List?)
+                      ?.map((e) => int.tryParse(e.toString()) ?? 0)
+                      .toList(),
                   tenantCode: sess['tenantCode']?.toString(),
                   tenantId: int.tryParse(sess['tenantId']?.toString() ?? '0'),
                   tenantName: newName,
@@ -372,7 +392,8 @@ class _SettingsPageState extends State<SettingsPage> {
         final db = await DBHelper().database;
         await db.update('settings', localMap, where: 'id = 1');
       } catch (_) {}
-      _showError('کنکشن خرابی: سیٹنگز لوکل محفوظ ہو گئیں مگر سرور سے رابطہ نہیں ہو سکا۔');
+      _showError(
+          'کنکشن خرابی: سیٹنگز لوکل محفوظ ہو گئیں مگر سرور سے رابطہ نہیں ہو سکا۔');
     }
     setState(() => _isLoading = false);
   }
@@ -408,7 +429,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     onPressed: () => Scaffold.of(context).openDrawer(),
                   ),
                 ),
-                title: Text(isUrdu ? "سافٹ ویئر سیٹنگ و برانڈنگ" : "Settings & Branding",
+                title: Text(
+                    isUrdu
+                        ? "سافٹ ویئر سیٹنگ و برانڈنگ"
+                        : "Settings & Branding",
                     style: const TextStyle(
                         color: Colors.white, fontWeight: FontWeight.bold)),
                 backgroundColor: primaryGreen,
@@ -462,7 +486,9 @@ class _SettingsPageState extends State<SettingsPage> {
                                     Icon(Icons.language, color: primaryGreen),
                                     const SizedBox(width: 10),
                                     Text(
-                                      isUrdu ? "زبان و ظاہری حالت" : "Language & Theme",
+                                      isUrdu
+                                          ? "زبان و ظاہری حالت"
+                                          : "Language & Theme",
                                       style: TextStyle(
                                           fontSize: 18,
                                           color: textDark,
@@ -523,6 +549,167 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                           const SizedBox(height: 20),
 
+                          // 1b. Active System Mode Switcher (Madrasa vs Masjid)
+                          ValueListenableBuilder<String>(
+                            valueListenable: SystemTypeGlobal.currentSystemType,
+                            builder: (context, activeSys, _) {
+                              final isMasjid = activeSys == 'Masjid';
+                              return NeoBox(
+                                padding: 20,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                            isMasjid
+                                                ? Icons.mosque
+                                                : Icons.school,
+                                            color: primaryGreen),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          isUrdu
+                                              ? "فعال سسٹم موڈ (Active Mode)"
+                                              : "Active System Mode",
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            color: textDark,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      isUrdu
+                                          ? "مدرسہ یا مسجد موڈ منتخب کریں، ایپ کا ڈیٹا اور انٹرفیس خودکار تبدیل ہو جائے گا:"
+                                          : "Select Madrasa or Masjid mode, the app interface and data will adapt automatically:",
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade700),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: InkWell(
+                                            onTap: () {
+                                              SystemTypeGlobal.currentSystemType
+                                                  .value = 'Madrasa';
+                                            },
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 12,
+                                                      horizontal: 8),
+                                              decoration: BoxDecoration(
+                                                color: !isMasjid
+                                                    ? primaryGreen
+                                                    : Colors.grey.shade100,
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: !isMasjid
+                                                      ? primaryGreen
+                                                      : Colors.grey.shade300,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.school,
+                                                      size: 20,
+                                                      color: !isMasjid
+                                                          ? Colors.white
+                                                          : Colors.black87),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    isUrdu
+                                                        ? 'مدرسہ موڈ'
+                                                        : 'Madrasa Mode',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 14,
+                                                      color: !isMasjid
+                                                          ? Colors.white
+                                                          : Colors.black87,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: InkWell(
+                                            onTap: () {
+                                              SystemTypeGlobal.currentSystemType
+                                                  .value = 'Masjid';
+                                            },
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 12,
+                                                      horizontal: 8),
+                                              decoration: BoxDecoration(
+                                                color: isMasjid
+                                                    ? primaryGreen
+                                                    : Colors.grey.shade100,
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: isMasjid
+                                                      ? primaryGreen
+                                                      : Colors.grey.shade300,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.mosque,
+                                                      size: 20,
+                                                      color: isMasjid
+                                                          ? Colors.white
+                                                          : Colors.black87),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    isUrdu
+                                                        ? 'مسجد موڈ'
+                                                        : 'Masjid Mode',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 14,
+                                                      color: isMasjid
+                                                          ? Colors.white
+                                                          : Colors.black87,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 20),
+
                           // 2. Madrasa Profile & Info
                           NeoBox(
                             padding: 20,
@@ -531,7 +718,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               children: [
                                 Row(
                                   children: [
-                                    Icon(Icons.account_balance, color: primaryGreen),
+                                    Icon(Icons.account_balance,
+                                        color: primaryGreen),
                                     const SizedBox(width: 10),
                                     Text(
                                       isUrdu
@@ -545,14 +733,23 @@ class _SettingsPageState extends State<SettingsPage> {
                                   ],
                                 ),
                                 const SizedBox(height: 15),
-                                _buildTextField(_madrasaNameController,
-                                    isUrdu ? "مدرسہ کا آفیشل نام" : "Madrasa Official Name"),
+                                _buildTextField(
+                                    _madrasaNameController,
+                                    isUrdu
+                                        ? "مدرسہ کا آفیشل نام"
+                                        : "Madrasa Official Name"),
                                 const SizedBox(height: 10),
-                                _buildTextField(_masjidNameController,
-                                    isUrdu ? "مسجد کا آفیشل نام (Masjid Name)" : "Masjid Official Name"),
+                                _buildTextField(
+                                    _masjidNameController,
+                                    isUrdu
+                                        ? "مسجد کا آفیشل نام (Masjid Name)"
+                                        : "Masjid Official Name"),
                                 const SizedBox(height: 10),
-                                _buildTextField(_taglineController,
-                                    isUrdu ? "سلوگن / ذیلی عنوان (Tagline)" : "Tagline"),
+                                _buildTextField(
+                                    _taglineController,
+                                    isUrdu
+                                        ? "سلوگن / ذیلی عنوان (Tagline)"
+                                        : "Tagline"),
                                 const SizedBox(height: 10),
                                 _buildTextField(_phoneController,
                                     isUrdu ? "رابطہ فون نمبر" : "Phone Number"),
@@ -597,14 +794,20 @@ class _SettingsPageState extends State<SettingsPage> {
                                   isUrdu
                                       ? "موبائل گیلری سے لوگو، مہر اور رسید/سند کے بیک گراؤنڈز اپلوڈ کریں۔"
                                       : "Upload custom logo, stamp and document templates from gallery.",
-                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade700),
                                 ),
                                 const SizedBox(height: 15),
 
                                 // 1. Official Logo
                                 _buildBrandingItem(
-                                  title: isUrdu ? "مدرسہ کا آفیشل لوگو" : "Official Logo",
-                                  subtitle: isUrdu ? "رسید، کارڈ اور سند پر نمایاں ہوگا" : "Displayed on receipts, cards and sanad",
+                                  title: isUrdu
+                                      ? "مدرسہ کا آفیشل لوگو"
+                                      : "Official Logo",
+                                  subtitle: isUrdu
+                                      ? "رسید، کارڈ اور سند پر نمایاں ہوگا"
+                                      : "Displayed on receipts, cards and sanad",
                                   newFile: _newLogoFile,
                                   serverPath: _logoPath,
                                   onPick: () => _pickImage('logo'),
@@ -613,8 +816,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
                                 // 1b. Official Masjid Logo
                                 _buildBrandingItem(
-                                  title: isUrdu ? "مسجد کا آفیشل لوگو" : "Masjid Official Logo",
-                                  subtitle: isUrdu ? "مسجد موڈ رسیدوں اور رپورٹس پر نمایاں ہوگا" : "Displayed on masjid receipts and reports",
+                                  title: isUrdu
+                                      ? "مسجد کا آفیشل لوگو"
+                                      : "Masjid Official Logo",
+                                  subtitle: isUrdu
+                                      ? "مسجد موڈ رسیدوں اور رپورٹس پر نمایاں ہوگا"
+                                      : "Displayed on masjid receipts and reports",
                                   newFile: _newMasjidLogoFile,
                                   serverPath: _masjidLogoPath,
                                   onPick: () => _pickImage('masjid_logo'),
@@ -623,8 +830,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
                                 // 2. Official Stamp / Signature
                                 _buildBrandingItem(
-                                  title: isUrdu ? "پرنسپل / مہتمم کے دستخط و مہر" : "Stamp / Signature",
-                                  subtitle: isUrdu ? "رسید اور سند پر خودکار شامل ہوگی" : "Auto-applied on receipts and certificates",
+                                  title: isUrdu
+                                      ? "پرنسپل / مہتمم کے دستخط و مہر"
+                                      : "Stamp / Signature",
+                                  subtitle: isUrdu
+                                      ? "رسید اور سند پر خودکار شامل ہوگی"
+                                      : "Auto-applied on receipts and certificates",
                                   newFile: _newStampFile,
                                   serverPath: _signatureStampPath,
                                   onPick: () => _pickImage('stamp'),
@@ -633,8 +844,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
                                 // 3. Madrasa Receipt Background
                                 _buildBrandingItem(
-                                  title: isUrdu ? "مدرسہ رسید کسٹم بیک گراؤنڈ" : "Receipt Custom Background",
-                                  subtitle: isUrdu ? "چھپی ہوئی رسید کا اسکین شدہ پس منظر" : "Pre-printed receipt watermark/template",
+                                  title: isUrdu
+                                      ? "مدرسہ رسید کسٹم بیک گراؤنڈ"
+                                      : "Receipt Custom Background",
+                                  subtitle: isUrdu
+                                      ? "چھپی ہوئی رسید کا اسکین شدہ پس منظر"
+                                      : "Pre-printed receipt watermark/template",
                                   newFile: _newReceiptBgFile,
                                   serverPath: _receiptBgPath,
                                   onPick: () => _pickImage('receipt_bg'),
@@ -643,8 +858,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
                                 // 4. Student ID Card Background
                                 _buildBrandingItem(
-                                  title: isUrdu ? "سٹوڈنٹ کارڈ کسٹم بیک گراؤنڈ" : "ID Card Background",
-                                  subtitle: isUrdu ? "سٹینڈرڈ کارڈ سائز (CR80)" : "Standard card dimensions (CR80)",
+                                  title: isUrdu
+                                      ? "سٹوڈنٹ کارڈ کسٹم بیک گراؤنڈ"
+                                      : "ID Card Background",
+                                  subtitle: isUrdu
+                                      ? "سٹینڈرڈ کارڈ سائز (CR80)"
+                                      : "Standard card dimensions (CR80)",
                                   newFile: _newIdCardBgFile,
                                   serverPath: _idCardBgPath,
                                   onPick: () => _pickImage('id_card_bg'),
@@ -653,8 +872,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
                                 // 5. Official Sanad Background
                                 _buildBrandingItem(
-                                  title: isUrdu ? "آفیشل سند کا کسٹم بیک گراؤنڈ" : "Sanad Custom Background",
-                                  subtitle: isUrdu ? "فارغین کی خالی سند کا فریم (A4 لینڈ اسکیپ)" : "Certificate frame (A4 landscape)",
+                                  title: isUrdu
+                                      ? "آفیشل سند کا کسٹم بیک گراؤنڈ"
+                                      : "Sanad Custom Background",
+                                  subtitle: isUrdu
+                                      ? "فارغین کی خالی سند کا فریم (A4 لینڈ اسکیپ)"
+                                      : "Certificate frame (A4 landscape)",
                                   newFile: _newSanadBgFile,
                                   serverPath: _sanadBgPath,
                                   onPick: () => _pickImage('sanad_bg'),
@@ -694,7 +917,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                       border: OutlineInputBorder()),
                                   items: const [
                                     DropdownMenuItem(
-                                        value: 'gemini', child: Text('Google Gemini')),
+                                        value: 'gemini',
+                                        child: Text('Google Gemini')),
                                     DropdownMenuItem(
                                         value: 'groq',
                                         child: Text('Groq (Llama)')),
@@ -736,10 +960,11 @@ class _SettingsPageState extends State<SettingsPage> {
                             onPressed: _updateSettings,
                             icon: const Icon(Icons.save, size: 20),
                             label: Text(
-                              isUrdu ? "تمام سیٹنگز و برانڈنگ محفوظ کریں" : "Save All Settings & Branding",
+                              isUrdu
+                                  ? "تمام سیٹنگز و برانڈنگ محفوظ کریں"
+                                  : "Save All Settings & Branding",
                               style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16),
+                                  fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -748,7 +973,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               Expanded(
                                 child: OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 13),
                                     side: BorderSide(color: primaryGreen),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
@@ -758,11 +984,13 @@ class _SettingsPageState extends State<SettingsPage> {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const MadrasaSetupWizardScreen(),
+                                        builder: (_) =>
+                                            const MadrasaSetupWizardScreen(),
                                       ),
                                     ).then((_) => _loadSettings());
                                   },
-                                  icon: Icon(Icons.auto_fix_high, color: primaryGreen, size: 18),
+                                  icon: Icon(Icons.auto_fix_high,
+                                      color: primaryGreen, size: 18),
                                   label: Text(
                                     isUrdu ? "سیٹ اپ وزرڈ" : "Setup Wizard",
                                     style: TextStyle(
@@ -776,8 +1004,10 @@ class _SettingsPageState extends State<SettingsPage> {
                               Expanded(
                                 child: OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 13),
-                                    side: const BorderSide(color: Colors.blueGrey),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 13),
+                                    side: const BorderSide(
+                                        color: Colors.blueGrey),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
@@ -787,12 +1017,16 @@ class _SettingsPageState extends State<SettingsPage> {
                                     if (!base.endsWith('/')) base += '/';
                                     final uri = Uri.parse('${base}privacy.php');
                                     if (await canLaunchUrl(uri)) {
-                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                      await launchUrl(uri,
+                                          mode: LaunchMode.externalApplication);
                                     }
                                   },
-                                  icon: const Icon(Icons.privacy_tip_outlined, color: Colors.blueGrey, size: 18),
+                                  icon: const Icon(Icons.privacy_tip_outlined,
+                                      color: Colors.blueGrey, size: 18),
                                   label: Text(
-                                    isUrdu ? "پرائیویسی پالیسی" : "Privacy Policy",
+                                    isUrdu
+                                        ? "پرائیویسی پالیسی"
+                                        : "Privacy Policy",
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Colors.blueGrey,
@@ -823,9 +1057,13 @@ class _SettingsPageState extends State<SettingsPage> {
   }) {
     String? fullServerUrl;
     if (serverPath != null && serverPath.isNotEmpty) {
-      String base = apiUrl.trim();
-      if (!base.endsWith('/')) base += '/';
-      fullServerUrl = base + serverPath.replaceFirst(RegExp(r'^/+'), '');
+      if (serverPath.startsWith('http')) {
+        fullServerUrl = serverPath;
+      } else {
+        String base = (NetworkService.activeBaseUrl ?? apiUrl).trim();
+        if (!base.endsWith('/')) base += '/';
+        fullServerUrl = base + serverPath.replaceFirst(RegExp(r'^/+'), '');
+      }
     }
 
     return Container(
@@ -898,10 +1136,9 @@ class _SettingsPageState extends State<SettingsPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryGreen,
               foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              textStyle: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.bold),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              textStyle:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             ),
           ),
         ],

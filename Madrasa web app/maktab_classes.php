@@ -1,23 +1,32 @@
 <?php 
 require_once 'db.php';
 
-// Migrations to support Phase 4 and Phase 5
-try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN class_type VARCHAR(50) DEFAULT 'Darse Nizami / Other'"); } catch (PDOException $e) {}
-try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN main_teacher_id INT NULL"); } catch (PDOException $e) {}
-try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN main_teacher_ids JSON NULL"); } catch (PDOException $e) {}
-try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN section VARCHAR(50) DEFAULT NULL"); } catch (PDOException $e) {}
-try {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS class_periods (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        class_id INT NOT NULL,
-        period_no INT NOT NULL,
-        books VARCHAR(255),
-        books_list VARCHAR(255),
-        teacher_id INT NULL,
-        teacher_ids JSON NULL,
-        FOREIGN KEY (class_id) REFERENCES maktab_classes(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-} catch (PDOException $e) {}
+// Migrations to support Phase 4 and Phase 5 (Only runs once to prevent MySQL metadata locks and HTTP 500)
+$maktabClsFlag = __DIR__ . '/.maktab_classes_schema_v2_done';
+if (!file_exists($maktabClsFlag)) {
+    try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN class_type VARCHAR(50) DEFAULT 'Darse Nizami / Other'"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN main_teacher_id INT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN main_teacher_ids JSON NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN section VARCHAR(50) DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN is_deleted TINYINT DEFAULT 0"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN is_deleted TINYINT DEFAULT 0"); } catch (Throwable $e) {}
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS class_periods (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            class_id INT NOT NULL,
+            period_no INT NOT NULL,
+            books VARCHAR(255) NULL,
+            books_list VARCHAR(255) NULL,
+            teacher_id INT NULL,
+            teacher_ids JSON NULL,
+            tenant_id INT NOT NULL DEFAULT 1
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE class_periods ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+    @touch($maktabClsFlag);
+}
 
 // کلاس حذف کرنا
 if (isset($_GET['delete'])) {
@@ -27,21 +36,23 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-function get_class_max_periods($class_type, $name = '') {
-    $haystack = mb_strtolower($class_type . ' ' . $name, 'UTF-8');
-    if (strpos($haystack, 'nazira') !== false || strpos($haystack, 'ناظرہ') !== false) {
-        return 2;
+if (!function_exists('get_class_max_periods')) {
+    function get_class_max_periods($class_type, $name = '') {
+        $haystack = mb_strtolower($class_type . ' ' . $name, 'UTF-8');
+        if (strpos($haystack, 'nazira') !== false || strpos($haystack, 'ناظرہ') !== false) {
+            return 2;
+        }
+        if (strpos($haystack, 'qaida') !== false || strpos($haystack, 'قاعدہ') !== false) {
+            return 2;
+        }
+        if (strpos($haystack, 'husn') !== false || strpos($haystack, 'حسن') !== false || strpos($haystack, 'صوت') !== false) {
+            return 4;
+        }
+        if (strpos($haystack, 'hifz') !== false || strpos($haystack, 'حفظ') !== false || strpos($haystack, 'gardan') !== false || strpos($haystack, 'گردان') !== false) {
+            return 4;
+        }
+        return 8;
     }
-    if (strpos($haystack, 'qaida') !== false || strpos($haystack, 'قاعدہ') !== false) {
-        return 2;
-    }
-    if (strpos($haystack, 'husn') !== false || strpos($haystack, 'حسن') !== false || strpos($haystack, 'صوت') !== false) {
-        return 4;
-    }
-    if (strpos($haystack, 'hifz') !== false || strpos($haystack, 'حفظ') !== false || strpos($haystack, 'gardan') !== false || strpos($haystack, 'گردان') !== false) {
-        return 4;
-    }
-    return 8;
 }
 
 include 'header.php';
@@ -63,7 +74,11 @@ if (isset($_POST['add_class'])) {
     $main_teacher_ids = isset($_POST['main_teacher_ids']) && is_array($_POST['main_teacher_ids']) ? json_encode($_POST['main_teacher_ids']) : json_encode([]);
     $subjects_list = trim($_POST['subjects_list'] ?? '');
     
-    if (!empty($name)) {
+    // کوٹہ لِمٹ کی جانچ
+    $quotaCheck = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'classes', $cur_tenant_id) : ['allowed' => true];
+    if (!$quotaCheck['allowed']) {
+        echo "<div class='container-fluid mt-3'><div class='alert alert-danger fw-bold shadow-sm'><i class='fas fa-lock me-2'></i> " . htmlspecialchars($quotaCheck['message']) . " <a href='subscription_status.php' class='alert-link text-decoration-underline ms-2'>سبسکرپشن اپ گریڈ کریں</a></div></div>";
+    } elseif (!empty($name)) {
         try {
             $stmt = $pdo->prepare("INSERT INTO maktab_classes (name, section, class_type, main_teacher_ids, subjects_list, tenant_id) VALUES (?, ?, ?, ?, ?, ?)");
             $stmt->execute([$name, $section, $class_type, $main_teacher_ids, $subjects_list, $cur_tenant_id]);
@@ -148,15 +163,52 @@ if (isset($_POST['update_class'])) {
     }
 }
 
-$maktab_classes = $pdo->query("SELECT * FROM maktab_classes WHERE tenant_id = $cur_tenant_id ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
-
-$periods_by_class = [];
-$periods_raw = $pdo->query("SELECT * FROM class_periods WHERE (tenant_id = $cur_tenant_id OR class_id IN (SELECT id FROM maktab_classes WHERE tenant_id = $cur_tenant_id)) ORDER BY class_id, period_no")->fetchAll(PDO::FETCH_ASSOC);
-foreach ($periods_raw as $pr) {
-    $periods_by_class[$pr['class_id']][$pr['period_no']] = $pr;
+$maktab_classes = [];
+try {
+    $maktab_classes = $pdo->query("SELECT * FROM maktab_classes WHERE tenant_id = $cur_tenant_id ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e1) {
+    try {
+        $maktab_classes = $pdo->query("SELECT * FROM maktab_classes ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e2) {
+        $maktab_classes = [];
+    }
 }
 
-$maktab_teachers = $pdo->query("SELECT id, name FROM maktab_teachers WHERE tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL) AND (status = 'Active' OR status = '' OR status IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$periods_by_class = [];
+try {
+    $periods_raw = $pdo->query("SELECT * FROM class_periods WHERE (tenant_id = $cur_tenant_id OR class_id IN (SELECT id FROM maktab_classes WHERE tenant_id = $cur_tenant_id)) ORDER BY class_id, period_no")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($periods_raw as $pr) {
+        $periods_by_class[$pr['class_id']][$pr['period_no']] = $pr;
+    }
+} catch (Throwable $ePr) {
+    try {
+        $periods_raw = $pdo->query("SELECT * FROM class_periods ORDER BY class_id, period_no")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($periods_raw as $pr) {
+            $periods_by_class[$pr['class_id']][$pr['period_no']] = $pr;
+        }
+    } catch (Throwable $ePr2) {
+        $periods_by_class = [];
+    }
+}
+
+$maktab_teachers = [];
+try {
+    $maktab_teachers = $pdo->query("SELECT id, name FROM maktab_teachers WHERE tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL) AND (status = 'Active' OR status = '' OR status IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $eT1) {
+    try {
+        $maktab_teachers = $pdo->query("SELECT id, name FROM maktab_teachers WHERE tenant_id = $cur_tenant_id AND (status = 'Active' OR status = '' OR status IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $eT2) {
+        try {
+            $maktab_teachers = $pdo->query("SELECT id, name FROM maktab_teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $eT3) {
+            try {
+                $maktab_teachers = $pdo->query("SELECT id, name FROM maktab_teachers ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable $eT4) {
+                $maktab_teachers = [];
+            }
+        }
+    }
+}
 
 $teacher_map = [];
 foreach($maktab_teachers as $t) {

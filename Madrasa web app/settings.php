@@ -22,17 +22,17 @@ if (!file_exists(__DIR__ . '/.settings_schema_done')) {
 
 $uploadDir = __DIR__ . '/uploads/branding/';
 if (!is_dir($uploadDir)) {
-    @mkdir($uploadDir, 0777, true);
+    @mkdir($uploadDir, 0755, true);
 }
 
-// Function to handle safe file uploads
+// Function to handle safe file uploads (Strict image extensions only, NO SVG)
 function handleSettingsFileUpload($fileKey, $targetPrefix, $currentVal) {
     global $uploadDir, $cur_tenant_id;
     if (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] === UPLOAD_ERR_OK) {
         $file = $_FILES[$fileKey];
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        $allowed = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
-        if (in_array($ext, $allowed)) {
+        $allowed = ['png', 'jpg', 'jpeg', 'webp'];
+        if (in_array($ext, $allowed, true)) {
             $newFileName = 't' . $cur_tenant_id . '_' . $targetPrefix . '_' . time() . '.' . $ext;
             $destPath = $uploadDir . $newFileName;
             if (move_uploaded_file($file['tmp_name'], $destPath)) {

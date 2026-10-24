@@ -9,6 +9,7 @@ import '../db_helper.dart';
 import '../utils/globals.dart';
 import '../utils/network_service.dart';
 import '../widgets/neo_box.dart';
+import '../widgets/app_brand_logo.dart';
 import 'admission_form.dart';
 import 'dashboard.dart';
 import 'login.dart';
@@ -107,7 +108,7 @@ class _HomePageState extends State<HomePage> {
                 builder: (context, tName, _) {
                   final titleText = (tName != null && tName.trim().isNotEmpty)
                       ? tName.trim()
-                      : (isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris');
+                      : (isUrdu ? 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)' : 'MC-MMS (Mindcrafts Madrasa Management System)');
                   return Text(
                     titleText,
                     style: const TextStyle(fontWeight: FontWeight.bold),
@@ -143,6 +144,10 @@ class _HomePageState extends State<HomePage> {
                               children: [
                                 if (_notices.isNotEmpty) _noticeBar(isUrdu),
                                 _statsGrid(isUrdu, isSmall),
+                                const SizedBox(height: 25),
+                                _aiFeaturesShowcase(isUrdu, isSmall),
+                                const SizedBox(height: 25),
+                                _systemFeaturesGrid(isUrdu, isSmall),
                                 const SizedBox(height: 30),
                                 _aboutSection(isUrdu),
                                 const SizedBox(height: 30),
@@ -202,13 +207,7 @@ class _HomePageState extends State<HomePage> {
       ),
       child: Column(
         children: [
-          ColorFiltered(
-            colorFilter: const ColorFilter.mode(
-              Colors.white,
-              BlendMode.srcIn,
-            ),
-            child: Image.asset('assets/logo.png', height: 80),
-          ),
+          const AppBrandLogo(size: 80),
           const SizedBox(height: 12),
           Text(
             isUrdu ? 'تعمیر ملت کا عظیم قلعہ' : 'A Center for Quranic Learning',
@@ -224,7 +223,7 @@ class _HomePageState extends State<HomePage> {
             builder: (context, tName, _) {
               final heroText = (tName != null && tName.trim().isNotEmpty)
                   ? tName.trim()
-                  : (isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris');
+                  : (isUrdu ? 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)' : 'MC-MMS (Mindcrafts Madrasa Management System)');
               return Text(
                 heroText,
                 style: TextStyle(
@@ -375,6 +374,355 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _aiFeaturesShowcase(bool isUrdu, bool isSmall) {
+    final aiItems = [
+      (
+        Icons.mic_none_outlined,
+        isUrdu ? 'AI وائس ٹائپنگ و صوتی اندراج' : 'AI Voice-to-Text Input',
+        isUrdu
+            ? 'کی بورڈ کے بغیر بول کر اسباق، حاضری، نوٹس اور کوائف کی فوری اردو و انگریزی ٹائپنگ اور اندراج۔'
+            : 'Instant hands-free voice typing for lessons, attendance, and student notes in Urdu & English.',
+        const Color(0xFF0D9488),
+      ),
+      (
+        Icons.auto_awesome,
+        isUrdu ? 'AI تعلیمی تجزیہ و پیش گوئی' : 'AI Academic Intelligence',
+        isUrdu
+            ? 'طالب علم کی رفتارِ حفظ و ناظرہ کا سمارٹ تجزیہ، کمزوریوں کی پیشگی نشاندہی اور حفظ کی تکمیل کا تخمینہ۔'
+            : 'Smart tracking of student memorization velocity, weak-point detection, and completion forecasts.',
+        const Color(0xFF7C3AED),
+      ),
+      (
+        Icons.notifications_active_outlined,
+        isUrdu ? 'AI سمارٹ الرٹس و آٹو واٹس ایپ' : 'Smart WhatsApp & Alerts',
+        isUrdu
+            ? 'طلبہ کی غیر حاضری، فیس بقایا جات اور سبقی پیش رفت پر والدین اور اساتذہ کو خودکار فوری پیغامات۔'
+            : 'Automated real-time notifications to parents for absentees, pending fees, and lesson updates.',
+        const Color(0xFF2563EB),
+      ),
+      (
+        Icons.insights,
+        isUrdu ? 'AI مالیاتی تخمینہ و سمارٹ بجٹ' : 'AI Financial Analytics',
+        isUrdu
+            ? 'ماہانہ اخراجات و آمدن کا جدید موازنہ، ممکنہ خسارے کا پیشگی الارم اور سمارٹ بجٹ تجاویز۔'
+            : 'Predictive budgeting, expense trend analytics, and automated financial health indicators.',
+        const Color(0xFFD97706),
+      ),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.only(top: 5, bottom: 10),
+      padding: EdgeInsets.all(isSmall ? 16 : 22),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF0F2B1D),
+            const Color(0xFF1B4332),
+            const Color(0xFF0A1F16),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: accentGold.withValues(alpha: 0.6),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primaryGreen.withValues(alpha: 0.35),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: accentGold.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: accentGold),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.auto_awesome, color: accentGold, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      isUrdu ? 'مصنوعی ذہانت سے لیس (AI Powered)' : 'AI Powered ERP',
+                      style: TextStyle(
+                        color: accentGold,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'MC-MMS 2026',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            isUrdu
+                ? 'جدید مصنوعی ذہانت (AI) کا انقلابی انضمام'
+                : 'Revolutionary AI Integration',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: isSmall ? 18 : 22,
+              fontWeight: FontWeight.bold,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isUrdu
+                ? 'تعلیمی اور انتظامی امور کو خودکار بنانے کے لیے جدید AI ٹیکنالوجی کو مربوط کیا گیا ہے، جس سے اساتذہ اور انتظامیہ کا 70% قیمتی وقت بچتا ہے:'
+                : 'Empowering institutions with next-generation AI tools that automate repetitive tasks and save 70% administrative time:',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.85),
+              fontSize: isSmall ? 12 : 13,
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (ctx, constraints) {
+              final isNarrow = constraints.maxWidth < 600;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: isNarrow ? 1 : 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: isNarrow ? 2.6 : 1.9,
+                ),
+                itemCount: aiItems.length,
+                itemBuilder: (ctx, idx) {
+                  final item = aiItems[idx];
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.12),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: item.$4.withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: item.$4.withValues(alpha: 0.6),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Icon(item.$1, color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                item.$2,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item.$3,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                  fontSize: 11,
+                                  height: 1.4,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _systemFeaturesGrid(bool isUrdu, bool isSmall) {
+    final modules = [
+      (
+        Icons.menu_book,
+        isUrdu ? 'جامع شعبہ تعلیم و امتحانات' : 'Academics & Exams',
+        isUrdu
+            ? 'روزانہ کا سبق، سبقی، منزل، کتب، حاضری رجسٹر اور ششماہی و سالانہ رزلٹ کارڈز کا خودکار انتظام۔'
+            : 'Comprehensive management for Daily Sabaq, Sabqi, Manzil, Dars-e-Nizami, and auto result cards.',
+        const Color(0xFF10B981),
+      ),
+      (
+        Icons.account_balance_wallet,
+        isUrdu ? 'فنانس، فیس و ڈیجیٹل رسیدات' : 'Finance & Fee ERP',
+        isUrdu
+            ? 'ڈبل انٹری کیش بک، آن لائن فیس واؤچرز، عملہ تنخواہیں، اخراجات اور تھرمل و پی ڈی ایف رسیدیں۔'
+            : 'Double-entry accounting, student fee challans, staff payroll, and thermal receipt printing.',
+        const Color(0xFFF59E0B),
+      ),
+      (
+        Icons.fingerprint,
+        isUrdu ? 'بائیو میٹرک و کیو آر حاضری' : 'Biometric & QR Attendance',
+        isUrdu
+            ? 'طلباء و اساتذہ کی ڈیجیٹل کارڈ اور فنگر پرنٹ سے حاضری، چھٹی کی درخواستیں اور تفصیلی لسٹ۔'
+            : 'Digital QR card & biometric attendance, staff leave requests, and absentee tracking.',
+        const Color(0xFF06B6D4),
+      ),
+      (
+        Icons.family_restroom,
+        isUrdu ? 'پیرنٹس موبائل پورٹل' : 'Parents Live Portal',
+        isUrdu
+            ? 'والدین کے لیے گھر بیٹھے اپنے بچوں کے اسباق، حاضری، تعلیمی رپورٹس اور فیس کی مکمل معلومات۔'
+            : 'Real-time parent access to daily attendance, academic progress, fee status, and teacher chat.',
+        const Color(0xFF8B5CF6),
+      ),
+      (
+        Icons.night_shelter,
+        isUrdu ? 'دارالاقامہ، کتب خانہ و راشن' : 'Hostel & Library',
+        isUrdu
+            ? 'رہائشی طلباء کمرے، میس انوینٹری، کتب اجراء و واپسی اور مدرسہ سٹور اسٹاک کا مکمل کنٹرول۔'
+            : 'Room allotments, mess inventory, library book checkouts, and institutional store management.',
+        const Color(0xFFEC4899),
+      ),
+      (
+        Icons.cloud_sync,
+        isUrdu ? 'کلاؤڈ ساس و ملٹی ٹیننسی' : 'Cloud SaaS & Offline Sync',
+        isUrdu
+            ? 'انٹرنیٹ کے بغیر بھی آف لائن کام، کلاؤڈ کے ساتھ محفوظ بیک اپ اور تینوں پلیٹ فارمز پر بیک وقت یکسانیت۔'
+            : 'Offline-first SQLite local engine with secure cloud sync across Web, Mobile, and Desktop.',
+        const Color(0xFF3B82F6),
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 10),
+        _sectionTitle(isUrdu ? 'نظام کے جامع ماڈیولز و خصوصیات' : 'Core ERP Modules & Features'),
+        const SizedBox(height: 8),
+        Text(
+          isUrdu
+              ? 'مدرسہ اور جامع مسجد کی تمام تر انتظامی، تدریسی اور مالیاتی ضروریات کو پورا کرنے والا واحد ہمہ جہت سافٹ ویئر'
+              : 'All-in-one institutional management suite designed specifically for Islamic institutes & Mosques',
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.black54,
+            height: 1.5,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (ctx, constraints) {
+            final isNarrow = constraints.maxWidth < 650;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: isNarrow ? 1 : 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: isNarrow ? 3.0 : 2.2,
+              ),
+              itemCount: modules.length,
+              itemBuilder: (ctx, idx) {
+                final m = modules[idx];
+                return NeoBox(
+                  padding: 14,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: m.$4.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(m.$1, color: m.$4, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              m.$2,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: primaryGreen,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              m.$3,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.black54,
+                                height: 1.35,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ],
+    );
+  }
+
   Widget _aboutSection(bool isUrdu) {
     return Column(
       children: [
@@ -397,16 +745,16 @@ class _HomePageState extends State<HomePage> {
             children: [
               Text(
                 isUrdu
-                    ? 'مدرسہ اشرف المدارس قرآن، تجوید، حسن صوت اور دینی و اخلاقی تربیت کا ایک معتبر مرکز ہے، جہاں روایتی دینی تعلیم کو عصرِ حاضر کے تقاضوں سے ہم آہنگ کیا گیا ہے۔\n\n'
-                      'ادارے نے اپنے تعلیمی و انتظامی نظام کو مکمل طور پر ڈیجیٹلائز کر دیا ہے تاکہ شفافیت اور سہولت کو یقینی بنایا جا سکے۔ اس ایپ میں دو اہم پینلز موجود ہیں:\n\n'
+                    ? 'نظامِ MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم) قرآن، تجوید، حسن صوت اور دینی و اخلاقی تربیت کے اداروں کے لیے تیار کیا گیا ایک جدید اور جامع نظام ہے، جہاں روایتی دینی تعلیم کو عصرِ حاضر کے تقاضوں سے ہم آہنگ کیا گیا ہے۔\n\n'
+                      'اس نظام نے تعلیمی و انتظامی عمل کو مکمل طور پر ڈیجیٹلائز کر دیا ہے تاکہ شفافیت اور سہولت کو یقینی بنایا جا سکے۔ اس ایپ میں اہم پینلز موجود ہیں:\n\n'
                       '۱۔ ایڈمن و ٹیچر پینل: جس کے ذریعے اساتذہ اور انتظامیہ طلباء کی حاضری، روزانہ کا سبق (حفظ و ناظرہ)، امتحانات اور فیس کا ریکارڈ باآسانی مرتب کرتے ہیں۔\n'
                       '۲۔ پیرنٹس (والدین) پینل: جس کے ذریعے والدین گھر بیٹھے اپنے بچوں کی کارکردگی، روزانہ کی حاضری، تعلیمی رپورٹس اور فیس کی تفصیلات دیکھ سکتے ہیں، نیز آن لائن چھٹی کی درخواست اور اساتذہ سے رابطہ بھی کر سکتے ہیں۔\n\n'
                       'اس ڈیجیٹل نظام کی بدولت مدرسہ اور والدین کے درمیان رابطہ مضبوط ہوا ہے اور بچوں کی تعلیمی و اخلاقی تربیت میں خاطر خواہ بہتری آئی ہے۔'
-                    : 'Madrasa Ashraf-ul-Madaris is a prestigious center for Quranic learning and moral training, blending traditional education with modern technological advancements.\n\n'
-                      'The institution has fully digitalized its management system to ensure transparency and efficiency. This application features two dedicated panels:\n\n'
+                    : 'MC-MMS (Mindcrafts Madrasa Management System) is a comprehensive ERP for Quranic learning and moral training centers, blending traditional Islamic education with modern technological advancements.\n\n'
+                      'The system digitalizes administrative and academic processes to ensure transparency and efficiency. This application features dedicated panels:\n\n'
                       '1. Admin & Teacher Panel: Empowers the administration to seamlessly manage daily attendance, academic progress (Hifz & Nazra), exams, and financial records.\n'
                       '2. Parents Panel: Allows parents to stay connected with their child\'s educational journey from home, offering real-time access to daily reports, attendance, fee statuses, and the ability to submit online leave requests.\n\n'
-                      'This digital transformation bridges the gap between the Madrasa and parents, fostering a collaborative environment for the better upbringing and education of the students.',
+                      'This digital transformation bridges the gap between institutions and parents, fostering a collaborative environment for student excellence.',
                 style: const TextStyle(fontSize: 13, height: 1.8),
                 textAlign: TextAlign.justify,
               ),

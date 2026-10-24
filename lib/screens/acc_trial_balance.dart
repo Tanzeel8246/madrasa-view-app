@@ -27,28 +27,38 @@ class _AccTrialBalancePageState extends State<AccTrialBalancePage> {
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   Future<void> _load() async {
-    final all = await DBHelper().getFinance(userRole: 'admin');
+    final db = await DBHelper().database;
     final asOfText = _date(_asOf);
+    const query = '''
+      SELECT a.id, a.code, a.name, a.type,
+             SUM(e.debit) as total_debit,
+             SUM(e.credit) as total_credit
+      FROM acc_chart_of_accounts a
+      JOIN acc_ledger_entries e ON a.id = e.account_id
+      JOIN acc_vouchers v ON e.voucher_id = v.id
+      WHERE v.status = 'Approved'
+        AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+        AND (a.is_deleted = 0 OR a.is_deleted IS NULL)
+        AND v.date <= ?
+      GROUP BY a.id, a.code, a.name, a.type
+      ORDER BY a.code ASC
+    ''';
+    final accounts = await db.rawQuery(query, [asOfText]);
     final grouped = <String, Map<String, dynamic>>{};
-
-    for (final row in all) {
-      if ((row['is_deleted'] ?? 0) == 1) continue;
-      final date = row['date']?.toString() ?? '';
-      if (date.isNotEmpty && date.compareTo(asOfText) > 0) continue;
-
-      final head = (row['title'] ?? row['head_name'] ?? row['description'] ?? 'General')
-          .toString();
-      final type = row['type']?.toString().toLowerCase() ?? '';
-      final amount = double.tryParse(row['amount']?.toString() ?? '0') ?? 0;
-      grouped.putIfAbsent(head, () => {'name': head, 'debit': 0.0, 'credit': 0.0});
-      if (type == 'income' || type == 'receipt') {
-        grouped[head]!['credit'] = (grouped[head]!['credit'] as double) + amount;
-      } else {
-        grouped[head]!['debit'] = (grouped[head]!['debit'] as double) + amount;
+    for (final acc in accounts) {
+      final code = acc['code']?.toString() ?? '';
+      final name = acc['name']?.toString() ?? '';
+      final title = '$code - $name';
+      final dr = double.tryParse(acc['total_debit']?.toString() ?? '0') ?? 0.0;
+      final cr = double.tryParse(acc['total_credit']?.toString() ?? '0') ?? 0.0;
+      if (dr > 0 || cr > 0) {
+        grouped[title] = {
+          'name': title,
+          'debit': dr,
+          'credit': cr,
+        };
       }
     }
-
-    if (!mounted) return;
     setState(() {
       _rows = grouped.values.toList()
         ..sort((a, b) => a['name'].toString().compareTo(b['name'].toString()));

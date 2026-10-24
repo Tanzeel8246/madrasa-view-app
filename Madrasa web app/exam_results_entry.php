@@ -89,7 +89,8 @@ if ($class_data) {
             $total_dynamic_marks += 100;
         }
     } elseif (!empty($class_data['subjects_list'])) {
-        $parts = array_filter(array_map('trim', explode(',', $class_data['subjects_list'])));
+        $clean_subjects = str_replace('،', ',', $class_data['subjects_list']);
+        $parts = array_filter(array_map('trim', explode(',', $clean_subjects)));
         foreach ($parts as $p) {
             $s_parts = explode(':', $p);
             $n = trim($s_parts[0]);

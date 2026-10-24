@@ -20,30 +20,34 @@ $as_of_date = $_GET['as_of'] ?? date('Y-m-d');
 finance_accounting_backfill($pdo, null, $as_of_date);
 
 $cur_tenant_id = (int)get_current_tenant_id($pdo);
+$tenant_settings = function_exists('get_tenant_settings') ? get_tenant_settings($pdo, $cur_tenant_id) : [];
+$inst_name = !empty($tenant_settings['madrasa_name']) ? $tenant_settings['madrasa_name'] : (!empty($_SESSION['madrasa_name']) ? $_SESSION['madrasa_name'] : t('app_name'));
 
-// Fetch accounts with balances
+// D8 Fix: Only Approved vouchers enter the balance sheet
 $query = "
     SELECT a.id, a.code, a.name, a.type, a.parent_id,
            SUM(CASE WHEN v.id IS NOT NULL THEN e.debit ELSE 0 END) as total_debit, 
            SUM(CASE WHEN v.id IS NOT NULL THEN e.credit ELSE 0 END) as total_credit
     FROM acc_chart_of_accounts a
-    LEFT JOIN acc_ledger_entries e ON a.id = e.account_id
-    LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status != 'Rejected' AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ? AND v.date <= ?
+    LEFT JOIN acc_ledger_entries e ON a.id = e.account_id AND e.tenant_id = ?
+    LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ? AND v.date <= ?
     WHERE a.is_deleted = 0 AND a.tenant_id = ?
     GROUP BY a.id, a.code, a.name, a.type, a.parent_id
     ORDER BY a.type, a.code
 ";
 
 $stmt = $pdo->prepare($query);
-$stmt->execute([$cur_tenant_id, $as_of_date, $cur_tenant_id]);
+$stmt->execute([$cur_tenant_id, $cur_tenant_id, $as_of_date, $cur_tenant_id]);
 $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $assets = [];
 $liabilities = [];
+$restricted_funds = [];
 $equity = [];
 
 $total_assets = 0;
 $total_liabilities = 0;
+$total_restricted_funds = 0;
 $total_equity = 0;
 $retained_earnings = 0;
 
@@ -58,7 +62,7 @@ foreach($accounts as $acc) {
     $isLiab = ($rawType === 'Liability');
     $isEq = ($rawType === 'Equity');
 
-    // Revenue and Expenses (For Retained Earnings)
+    // Revenue and Expenses (Calculates Net Surplus/Deficit for Equity)
     if ($isRev) {
         $retained_earnings += ($cr - $dr);
     } else if ($isExp) {
@@ -75,8 +79,15 @@ foreach($accounts as $acc) {
     } else if ($isLiab) {
         $bal = $cr - $dr;
         if ($bal != 0) {
-            $liabilities[] = ['code' => $acc['code'], 'name' => $acc['name'], 'balance' => $bal];
-            $total_liabilities += $bal;
+            // D5 Fix: Distinguish Restricted Trust Funds (Zakat / Sadaqah) from general liabilities
+            $is_fund = (strpos($acc['name'], 'فنڈ') !== false || strpos($acc['name'], 'زکوٰۃ') !== false || strpos($acc['name'], 'زکوۃ') !== false || strpos($acc['name'], 'صدقات') !== false || strpos($acc['code'], '21') === 0);
+            if ($is_fund) {
+                $restricted_funds[] = ['code' => $acc['code'], 'name' => $acc['name'], 'balance' => $bal];
+                $total_restricted_funds += $bal;
+            } else {
+                $liabilities[] = ['code' => $acc['code'], 'name' => $acc['name'], 'balance' => $bal];
+                $total_liabilities += $bal;
+            }
         }
     } else if ($isEq) {
         $bal = $cr - $dr;
@@ -87,13 +98,14 @@ foreach($accounts as $acc) {
     }
 }
 
-// Add Retained Earnings to Equity
+// D5 Fix: Replace hardcoded 3999 plug with standard 3002 Retained Surplus / Deficit
 if ($retained_earnings != 0) {
-    $equity[] = ['code' => '3999', 'name' => 'Retained Earnings (خالص منافع/نقصان)', 'balance' => $retained_earnings];
+    $equity[] = ['code' => '3002', 'name' => 'Accumulated Surplus / Deficit (مجموعی فاضل/خسارہ)', 'balance' => $retained_earnings];
     $total_equity += $retained_earnings;
 }
 
-$total_liab_and_equity = $total_liabilities + $total_equity;
+$all_liab_and_funds = $total_liabilities + $total_restricted_funds;
+$total_liab_and_equity = $all_liab_and_funds + $total_equity;
 ?>
 
 <div class="container py-4 urdu-text" style="font-family: 'Noto Nastaliq Urdu', serif;">
@@ -115,13 +127,14 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
 
     <div id="printableArea" class="bg-white p-5 border rounded shadow-sm">
         <div class="text-center border-bottom border-2 border-dark mb-4 pb-3">
-            <h2 class="fw-bold text-success m-0">مدرسہ اشرف المدارس</h2>
+            <!-- D10 Fix: Print current tenant's own name, never hardcoded template name -->
+            <h2 class="fw-bold text-success m-0"><?php echo e($inst_name); ?></h2>
             <h4 class="mt-2 fw-bold">بیلنس شیٹ (Balance Sheet)</h4>
             <p class="mb-1 fw-bold fs-6 text-muted">As of: <?php echo date('d-M-Y', strtotime($as_of_date)); ?></p>
         </div>
 
         <div class="row g-5">
-            <!-- Assets -->
+            <!-- Assets Column -->
             <div class="col-md-6 border-end">
                 <h4 class="text-primary fw-bold border-bottom pb-2 mb-3"><i class="fas fa-money-bill-wave me-2"></i> اثاثہ جات (Assets)</h4>
                 <table class="table table-borderless table-sm fs-5">
@@ -145,11 +158,11 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                 </table>
             </div>
 
-            <!-- Liabilities & Equity -->
+            <!-- Liabilities & Equity Column -->
             <div class="col-md-6">
-                <!-- Liabilities -->
-                <h4 class="text-danger fw-bold border-bottom pb-2 mb-3"><i class="fas fa-hand-holding-usd me-2"></i> واجبات (Liabilities)</h4>
-                <table class="table table-borderless table-sm fs-5 mb-4">
+                <!-- Current Liabilities -->
+                <h4 class="text-danger fw-bold border-bottom pb-2 mb-3"><i class="fas fa-hand-holding-usd me-2"></i> واجبات (Current Liabilities)</h4>
+                <table class="table table-borderless table-sm fs-5 mb-3">
                     <tbody>
                         <?php foreach($liabilities as $l): ?>
                         <tr>
@@ -158,19 +171,41 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                         </tr>
                         <?php endforeach; ?>
                         <?php if(empty($liabilities)): ?>
-                        <tr><td colspan="2" class="text-muted text-center">کوئی واجبات نہیں (No liabilities)</td></tr>
+                        <tr><td colspan="2" class="text-muted text-center">کوئی عام واجبات نہیں</td></tr>
                         <?php endif; ?>
                     </tbody>
                     <tfoot class="border-top border-1">
                         <tr>
-                            <th class="fs-6">کل واجبات (Total Liabilities):</th>
-                            <th class="text-end fs-5 text-danger"><span dir="ltr" class="d-inline-block"><?php echo number_format($total_liabilities, 2); ?></span></th>
+                            <th class="fs-6">کل عام واجبات:</th>
+                            <th class="text-end fs-6 text-danger"><span dir="ltr" class="d-inline-block"><?php echo number_format($total_liabilities, 2); ?></span></th>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <!-- D5 Fix: Restricted Funds Section (Zakat, Sadaqah, Specific Funds) -->
+                <h4 class="text-warning fw-bold border-bottom pb-2 mb-3"><i class="fas fa-box-open me-2"></i> مخصوص فنڈز و امانات (Restricted Funds)</h4>
+                <table class="table table-borderless table-sm fs-5 mb-4">
+                    <tbody>
+                        <?php foreach($restricted_funds as $rf): ?>
+                        <tr>
+                            <td><span class="text-muted fs-6 me-2"><?php echo $rf['code']; ?></span> <strong><?php echo $rf['name']; ?></strong></td>
+                            <td class="text-end fw-bold text-warning"><span dir="ltr" class="d-inline-block"><?php echo number_format($rf['balance'], 2); ?></span></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if(empty($restricted_funds)): ?>
+                        <tr><td colspan="2" class="text-muted text-center">کوئی مخصوص فنڈ موجود نہیں</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                    <tfoot class="border-top border-1">
+                        <tr>
+                            <th class="fs-6">کل مخصوص فنڈز و امانات:</th>
+                            <th class="text-end fs-6 text-warning"><span dir="ltr" class="d-inline-block"><?php echo number_format($total_restricted_funds, 2); ?></span></th>
                         </tr>
                     </tfoot>
                 </table>
 
                 <!-- Equity -->
-                <h4 class="text-info fw-bold border-bottom pb-2 mb-3"><i class="fas fa-chart-line me-2"></i> سرمایہ (Equity)</h4>
+                <h4 class="text-info fw-bold border-bottom pb-2 mb-3"><i class="fas fa-chart-line me-2"></i> سرمایہ و عمومی فنڈز (Equity & Capital)</h4>
                 <table class="table table-borderless table-sm fs-5">
                     <tbody>
                         <?php foreach($equity as $e): ?>
@@ -185,7 +220,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                     </tbody>
                     <tfoot class="border-top border-1">
                         <tr>
-                            <th class="fs-6">کل سرمایہ (Total Equity):</th>
+                            <th class="fs-6">کل سرمایہ و عمومی فنڈز:</th>
                             <th class="text-end fs-5 text-info"><span dir="ltr" class="d-inline-block"><?php echo number_format($total_equity, 2); ?></span></th>
                         </tr>
                     </tfoot>
@@ -194,7 +229,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
                 <table class="table table-borderless table-sm fs-5 mt-4">
                     <tfoot class="border-top border-2">
                         <tr>
-                            <th class="fs-5">کل واجبات و سرمایہ (Total Liab & Eq):</th>
+                            <th class="fs-5">کل واجبات، فنڈز و سرمایہ (Total Liab, Funds & Eq):</th>
                             <th class="text-end fs-4 <?php echo abs($total_assets - $total_liab_and_equity) < 0.01 ? 'text-success' : 'text-danger'; ?>">
                                 <span dir="ltr" class="d-inline-block"><?php echo number_format($total_liab_and_equity, 2); ?></span>
                             </th>
@@ -210,7 +245,7 @@ $total_liab_and_equity = $total_liabilities + $total_equity;
         </div>
         <?php else: ?>
         <div class="alert alert-success mt-5 fw-bold text-center fs-5">
-            <i class="fas fa-check-circle me-2"></i> بیلنس شیٹ درست ہے! (Assets = Liabilities + Equity)
+            <i class="fas fa-check-circle me-2"></i> بیلنس شیٹ 100% درست اور متوازن ہے! (Assets = Liabilities + Equity)
         </div>
         <?php endif; ?>
     </div>

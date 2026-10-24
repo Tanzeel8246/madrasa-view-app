@@ -25,7 +25,7 @@ $student_name = $s['name'];
 
 $cur_tenant_id = (int)($s['tenant_id'] ?? get_current_tenant_id());
 $settings = get_tenant_settings($pdo, $cur_tenant_id);
-$app_name = !empty($settings['madrasa_name']) ? $settings['madrasa_name'] : "مدرسہ اشرف المدارس";
+$app_name = !empty($settings['madrasa_name']) ? $settings['madrasa_name'] : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : "ادارہ");
 $app_address = !empty($settings['address']) ? $settings['address'] : "منسلک جامع مسجد حنفیہ (محلہ راؤ رشید والا/بالمقابل دفتر زراعت ساہیوال روڈ<br> فروکہ ضلع سرگودھا)";
 $sig_stamp = (!empty($settings['signature_stamp_path']) && file_exists(__DIR__ . '/' . $settings['signature_stamp_path'])) ? $settings['signature_stamp_path'] : '';
 

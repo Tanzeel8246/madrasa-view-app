@@ -474,9 +474,9 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
     <!-- Print Title Bar — صرف پرنٹ میں ظاہر -->
     <div class="print-title-bar">
         <div style="text-align:center; border-bottom:2px solid #284D3D; margin-bottom:6px; padding-bottom:5px; font-family:'Noto Nastaliq Urdu',sans-serif;">
-            <h4 style="color:#284D3D; margin:0; font-size:13pt;">رجسٹر <?php echo t('status_present'); ?>ی</h4>
+            <h4 style="color:#284D3D; margin:0; font-size:13pt;"><?php echo t('attendance_register'); ?></h4>
             <p style="margin:1px 0; font-size:8.5pt;">
-                مدرسہ اشرف المدارس &mdash; فاروقہ، سرگودھا
+                <?php echo htmlspecialchars($header_madrasa_name ?? ($_SESSION['tenant_name'] ?? 'ادارہ')); ?>
                 &nbsp;|&nbsp; مدت: <strong><?php echo date('d M Y', strtotime($start_date)); ?> تا <?php echo date('d M Y', strtotime($end_date)); ?></strong>
             </p>
         </div>
@@ -521,7 +521,7 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
             
             <div class="madrasa-header d-flex justify-content-between align-items-end" style="font-family: 'Jameel Noori Nastaleeq', sans-serif;">
                 <div class="text-start" style="width: 25%;">
-                    <h4 class="fw-bold m-0">مدرسہ اشرف المدارس</h4>
+                    <h4 class="fw-bold m-0"><?php echo htmlspecialchars($header_madrasa_name ?? ($_SESSION['tenant_name'] ?? 'ادارہ')); ?></h4>
                     <h6 class="m-0">فاروقہ، سرگودھا</h6>
                 </div>
                 <div class="text-center" style="width: 50%;">
@@ -533,7 +533,7 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
                     <div class="mt-1 fw-bold text-primary" style="font-family: 'Noto Nastaliq Urdu', sans-serif; font-size: 14px;">کلاس: <?php echo $cName; ?></div>
                 </div>
                 <div class="text-end" style="width: 25%;">
-                    <h3 class="fw-bold m-0 text-decoration-underline">رجسٹر <?php echo t('status_present'); ?>ی</h3>
+                    <h3 class="fw-bold m-0 text-decoration-underline"><?php echo t('attendance_register'); ?></h3>
                 </div>
             </div>
 
@@ -1096,9 +1096,9 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
         </div>
         <div class="card-body">
             <div class="row text-center">
-                <div class="col-3 border-end"><h4 class="text-success fw-bold mb-0"><?php echo $perc_p; ?>%</h4><small>بر<?php echo t('time_period'); ?></small></div>
+                <div class="col-3 border-end"><h4 class="text-success fw-bold mb-0"><?php echo $perc_p; ?>%</h4><small><?php echo t('on_time'); ?></small></div>
                 <div class="col-3 border-end"><h4 class="text-warning fw-bold mb-0" style="color: #fd7e14 !important;"><?php echo $perc_late; ?>%</h4><small>تاخیر</small></div>
-                <div class="col-3 border-end"><h4 class="text-danger fw-bold mb-0"><?php echo $perc_a; ?>%</h4><small>غیر <?php echo t('status_present'); ?></small></div>
+                <div class="col-3 border-end"><h4 class="text-danger fw-bold mb-0"><?php echo $perc_a; ?>%</h4><small><?php echo t('status_absent'); ?></small></div>
                 <div class="col-3"><h4 class="text-info fw-bold mb-0"><?php echo $perc_l; ?>%</h4><small><?php echo t('status_leave'); ?></small></div>
             </div>
         </div>

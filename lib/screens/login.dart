@@ -13,6 +13,7 @@ import '../utils/network_service.dart';
 import '../utils/session.dart';
 import '../utils/notification_service.dart';
 import '../widgets/neo_box.dart';
+import '../widgets/app_brand_logo.dart';
 import 'dashboard.dart';
 import 'home.dart';
 
@@ -101,10 +102,28 @@ class _LoginPageState extends State<LoginPage> {
       _errorMessage = '';
     });
 
-    final username = _usernameController.text.trim();
+    String cleanInputCode(String input) {
+      if (input.isEmpty) return '';
+      var s = input.trim();
+      // غیر مرئی یونیکوڈ حروف (LRM, RLM, ALM, ZWSP, BOM وغیرہ) کو ہٹائیں
+      s = s.replaceAll(RegExp(r'[\u200B-\u200F\u202A-\u202E\u061C\uFEFF\s]'), '');
+      // یونیکوڈ ڈیشز کو معیاری ASCII ڈیش میں تبدیل کریں
+      s = s.replaceAll(RegExp(r'[\u2010-\u2015\u2212]'), '-');
+      // اردو اور عربی ہندسوں کو انگریزی ہندسوں میں تبدیل کریں
+      const eastern = '۰۱۲۳۴۵۶۷۸۹';
+      const arabic = '٠١٢٣٤٥٦٧٨٩';
+      const western = '0123456789';
+      for (int i = 0; i < 10; i++) {
+        s = s.replaceAll(eastern[i], western[i]).replaceAll(arabic[i], western[i]);
+      }
+      return s.toUpperCase();
+    }
+
+    final rawUsername = _usernameController.text.trim();
+    final username = rawUsername.replaceAll(RegExp(r'[\u200B-\u200F\u202A-\u202E\u061C\uFEFF]'), '');
     final password = _passwordController.text.trim();
     final tenantCode = isMultiTenantEnabled.value
-        ? _tenantCodeController.text.trim().toUpperCase()
+        ? cleanInputCode(_tenantCodeController.text)
         : '';
     String serverMessage = '';
     bool hasNetworkException = false;
@@ -217,6 +236,11 @@ class _LoginPageState extends State<LoginPage> {
         final subEndsAt = uniBody['subscription_ends_at']?.toString() ?? '';
         final subStatus = uniBody['subscription_status']?.toString() ??
             (isTrial ? 'trial' : 'active');
+        final tSystemType = uniBody['tenant_system_type']?.toString() ??
+            (uniBody['system_type']?.toString() ?? 'Both');
+        final maxStudents = int.tryParse(uniBody['max_students']?.toString() ?? '50') ?? 50;
+        final maxClasses = int.tryParse(uniBody['max_classes']?.toString() ?? '3') ?? 3;
+        final maxTeachers = int.tryParse(uniBody['max_teachers']?.toString() ?? '4') ?? 4;
 
         currentTenantIsTrial.value = isTrial;
         currentTenantTrialDaysLeft.value = trialDaysLeft;
@@ -224,6 +248,10 @@ class _LoginPageState extends State<LoginPage> {
         currentTenantPlanCode.value = planCode;
         currentTenantSubscriptionEndsAt.value = subEndsAt;
         currentTenantSubscriptionStatus.value = subStatus;
+        currentTenantSystemType.value = tSystemType;
+        currentTenantMaxStudents.value = maxStudents;
+        currentTenantMaxClasses.value = maxClasses;
+        currentTenantMaxTeachers.value = maxTeachers;
 
         await SessionManager.saveSession(
           currentUserRole.value!,
@@ -244,6 +272,10 @@ class _LoginPageState extends State<LoginPage> {
           planCode: planCode,
           subscriptionEndsAt: subEndsAt,
           subscriptionStatus: subStatus,
+          systemType: tSystemType,
+          maxStudents: maxStudents,
+          maxClasses: maxClasses,
+          maxTeachers: maxTeachers,
         );
 
         NotificationService.syncTokenWithServer(
@@ -1289,16 +1321,8 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                               ],
                             ),
-                            child: ClipOval(
-                              child: Image.asset(
-                                'assets/logo.png',
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => Icon(
-                                  Icons.school,
-                                  size: 50,
-                                  color: primaryGreen,
-                                ),
-                              ),
+                            child: const Center(
+                              child: AppBrandLogo(size: 72),
                             ),
                           ),
                           const SizedBox(height: 15),
@@ -1307,7 +1331,7 @@ class _LoginPageState extends State<LoginPage> {
                             builder: (ctx, tName, _) {
                               final title = (tName != null && tName.isNotEmpty)
                                   ? tName
-                                  : (isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris');
+                                  : (isUrdu ? 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)' : 'MC-MMS (Mindcrafts Madrasa Management System)');
                               return Text(
                                 title,
                                 style: TextStyle(
@@ -1355,61 +1379,75 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                           if (isMultiTenantEnabled.value) ...[
-                            TextField(
-                              controller: _tenantCodeController,
-                              textCapitalization: TextCapitalization.characters,
+                            Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: TextField(
+                                controller: _tenantCodeController,
+                                textDirection: TextDirection.ltr,
+                                textAlign: TextAlign.start,
+                                decoration: InputDecoration(
+                                  labelText: isUrdu
+                                      ? 'ادارہ کوڈ (Institute Code)'
+                                      : 'Institute Code',
+                                  hintText: 'M-26-001 / MAIN01',
+                                  helperText: isUrdu
+                                      ? 'مرکزی ادارہ کوڈ MAIN01 ہے'
+                                      : 'Default Code: MAIN01',
+                                  prefixIcon: const Icon(Icons.domain),
+                                  suffixIcon: IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      _tenantCodeController.clear();
+                                    },
+                                  ),
+                                  border: const OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 15),
+                          ],
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: TextField(
+                              controller: _usernameController,
+                              textDirection: TextDirection.ltr,
+                              textAlign: TextAlign.start,
                               decoration: InputDecoration(
                                 labelText: isUrdu
-                                    ? 'ادارہ کوڈ (Institute Code)'
-                                    : 'Institute Code',
-                                hintText: 'MAIN01',
-                                helperText: isUrdu
-                                    ? 'مرکزی ادارہ کوڈ MAIN01 ہے'
-                                    : 'Default Code: MAIN01',
-                                prefixIcon: const Icon(Icons.domain),
+                                    ? 'یوزر نیم / داخلہ نمبر'
+                                    : 'Username / admission no',
+                                prefixIcon: const Icon(Icons.person),
+                                border: const OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: TextField(
+                              controller: _passwordController,
+                              obscureText: _isObscure,
+                              textDirection: TextDirection.ltr,
+                              textAlign: TextAlign.start,
+                              decoration: InputDecoration(
+                                labelText: isUrdu ? 'پاس ورڈ' : 'Password',
+                                prefixIcon: const Icon(Icons.lock),
                                 suffixIcon: IconButton(
-                                  icon: const Icon(Icons.clear, size: 18),
+                                  icon: Icon(
+                                    _isObscure
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                  ),
                                   onPressed: () {
-                                    _tenantCodeController.clear();
+                                    setState(() {
+                                      _isObscure = !_isObscure;
+                                    });
                                   },
                                 ),
                                 border: const OutlineInputBorder(),
                               ),
                             ),
-                            const SizedBox(height: 15),
-                          ],
-                          TextField(
-                        controller: _usernameController,
-                        decoration: InputDecoration(
-                          labelText: isUrdu
-                              ? 'یوزر نیم / داخلہ نمبر'
-                              : 'Username / admission no',
-                          prefixIcon: const Icon(Icons.person),
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: _isObscure,
-                        decoration: InputDecoration(
-                          labelText: isUrdu ? 'پاس ورڈ' : 'Password',
-                          prefixIcon: const Icon(Icons.lock),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _isObscure
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isObscure = !_isObscure;
-                              });
-                            },
                           ),
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
                       Align(
                         alignment: isUrdu
                             ? Alignment.centerLeft

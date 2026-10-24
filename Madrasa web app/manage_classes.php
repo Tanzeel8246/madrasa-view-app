@@ -1,100 +1,122 @@
 <?php 
 require_once 'db.php';
 
-// Migrations to support Phase 4 and Phase 5
-try { $pdo->exec("ALTER TABLE classes ADD COLUMN class_type VARCHAR(50) DEFAULT 'Darse Nizami / Other'"); } catch (PDOException $e) {}
-try { $pdo->exec("ALTER TABLE classes ADD COLUMN main_teacher_id INT NULL"); } catch (PDOException $e) {}
-try { $pdo->exec("ALTER TABLE classes ADD COLUMN main_teacher_ids JSON NULL"); } catch (PDOException $e) {}
-try { $pdo->exec("ALTER TABLE classes ADD COLUMN section VARCHAR(50) DEFAULT NULL"); } catch (PDOException $e) {}
-try { $pdo->exec("ALTER TABLE classes ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (PDOException $e) {}
-try { $pdo->exec("ALTER TABLE classes ADD COLUMN subjects_list VARCHAR(255) DEFAULT NULL"); } catch (PDOException $e) {}
-try {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS class_periods (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        class_id INT NOT NULL,
-        period_no INT NOT NULL,
-        books VARCHAR(255),
-        teacher_id INT NULL,
-        teacher_ids JSON NULL,
-        tenant_id INT NOT NULL DEFAULT 1,
-        FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-} catch (PDOException $e) {}
-try { $pdo->exec("ALTER TABLE class_periods ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (PDOException $e) {}
+// Migrations to support Phase 4 and Phase 5 (Only runs once to prevent MySQL metadata locks and HTTP 500)
+$clsMigrateFlag = __DIR__ . '/.manage_classes_schema_v2_done';
+if (!file_exists($clsMigrateFlag)) {
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN class_type VARCHAR(50) DEFAULT 'Darse Nizami / Other'"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN main_teacher_id INT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN main_teacher_ids JSON NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN section VARCHAR(50) DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN subjects_list VARCHAR(255) DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN is_deleted TINYINT DEFAULT 0"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE teachers ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE teachers ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE teachers ADD COLUMN is_deleted TINYINT DEFAULT 0"); } catch (Throwable $e) {}
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS class_periods (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            class_id INT NOT NULL,
+            period_no INT NOT NULL,
+            books VARCHAR(255) NULL,
+            teacher_id INT NULL,
+            teacher_ids JSON NULL,
+            tenant_id INT NOT NULL DEFAULT 1
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE class_periods ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
 
-// Drop legacy single-column unique index on classes(name) that prevents multi-tenant class creation
-try {
-    $indexes = $pdo->query("SHOW INDEX FROM `classes`")->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($indexes as $idx) {
-        if ($idx['Non_unique'] == 0 && $idx['Key_name'] !== 'PRIMARY' && $idx['Column_name'] === 'name') {
-            $kName = $idx['Key_name'];
-            $hasTenant = false;
-            foreach ($indexes as $idx2) {
-                if ($idx2['Key_name'] === $kName && $idx2['Column_name'] === 'tenant_id') {
-                    $hasTenant = true;
+    // Drop legacy single-column unique index on classes(name) that prevents multi-tenant class creation
+    try {
+        $indexes = $pdo->query("SHOW INDEX FROM `classes`")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($indexes as $idx) {
+            if ($idx['Non_unique'] == 0 && $idx['Key_name'] !== 'PRIMARY' && $idx['Column_name'] === 'name') {
+                $kName = $idx['Key_name'];
+                $hasTenant = false;
+                foreach ($indexes as $idx2) {
+                    if ($idx2['Key_name'] === $kName && $idx2['Column_name'] === 'tenant_id') {
+                        $hasTenant = true;
+                    }
+                }
+                if (!$hasTenant) {
+                    try { $pdo->exec("ALTER TABLE `classes` DROP INDEX `$kName`"); } catch (Throwable $eDrop) {}
                 }
             }
-            if (!$hasTenant) {
-                try { $pdo->exec("ALTER TABLE `classes` DROP INDEX `$kName`"); } catch (Throwable $eDrop) {}
+        }
+        try {
+            $pdo->exec("ALTER TABLE `classes` ADD UNIQUE KEY `idx_tenant_class` (`tenant_id`, `name`, `section`, `system_type`)");
+        } catch (Throwable $eAddIdx) {}
+    } catch (Throwable $e) {}
+    @touch($clsMigrateFlag);
+}
+
+// Auto-seed default classes for Madrasa if empty for this tenant (respecting plan limits & system_type)
+try {
+    $cur_tenant_id = (int)get_current_tenant_id();
+    $tenant_sys = $_SESSION['tenant_system_type'] ?? 'Madrasa';
+    $is_madrasa_allowed = ($tenant_sys === 'Madrasa' || $tenant_sys === 'Both' || $cur_tenant_id <= 1);
+
+    if ($is_madrasa_allowed) {
+        $madrasa_classes_count = $pdo->query("SELECT COUNT(*) FROM classes WHERE (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '') AND tenant_id = $cur_tenant_id")->fetchColumn();
+        if ($madrasa_classes_count == 0) {
+            $limits = function_exists('get_tenant_plan_limits') ? get_tenant_plan_limits($pdo, $cur_tenant_id) : ['max_classes' => 3];
+            $default_classes = [
+                ['name' => 'حفظ', 'class_type' => 'Hifz/Gardan/Husn'],
+                ['name' => 'ناظرہ', 'class_type' => 'Nazira'],
+                ['name' => 'قاعدہ', 'class_type' => 'Qaida'],
+                ['name' => 'درجہ اولیٰ', 'class_type' => 'Darse Nizami / Other']
+            ];
+            $maxToSeed = min(count($default_classes), (int)($limits['max_classes'] ?? 3));
+            $stmt_seed_m = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id) VALUES (?, ?, 'Madrasa', ?)");
+            for ($k = 0; $k < $maxToSeed; $k++) {
+                $stmt_seed_m->execute([$default_classes[$k]['name'], $default_classes[$k]['class_type'], $cur_tenant_id]);
             }
         }
     }
-    try {
-        $pdo->exec("ALTER TABLE `classes` ADD UNIQUE KEY `idx_tenant_class` (`tenant_id`, `name`, `section`, `system_type`)");
-    } catch (Throwable $eAddIdx) {}
-} catch (Throwable $e) {}
+} catch (Exception $e) {}
 
-// Auto-seed default classes for Madrasa if empty for this tenant
+// Auto-seed Quranic classes for Masjid ONLY if Masjid/Both is allowed
 try {
     $cur_tenant_id = (int)get_current_tenant_id();
-    $madrasa_classes_count = $pdo->query("SELECT COUNT(*) FROM classes WHERE (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '') AND tenant_id = $cur_tenant_id")->fetchColumn();
-    if ($madrasa_classes_count == 0) {
-        $default_classes = [
-            ['name' => 'حفظ', 'class_type' => 'Hifz/Gardan/Husn'],
-            ['name' => 'ناظرہ', 'class_type' => 'Nazira'],
-            ['name' => 'قاعدہ', 'class_type' => 'Qaida'],
-            ['name' => 'درجہ اولیٰ', 'class_type' => 'Darse Nizami / Other']
-        ];
-        $stmt_seed_m = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id) VALUES (?, ?, 'Madrasa', ?)");
-        foreach ($default_classes as $dc) {
-            $stmt_seed_m->execute([$dc['name'], $dc['class_type'], $cur_tenant_id]);
+    $tenant_sys = $_SESSION['tenant_system_type'] ?? 'Madrasa';
+    $is_masjid_allowed = ($tenant_sys === 'Masjid' || $tenant_sys === 'Both' || $cur_tenant_id <= 1);
+    if ($is_masjid_allowed) {
+        $masjid_classes_count = $pdo->query("SELECT COUNT(*) FROM classes WHERE system_type = 'Masjid' AND tenant_id = $cur_tenant_id")->fetchColumn();
+        if ($masjid_classes_count == 0) {
+            $limits = function_exists('get_tenant_plan_limits') ? get_tenant_plan_limits($pdo, $cur_tenant_id) : ['max_classes' => 3];
+            $quran_classes = [
+                ['name' => 'حفظ', 'class_type' => 'Hifz/Gardan/Husn'],
+                ['name' => 'ناظرہ', 'class_type' => 'Nazira'],
+                ['name' => 'قاعدہ', 'class_type' => 'Qaida']
+            ];
+            $maxToSeed = min(count($quran_classes), (int)($limits['max_classes'] ?? 3));
+            $stmt_seed = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id) VALUES (?, ?, 'Masjid', ?)");
+            for ($k = 0; $k < $maxToSeed; $k++) {
+                $stmt_seed->execute([$quran_classes[$k]['name'], $quran_classes[$k]['class_type'], $cur_tenant_id]);
+            }
         }
     }
 } catch (Exception $e) {}
 
-// Auto-seed 4 Quranic classes for Masjid if empty for this tenant
-try {
-    $cur_tenant_id = (int)get_current_tenant_id();
-    $masjid_classes_count = $pdo->query("SELECT COUNT(*) FROM classes WHERE system_type = 'Masjid' AND tenant_id = $cur_tenant_id")->fetchColumn();
-    if ($masjid_classes_count == 0) {
-        $quran_classes = [
-            ['name' => 'حفظ', 'class_type' => 'Hifz/Gardan/Husn'],
-            ['name' => 'ناظرہ', 'class_type' => 'Nazira'],
-            ['name' => 'قاعدہ', 'class_type' => 'Qaida'],
-            ['name' => 'حسنِ صوت', 'class_type' => 'Hifz/Gardan/Husn']
-        ];
-        $stmt_seed = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id) VALUES (?, ?, 'Masjid', ?)");
-        foreach ($quran_classes as $qc) {
-            $stmt_seed->execute([$qc['name'], $qc['class_type'], $cur_tenant_id]);
+if (!function_exists('get_class_max_periods')) {
+    function get_class_max_periods($class_type, $name = '') {
+        $haystack = mb_strtolower($class_type . ' ' . $name, 'UTF-8');
+        if (strpos($haystack, 'nazira') !== false || strpos($haystack, 'ناظرہ') !== false) {
+            return 2;
         }
+        if (strpos($haystack, 'qaida') !== false || strpos($haystack, 'قاعدہ') !== false) {
+            return 2;
+        }
+        if (strpos($haystack, 'husn') !== false || strpos($haystack, 'حسن') !== false || strpos($haystack, 'صوت') !== false) {
+            return 4;
+        }
+        if (strpos($haystack, 'hifz') !== false || strpos($haystack, 'حفظ') !== false || strpos($haystack, 'gardan') !== false || strpos($haystack, 'گردان') !== false) {
+            return 4;
+        }
+        return 8; // Academic / Darse Nizami / Asri Taleem
     }
-} catch (Exception $e) {}
-
-function get_class_max_periods($class_type, $name = '') {
-    $haystack = mb_strtolower($class_type . ' ' . $name, 'UTF-8');
-    if (strpos($haystack, 'nazira') !== false || strpos($haystack, 'ناظرہ') !== false) {
-        return 2;
-    }
-    if (strpos($haystack, 'qaida') !== false || strpos($haystack, 'قاعدہ') !== false) {
-        return 2;
-    }
-    if (strpos($haystack, 'husn') !== false || strpos($haystack, 'حسن') !== false || strpos($haystack, 'صوت') !== false) {
-        return 4;
-    }
-    if (strpos($haystack, 'hifz') !== false || strpos($haystack, 'حفظ') !== false || strpos($haystack, 'gardan') !== false || strpos($haystack, 'گردان') !== false) {
-        return 4;
-    }
-    return 8; // Academic / Darse Nizami / Asri Taleem
 }
 
 include 'header.php';
@@ -108,8 +130,9 @@ if (!$can_manage_classes) {
 }
 
 // کلاس حذف کرنا 
-if (isset($_GET['delete'])) {
-    $id = (int)$_GET['delete'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_class'])) {
+    validate_csrf_or_abort();
+    $id = (int)$_POST['class_id'];
     $pdo->prepare("DELETE FROM classes WHERE id = ? AND tenant_id = ?")->execute([$id, $cur_tenant_id]);
     header("Location: manage_classes.php");
     exit;
@@ -117,13 +140,18 @@ if (isset($_GET['delete'])) {
 
 // نئی کلاس شامل کرنا
 if (isset($_POST['add_class'])) {
+    validate_csrf_or_abort();
     $name = trim($_POST['class_name']);
     $section = trim($_POST['section'] ?? '');
     $class_type = trim($_POST['class_type']);
     $main_teacher_ids = isset($_POST['main_teacher_ids']) && is_array($_POST['main_teacher_ids']) ? json_encode($_POST['main_teacher_ids']) : json_encode([]);
     $subjects_list = trim($_POST['subjects_list'] ?? '');
     
-    if (!empty($name)) {
+    // کوٹہ لِمٹ کی جانچ
+    $quotaCheck = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'classes', $cur_tenant_id) : ['allowed' => true];
+    if (!$quotaCheck['allowed']) {
+        echo "<div class='container-fluid mt-3'><div class='alert alert-danger fw-bold shadow-sm'><i class='fas fa-lock me-2'></i> " . htmlspecialchars($quotaCheck['message']) . " <a href='subscription_status.php' class='alert-link text-decoration-underline ms-2'>سبسکرپشن اپ گریڈ کریں</a></div></div>";
+    } elseif (!empty($name)) {
         try {
             $sys = $_SESSION['system_type'] ?? 'Madrasa';
             $stmt = $pdo->prepare("INSERT INTO classes (name, section, class_type, main_teacher_ids, subjects_list, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
@@ -166,6 +194,7 @@ if (isset($_POST['add_class'])) {
 
 // کلاس اپڈیٹ کرنا
 if (isset($_POST['update_class'])) {
+    validate_csrf_or_abort();
     $id = (int)$_POST['class_id'];
     $name = trim($_POST['class_name']);
     $section = trim($_POST['section'] ?? '');
@@ -210,19 +239,80 @@ if (isset($_POST['update_class'])) {
 
 $sys = $_SESSION['system_type'] ?? 'Madrasa';
 $sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
-$classes = $pdo->query("SELECT * FROM classes WHERE $sys_cond AND tenant_id = $cur_tenant_id ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-$periods_by_class = [];
-$periods_raw = $pdo->query("SELECT * FROM class_periods WHERE (tenant_id = $cur_tenant_id OR class_id IN (SELECT id FROM classes WHERE tenant_id = $cur_tenant_id)) ORDER BY class_id, period_no")->fetchAll(PDO::FETCH_ASSOC);
-foreach ($periods_raw as $pr) {
-    $periods_by_class[$pr['class_id']][$pr['period_no']] = $pr;
+$classes = [];
+try {
+    $classes = $pdo->query("SELECT * FROM classes WHERE $sys_cond AND tenant_id = $cur_tenant_id ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e1) {
+    try {
+        $classes = $pdo->query("SELECT * FROM classes WHERE tenant_id = $cur_tenant_id ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e2) {
+        try {
+            $classes = $pdo->query("SELECT * FROM classes WHERE $sys_cond ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e3) {
+            try {
+                $classes = $pdo->query("SELECT * FROM classes ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable $e4) {
+                $classes = [];
+            }
+        }
+    }
 }
 
-$teachers = $pdo->query("SELECT id, name FROM teachers WHERE $sys_cond AND tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL) AND (status = 'Active' OR status = '' OR status IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$periods_by_class = [];
+try {
+    $periods_raw = $pdo->query("SELECT * FROM class_periods WHERE (tenant_id = $cur_tenant_id OR class_id IN (SELECT id FROM classes WHERE tenant_id = $cur_tenant_id)) ORDER BY class_id, period_no")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($periods_raw as $pr) {
+        $periods_by_class[$pr['class_id']][$pr['period_no']] = $pr;
+    }
+} catch (Throwable $ePr) {
+    try {
+        $periods_raw = $pdo->query("SELECT * FROM class_periods ORDER BY class_id, period_no")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($periods_raw as $pr) {
+            $periods_by_class[$pr['class_id']][$pr['period_no']] = $pr;
+        }
+    } catch (Throwable $ePr2) {
+        $periods_by_class = [];
+    }
+}
+
+$teachers = [];
+try {
+    $teachers = $pdo->query("SELECT id, name FROM teachers WHERE $sys_cond AND tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL) AND (status = 'Active' OR status = '' OR status IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $eT1) {
+    try {
+        $teachers = $pdo->query("SELECT id, name FROM teachers WHERE tenant_id = $cur_tenant_id AND (status = 'Active' OR status = '' OR status IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $eT2) {
+        try {
+            $teachers = $pdo->query("SELECT id, name FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $eT3) {
+            try {
+                $teachers = $pdo->query("SELECT id, name FROM teachers ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable $eT4) {
+                $teachers = [];
+            }
+        }
+    }
+}
 
 $teacher_map = [];
 foreach($teachers as $t) {
     $teacher_map[$t['id']] = $t['name'];
+}
+
+$courses_list = [];
+$course_subjects_by_course = [];
+try {
+    $courses_list = $pdo->query("SELECT id, name, course_type, total_years, gender FROM course_structure WHERE (tenant_id = $cur_tenant_id OR tenant_id IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL) AND is_active = 1 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    if (!empty($courses_list)) {
+        $c_ids = implode(',', array_map('intval', array_column($courses_list, 'id')));
+        $subs_raw = $pdo->query("SELECT course_id, year_no, subject_name FROM course_subjects WHERE course_id IN ($c_ids) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY year_no, subject_order, id")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($subs_raw as $sr) {
+            $course_subjects_by_course[$sr['course_id']][$sr['year_no']][] = $sr['subject_name'];
+        }
+    }
+} catch (Throwable $eCrs) {
+    $courses_list = [];
 }
 ?>
 
@@ -238,18 +328,9 @@ foreach($teachers as $t) {
             <div class="neobox shadow-sm">
                 <h5 class="fw-bold mb-3"><?php echo ($sys === 'Masjid') ? 'نئی مکتب کلاس شامل کریں' : t('add_new_class'); ?></h5>
                 <form method="POST">
+                    <?php echo csrf_field(); ?>
                     <div class="mb-3">
-                        <label class="form-label fw-bold"><?php echo t('class_name'); ?></label>
-                        <input type="text" name="class_name" class="form-control" placeholder="<?php echo ($sys === 'Masjid') ? 'مثلاً: حفظ، ناظرہ، قاعدہ، حسنِ صوت' : 'مثلاً: درجہ اولیٰ'; ?>" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">سیکشن (Section)</label>
-                        <input type="text" name="section" class="form-control" placeholder="مثلاً: A, B, Boys وغیرہ">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">کلاس کی قسم (Class Type)</label>
+                        <label class="form-label fw-bold">کلاس کی قسم / کورس (Class Type / Course)</label>
                         <select name="class_type" class="form-select class-type-select" required>
                             <?php if ($sys === 'Masjid'): ?>
                                 <option value="Hifz/Gardan/Husn">حفظ و گردان</option>
@@ -265,12 +346,39 @@ foreach($teachers as $t) {
                                     <option value="Qaida">نورانی قاعدہ / نماز حنفی</option>
                                     <option value="Tajweed">تجوید</option>
                                 </optgroup>
+                                <?php if (!empty($courses_list)): ?>
+                                <optgroup label="تعلیمی کورسز (درس نظامی و عصری علوم)">
+                                    <?php foreach ($courses_list as $crs): ?>
+                                        <option value="<?= htmlspecialchars($crs['name']) ?>" data-course-id="<?= $crs['id'] ?>" data-total-years="<?= (int)$crs['total_years'] ?>" data-is-course="1">
+                                            <?= htmlspecialchars($crs['name']) ?> (<?= htmlspecialchars($crs['gender'] ?? 'بنین') ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </optgroup>
+                                <?php endif; ?>
                                 <optgroup label="دیگر">
                                     <option value="Asri Taleem">عصری تعلیم</option>
-                                    <option value="Darse Nizami">درس نظامی</option>
+                                    <option value="Darse Nizami" selected>درس نظامی</option>
                                 </optgroup>
                             <?php endif; ?>
                         </select>
+                    </div>
+
+                    <div class="mb-3 course-year-container" style="display:none;">
+                        <label class="form-label fw-bold"><i class="fas fa-layer-group text-success me-1"></i> سال / درجہ منتخب کریں (Year / Grade)</label>
+                        <select class="form-select course-year-select">
+                            <option value="">-- درجہ / سال منتخب کریں --</option>
+                        </select>
+                        <small class="text-muted d-block mt-1">سال منتخب کرنے سے کلاس کا نام اور مضامین خودکار پر ہو جائیں گے۔</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><?php echo t('class_name'); ?></label>
+                        <input type="text" name="class_name" class="form-control" placeholder="<?php echo ($sys === 'Masjid') ? 'مثلاً: حفظ، ناظرہ، قاعدہ، حسنِ صوت' : 'مثلاً: درجہ اولیٰ'; ?>" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">سیکشن (Section)</label>
+                        <input type="text" name="section" class="form-control" placeholder="مثلاً: A, B, Boys وغیرہ">
                     </div>
 
                     <div class="hifz-section" style="display:none;">
@@ -379,9 +487,14 @@ foreach($teachers as $t) {
                                     <button class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#editModal<?= $c['id']; ?>">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <a href="?delete=<?= $c['id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('کیا آپ واقعی یہ کلاس حذف کرنا چاہتے ہیں؟')">
-                                        <i class="fas fa-trash"></i>
-                                    </a>
+                                    <form method="POST" action="manage_classes.php" style="display:inline-block;" onsubmit="return confirm('کیا آپ واقعی یہ کلاس حذف کرنا چاہتے ہیں؟');">
+                                        <?php echo csrf_field(); ?>
+                                        <input type="hidden" name="delete_class" value="1">
+                                        <input type="hidden" name="class_id" value="<?= $c['id']; ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -401,6 +514,7 @@ foreach($teachers as $t) {
 <div class="modal fade" id="editModal<?= $c['id']; ?>" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <form method="POST" class="modal-content">
+            <?php echo csrf_field(); ?>
             <div class="modal-header">
                 <h5 class="modal-title fw-bold">کلاس اپڈیٹ کریں</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -438,6 +552,15 @@ foreach($teachers as $t) {
                                     <option value="Asri Taleem" <?= ($c['class_type'] ?? '') === 'Asri Taleem' ? 'selected' : '' ?>>عصری تعلیم</option>
                                     <option value="Darse Nizami" <?= in_array(($c['class_type'] ?? ''), ['Darse Nizami', 'Darse Nizami / Other']) ? 'selected' : '' ?>>درس نظامی</option>
                                 </optgroup>
+                                <?php if (!empty($courses_list)): ?>
+                                <optgroup label="تعلیمی کورسز (درس نظامی و عصری علوم)">
+                                    <?php foreach ($courses_list as $crs): ?>
+                                        <option value="<?= htmlspecialchars($crs['name']) ?>" <?= ($c['class_type'] ?? '') === $crs['name'] ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($crs['name']) ?> (<?= htmlspecialchars($crs['gender'] ?? 'بنین') ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </optgroup>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </select>
                     </div>
@@ -517,6 +640,20 @@ foreach($teachers as $t) {
 <?php endforeach; ?>
 
 <script>
+var courseSubjectsMap = <?= json_encode($course_subjects_by_course) ?>;
+var defaultYearNamesMap = {
+    1: 'سال اول (درجہ اولیٰ)',
+    2: 'سال دوم (درجہ ثانیہ)',
+    3: 'سال سوم (درجہ ثالثہ)',
+    4: 'سال چہارم (درجہ رابعہ)',
+    5: 'سال پنجم (درجہ خامسہ)',
+    6: 'سال ششم (درجہ سادسہ)',
+    7: 'سال ہفتم (درجہ عالیہ)',
+    8: 'سال ہشتم (درجہ عالمیہ / دورۂ حدیث)',
+    9: 'سال نہم (تخصص فی الفقہ)',
+    10: 'سال دہم (تخصص فی الحدیث)'
+};
+
 function toggleTeacherChip(input) {
     var label = input.closest('.teacher-chip');
     if (!label) return;
@@ -536,12 +673,38 @@ document.addEventListener('DOMContentLoaded', function() {
     function toggleSections(form) {
         if (!form) return;
         var selectElement = form.querySelector('.class-type-select');
+        var selectedOpt = selectElement ? selectElement.options[selectElement.selectedIndex] : null;
         var val = selectElement ? selectElement.value : '';
         var nameInput = form.querySelector('input[name="class_name"]');
         var nameVal = nameInput ? nameInput.value.trim().toLowerCase() : '';
         var hifzSection = form.querySelector('.hifz-section');
         var darseSection = form.querySelector('.darse-nizami-section');
         var periodsHeader = form.querySelector('.periods-header-label');
+        var yearContainer = form.querySelector('.course-year-container');
+        var yearSelect = form.querySelector('.course-year-select');
+
+        // Course integration check
+        var isCourse = selectedOpt && selectedOpt.getAttribute('data-is-course') === '1';
+        if (isCourse && yearContainer && yearSelect) {
+            var totalYears = parseInt(selectedOpt.getAttribute('data-total-years') || '8');
+            var courseId = selectedOpt.getAttribute('data-course-id');
+            yearContainer.style.display = 'block';
+
+            // Populate year options if not populated for this course
+            if (yearSelect.getAttribute('data-loaded-course') !== courseId) {
+                yearSelect.innerHTML = '<option value="">-- درجہ / سال منتخب کریں --</option>';
+                for (var y = 1; y <= totalYears; y++) {
+                    var optTitle = defaultYearNamesMap[y] || ('سال ' + y);
+                    var yOpt = document.createElement('option');
+                    yOpt.value = y;
+                    yOpt.textContent = optTitle;
+                    yearSelect.appendChild(yOpt);
+                }
+                yearSelect.setAttribute('data-loaded-course', courseId);
+            }
+        } else if (yearContainer) {
+            yearContainer.style.display = 'none';
+        }
 
         // Identify category
         var isNazira = (val === 'Nazira' || nameVal.includes('ناظرہ') || nameVal.includes('nazira'));
@@ -616,6 +779,9 @@ document.addEventListener('DOMContentLoaded', function() {
     forms.forEach(function(form) {
         var select = form.querySelector('.class-type-select');
         var nameInput = form.querySelector('input[name="class_name"]');
+        var yearSelect = form.querySelector('.course-year-select');
+        var subjectsTextarea = form.querySelector('textarea[name="subjects_list"]');
+
         if (select) {
             select.addEventListener('change', function() {
                 toggleSections(form);
@@ -624,6 +790,26 @@ document.addEventListener('DOMContentLoaded', function() {
         if (nameInput) {
             nameInput.addEventListener('input', function() {
                 toggleSections(form);
+            });
+        }
+        if (yearSelect) {
+            yearSelect.addEventListener('change', function() {
+                var selectedOpt = select ? select.options[select.selectedIndex] : null;
+                var courseId = selectedOpt ? selectedOpt.getAttribute('data-course-id') : null;
+                var yVal = parseInt(yearSelect.value);
+                if (yVal > 0) {
+                    var yTitle = defaultYearNamesMap[yVal] || ('سال ' + yVal);
+                    if (nameInput && (!nameInput.value || nameInput.value.trim() === '')) {
+                        nameInput.value = yTitle;
+                    }
+                    if (courseId && courseSubjectsMap[courseId] && courseSubjectsMap[courseId][yVal]) {
+                        var subs = courseSubjectsMap[courseId][yVal];
+                        if (subjectsTextarea && (!subjectsTextarea.value || subjectsTextarea.value.trim() === '')) {
+                            subjectsTextarea.value = subs.join('، ');
+                        }
+                    }
+                    toggleSections(form);
+                }
             });
         }
         if (select || nameInput) {

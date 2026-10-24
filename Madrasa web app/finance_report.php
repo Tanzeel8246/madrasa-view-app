@@ -19,6 +19,9 @@ $end_date = isset($_GET['to']) ? $_GET['to'] : date('Y-m-d');
 $type_filter = isset($_GET['type']) ? $_GET['type'] : 'All';
 
 $cur_tenant_id = (int)get_current_tenant_id();
+require_once 'finance_accounting_bridge.php';
+finance_accounting_backfill($pdo, $start_date, $end_date);
+$tenant_settings = function_exists('get_tenant_settings') ? get_tenant_settings($pdo, $cur_tenant_id) : [];
 
 // Dynamic column checking to prevent SQL errors on unmigrated schemas
 $fin_cols = [];
@@ -197,7 +200,7 @@ foreach ($by_user as $u) {
 
 <div id="printableArea" class="bg-white p-4 border rounded">
     <div class="text-center border-bottom border-2 border-dark mb-4 pb-2">
-        <h2 class="fw-bold text-success m-0"><?php echo ($sys === 'Masjid') ? 'مسجد انتظامیہ' : 'مدرسہ اشرف المدارس'; ?></h2>
+        <h2 class="fw-bold text-success m-0"><?php echo htmlspecialchars(!empty($tenant_settings['madrasa_name']) ? $tenant_settings['madrasa_name'] : (!empty($_SESSION['madrasa_name']) ? $_SESSION['madrasa_name'] : (($sys === 'Masjid') ? 'مسجد انتظامیہ' : 'جامعہ دارالعلوم'))); ?></h2>
         <h4 class="mt-2 text-uppercase fw-bold">فنانس رپورٹ (یوزر وائز) - [<?php echo htmlspecialchars($sys); ?>]</h4>
         <p class="text-muted mb-1">
             مدت: <strong><?php echo date('d-m-Y', strtotime($start_date)); ?></strong> تا <strong><?php echo date('d-m-Y', strtotime($end_date)); ?></strong>

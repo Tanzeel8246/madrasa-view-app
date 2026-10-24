@@ -148,6 +148,7 @@ function teacher_format_period_summary($raw) {
 
 // --- ایکشن: ڈیٹا محفوظ کریں ---
 if (isset($_POST['save_teacher'])) {
+    validate_csrf_or_abort();
     try {
         $pdo->beginTransaction();
 
@@ -178,13 +179,19 @@ if (isset($_POST['save_teacher'])) {
         } 
         // ورنہ نیا ریکارڈ ڈالیں
         else {
-            $sys = $_SESSION['system_type'] ?? 'Madrasa';
-            $today_date = date('Y-m-d');
-            $sql = "INSERT INTO teachers (name, father_name, phone, cnic, qualification, address, salary, house_rent, medical_allowance, travel_allowance, daily_deduction_rate, joining_date, status, status_change_date, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$name, $fname, $phone, $cnic, $qual, $addr, $salary, $house_rent, $medical_allowance, $travel_allowance, $daily_deduction_rate, $j_date, $status, $today_date, $sys, $cur_tenant_id]);
-            $teacher_id = $pdo->lastInsertId();
-            $msg = "<div class='alert alert-success fw-bold'>✅ نیا استاد شامل کر لیا گیا!</div>";
+            $quotaCheck = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'teachers', $cur_tenant_id) : ['allowed' => true];
+            if (!$quotaCheck['allowed']) {
+                $pdo->rollBack();
+                $msg = "<div class='alert alert-danger fw-bold shadow-sm'><i class='fas fa-lock me-2'></i> " . htmlspecialchars($quotaCheck['message']) . " <a href='subscription_status.php' class='alert-link text-decoration-underline ms-2'>سبسکرپشن اپ گریڈ کریں</a></div>";
+            } else {
+                $sys = $_SESSION['system_type'] ?? 'Madrasa';
+                $today_date = date('Y-m-d');
+                $sql = "INSERT INTO teachers (name, father_name, phone, cnic, qualification, address, salary, house_rent, medical_allowance, travel_allowance, daily_deduction_rate, joining_date, status, status_change_date, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute([$name, $fname, $phone, $cnic, $qual, $addr, $salary, $house_rent, $medical_allowance, $travel_allowance, $daily_deduction_rate, $j_date, $status, $today_date, $sys, $cur_tenant_id]);
+                $teacher_id = $pdo->lastInsertId();
+                $msg = "<div class='alert alert-success fw-bold'>✅ نیا استاد شامل کر لیا گیا!</div>";
+            }
         }
 
         if ($teacher_id) {
@@ -306,6 +313,7 @@ try { $pdo->exec("ALTER TABLE teachers ADD COLUMN status_change_date VARCHAR(20)
 
 // --- ایکشن: اسٹیٹس تبدیلی (Leave / Terminate / Active) ---
 if (isset($_POST['change_teacher_status'])) {
+    validate_csrf_or_abort();
     try {
         $t_id = (int)$_POST['teacher_id'];
         $new_status = $_POST['new_status'] ?? 'Active';
@@ -320,10 +328,13 @@ if (isset($_POST['change_teacher_status'])) {
 }
 
 // --- ایکشن: ڈیلیٹ ---
-if (isset($_GET['delete'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_teacher'])) {
+    validate_csrf_or_abort();
     try {
-        $pdo->prepare("UPDATE teachers SET is_deleted = 1 WHERE id = ? AND tenant_id = ?")->execute([$_GET['delete'], $cur_tenant_id]);
+        $del_tid = (int)$_POST['teacher_id'];
+        $pdo->prepare("UPDATE teachers SET is_deleted = 1 WHERE id = ? AND tenant_id = ?")->execute([$del_tid, $cur_tenant_id]);
         echo "<script>window.location='teachers.php';</script>";
+        exit;
     } catch (Exception $e) {
         $msg = "<div class='alert alert-danger'>اس ریکارڈ کو ڈیلیٹ نہیں کیا جا سکتا۔</div>";
     }
@@ -434,7 +445,7 @@ if ($edit_data && !empty($classes_list)) {
 <div class="container-fluid">
     <div class="row mb-3 align-items-center">
         <div class="col-md-6">
-            <h3 class="text-primary fw-bold"><i class="fas fa-chalkboard-teacher me-2"></i> <?php echo t('teachers'); ?> ریکارڈ</h3>
+            <h3 class="text-primary fw-bold"><i class="fas fa-chalkboard-teacher me-2"></i> <?php echo t('teachers_record'); ?></h3>
         </div>
         <div class="col-md-6 text-md-end">
             <button type="button" class="btn btn-primary fw-bold px-3 py-2 shadow-sm" data-bs-toggle="collapse" data-bs-target="#teacherFormCollapse" aria-expanded="<?php echo $edit_data ? 'true' : 'false'; ?>">
@@ -455,6 +466,7 @@ if ($edit_data && !empty($classes_list)) {
             </div>
             <div class="card-body">
                 <form method="POST">
+                    <?php echo csrf_field(); ?>
                     <input type="hidden" name="edit_id" value="<?php echo $edit_data['id'] ?? ''; ?>">
                 <div class="row g-3">
                     <div class="col-md-3">
@@ -745,7 +757,12 @@ if ($edit_data && !empty($classes_list)) {
                                         <i class="fas fa-user-clock"></i>
                                     </button>
                                     <a href="teachers.php?edit=<?php echo $t['id']; ?>" class="btn btn-sm btn-primary" title="ترمیم"><i class="fas fa-edit"></i></a>
-                                    <a href="teachers.php?delete=<?php echo $t['id']; ?>" class="btn btn-sm btn-danger" title="حذف" onclick="return confirm('کیا آپ واقعی ڈیلیٹ کرنا چاہتے ہیں؟')"><i class="fas fa-trash"></i></a>
+                                    <form method="POST" action="teachers.php" style="display:inline-block;" onsubmit="return confirm('کیا آپ واقعی ڈیلیٹ کرنا چاہتے ہیں؟');">
+                                        <?php echo csrf_field(); ?>
+                                        <input type="hidden" name="delete_teacher" value="1">
+                                        <input type="hidden" name="teacher_id" value="<?php echo $t['id']; ?>">
+                                        <button type="submit" class="btn btn-sm btn-danger" title="حذف"><i class="fas fa-trash"></i></button>
+                                    </form>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -764,6 +781,7 @@ if ($edit_data && !empty($classes_list)) {
     <div class="modal-dialog">
         <div class="modal-content text-end" dir="rtl">
             <form method="POST" action="teachers.php">
+                <?php echo csrf_field(); ?>
                 <div class="modal-header bg-primary text-white justify-content-between">
                     <h5 class="modal-title fw-bold" id="teacherStatusModalLabel"><i class="fas fa-user-clock me-2"></i> استاد کا اسٹیٹس تبدیل کریں</h5>
                     <button type="button" class="btn-close btn-close-white ms-0" data-bs-dismiss="modal" aria-label="Close"></button>

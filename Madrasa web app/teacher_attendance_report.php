@@ -520,7 +520,7 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
         <div style="text-align:center; border-bottom:2px solid var(--primary); margin-bottom:6px; padding-bottom:5px; font-family:'Noto Nastaliq Urdu',sans-serif;">
             <h4 style="color:var(--primary); margin:0; font-size:13pt;">اساتذہ حاضری رجسٹر</h4>
             <p style="margin:1px 0; font-size:8.5pt;">
-                مدرسہ اشرف المدارس &mdash; فاروقہ، سرگودھا
+                <?php echo htmlspecialchars($header_madrasa_name ?? ($_SESSION['tenant_name'] ?? 'ادارہ')); ?>
                 &nbsp;|&nbsp; مدت: <strong><?php echo date('d M Y', strtotime($start_date)); ?> تا <?php echo date('d M Y', strtotime($end_date)); ?></strong>
             </p>
         </div>
@@ -551,7 +551,7 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
             
             <div class="madrasa-header d-flex justify-content-between align-items-end" style="font-family: 'Jameel Noori Nastaleeq', sans-serif;">
                 <div class="text-start" style="width: 25%;">
-                    <h4 class="fw-bold m-0">مدرسہ اشرف المدارس</h4>
+                    <h4 class="fw-bold m-0"><?php echo htmlspecialchars($header_madrasa_name ?? ($_SESSION['tenant_name'] ?? 'ادارہ')); ?></h4>
                     <h6 class="m-0">فاروقہ، سرگودھا</h6>
                 </div>
                 <div class="text-center" style="width: 50%;">

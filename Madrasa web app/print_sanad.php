@@ -105,7 +105,7 @@ if ($cat !== 'completed') {
 
 // Fetch Settings
 $settings = get_tenant_settings($pdo, $cur_tenant_id);
-$madrasa_name = !empty($settings['madrasa_name']) ? $settings['madrasa_name'] : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : 'جامعہ اشرف المدارس');
+$madrasa_name = !empty($settings['madrasa_name']) ? $settings['madrasa_name'] : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : 'ادارہ');
 $logo_path = (!empty($settings['logo_path']) && file_exists(__DIR__ . '/' . $settings['logo_path'])) ? $settings['logo_path'] : 'logo.png';
 $sanad_bg = (!empty($settings['sanad_bg']) && file_exists(__DIR__ . '/' . $settings['sanad_bg'])) ? $settings['sanad_bg'] : null;
 $stamp_path = (!empty($settings['signature_stamp_path']) && file_exists(__DIR__ . '/' . $settings['signature_stamp_path'])) ? $settings['signature_stamp_path'] : null;

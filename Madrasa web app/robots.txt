@@ -1,0 +1,26 @@
+# Robots.txt for MC-MMS (Mindcrafts Madrasa Management System)
+# URL: https://madrasa.mamfss.com/
+
+User-agent: *
+Allow: /
+Allow: /index.php
+Allow: /register.php
+Allow: /login.php
+Allow: /pricing.php
+Allow: /about.php
+Allow: /contact.php
+Allow: /assets/
+
+# Disallow Private & Administrative Areas
+Disallow: /super_admin/
+Disallow: /api/
+Disallow: /backups/
+Disallow: /config/
+Disallow: /middleware/
+Disallow: /vendor/
+Disallow: /ajax/
+Disallow: /db.php
+Disallow: /sync.php
+
+# Sitemap reference
+Sitemap: https://madrasa.mamfss.com/sitemap.xml

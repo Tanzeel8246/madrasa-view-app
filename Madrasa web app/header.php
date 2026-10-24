@@ -1,5 +1,6 @@
 <?php 
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once __DIR__ . '/session_init.php';
+if (session_status() === PHP_SESSION_NONE) { madrasa_safe_session_start(); }
 try {
     require_once 'db.php';
 } catch (Throwable $e) {
@@ -58,31 +59,56 @@ if (isset($_SESSION['user_id'])) {
 
 // Tenant Resolution for Session
 $current_tenant_id = get_current_tenant_id();
-if (isset($_SESSION['user_id']) && (!isset($_SESSION['tenant_id']) || empty($_SESSION['tenant_name']))) {
+if (isset($_SESSION['user_id'])) {
     $_SESSION['tenant_id'] = $current_tenant_id;
     $_SESSION['tenant_code'] = get_current_tenant_code();
     try {
-        $tStmt = $pdo->prepare("SELECT name, status FROM tenants WHERE id = ?");
+        $tStmt = $pdo->prepare("SELECT name, status, system_type FROM tenants WHERE id = ?");
         $tStmt->execute([$current_tenant_id]);
         $tRow = $tStmt->fetch(PDO::FETCH_ASSOC);
         if ($tRow) {
             $_SESSION['tenant_name'] = $tRow['name'];
             $_SESSION['tenant_status'] = $tRow['status'];
+            $_SESSION['tenant_system_type'] = $tRow['system_type'] ?: 'Madrasa';
         }
     } catch (Throwable $e) {}
 }
 
-if (!function_exists('is_mod_allowed')) {
-    function is_mod_allowed($moduleKey) {
-        global $pdo, $current_tenant_id;
-        if (function_exists('is_module_allowed_for_tenant')) {
-            return is_module_allowed_for_tenant($pdo, $moduleKey, $current_tenant_id);
-        }
-        return true;
+$tenant_reg_system = $_SESSION['tenant_system_type'] ?? 'Madrasa';
+$is_super = !empty($_SESSION['is_super_admin']) || !empty($_SESSION['impersonated_by_super_admin']) || ($current_tenant_id <= 1);
+
+// 1. Strict Madrasa Isolation: If registered strictly as Madrasa, lock out all Masjid/Maktab features
+if (!$is_super && $tenant_reg_system === 'Madrasa') {
+    $_SESSION['system_type'] = 'Madrasa';
+    $masjid_exclusive_pages = [
+        'masjid_dashboard.php', 'maktab_dashboard.php', 'maktab_classes.php',
+        'maktab_students.php', 'maktab_teachers.php', 'maktab_attendance.php',
+        'maktab_attendance_report.php', 'maktab_hifz.php', 'maktab_nazira.php',
+        'maktab_qaida.php', 'maktab_exams.php', 'maktab_exam_results_entry.php',
+        'maktab_academics.php', 'masjid_itikaf.php', 'masjid_staff.php'
+    ];
+    if (in_array($current_page, $masjid_exclusive_pages)) {
+        header("Location: dashboard.php?locked=masjid");
+        exit;
     }
 }
 
-// Masjid wing permission guard: if not allowed, force Madrasa mode and block masjid pages
+// 2. Strict Masjid Isolation: If registered strictly as Masjid, lock out Madrasa-exclusive features
+if (!$is_super && $tenant_reg_system === 'Masjid') {
+    $_SESSION['system_type'] = 'Masjid';
+    $madrasa_exclusive_pages = [
+        'dashboard.php', 'course_manager.php', 'student_course_enrollment.php',
+        'academic_results_entry.php', 'student_promotion.php', 'academic_reports.php',
+        'hostel.php', 'library.php', 'inventory.php', 'recruitment.php',
+        'admin_admissions.php', 'admissions_pipeline.php'
+    ];
+    if (in_array($current_page, $madrasa_exclusive_pages)) {
+        header("Location: masjid_dashboard.php?locked=madrasa");
+        exit;
+    }
+}
+
+// Fallback check for masjid_wing permission
 if (!is_mod_allowed('masjid_wing')) {
     if (($_SESSION['system_type'] ?? '') === 'Masjid') {
         $_SESSION['system_type'] = 'Madrasa';
@@ -182,67 +208,14 @@ if (isset($_SESSION['role']) && (in_array(strtolower(trim((string)$_SESSION['rol
 
 // Language and session settings
 if (isset($_GET['lang'])) { $_SESSION['lang'] = $_GET['lang']; }
-$lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : 'ur';
+if (isset($_GET['lang'])) { @setcookie('app_language', $_GET['lang'], time() + (86400 * 365), '/'); }
+$lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : ($_COOKIE['app_language'] ?? 'ur');
 $role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
 $is_admin = in_array(strtolower(trim((string)$role)), ['admin', 'superadmin', 'super_admin', 'administrator'], true);
 $user_name = isset($_SESSION['name']) ? $_SESSION['name'] : 'Guest';
 
 
-if (!function_exists('has_perm')) {
-    function has_perm($perm) {
-        if (!isset($_SESSION['role'])) return false;
-        $role_lower = strtolower(trim((string)$_SESSION['role']));
-        if (in_array($role_lower, ['admin', 'superadmin', 'super_admin', 'administrator'], true)) {
-            return true;
-        }
-        
-        // Map individual permission to its parent module
-        $permToModuleMap = [
-            'manage_classes' => 'classes',
-            'manage_students' => 'students',
-            'manage_teachers' => 'teachers',
-            'manage_teacher_attendance' => 'attendance',
-            'manage_attendance' => 'attendance',
-            'manage_attendance_report' => 'attendance',
-            'manage_hifz' => 'hifz',
-            'manage_hifz_daily' => 'hifz',
-            'manage_hifz_report' => 'hifz',
-            'manage_academic_dashboard' => 'hifz',
-            'manage_academic_entry' => 'hifz',
-            'manage_academic_view' => 'hifz',
-            'manage_academics' => 'hifz',
-            'manage_exams' => 'exams',
-            'manage_admissions' => 'admissions',
-            'manage_notices' => 'notices',
-            'manage_requests' => 'requests',
-            'add_complaint' => 'requests',
-            'manage_complaints' => 'requests',
-            'manage_finance' => 'simple_finance',
-            'manage_finance_entry' => 'simple_finance',
-            'manage_finance_report' => 'simple_finance',
-            'manage_financial_reports' => 'simple_finance',
-            'manage_fee_defaulters' => 'simple_finance',
-            'manage_assets' => 'assets_donations',
-            'manage_in_kind_donations' => 'assets_donations',
-            'manage_stipends' => 'payroll',
-            'manage_loans' => 'loans',
-            'manage_erp' => 'erp_accounts',
-            'manage_library' => 'library',
-            'manage_inventory' => 'inventory',
-            'manage_hostel' => 'hostel',
-            'manage_recruitment' => 'recruitment',
-            'manage_website' => 'cms',
-            'manage_saas' => 'saas',
-        ];
-
-        if (isset($permToModuleMap[$perm]) && function_exists('is_mod_allowed') && !is_mod_allowed($permToModuleMap[$perm])) {
-            return false;
-        }
-
-        $perms = $_SESSION['permissions'] ?? [];
-        return has_permission($_SESSION['role'], $perms, $perm);
-    }
-}
+// has_perm() is centrally provided by middleware/auth.php
 
 if (!function_exists('get_today_hijri_date')) {
     function get_today_hijri_date() {
@@ -411,7 +384,10 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
             <h5 class="sidebar-app-title mb-2 fw-bold"><?php echo htmlspecialchars($header_current_name); ?></h5>
             
             <!-- Masjid / Madrasa Switcher Tabs -->
-            <?php if (is_mod_allowed('masjid_wing')): ?>
+            <?php 
+            $can_switch_systems = $is_super || ($tenant_reg_system === 'Both') || (is_mod_allowed('masjid_wing') && $tenant_reg_system !== 'Madrasa' && $tenant_reg_system !== 'Masjid');
+            if ($can_switch_systems): 
+            ?>
             <div class="d-flex justify-content-center px-3 mt-2">
                 <div class="btn-group w-100 sidebar-switcher-group rounded-pill p-1">
                     <a href="switch_system.php?sys=Madrasa" class="btn btn-sm rounded-pill fw-bold system-switch-btn <?php echo ($system_type === 'Madrasa') ? 'active' : ''; ?>" style="flex: 1; text-decoration: none;">

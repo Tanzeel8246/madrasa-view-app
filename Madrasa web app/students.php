@@ -7,6 +7,7 @@ $cur_tenant_id = (int)get_current_tenant_id();
 
 // 1. فارغ التحصیل کرنا (Alumni)
 if (isset($_POST['graduate_student'])) {
+    validate_csrf_or_abort();
     $id = $_POST['student_id'];
     $g_date = !empty($_POST['graduation_date']) ? $_POST['graduation_date'] : null;
     $category = $_POST['alumni_category'] ?? 'completed';
@@ -19,17 +20,22 @@ if (isset($_POST['graduate_student'])) {
     $stmt = $pdo->prepare("UPDATE students SET status = 'Alumni', alumni_category = ?, graduation_date = ?, leaving_reason = ?, duration = ?, wifaq_exam = ?, wifaq_marks = ?, mehrab_recitation = ? WHERE id = ? AND tenant_id = ?");
     $stmt->execute([$category, $g_date, $reason, $duration, $wifaq_exam, $wifaq_marks, $mehrab, $id, $cur_tenant_id]);
     echo "<script>window.location='students.php';</script>";
+    exit;
 }
 
 // 2. بحال کرنا (Restore - اگر غلطی سے فارغ ہو گیا ہو)
-if (isset($_GET['restore'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_student'])) {
+    validate_csrf_or_abort();
+    $r_id = (int)$_POST['student_id'];
     $stmt = $pdo->prepare("UPDATE students SET status = 'Active' WHERE id = ? AND tenant_id = ?");
-    $stmt->execute([$_GET['restore'], $cur_tenant_id]);
+    $stmt->execute([$r_id, $cur_tenant_id]);
     echo "<script>window.location='students.php';</script>";
+    exit;
 }
 
 // 2.5 پروموٹ کرنا (Promote)
 if (isset($_POST['promote_student'])) {
+    validate_csrf_or_abort();
     $id = $_POST['student_id'];
     $new_class = $_POST['new_class'];
     $quran_edition = !empty($_POST['quran_edition']) ? trim($_POST['quran_edition']) : null;
@@ -44,17 +50,22 @@ if (isset($_POST['promote_student'])) {
         $stmt->execute([$new_class, $hifz_section, $id, $cur_tenant_id]);
     }
     echo "<script>window.location='students.php';</script>";
+    exit;
 }
 
 // 3. ڈیلیٹ کرنا (Delete)
-if (isset($_GET['delete'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_student'])) {
+    validate_csrf_or_abort();
+    $d_id = (int)$_POST['student_id'];
     $stmt = $pdo->prepare("UPDATE students SET is_deleted = 1 WHERE id = ? AND tenant_id = ?");
-    $stmt->execute([$_GET['delete'], $cur_tenant_id]);
+    $stmt->execute([$d_id, $cur_tenant_id]);
     echo "<script>window.location='students.php';</script>";
+    exit;
 }
 
 // 4. محفوظ کرنا (Save)
 if (isset($_POST['save_student'])) {
+    validate_csrf_or_abort();
     try {
         $name = $_POST['name'];
         $fname = $_POST['father_name'];
@@ -108,6 +119,12 @@ if (isset($_POST['save_student'])) {
         } 
         // نیا داخلہ
         else {
+            // Check plan quota limits
+            $quotaCheck = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'students', $cur_tenant_id) : ['allowed' => true];
+            if (!$quotaCheck['allowed']) {
+                throw new Exception($quotaCheck['message']);
+            }
+
             // Drop legacy single-column unique index on students(admission_number) if still present
             try {
                 $indexes = $pdo->query("SHOW INDEX FROM `students`")->fetchAll(PDO::FETCH_ASSOC);
@@ -367,6 +384,7 @@ if(isset($_GET['edit'])) {
         </div>
         <div class="card-body">
             <form method="POST" enctype="multipart/form-data">
+                <?php echo csrf_field(); ?>
                 <input type="hidden" name="edit_id" value="<?php echo $edit_data['id']??''; ?>">
                 <input type="hidden" name="old_photo" value="<?php echo $edit_data['photo']??''; ?>">
                 <div class="row g-3">
@@ -572,10 +590,18 @@ if(isset($_GET['edit'])) {
                                             <i class="fas fa-certificate me-1"></i> سند
                                         </a>
                                     <?php endif; ?>
-                                    <a href="students.php?restore=<?php echo $s['id']; ?>" class="btn btn-sm btn-success" title="دوبارہ داخل (Restore)" onclick="return confirm('کیا اسے دوبارہ موجودہ لسٹ میں شامل کرنا ہے؟')">
-                                        <i class="fas fa-undo"></i>
-                                    </a>
-                                    <a href="students.php?delete=<?php echo $s['id']; ?>" class="btn btn-sm btn-outline-danger" title="ہمیشہ کے لیے ڈیلیٹ" onclick="return confirm('ڈیلیٹ؟')"><i class="fas fa-trash"></i></a>
+                                    <form method="POST" action="students.php" style="display:inline-block;" onsubmit="return confirm('کیا اسے دوبارہ موجودہ لسٹ میں شامل کرنا ہے؟');">
+                                        <?php echo csrf_field(); ?>
+                                        <input type="hidden" name="restore_student" value="1">
+                                        <input type="hidden" name="student_id" value="<?php echo $s['id']; ?>">
+                                        <button type="submit" class="btn btn-sm btn-success" title="دوبارہ داخل (Restore)"><i class="fas fa-undo"></i></button>
+                                    </form>
+                                    <form method="POST" action="students.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ریکارڈ ہمیشہ کے لیے ڈیلیٹ کرنا چاہتے ہیں؟');">
+                                        <?php echo csrf_field(); ?>
+                                        <input type="hidden" name="delete_student" value="1">
+                                        <input type="hidden" name="student_id" value="<?php echo $s['id']; ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="ہمیشہ کے لیے ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -658,7 +684,12 @@ if(isset($_GET['edit'])) {
                                                             <i class="fas fa-level-up-alt"></i>
                                                         </button>
                                                         
-                                                        <a href="students.php?delete=<?php echo $s['id']; ?>" class="btn btn-sm btn-danger" title="ڈیلیٹ" onclick="return confirm('ریکارڈ ہمیشہ کے لیے ختم ہو جائے گا!')"><i class="fas fa-trash"></i></a>
+                                                        <form method="POST" action="students.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ریکارڈ ہمیشہ کے لیے ڈیلیٹ کرنا چاہتے ہیں؟');">
+                                                            <?php echo csrf_field(); ?>
+                                                            <input type="hidden" name="delete_student" value="1">
+                                                            <input type="hidden" name="student_id" value="<?php echo $s['id']; ?>">
+                                                            <button type="submit" class="btn btn-sm btn-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                                        </form>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -679,6 +710,7 @@ if(isset($_GET['edit'])) {
 <div class="modal fade" id="graduateModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <form method="POST" class="modal-content shadow-lg border-0" style="border-radius: 15px;">
+            <?php echo csrf_field(); ?>
             <div class="modal-header bg-dark text-white">
                 <h5 class="modal-title fw-bold"><i class="fas fa-user-graduate me-2 text-warning"></i> فارغ التحصیل / خارج ریکارڈ (Alumni & Migration)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -752,6 +784,7 @@ if(isset($_GET['edit'])) {
 <div class="modal fade" id="promoteModal" tabindex="-1">
     <div class="modal-dialog">
         <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+            <?php echo csrf_field(); ?>
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title fw-bold"><i class="fas fa-level-up-alt me-2"></i> طالب علم کو پروموٹ کریں</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>

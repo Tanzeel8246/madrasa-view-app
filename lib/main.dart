@@ -120,6 +120,10 @@ void main() async {
     currentTenantPlanCode.value = session['planCode']?.toString() ?? 'basic';
     currentTenantSubscriptionEndsAt.value = session['subscriptionEndsAt']?.toString() ?? '';
     currentTenantSubscriptionStatus.value = session['subscriptionStatus']?.toString() ?? (currentTenantIsTrial.value ? 'trial' : 'active');
+    currentTenantSystemType.value = session['systemType']?.toString() ?? 'Both';
+    currentTenantMaxStudents.value = int.tryParse(session['maxStudents']?.toString() ?? '50') ?? 50;
+    currentTenantMaxClasses.value = int.tryParse(session['maxClasses']?.toString() ?? '3') ?? 3;
+    currentTenantMaxTeachers.value = int.tryParse(session['maxTeachers']?.toString() ?? '4') ?? 4;
     initialScreen = const DashboardPage();
   } else {
     currentUserRole.value = null;
@@ -179,7 +183,7 @@ class MyApp extends StatelessWidget {
               navigatorKey: rootNavigatorKey,
               scrollBehavior: const AppScrollBehavior(),
               debugShowCheckedModeBanner: false,
-              title: 'Madrasa App',
+              title: 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)',
               themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
               // 🌟 پوری ایپ کی ڈائریکشن (RTL/LTR)، کی بورڈ بیک شارٹ کٹس، اور ونڈوز فونٹ اسکیلنگ
               builder: (context, child) {
@@ -199,41 +203,43 @@ class MyApp extends StatelessWidget {
                       )
                     : app;
 
-                // 🌟 کی بورڈ بیک بٹن بی ہیوئر (Backspace, Alt+Left, Escape, BrowserBack)
-                return CallbackShortcuts(
-                  bindings: <ShortcutActivator, VoidCallback>{
-                    const SingleActivator(LogicalKeyboardKey.backspace): () {
-                      // ونڈوز اور ڈیسک ٹاپ پر بیک سپیس سے بیک سکرین پر جانا تبھی کام کرے گا جب صارف کسی ان پٹ فیلڈ میں نہ ہو
-                      if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+                // 🌟 کی بورڈ بیک بٹن بی ہیوئر صرف اور صرف ڈیسک ٹاپ (ونڈوز/لینکس/میک) پر لاگو کریں تاکہ موبائل کی بورڈ کا بیک سپیس/ڈیلیٹ بٹن متاثر نہ ہو
+                if (isDesktop) {
+                  return CallbackShortcuts(
+                    bindings: <ShortcutActivator, VoidCallback>{
+                      const SingleActivator(LogicalKeyboardKey.backspace): () {
                         final primaryFocusContext = FocusManager.instance.primaryFocus?.context;
                         final isEditing = primaryFocusContext != null &&
                             primaryFocusContext.findAncestorWidgetOfExactType<EditableText>() != null;
                         if (!isEditing && (rootNavigatorKey.currentState?.canPop() ?? false)) {
                           rootNavigatorKey.currentState?.maybePop();
                         }
-                      }
+                      },
+                      const SingleActivator(LogicalKeyboardKey.escape): () {
+                        if (rootNavigatorKey.currentState?.canPop() ?? false) {
+                          rootNavigatorKey.currentState?.maybePop();
+                        }
+                      },
+                      const SingleActivator(LogicalKeyboardKey.browserBack): () {
+                        if (rootNavigatorKey.currentState?.canPop() ?? false) {
+                          rootNavigatorKey.currentState?.maybePop();
+                        }
+                      },
+                      const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): () {
+                        if (rootNavigatorKey.currentState?.canPop() ?? false) {
+                          rootNavigatorKey.currentState?.maybePop();
+                        }
+                      },
                     },
-                    const SingleActivator(LogicalKeyboardKey.escape): () {
-                      if (rootNavigatorKey.currentState?.canPop() ?? false) {
-                        rootNavigatorKey.currentState?.maybePop();
-                      }
-                    },
-                    const SingleActivator(LogicalKeyboardKey.browserBack): () {
-                      if (rootNavigatorKey.currentState?.canPop() ?? false) {
-                        rootNavigatorKey.currentState?.maybePop();
-                      }
-                    },
-                    const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): () {
-                      if (rootNavigatorKey.currentState?.canPop() ?? false) {
-                        rootNavigatorKey.currentState?.maybePop();
-                      }
-                    },
-                  },
-                  child: Focus(
-                    autofocus: true,
-                    child: scaledApp,
-                  ),
-                );
+                    child: Focus(
+                      autofocus: true,
+                      child: scaledApp,
+                    ),
+                  );
+                }
+
+                // موبائل پر سادہ اور براہ راست ریٹرن تاکہ کی بورڈ کے تمام کیز (بیک سپیس، ڈیلیٹ، ایڈٹنگ) 100 فیصد روانی سے کام کریں
+                return scaledApp;
               },
               theme: ThemeData(
                 brightness: Brightness.light,

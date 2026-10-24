@@ -20,22 +20,24 @@ $as_of_date = $_GET['as_of'] ?? date('Y-m-d');
 finance_accounting_backfill($pdo, null, $as_of_date);
 
 $cur_tenant_id = (int)get_current_tenant_id($pdo);
+$tenant_settings = function_exists('get_tenant_settings') ? get_tenant_settings($pdo, $cur_tenant_id) : [];
+$inst_name = !empty($tenant_settings['madrasa_name']) ? $tenant_settings['madrasa_name'] : (!empty($_SESSION['madrasa_name']) ? $_SESSION['madrasa_name'] : t('app_name'));
 
-// Fetch Trial Balance
+// D8 Fix: Only Approved / Posted vouchers affect the Trial Balance!
 $query = "
     SELECT a.code, a.name, a.type, 
            SUM(CASE WHEN v.id IS NOT NULL THEN e.debit ELSE 0 END) as total_debit, 
            SUM(CASE WHEN v.id IS NOT NULL THEN e.credit ELSE 0 END) as total_credit
     FROM acc_chart_of_accounts a
-    LEFT JOIN acc_ledger_entries e ON a.id = e.account_id
-    LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status != 'Rejected' AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ? AND v.date <= ?
+    LEFT JOIN acc_ledger_entries e ON a.id = e.account_id AND e.tenant_id = ?
+    LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ? AND v.date <= ?
     WHERE a.is_deleted = 0 AND a.tenant_id = ?
     GROUP BY a.id, a.code, a.name, a.type
     ORDER BY a.type, a.code
 ";
 
 $stmt = $pdo->prepare($query);
-$stmt->execute([$cur_tenant_id, $as_of_date, $cur_tenant_id]);
+$stmt->execute([$cur_tenant_id, $cur_tenant_id, $as_of_date, $cur_tenant_id]);
 $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $total_dr = 0;
@@ -61,19 +63,20 @@ $total_cr = 0;
 
     <div id="printableArea" class="bg-white p-4 border rounded shadow-sm">
         <div class="text-center border-bottom border-2 border-dark mb-4 pb-2">
-            <h3 class="fw-bold text-success m-0"><?php echo e(t('app_name')); ?></h3>
+            <!-- D10 Fix: Print current tenant's own name, never hardcoded -->
+            <h3 class="fw-bold text-success m-0"><?php echo e($inst_name); ?></h3>
             <h5 class="mt-2 fw-bold"><?php echo ($lang=='ur') ? 'میزانِ پڑتال' : 'Trial Balance'; ?></h5>
-            <p class="mb-1 fw-bold fs-6 text-muted">As of: <?php echo date('d-M-Y', strtotime($as_of_date)); ?></p>
+            <p class="mb-1 fw-bold fs-6 text-muted"><?php echo ($lang=='ur') ? 'بتاریخ:' : 'As of:'; ?> <?php echo date('d-M-Y', strtotime($as_of_date)); ?></p>
         </div>
 
         <table class="table table-bordered table-sm align-middle">
             <thead class="table-dark text-center">
                 <tr>
-                    <th style="width: 15%">Account Code</th>
-                    <th style="width: 35%">Account Title</th>
-                    <th style="width: 20%">Account Type</th>
-                    <th style="width: 15%">Debit (Dr)</th>
-                    <th style="width: 15%">Credit (Cr)</th>
+                    <th style="width: 15%"><?php echo ($lang=='ur') ? 'کھاتہ کوڈ' : 'Account Code'; ?></th>
+                    <th style="width: 35%"><?php echo ($lang=='ur') ? 'کھاتہ کا عنوان' : 'Account Title'; ?></th>
+                    <th style="width: 20%"><?php echo ($lang=='ur') ? 'نوعیت' : 'Account Type'; ?></th>
+                    <th style="width: 15%"><?php echo ($lang=='ur') ? 'ڈیبٹ (Dr)' : 'Debit (Dr)'; ?></th>
+                    <th style="width: 15%"><?php echo ($lang=='ur') ? 'کریڈٹ (Cr)' : 'Credit (Cr)'; ?></th>
                 </tr>
             </thead>
             <tbody>
@@ -108,7 +111,18 @@ $total_cr = 0;
                         $current_type = $acc['type'];
                 ?>
                 <tr class="table-light fw-bold text-primary">
-                    <td colspan="5"><?php echo $current_type; ?> Accounts</td>
+                    <td colspan="5">
+                        <?php 
+                        $type_map_ur = [
+                            'Asset' => 'اثاثہ جات کھاتے (Assets)',
+                            'Liability' => 'واجبات کھاتے (Liabilities)',
+                            'Equity' => 'سرمایہ کھاتے (Equity)',
+                            'Revenue' => 'آمدنی کھاتے (Revenue)',
+                            'Expense' => 'اخراجات کھاتے (Expense)'
+                        ];
+                        echo ($lang == 'ur' && isset($type_map_ur[$current_type])) ? $type_map_ur[$current_type] : ($current_type . ' Accounts');
+                        ?>
+                    </td>
                 </tr>
                 <?php endif; ?>
                 <tr>
@@ -122,7 +136,7 @@ $total_cr = 0;
             </tbody>
             <tfoot class="table-dark">
                 <tr>
-                    <th colspan="3" class="text-end fs-5">Grand Total:</th>
+                    <th colspan="3" class="text-end fs-5"><?php echo ($lang=='ur') ? 'کل میزان:' : 'Grand Total:'; ?></th>
                     <th class="text-end fs-5 text-success"><?php echo number_format($total_dr, 2); ?></th>
                     <th class="text-end fs-5 text-danger"><?php echo number_format($total_cr, 2); ?></th>
                 </tr>
@@ -131,11 +145,11 @@ $total_cr = 0;
         
         <?php if (abs($total_dr - $total_cr) > 0.01): ?>
         <div class="alert alert-danger mt-3 fw-bold text-center">
-            <i class="fas fa-exclamation-triangle me-2"></i> Trial Balance is out of balance by <?php echo number_format(abs($total_dr - $total_cr), 2); ?>
+            <i class="fas fa-exclamation-triangle me-2"></i> <?php echo ($lang=='ur') ? 'میزانِ پڑتال میں فرق ہے: ' . number_format(abs($total_dr - $total_cr), 2) : 'Trial Balance is out of balance by ' . number_format(abs($total_dr - $total_cr), 2); ?>
         </div>
         <?php else: ?>
         <div class="alert alert-success mt-3 fw-bold text-center">
-            <i class="fas fa-check-circle me-2"></i> Trial Balance matches perfectly! (Debit = Credit)
+            <i class="fas fa-check-circle me-2"></i> <?php echo ($lang=='ur') ? 'میزانِ پڑتال 100% متوازن اور درست ہے! (ڈیبٹ = کریڈٹ)' : 'Trial Balance matches perfectly! (Debit = Credit)'; ?>
         </div>
         <?php endif; ?>
     </div>

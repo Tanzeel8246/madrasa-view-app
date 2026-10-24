@@ -16,9 +16,13 @@ class SyncUpFinance {
         try { $pdo->exec("ALTER TABLE finance ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE finance ADD COLUMN account_id INT DEFAULT NULL"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE finance ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash'"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE finance ADD COLUMN deleted_at DATETIME DEFAULT NULL"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE finance ADD COLUMN original_receipt_no VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN account_id INT DEFAULT NULL"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash'"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN deleted_at DATETIME DEFAULT NULL"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN original_receipt_no VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE acc_payroll ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE acc_payroll ADD COLUMN payment_account_id INT DEFAULT NULL"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE acc_payroll ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash'"); } catch (Throwable $e) {}
@@ -33,10 +37,11 @@ class SyncUpFinance {
                     if ((int)($f['is_deleted'] ?? 0) === 1) {
                         $deletedServerId = $serverId;
                         if ($serverId) {
-                            $upd = $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, receipt_no, CAST(computer_receipt_no AS CHAR)), computer_receipt_no = NULL WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
-                            $upd->execute([$serverId, $tId]);
-                            if ($upd->rowCount() === 0) {
-                                $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, receipt_no, CAST(computer_receipt_no AS CHAR)), computer_receipt_no = NULL WHERE id = ?")->execute([$serverId]);
+                            try {
+                                $upd = $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, CAST(computer_receipt_no AS CHAR), manual_receipt_no), computer_receipt_no = NULL WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                                $upd->execute([$serverId, $tId]);
+                            } catch (Throwable $eSoft) {
+                                $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")->execute([$serverId, $tId]);
                             }
                             finance_accounting_delete_voucher($pdo, $serverId, $tId);
                         } else {
@@ -44,10 +49,11 @@ class SyncUpFinance {
                             $findDeleted->execute([normalize_date($f['date'] ?? ''), trim($f['type'] ?? ''), (float)($f['amount'] ?? 0), $f['description'] ?? '', $tId]);
                             $deletedServerId = to_int_or_null($findDeleted->fetchColumn());
                             if ($deletedServerId) {
-                                $upd = $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, receipt_no, CAST(computer_receipt_no AS CHAR)), computer_receipt_no = NULL WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
-                                $upd->execute([$deletedServerId, $tId]);
-                                if ($upd->rowCount() === 0) {
-                                    $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, receipt_no, CAST(computer_receipt_no AS CHAR)), computer_receipt_no = NULL WHERE id = ?")->execute([$deletedServerId]);
+                                try {
+                                    $upd = $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, CAST(computer_receipt_no AS CHAR), manual_receipt_no), computer_receipt_no = NULL WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                                    $upd->execute([$deletedServerId, $tId]);
+                                } catch (Throwable $eSoft2) {
+                                    $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")->execute([$deletedServerId, $tId]);
                                 }
                                 finance_accounting_delete_voucher($pdo, $deletedServerId, $tId);
                             }
@@ -123,13 +129,22 @@ class SyncUpFinance {
                         }
                         $pdo->prepare("UPDATE finance SET date = ?, type = ?, amount = ?, description = ?, head_id = ?, manual_receipt_no = ?, donor_name = ?, donor_address = ?, computer_receipt_no = ?, user_id = ?, user_name = ?, account_id = ?, payment_method = ?, bill_image = COALESCE(NULLIF(?, ''), bill_image), is_deleted = 0 WHERE id = ? AND tenant_id = ?")
                             ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName, $accountId, $paymentMethod, $billImage, $existingId, $tId]);
-                        finance_accounting_post($pdo, $savedId);
+                        $savedId = (int)$existingId;
+                        try {
+                            finance_accounting_post($pdo, $savedId);
+                        } catch (Throwable $eAcc) {
+                            write_log("Sync Up finance_accounting_post update error: " . $eAcc->getMessage());
+                        }
                     } else {
                         $computer_receipt_no = ($type === 'Income') ? next_user_receipt_no($pdo, $uid, $computer_receipt_no, null, 'Madrasa', $tId) : null;
                         $pdo->prepare("INSERT INTO finance (date, type, amount, description, head_id, manual_receipt_no, donor_name, donor_address, computer_receipt_no, user_id, user_name, account_id, payment_method, bill_image, system_type, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Madrasa', 0, ?)")
                             ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName, $accountId, $paymentMethod, $billImage, $tId]);
                         $savedId = (int)$pdo->lastInsertId();
-                        finance_accounting_post($pdo, $savedId);
+                        try {
+                            finance_accounting_post($pdo, $savedId);
+                        } catch (Throwable $eAcc) {
+                            write_log("Sync Up finance_accounting_post insert error: " . $eAcc->getMessage());
+                        }
                     }
                     if ($localId !== null) {
                         $syncedIds['finance_entries'][] = $localId;
@@ -151,20 +166,22 @@ class SyncUpFinance {
                     if ((int)($f['is_deleted'] ?? 0) === 1) {
                         $deletedServerId = $serverId;
                         if ($serverId) {
-                            $upd = $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, receipt_no, CAST(computer_receipt_no AS CHAR)), computer_receipt_no = NULL WHERE id = ? AND system_type = 'Masjid' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
-                            $upd->execute([$serverId, $tId]);
-                            if ($upd->rowCount() === 0) {
-                                $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, receipt_no, CAST(computer_receipt_no AS CHAR)), computer_receipt_no = NULL WHERE id = ? AND system_type = 'Masjid'")->execute([$serverId]);
+                            try {
+                                $upd = $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, CAST(computer_receipt_no AS CHAR), manual_receipt_no), computer_receipt_no = NULL WHERE id = ? AND system_type = 'Masjid' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                                $upd->execute([$serverId, $tId]);
+                            } catch (Throwable $eSoftM) {
+                                $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ? AND system_type = 'Masjid' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")->execute([$serverId, $tId]);
                             }
                         } else {
                             $findDeleted = $pdo->prepare("SELECT id FROM finance WHERE date = ? AND type = ? AND amount = ? AND description = ? AND system_type = 'Masjid' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
                             $findDeleted->execute([normalize_date($f['date'] ?? ''), trim($f['type'] ?? ''), (float)($f['amount'] ?? 0), $f['description'] ?? '', $tId]);
                             $deletedServerId = to_int_or_null($findDeleted->fetchColumn());
                             if ($deletedServerId) {
-                                $upd = $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, receipt_no, CAST(computer_receipt_no AS CHAR)), computer_receipt_no = NULL WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
-                                $upd->execute([$deletedServerId, $tId]);
-                                if ($upd->rowCount() === 0) {
-                                    $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, receipt_no, CAST(computer_receipt_no AS CHAR)), computer_receipt_no = NULL WHERE id = ?")->execute([$deletedServerId]);
+                                try {
+                                    $upd = $pdo->prepare("UPDATE finance SET is_deleted = 1, deleted_at = NOW(), original_receipt_no = COALESCE(original_receipt_no, CAST(computer_receipt_no AS CHAR), manual_receipt_no), computer_receipt_no = NULL WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                                    $upd->execute([$deletedServerId, $tId]);
+                                } catch (Throwable $eSoftM2) {
+                                    $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")->execute([$deletedServerId, $tId]);
                                 }
                             }
                         }

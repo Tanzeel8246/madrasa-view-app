@@ -1,6 +1,7 @@
 <?php
 require_once 'db.php';
 require_once 'finance_accounting_bridge.php';
+require_once 'financial_audit_helper.php';
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
 // Bulletproof table schema additions (run once)
@@ -335,7 +336,12 @@ if (!function_exists('render_user_wise_finance_cards')) {
                                                                     <a href="<?php echo $print_file; ?>?id=<?php echo $r['id']; ?>" class="btn btn-outline-primary" target="_blank" title="رسید پرنٹ"><i class="fas fa-print"></i></a>
                                                                 <?php endif; ?>
                                                                 <a href="edit_finance.php?id=<?php echo $r['id']; ?>" class="btn btn-outline-warning" title="ترمیم"><i class="fas fa-edit"></i></a>
-                                                                <a href="?del_id=<?php echo $r['id']; ?>" class="btn btn-outline-danger" onclick="return confirm('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟')" title="ڈیلیٹ"><i class="fas fa-trash"></i></a>
+                                                                <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟');">
+                                                                    <?php echo csrf_field(); ?>
+                                                                    <input type="hidden" name="delete_record" value="1">
+                                                                    <input type="hidden" name="del_id" value="<?php echo $r['id']; ?>">
+                                                                    <button type="submit" class="btn btn-outline-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                                                </form>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -419,8 +425,9 @@ if (!function_exists('next_user_receipt_no')) {
 }
 
 // Delete Record (Soft delete to Trash/Recycle Bin, preserve original receipt text but free numeric receipt immediately)
-if (isset($_GET['del_id'])) {
-    $delId = (int)$_GET['del_id'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_record'])) {
+    validate_csrf_or_abort();
+    $delId = (int)$_POST['del_id'];
     if (!$is_admin && !finance_has_valid_edit_permission($pdo, $delId, (int)$_SESSION['user_id'])) {
         header("Location: edit_finance.php?id=" . $delId . "&otp_required=1");
         exit;
@@ -473,7 +480,8 @@ if (isset($_GET['del_id'])) {
 
 // Handle Add/Edit Record submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_record'])) {
-    $type = $_POST['type']; // Income or Expense
+    validate_csrf_or_abort();
+    $type = !empty($_POST['type']) ? trim($_POST['type']) : (isset($_POST['manual_receipt_no']) || isset($_POST['donor_address']) ? 'Income' : 'Expense');
     $date = $_POST['date'];
     $head_id = (int)$_POST['head_id'];
     $amount = (float)$_POST['amount'];
@@ -609,19 +617,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_record'])) {
                 $comp_receipt_no = null;
             }
         }
+
+        // D2 Fix: Self-heal columns and ensure 100% column/value count parity
+        try { $pdo->exec("ALTER TABLE finance ADD COLUMN account_id INT DEFAULT NULL"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE finance ADD COLUMN payment_method VARCHAR(50) DEFAULT NULL"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE finance ADD COLUMN bill_image VARCHAR(255) DEFAULT NULL"); } catch (Throwable $e) {}
+
+        $insert_id = 0;
         try {
             $stmt = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, donor_address, manual_receipt_no, computer_receipt_no, description, is_deleted, system_type, account_id, payment_method, tenant_id, bill_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)");
             $stmt->execute([$user_id, $user_name, $type, $head_id, $amount, $date, $donor_name, $donor_address, $manual_receipt_no, $comp_receipt_no, $description, $sys, $account_id, $payment_method, $cur_tenant_id, $bill_path]);
+            $insert_id = (int)$pdo->lastInsertId();
         } catch (Throwable $e) {
             try {
-                $stmt = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, donor_address, manual_receipt_no, computer_receipt_no, description, is_deleted, system_type, tenant_id, bill_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)");
-                $stmt->execute([$user_id, $user_name, $type, $head_id, $amount, $date, $donor_name, $donor_address, $manual_receipt_no, $comp_receipt_no, $description, $sys, $cur_tenant_id, $bill_path]);
-            } catch (Throwable $e2) {
-                $stmt = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, donor_address, manual_receipt_no, computer_receipt_no, description, tenant_id, bill_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                // Robust fallback with exact 12 columns and 12 values (resolves SQLSTATE 21S01 error!)
+                $stmt = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, donor_address, manual_receipt_no, computer_receipt_no, description, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$user_id, $user_name, $type, $head_id, $amount, $date, $donor_name, $donor_address, $manual_receipt_no, $comp_receipt_no, $description, $cur_tenant_id]);
+                $insert_id = (int)$pdo->lastInsertId();
+            } catch (Throwable $e2) {
+                error_log("[Simple Finance Insert Error] " . $e2->getMessage());
+                header("Location: simple_finance.php?error=insert_failed&err_msg=" . urlencode("اندراج محفوظ نہیں ہو سکا: " . $e2->getMessage()));
+                exit;
             }
         }
-        try { finance_accounting_post($pdo, (int)$pdo->lastInsertId()); } catch (Throwable $e) {}
+
+        if ($insert_id > 0) {
+            try { finance_accounting_post($pdo, $insert_id); } catch (Throwable $e) {}
+            if (function_exists('acc_log_audit')) {
+                acc_log_audit($pdo, $cur_tenant_id, 'finance', $insert_id, 'ADD_SIMPLE_FINANCE', null, [
+                    'type' => $type, 'head_id' => $head_id, 'amount' => $amount, 'date' => $date, 'receipt' => $comp_receipt_no
+                ], $user_id, $user_name, 'Web');
+            }
+        }
         header("Location: simple_finance.php?msg=added");
         exit;
     }
@@ -629,36 +656,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_record'])) {
 
 // Handle Fund Transfer submission (Contra Entry)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['transfer_funds'])) {
-    
+    validate_csrf_or_abort();
     try {
         // Helper function to resolve 'user_X' or 'col_X' to an account ID
         $resolve_account = function($raw_id, $pdo) use ($cur_tenant_id) {
             $raw_id = (string)$raw_id;
             if (strpos($raw_id, 'col_') === 0) {
                 $u_id = (int)str_replace('col_', '', $raw_id);
-                if ($u_id === 1) {
-                    $chkTan = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = '1101' OR (name LIKE '%تنزیل%' AND (name LIKE '%وصولی%' OR name LIKE '%Collection%')) ORDER BY (code = '1101') DESC LIMIT 1");
-                    $tanAid = $chkTan ? (int)$chkTan->fetchColumn() : 0;
-                    if ($tanAid) return $tanAid;
-                } elseif ($u_id === 3) {
-                    $chkSal = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = '1102' OR (name LIKE '%سلیم%' AND (name LIKE '%وصولی%' OR name LIKE '%Collection%')) ORDER BY (code = '1102') DESC LIMIT 1");
-                    $salAid = $chkSal ? (int)$chkSal->fetchColumn() : 0;
-                    if ($salAid) return $salAid;
-                }
                 $stmt = $pdo->prepare("SELECT username, name FROM admins WHERE id = ?");
                 $stmt->execute([$u_id]);
                 $u = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($u) {
                     $u_label = !empty($u['name']) ? $u['name'] : (!empty($u['username']) ? $u['username'] : 'User ' . $u_id);
                     $acc_name = "نقد وصولی - " . $u_label;
-                    $chk = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE (name = ? OR name LIKE ?) AND type = 'Asset' AND (is_deleted = 0 OR is_deleted IS NULL)");
-                    $chk->execute([$acc_name, "%" . $u_label . "%"]);
+                    $chk = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE (name = ? OR name LIKE ?) AND type = 'Asset' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY (tenant_id = ?) DESC LIMIT 1");
+                    $chk->execute([$acc_name, "%" . $u_label . "%", $cur_tenant_id, $cur_tenant_id]);
                     $ex = $chk->fetchColumn();
                     if ($ex) return (int)$ex;
 
-                    $code_stmt = $pdo->query("SELECT MAX(CAST(code AS UNSIGNED)) FROM acc_chart_of_accounts WHERE type = 'Asset' AND code LIKE '11%'");
+                    $code_stmt = $pdo->prepare("SELECT MAX(CAST(code AS UNSIGNED)) FROM acc_chart_of_accounts WHERE type = 'Asset' AND code LIKE '11%' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                    $code_stmt->execute([$cur_tenant_id]);
                     $max_code = (int)($code_stmt ? $code_stmt->fetchColumn() : 0);
-                    $new_code = max(1102, $max_code) + 1;
+                    $new_code = max(1100, $max_code) + 1;
                     try {
                         $ins = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, tenant_id, is_active, is_deleted) VALUES (?, ?, 'Asset', ?, 1, 0)");
                         $ins->execute([(string)$new_code, $acc_name, $cur_tenant_id]);
@@ -667,46 +686,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['transfer_funds'])) {
                 }
             } elseif (strpos($raw_id, 'user_') === 0) {
                 $u_id = (int)str_replace('user_', '', $raw_id);
-                
-                // Strict isolation for key users
-                if ($u_id === 1) {
-                    $chkTan = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = '1502' OR (name LIKE '%تنزیل%' AND (name LIKE '%ایڈوانس%' OR name LIKE '%Advance%')) ORDER BY (code = '1502') DESC LIMIT 1");
-                    $tanAid = $chkTan ? (int)$chkTan->fetchColumn() : 0;
-                    if ($tanAid) return $tanAid;
-                } elseif ($u_id === 3) {
-                    $chkSal = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = '1503' OR (name LIKE '%سلیم%' AND (name LIKE '%ایڈوانس%' OR name LIKE '%Advance%')) ORDER BY (code = '1503') DESC LIMIT 1");
-                    $salAid = $chkSal ? (int)$chkSal->fetchColumn() : 0;
-                    if ($salAid) return $salAid;
-                }
-
                 $stmt = $pdo->prepare("SELECT username, name FROM admins WHERE id = ?");
                 $stmt->execute([$u_id]);
                 $u = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($u) {
                     $u_label = !empty($u['name']) ? $u['name'] : (!empty($u['username']) ? $u['username'] : 'User ' . $u_id);
                     $acc_name = "ایڈوانس - " . $u_label;
-                    $chk = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE (name = ? OR name = ? OR name LIKE ?) AND type = 'Asset' AND (is_deleted = 0 OR is_deleted IS NULL)");
-                    $chk->execute([$acc_name, "Advance - " . $u_label, "%" . $u_label . "%"]);
+                    $chk = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE (name = ? OR name = ? OR name LIKE ?) AND type = 'Asset' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY (tenant_id = ?) DESC LIMIT 1");
+                    $chk->execute([$acc_name, "Advance - " . $u_label, "%" . $u_label . "%", $cur_tenant_id, $cur_tenant_id]);
                     $ex = $chk->fetchColumn();
                     if ($ex) return (int)$ex;
                     
-                    $code_stmt = $pdo->query("SELECT MAX(CAST(code AS UNSIGNED)) FROM acc_chart_of_accounts WHERE type = 'Asset'");
+                    $code_stmt = $pdo->prepare("SELECT MAX(CAST(code AS UNSIGNED)) FROM acc_chart_of_accounts WHERE type = 'Asset' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                    $code_stmt->execute([$cur_tenant_id]);
                     $max_code = (int)($code_stmt ? $code_stmt->fetchColumn() : 0);
                     $new_code = max(1500, $max_code + 1);
-                    while ($pdo->query("SELECT COUNT(*) FROM acc_chart_of_accounts WHERE code = '$new_code'")->fetchColumn() > 0) {
+                    while ($pdo->query("SELECT COUNT(*) FROM acc_chart_of_accounts WHERE code = '$new_code' AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0)")->fetchColumn() > 0) {
                         $new_code++;
                     }
                     
                     try {
                         $ins = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, tenant_id, is_active, is_deleted) VALUES (?, ?, 'Asset', ?, 1, 0)");
                         $ins->execute([(string)$new_code, $acc_name, $cur_tenant_id]);
+                        return (int)$pdo->lastInsertId();
                     } catch (Throwable $e) {
                         try {
                             $ins = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_active, is_deleted) VALUES (?, ?, 'Asset', 1, 0)");
                             $ins->execute([(string)$new_code, $acc_name]);
+                            return (int)$pdo->lastInsertId();
                         } catch (Throwable $e2) {}
                     }
-                    return (int)$pdo->lastInsertId();
                 }
             }
             return (int)$raw_id;
@@ -750,8 +759,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['transfer_funds'])) {
 }
 
 // Delete Transfer (Admin Only)
-if (isset($_GET['del_transfer']) && $is_admin) {
-    $del_id = (int)$_GET['del_transfer'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_transfer']) && $is_admin) {
+    validate_csrf_or_abort();
+    $del_id = (int)$_POST['del_transfer_id'];
     try {
         $pdo->query("UPDATE acc_vouchers SET is_deleted = 1 WHERE id = $del_id AND (reference LIKE 'TRANSFER-%' OR type = 'Contra')");
         $pdo->query("UPDATE acc_ledger_entries SET debit = 0, credit = 0 WHERE voucher_id = $del_id");
@@ -762,6 +772,7 @@ if (isset($_GET['del_transfer']) && $is_admin) {
 
 // Edit Transfer (Admin Only)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_transfer']) && $is_admin) {
+    validate_csrf_or_abort();
     $edit_id = (int)$_POST['edit_transfer_id'];
     $edit_amount = (float)($_POST['edit_transfer_amount'] ?? 0);
     $edit_date = $_POST['edit_transfer_date'] ?? date('Y-m-d');
@@ -783,6 +794,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_transfer']) && $i
 
 // Add New Head
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_head'])) {
+    validate_csrf_or_abort();
     $head_name = trim($_POST['head_name']);
     $head_type = $_POST['head_type'];
     if (!empty($head_name) && !empty($head_type)) {
@@ -805,6 +817,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_head'])) {
 
 // Edit Head
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_head'])) {
+    validate_csrf_or_abort();
     $head_id = (int)$_POST['head_id'];
     $head_name = trim($_POST['head_name']);
     $head_type = $_POST['head_type'];
@@ -821,8 +834,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_head'])) {
 }
 
 // Delete Head
-if (isset($_GET['del_head_id'])) {
-    $del_head_id = (int)$_GET['del_head_id'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_head'])) {
+    validate_csrf_or_abort();
+    $del_head_id = (int)$_POST['del_head_id'];
     try {
         $pdo->prepare("UPDATE heads SET is_deleted = 1 WHERE id = ? AND tenant_id = ?")->execute([$del_head_id, $cur_tenant_id]);
     } catch (Throwable $e) {
@@ -933,7 +947,7 @@ try {
 // Fetch payment asset accounts (Cash in Hand, Bank Accounts, etc.)
 $all_payment_accounts = [];
 try {
-    $all_payment_accounts = $pdo->query("SELECT id, code, name FROM acc_chart_of_accounts WHERE type = 'Asset' AND tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY code ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $all_payment_accounts = $pdo->query("SELECT id, code, name FROM acc_chart_of_accounts WHERE type = 'Asset' AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0) AND (is_deleted = 0 OR is_deleted IS NULL) AND (is_active = 1 OR is_active IS NULL) AND code NOT IN ('1101', '1201', '1301', '2101', '2102', '2103', '5010', '5011') ORDER BY CAST(code AS UNSIGNED) ASC, code ASC")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {}
 if (empty($all_payment_accounts)) {
     $cid = finance_accounting_ensure_account($pdo, '1001', 'Cash in Hand', 'Asset', $cur_tenant_id);
@@ -968,12 +982,6 @@ $is_other_advance_account = function($acc_name) use ($is_my_advance_account) {
 $is_my_collection_account = function($acc_name) use ($my_uname, $my_full_name, $user_id) {
     if (mb_strpos($acc_name, 'وصولی') === false && stripos($acc_name, 'collection') === false) return false;
     $lower_acc = mb_strtolower($acc_name);
-    if ($user_id == 3 || stripos($my_uname, 'saleem') !== false || mb_strpos($my_full_name, 'سلیم') !== false) {
-        if (mb_strpos($lower_acc, 'سلیم') !== false || stripos($lower_acc, 'saleem') !== false) return true;
-    }
-    if ($user_id == 1 || stripos($my_uname, 'tanzeel') !== false || mb_strpos($my_full_name, 'تنزیل') !== false) {
-        if (mb_strpos($lower_acc, 'تنزیل') !== false || stripos($lower_acc, 'tanzeel') !== false) return true;
-    }
     if (!empty($my_uname) && mb_strpos($lower_acc, mb_strtolower($my_uname)) !== false) return true;
     if (!empty($my_full_name) && mb_strpos($lower_acc, mb_strtolower($my_full_name)) !== false) return true;
     return false;
@@ -1036,29 +1044,24 @@ if (!$is_admin) {
 
     // 3. Filter for logged-in user's own collection account (نقد وصولی)
     $my_col_acc_name = "نقد وصولی - " . (!empty($my_full_name) ? $my_full_name : $current_username);
-    if ($user_id === 1) {
-        $chkTanCol = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = '1101' OR (name LIKE '%تنزیل%' AND (name LIKE '%وصولی%' OR name LIKE '%Collection%')) ORDER BY (code = '1101') DESC LIMIT 1");
-        $my_col_aid = $chkTanCol ? (int)$chkTanCol->fetchColumn() : 0;
-    } elseif ($user_id === 3) {
-        $chkSalCol = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = '1102' OR (name LIKE '%سلیم%' AND (name LIKE '%وصولی%' OR name LIKE '%Collection%')) ORDER BY (code = '1102') DESC LIMIT 1");
-        $my_col_aid = $chkSalCol ? (int)$chkSalCol->fetchColumn() : 0;
+    foreach ($all_payment_accounts as $pa) {
+        if ($is_my_collection_account($pa['name'] ?? '')) {
+            $my_col_aid = (int)$pa['id'];
+            break;
+        }
     }
     if ($my_col_aid <= 0) {
-        foreach ($all_payment_accounts as $pa) {
-            if ($is_my_collection_account($pa['name'] ?? '')) {
-                $my_col_aid = (int)$pa['id'];
-                break;
-            }
-        }
+        // Search in database for tenant collection account for this user
+        $chkColStmt = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE (name = ? OR name LIKE ?) AND type = 'Asset' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY (tenant_id = ?) DESC LIMIT 1");
+        $chkColStmt->execute([$my_col_acc_name, "%" . (!empty($my_full_name) ? $my_full_name : $current_username) . "%", $cur_tenant_id, $cur_tenant_id]);
+        $my_col_aid = (int)($chkColStmt->fetchColumn() ?: 0);
     }
     if ($my_col_aid <= 0) {
         // Auto-provision collection account
-        $col_code = ($user_id === 1) ? 1101 : (($user_id === 3) ? 1102 : 0);
-        if ($col_code <= 0) {
-            $code_stmt = $pdo->query("SELECT MAX(CAST(code AS UNSIGNED)) FROM acc_chart_of_accounts WHERE type = 'Asset' AND code LIKE '11%'");
-            $max_code = (int)($code_stmt ? $code_stmt->fetchColumn() : 0);
-            $col_code = max(1102, $max_code) + 1;
-        }
+        $code_stmt = $pdo->prepare("SELECT MAX(CAST(code AS UNSIGNED)) FROM acc_chart_of_accounts WHERE type = 'Asset' AND code LIKE '11%' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+        $code_stmt->execute([$cur_tenant_id]);
+        $max_code = (int)($code_stmt ? $code_stmt->fetchColumn() : 0);
+        $col_code = max(1100, $max_code) + 1;
         try {
             $ins = $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, tenant_id, is_active, is_deleted) VALUES (?, ?, 'Asset', ?, 1, 0)");
             $ins->execute([(string)$col_code, $my_col_acc_name, $cur_tenant_id]);
@@ -2210,7 +2213,7 @@ if (!$is_admin && empty($active_col) && $my_col_aid > 0) {
 
 // Refresh payment accounts after consolidation so duplicate/soft-deleted accounts do not show in forms
 try {
-    $all_payment_accounts = $pdo->query("SELECT id, code, name FROM acc_chart_of_accounts WHERE type = 'Asset' AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0) AND (is_deleted = 0 OR is_deleted IS NULL) AND (is_active = 1 OR is_active IS NULL) ORDER BY CAST(code AS UNSIGNED) ASC, code ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $all_payment_accounts = $pdo->query("SELECT id, code, name FROM acc_chart_of_accounts WHERE type = 'Asset' AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0) AND (is_deleted = 0 OR is_deleted IS NULL) AND (is_active = 1 OR is_active IS NULL) AND code NOT IN ('1101', '1201', '1301', '2101', '2102', '2103', '5010', '5011') ORDER BY CAST(code AS UNSIGNED) ASC, code ASC")->fetchAll(PDO::FETCH_ASSOC);
     $payment_accounts = $all_payment_accounts;
     if ($is_admin) {
         $admin_exp_pa = [];
@@ -2834,6 +2837,8 @@ include 'header.php';
                     </div>
 
                     <form method="POST">
+                        <input type="hidden" name="type" value="Income">
+                        <?php echo csrf_field(); ?>
                         <?php if ($is_admin): ?>
                         <div class="row g-3 mb-2">
                             <div class="col-md-12">
@@ -2983,7 +2988,12 @@ include 'header.php';
                                         <div class="btn-group btn-group-sm">
                                             <a href="<?php echo $print_file; ?>?id=<?php echo $r['id']; ?>" class="btn btn-outline-primary" target="_blank" title="رسید پرنٹ"><i class="fas fa-print"></i></a>
                                             <a href="edit_finance.php?id=<?php echo $r['id']; ?>" class="btn btn-outline-warning" title="ترمیم"><i class="fas fa-edit"></i></a>
-                                            <a href="?del_id=<?php echo $r['id']; ?>" class="btn btn-outline-danger" onclick="return confirm('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟ اس سے رسید نمبر آزاد ہو جائے گا۔')" title="ڈیلیٹ"><i class="fas fa-trash"></i></a>
+                                            <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟ اس سے رسید نمبر آزاد ہو جائے گا۔');">
+                                                <?php echo csrf_field(); ?>
+                                                <input type="hidden" name="delete_record" value="1">
+                                                <input type="hidden" name="del_id" value="<?php echo $r['id']; ?>">
+                                                <button type="submit" class="btn btn-outline-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>
@@ -3013,6 +3023,8 @@ include 'header.php';
                 </div>
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="type" value="Expense">
+                        <?php echo csrf_field(); ?>
                         <?php if ($is_admin): ?>
                         <div class="row g-3 mb-2">
                             <div class="col-md-12">
@@ -3169,7 +3181,12 @@ include 'header.php';
                                                 <a href="<?php echo htmlspecialchars($r['bill_image']); ?>" target="_blank" class="btn btn-outline-info" title="منسلک بل دیکھیں"><i class="fas fa-file-invoice-dollar"></i></a>
                                             <?php endif; ?>
                                             <a href="edit_finance.php?id=<?php echo $r['id']; ?>" class="btn btn-outline-warning" title="ترمیم"><i class="fas fa-edit"></i></a>
-                                            <a href="?del_id=<?php echo $r['id']; ?>" class="btn btn-outline-danger" onclick="return confirm('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟')" title="ڈیلیٹ"><i class="fas fa-trash"></i></a>
+                                            <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟');">
+                                                <?php echo csrf_field(); ?>
+                                                <input type="hidden" name="delete_record" value="1">
+                                                <input type="hidden" name="del_id" value="<?php echo $r['id']; ?>">
+                                                <button type="submit" class="btn btn-outline-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>
@@ -3226,7 +3243,12 @@ include 'header.php';
                                             <button type="button" class="btn btn-outline-warning" title="ترمیم" onclick="openEditTransferModal(<?php echo $tr['id']; ?>, '<?php echo $tr['date']; ?>', <?php echo $tr['amount']; ?>, '<?php echo htmlspecialchars(addslashes($tr['description'])); ?>')">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <a href="?del_transfer=<?php echo $tr['id']; ?>" class="btn btn-outline-danger" onclick="return confirm('کیا واقعی یہ ٹرانسفر ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟')" title="ڈیلیٹ"><i class="fas fa-trash"></i></a>
+                                            <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ٹرانسفر ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟');">
+                                                <?php echo csrf_field(); ?>
+                                                <input type="hidden" name="delete_transfer" value="1">
+                                                <input type="hidden" name="del_transfer_id" value="<?php echo $tr['id']; ?>">
+                                                <button type="submit" class="btn btn-outline-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                            </form>
                                         </div>
                                     </td>
                                     <?php endif; ?>
@@ -3250,6 +3272,7 @@ include 'header.php';
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST">
+                <?php echo csrf_field(); ?>
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">نئی مد (Head) شامل کریں</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -3281,6 +3304,7 @@ include 'header.php';
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST">
+                <?php echo csrf_field(); ?>
                 <div class="modal-header bg-warning text-dark">
                     <h5 class="modal-title fw-bold" id="fundTransferModalLabel"><i class="fas fa-exchange-alt me-2"></i> رقم منتقلی (ایڈوانس / ٹرانسفر)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -3382,6 +3406,7 @@ include 'header.php';
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST">
+                <?php echo csrf_field(); ?>
                 <div class="modal-header bg-warning text-dark">
                     <h5 class="modal-title fw-bold" id="editTransferModalLabel"><i class="fas fa-edit me-2"></i> ترمیم رقم منتقلی (ایڈوانس / ٹرانسفر)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>

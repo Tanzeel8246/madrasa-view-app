@@ -1,6 +1,7 @@
 <?php 
 ob_start();
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once __DIR__ . '/session_init.php';
+if (session_status() === PHP_SESSION_NONE) { madrasa_safe_session_start(); }
 require_once 'db.php'; 
 
 $sys = $_SESSION['system_type'] ?? 'Madrasa';
@@ -14,15 +15,27 @@ if ($sys === 'Masjid') {
 
 include 'header.php'; 
 
-$total_students=0; $total_alumni=0; $total_teachers=0; $present_today_pct=0; $absent_today_pct=0; $leave_today_pct=0; $late_today_pct=0; 
-$total_notices=0; $monthly_att_percent=0; $total_classes=0; 
-$management_insight="رپورٹ تیار کی جا رہی ہے..."; $monthly_expense=0;
+$tenant_id_dash = (int)get_current_tenant_id();
+
+// Auto-heal vital columns if missing in production (Only runs once to prevent MySQL metadata locks and HTTP 500)
+$dashMigrateFlag = __DIR__ . '/.dashboard_schema_v2_done';
+if (!file_exists($dashMigrateFlag)) {
+    try { $pdo->exec("ALTER TABLE students ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE students ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE students ADD COLUMN is_deleted TINYINT DEFAULT 0"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE teachers ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE teachers ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE teachers ADD COLUMN is_deleted TINYINT DEFAULT 0"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE classes ADD COLUMN is_deleted TINYINT DEFAULT 0"); } catch (Throwable $e) {}
+    @touch($dashMigrateFlag);
+}
 
 $role = strtolower((string)($_SESSION['role'] ?? 'parent'));
 
 if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'super_admin', 'administrator'], true)) {
     try {
-        $tenant_id_dash = get_current_tenant_id();
         $st_set = $pdo->prepare("SELECT * FROM settings WHERE tenant_id = ? ORDER BY id ASC LIMIT 1");
         $st_set->execute([$tenant_id_dash]);
         $settings = $st_set->fetch();
@@ -194,7 +207,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
         $recent_activities = [];
         try {
             if (function_exists('ensure_phase1_tables')) ensure_phase1_tables($pdo);
-            $rec_act_stmt = $pdo->prepare("SELECT * FROM activity_logs WHERE tenant_id = ? ORDER BY id DESC LIMIT 8");
+            $rec_act_stmt = $pdo->prepare("SELECT * FROM activity_logs WHERE tenant_id = ? AND (system_type='Madrasa' OR system_type IS NULL OR system_type='') ORDER BY id DESC LIMIT 8");
             $rec_act_stmt->execute([$tenant_id_dash]);
             $recent_activities = $rec_act_stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $e) {}
@@ -218,7 +231,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                     <i class="fas fa-university me-2 text-warning"></i>
                     <small class="fw-bold text-uppercase" style="letter-spacing: 1px;">مشورہ</small>
                 </div>
-                <p class="m-0 small" style="line-height: 1.6;" id="ai-insight-text"><?php echo $management_insight; ?></p>
+                <p class="m-0 small" style="line-height: 1.6;" id="ai-insight-text"><?php echo htmlspecialchars($management_insight ?? 'انتظامی تجاویز حاصل کی جا رہی ہیں...'); ?></p>
             </div>
         </div>
         <?php endif; ?>
@@ -429,15 +442,36 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                                 <th class="px-4"><?php echo t('student_id'); ?></th>
                                 <th><?php echo t('student'); ?></th>
                                 <th><?php echo t('father_name'); ?></th>
-                                <th>داخلہ Date</th>
+                                <th><?php echo t('admission_date'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php
-                            $stmt_recent = $pdo->prepare("SELECT * FROM students WHERE tenant_id = ? AND (is_deleted=0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5");
-                            $stmt_recent->execute([$tenant_id_dash]);
-                            while($row = $stmt_recent->fetch(PDO::FETCH_ASSOC)) {
-                                echo "<tr><td class='px-4 text-muted'>#{$row['id']}</td><td class='fw-bold text-primary'>{$row['name']}</td><td>{$row['father_name']}</td><td>".translateDate($row['admission_date'])."</td></tr>";
+                            $recent_rows = [];
+                            try {
+                                $stmt_recent = $pdo->prepare("SELECT * FROM students WHERE tenant_id = ? AND (is_deleted=0 OR is_deleted IS NULL) AND (system_type='Madrasa' OR system_type IS NULL OR system_type='') ORDER BY id DESC LIMIT 5");
+                                $stmt_recent->execute([$tenant_id_dash]);
+                                $recent_rows = $stmt_recent->fetchAll(PDO::FETCH_ASSOC);
+                            } catch (Throwable $eRec1) {
+                                try {
+                                    $stmt_recent = $pdo->query("SELECT * FROM students WHERE (is_deleted=0 OR is_deleted IS NULL) AND (system_type='Madrasa' OR system_type IS NULL OR system_type='') ORDER BY id DESC LIMIT 5");
+                                    $recent_rows = $stmt_recent ? $stmt_recent->fetchAll(PDO::FETCH_ASSOC) : [];
+                                } catch (Throwable $eRec2) {
+                                    try {
+                                        $stmt_recent = $pdo->query("SELECT * FROM students ORDER BY id DESC LIMIT 5");
+                                        $recent_rows = $stmt_recent ? $stmt_recent->fetchAll(PDO::FETCH_ASSOC) : [];
+                                    } catch (Throwable $eRec3) {
+                                        $recent_rows = [];
+                                    }
+                                }
+                            }
+                            if (!empty($recent_rows)) {
+                                foreach ($recent_rows as $row) {
+                                    $adm_date_str = function_exists('translateDate') ? translateDate($row['admission_date'] ?? '') : ($row['admission_date'] ?? '-');
+                                    echo "<tr><td class='px-4 text-muted'>#" . htmlspecialchars($row['id'] ?? '') . "</td><td class='fw-bold text-primary'>" . htmlspecialchars($row['name'] ?? '') . "</td><td>" . htmlspecialchars($row['father_name'] ?? '') . "</td><td>" . $adm_date_str . "</td></tr>";
+                                }
+                            } else {
+                                echo "<tr><td colspan='4' class='text-center text-muted py-3'>کوئی حالیہ داخلہ موجود نہیں۔</td></tr>";
                             }
                             ?>
                         </tbody>

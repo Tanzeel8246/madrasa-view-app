@@ -19,6 +19,13 @@ $cur_tenant_id = (int)get_current_tenant_id();
 $user_id = $_SESSION['user_id'];
 $user_name = $_SESSION['name'] ?? 'Admin';
 
+// D7 Fix: Self-heal table schema additions
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN computer_receipt_no INT DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN manual_receipt_no VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN tenant_id INT DEFAULT 1"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
+
 function next_in_kind_receipt_no(PDO $pdo, $userId, $systemType = 'Madrasa', $tenantId = null) {
     if ($tenantId === null) $tenantId = (int)get_current_tenant_id();
     // Ensure system_type column exists
@@ -141,7 +148,7 @@ if (isset($_GET['msg'])) {
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="text-primary fw-bold mb-0"><i class="fas fa-box-open me-2"></i> <?php echo ($lang == 'ur') ? ' ' : 'In-Kind Donations'; ?></h4>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
-            <i class="fas fa-plus-circle me-1"></i>    
+            <i class="fas fa-plus-circle me-1"></i> <?php echo (isset($lang) && $lang=='en') ? 'Add In-Kind Donation' : 'نیا جنسی عطیہ درج کریں'; ?>
         </button>
     </div>
 
@@ -174,13 +181,13 @@ if (isset($_GET['msg'])) {
                 <table class="table table-hover table-striped align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="text-center"> </th>
-                            <th></th>
-                            <th> </th>
-                            <th> (Item)</th>
-                            <th></th>
-                            <th></th>
-                            <th class="text-center"></th>
+                            <th class="text-center"><?php echo (isset($lang) && $lang=='en') ? 'Receipt #' : 'رسید نمبر'; ?></th>
+                            <th><?php echo (isset($lang) && $lang=='en') ? 'Date' : 'تاریخ'; ?></th>
+                            <th><?php echo (isset($lang) && $lang=='en') ? 'Donor Name' : 'عطیہ دہندہ'; ?></th>
+                            <th><?php echo (isset($lang) && $lang=='en') ? 'Donated Item' : 'شے / جنس (Item)'; ?></th>
+                            <th><?php echo (isset($lang) && $lang=='en') ? 'Quantity' : 'مقدار / تعداد'; ?></th>
+                            <th><?php echo (isset($lang) && $lang=='en') ? 'Description' : 'تفصیل / کیفیت'; ?></th>
+                            <th class="text-center"><?php echo (isset($lang) && $lang=='en') ? 'Actions' : 'کارروائی'; ?></th>
                         </tr>
                     </thead>
                     <tbody>

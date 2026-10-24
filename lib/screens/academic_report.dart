@@ -91,6 +91,8 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
     return className == selected || legacyClass == selected;
   }
 
+  List<String> _suggestedSubjects = [];
+
   void _loadData() async {
     final data = await DBHelper().getStudentsForUser(includeInactive: true);
     final classesData = await DBHelper().getClassesForUser();
@@ -116,8 +118,42 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
     });
 
     if (_selectedClass != null) {
+      await _loadClassSubjects(_selectedClass!);
       await _checkExistingRecords();
     }
+  }
+
+  Future<void> _loadClassSubjects(String className) async {
+    final db = await DBHelper().database;
+    final cRows = await db.query('classes', where: 'name = ?', whereArgs: [className], limit: 1);
+    final subs = <String>{};
+    if (cRows.isNotEmpty) {
+      final raw = cRows.first['subjects_list']?.toString() ?? '';
+      if (raw.isNotEmpty) {
+        for (final item in raw.split(RegExp(r'[,،]'))) {
+          final clean = item.split(':').first.trim();
+          if (clean.isNotEmpty) subs.add(clean);
+        }
+      }
+      final cType = cRows.first['class_type']?.toString() ?? '';
+      // Also look up course subjects if linked
+      final courses = await DBHelper().getCourses();
+      for (final crs in courses) {
+        if (crs['name'] == cType || crs['name'] == className) {
+          final cSubs = await DBHelper().getCourseSubjects(crs['id'] as int);
+          for (final cs in cSubs) {
+            final sName = cs['subject_name']?.toString().trim() ?? '';
+            if (sName.isNotEmpty) subs.add(sName);
+          }
+        }
+      }
+    }
+    setState(() {
+      _suggestedSubjects = subs.toList();
+      if (_suggestedSubjects.isNotEmpty && _subjectController.text.trim().isEmpty) {
+        _subjectController.text = _suggestedSubjects.first;
+      }
+    });
   }
 
   String _normalizeDate(String dateStr) {
@@ -420,18 +456,55 @@ class _AcademicReportPageState extends State<AcademicReportPage> {
                     ],
                     onChanged: (val) async {
                       setState(() => _selectedClass = val);
+                      if (val != null) {
+                        await _loadClassSubjects(val);
+                      }
                       await _checkExistingRecords();
                     },
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 15),
+            const SizedBox(height: 12),
+            if (_suggestedSubjects.isNotEmpty) ...[
+              Align(
+                alignment: isUrdu ? Alignment.centerRight : Alignment.centerLeft,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      Text(
+                        isUrdu ? 'مضامین: ' : 'Subjects: ',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primaryGreen),
+                      ),
+                      ..._suggestedSubjects.map((sub) {
+                        final isSel = _subjectController.text.trim() == sub.trim();
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 4, right: 4),
+                          child: ActionChip(
+                            label: Text(sub, style: TextStyle(fontSize: 12, color: isSel ? Colors.white : primaryGreen)),
+                            backgroundColor: isSel ? primaryGreen : primaryGreen.withOpacity(0.08),
+                            onPressed: () async {
+                              setState(() {
+                                _subjectController.text = sub;
+                              });
+                              await _checkExistingRecords();
+                            },
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             TextField(
               controller: _subjectController,
               focusNode: _subjectFocus,
               decoration: InputDecoration(
                   labelText: isUrdu ? "مضمون" : "Subject",
+                  hintText: isUrdu ? "مضمون کا نام منتخب کریں یا لکھیں" : "Enter subject name",
                   border: const OutlineInputBorder(),
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 15)),

@@ -40,7 +40,7 @@ if (!$s) {
 }
 
 $settings = get_tenant_settings($pdo, $cur_tenant_id);
-$app_name = !empty($settings['madrasa_name']) ? $settings['madrasa_name'] : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : "مدرسہ اشرف المدارس");
+$app_name = !empty($settings['madrasa_name']) ? $settings['madrasa_name'] : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : "ادارہ");
 $logo_img = (!empty($settings['logo_path']) && file_exists(__DIR__ . '/' . $settings['logo_path'])) ? $settings['logo_path'] : 'logo.png';
 $id_card_bg = (!empty($settings['id_card_bg']) && file_exists(__DIR__ . '/' . $settings['id_card_bg'])) ? $settings['id_card_bg'] : null;
 $tagline = !empty($settings['tagline']) ? $settings['tagline'] : "تعلیم و تربیت کا گہوارہ";

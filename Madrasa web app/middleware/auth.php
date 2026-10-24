@@ -505,14 +505,24 @@ if (!function_exists('madrasa_restore_session_from_cookie')) {
                     return true;
                 }
             } elseif (in_array($role, ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim', 'mudarris', 'accountant', 'staff'])) {
-                $stmt = $pdo->prepare("
-                    SELECT a.*, t.id as t_id, t.code as t_code, t.name as t_name, t.system_type as t_system_type
-                    FROM admins a
-                    LEFT JOIN tenants t ON a.tenant_id = t.id
-                    WHERE a.id = ? AND (a.tenant_id = ? OR a.tenant_id IS NULL OR a.tenant_id = 0)
-                    LIMIT 1
-                ");
-                $stmt->execute([$uid, $tid]);
+                $hasATid = false;
+                try {
+                    $hasATid = (bool)$pdo->query("SHOW COLUMNS FROM admins LIKE 'tenant_id'")->fetch();
+                } catch (Throwable $eCol) {}
+
+                if ($hasATid) {
+                    $stmt = $pdo->prepare("
+                        SELECT a.*, t.id as t_id, t.code as t_code, t.name as t_name, t.system_type as t_system_type
+                        FROM admins a
+                        LEFT JOIN tenants t ON a.tenant_id = t.id
+                        WHERE a.id = ? AND (a.tenant_id = ? OR a.tenant_id IS NULL OR a.tenant_id = 0)
+                        LIMIT 1
+                    ");
+                    $stmt->execute([$uid, $tid]);
+                } else {
+                    $stmt = $pdo->prepare("SELECT a.*, 1 as t_id, 'MAIN01' as t_code, 'کلاؤڈ ساس ادارہ' as t_name, 'Madrasa' as t_system_type FROM admins a WHERE a.id = ? LIMIT 1");
+                    $stmt->execute([$uid]);
+                }
                 $adm = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($adm) {
                     $tCode = !empty($adm['t_code']) ? $adm['t_code'] : 'MAIN01';
@@ -546,14 +556,24 @@ if (!function_exists('madrasa_restore_session_from_cookie')) {
                     return true;
                 }
             } elseif ($role === 'teacher') {
-                $stmt = $pdo->prepare("
-                    SELECT tc.*, tn.id as t_id, tn.code as t_code, tn.name as t_name, tn.system_type as t_system_type
-                    FROM teachers tc
-                    LEFT JOIN tenants tn ON tc.tenant_id = tn.id
-                    WHERE tc.id = ? AND (tc.tenant_id = ? OR tc.tenant_id IS NULL OR tc.tenant_id = 0)
-                    LIMIT 1
-                ");
-                $stmt->execute([$uid, $tid]);
+                $hasTTid = false;
+                try {
+                    $hasTTid = (bool)$pdo->query("SHOW COLUMNS FROM teachers LIKE 'tenant_id'")->fetch();
+                } catch (Throwable $eCol) {}
+
+                if ($hasTTid) {
+                    $stmt = $pdo->prepare("
+                        SELECT tc.*, tn.id as t_id, tn.code as t_code, tn.name as t_name, tn.system_type as t_system_type
+                        FROM teachers tc
+                        LEFT JOIN tenants tn ON tc.tenant_id = tn.id
+                        WHERE tc.id = ? AND (tc.tenant_id = ? OR tc.tenant_id IS NULL OR tc.tenant_id = 0)
+                        LIMIT 1
+                    ");
+                    $stmt->execute([$uid, $tid]);
+                } else {
+                    $stmt = $pdo->prepare("SELECT tc.*, 1 as t_id, 'MAIN01' as t_code, 'کلاؤڈ ساس ادارہ' as t_name, 'Madrasa' as t_system_type FROM teachers tc WHERE tc.id = ? LIMIT 1");
+                    $stmt->execute([$uid]);
+                }
                 $tc = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($tc) {
                     $tCode = !empty($tc['t_code']) ? $tc['t_code'] : 'MAIN01';

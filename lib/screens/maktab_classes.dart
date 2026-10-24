@@ -402,6 +402,36 @@ class _MaktabClassesPageState extends State<MaktabClassesPage> {
                   };
 
                   if (klass == null) {
+                    final isSuper = currentUserRole.value == 'superadmin' || 
+                        (currentUserRole.value == 'admin' && currentUserId.value == 1);
+                    final maxCls = currentTenantMaxClasses.value;
+                    if (!isSuper && _classes.length >= maxCls) {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Row(
+                            children: [
+                              const Icon(Icons.lock, color: Colors.red),
+                              const SizedBox(width: 8),
+                              Text(isUrdu ? 'کلاسز کی حد مکمل' : 'Class Limit Reached'),
+                            ],
+                          ),
+                          content: Text(
+                            isUrdu
+                                ? 'آپ کے موجودہ پلان (${currentTenantPlanName.value}) میں کلاسز کی زیادہ سے زیادہ حد ($maxCls) مکمل ہو چکی ہے۔\nمزید کلاسز کے اندراج کے لیے براہ کرم اپنا سبسکرپشن پلان اپ گریڈ کریں۔'
+                                : 'You have reached the maximum class limit ($maxCls) for your plan (${currentTenantPlanName.value}). Please upgrade your plan to add more classes.',
+                          ),
+                          actions: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
+                              onPressed: () => Navigator.pop(ctx),
+                              child: Text(isUrdu ? 'سمجھ گیا' : 'OK', style: const TextStyle(color: Colors.white)),
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
                     await DBHelper().insertMaktabClass(data);
                   } else {
                     await DBHelper().updateMaktabClass(klass['id'] as int, data);

@@ -100,7 +100,7 @@ if (isset($_POST['save_hifz'])) {
         }
 
         if (!$sabqi_not_recited && $sq_amt === 'جائزہ') {
-            throw new Exception(t('sabaq') . 'ی جائزہ کے لیے کم از کم ایک پارہ شامل کریں۔');
+            throw new Exception(t('sabqi') . ' جائزہ کے لیے کم از کم ایک پارہ شامل کریں۔');
         }
         if (!$manzil_not_recited && $m_total_amt === 'جائزہ') {
             throw new Exception(t('manzil') . ' جائزہ کے لیے کم از کم ایک پارہ شامل کریں۔');
@@ -272,7 +272,7 @@ function parahDropdown($name, $id) {
 
                 <!-- <?php echo t('sabaq'); ?>ی -->
                 <div class="col-md-4 p-3 border-start section-box" id="box_sabqi">
-                    <h5 class="text-white text-center bg-primary p-2 rounded mb-3 shadow-sm"><?php echo t('sabaq'); ?>ی</h5>
+                    <h5 class="text-white text-center bg-primary p-2 rounded mb-3 shadow-sm"><?php echo t('sabqi'); ?></h5>
                     <div class="form-check form-switch mb-2">
                         <input class="form-check-input" type="checkbox" name="sabqi_not_recited" id="sabqi_not_recited" onchange="toggleNotRecited('sabqi')">
                         <label class="form-check-label fw-bold text-danger" for="sabqi_not_recited">سبقی نہیں سنائی</label>
@@ -591,7 +591,7 @@ function processVoiceCommand(text) {
     if(text.includes('بہترین') || text.includes('بہتر') || text.includes('کمزور')) {
         let val = text.includes('بہترین') ? 'بہترین' : (text.includes('کمزور') ? 'کمزور' : 'بہتر');
         if(text.includes('<?php echo t('sabaq'); ?>')) { document.getElementById('sabaq_s').value = val; colorStatus(document.getElementById('sabaq_s')); }
-        if(text.includes('<?php echo t('sabaq'); ?>ی')) { document.getElementById('sabqi_s').value = val; colorStatus(document.getElementById('sabqi_s')); }
+        if(text.includes('<?php echo t('sabqi'); ?>')) { document.getElementById('sabqi_s').value = val; colorStatus(document.getElementById('sabqi_s')); }
         if(text.includes('<?php echo t('manzil'); ?>')) { document.getElementById('manzil_s').value = val; colorStatus(document.getElementById('manzil_s')); }
     }
 }

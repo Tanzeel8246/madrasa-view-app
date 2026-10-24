@@ -36,6 +36,10 @@ ValueNotifier<String> currentTenantPlanName = ValueNotifier('بنیادی پیک
 ValueNotifier<String> currentTenantPlanCode = ValueNotifier('basic');
 ValueNotifier<String> currentTenantSubscriptionEndsAt = ValueNotifier('');
 ValueNotifier<String> currentTenantSubscriptionStatus = ValueNotifier('active');
+ValueNotifier<String> currentTenantSystemType = ValueNotifier('Both'); // 'Madrasa', 'Masjid', or 'Both'
+ValueNotifier<int> currentTenantMaxStudents = ValueNotifier(50);
+ValueNotifier<int> currentTenantMaxClasses = ValueNotifier(3);
+ValueNotifier<int> currentTenantMaxTeachers = ValueNotifier(4);
 
 /// ماڈیول چیکر: اگر سوپر ایڈمن نے ماڈیول بند کر رکھا ہو تو false واپس کرتا ہے
 bool isTenantModuleAllowed(String moduleKey) {
