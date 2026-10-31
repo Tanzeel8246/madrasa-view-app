@@ -78,7 +78,6 @@ class _SyncHealthModalState extends State<SyncHealthModal> {
     });
 
     try {
-      final db = DBHelper();
       await SyncEngine.syncSingleTable('students');
       await SyncEngine.syncSingleTable('attendance');
       await SyncEngine.syncSingleTable('finance');

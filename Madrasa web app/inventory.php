@@ -168,22 +168,22 @@ $std_table = $is_masjid ? 'maktab_students' : 'students';
 $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE status = 'Active' AND (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = $cur_tenant_id ORDER BY name ASC LIMIT 300")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
-<div class="container-fluid py-4" dir="rtl">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <!-- Header Title -->
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
         <div>
             <h3 class="fw-bold mb-1" style="color: #284D3D;">
                 <i class="fas fa-store me-2 text-warning"></i>
-                <?php echo $is_masjid ? 'شاپ و کتب خانہ (مسجد / مکتب)' : 'سکول شاپ و انونٹری مینیجمنٹ'; ?>
+                <?php echo $is_masjid ? __('شاپ و کتب خانہ (مسجد / مکتب)', 'Shop & Bookshop (Masjid / Maktab)') : __('سکول شاپ و انونٹری مینیجمنٹ', 'School Shop & Inventory Management'); ?>
             </h3>
-            <span class="text-muted">یونیفارم، درسی کتب، بیجز اور سٹیشنری کا ریکارڈ مع خودکار فنانس ڈبل انٹری</span>
+            <span class="text-muted"><?php echo __('یونیفارم، درسی کتب، بیجز اور سٹیشنری کا ریکارڈ مع خودکار فنانس ڈبل انٹری', 'Uniform, textbooks, badges & stationery with automated finance double-entry'); ?></span>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-warning fw-bold text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#posModal">
-                <i class="fas fa-cash-register me-1"></i> فوری فروخت (POS Sale)
+                <i class="fas fa-cash-register me-1"></i> <?php echo __('فوری فروخت (POS Sale)', 'Quick Sale (POS Sale)'); ?>
             </button>
             <button class="btn btn-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addItemModal">
-                <i class="fas fa-plus-circle me-1"></i> نیا آئٹم شامل کریں
+                <i class="fas fa-plus-circle me-1"></i> <?php echo __('نیا آئٹم شامل کریں', 'Add New Item'); ?>
             </button>
         </div>
     </div>
@@ -208,7 +208,7 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-primary">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">کل آئٹمز کی اقسام</div>
+                        <div class="text-muted small"><?php echo __('کل آئٹمز کی اقسام', 'Total Item Types'); ?></div>
                         <h3 class="fw-bold text-primary mb-0"><?php echo $totalItems; ?></h3>
                     </div>
                     <i class="fas fa-boxes fa-2x text-primary opacity-50"></i>
@@ -219,7 +219,7 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-success">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">موجودہ کل اسٹاک</div>
+                        <div class="text-muted small"><?php echo __('موجودہ کل اسٹاک', 'Total Current Stock'); ?></div>
                         <h3 class="fw-bold text-success mb-0"><?php echo $totalStock; ?></h3>
                     </div>
                     <i class="fas fa-cubes fa-2x text-success opacity-50"></i>
@@ -230,7 +230,7 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-danger">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">کم اسٹاک الرٹس</div>
+                        <div class="text-muted small"><?php echo __('کم اسٹاک الرٹس', 'Low Stock Alerts'); ?></div>
                         <h3 class="fw-bold text-danger mb-0"><?php echo $lowStockCount; ?></h3>
                     </div>
                     <i class="fas fa-exclamation-circle fa-2x text-danger opacity-50"></i>
@@ -241,7 +241,7 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-warning">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">آج کی فروخت (روپے)</div>
+                        <div class="text-muted small"><?php echo __('آج کی فروخت (روپے)', 'Today\'s Sales (PKR)'); ?></div>
                         <h3 class="fw-bold text-warning mb-0">Rs. <?php echo number_format($todayTotal, 0); ?></h3>
                     </div>
                     <i class="fas fa-receipt fa-2x text-warning opacity-50"></i>
@@ -254,12 +254,12 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
     <ul class="nav nav-pills mb-3 gap-2" id="shopTabs" role="tablist">
         <li class="nav-item">
             <button class="nav-link active fw-bold px-4" id="items-tab" data-bs-toggle="pill" data-bs-target="#items-pane">
-                <i class="fas fa-list me-1"></i> اشیاء کی فہرست (Items Catalog)
+                <i class="fas fa-list me-1"></i> <?php echo __('اشیاء کی فہرست (Items Catalog)', 'Items Catalog'); ?>
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link fw-bold px-4" id="sales-tab" data-bs-toggle="pill" data-bs-target="#sales-pane">
-                <i class="fas fa-history me-1"></i> فروخت کی ہسٹری (Sales History)
+                <i class="fas fa-history me-1"></i> <?php echo __('فروخت کی ہسٹری (Sales History)', 'Sales History'); ?>
             </button>
         </li>
     </ul>
@@ -272,21 +272,21 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
                     <!-- Filters -->
                     <form method="GET" class="row g-2 mb-3">
                         <div class="col-md-5">
-                            <input type="text" name="search" class="form-control" placeholder="آئٹم کا نام یا کوڈ تلاش کریں..." value="<?php echo htmlspecialchars($search); ?>">
+                            <input type="text" name="search" class="form-control" placeholder="<?php echo __('آئٹم کا نام یا کوڈ تلاش کریں...', 'Search item name or code...'); ?>" value="<?php echo htmlspecialchars($search); ?>">
                         </div>
                         <div class="col-md-3">
                             <select name="category" class="form-select">
-                                <option value="all">تمام کیٹیگریز</option>
-                                <option value="کتب" <?php echo $catFilter=='کتب'?'selected':''; ?>>درسی کتب</option>
-                                <option value="یونیفارم" <?php echo $catFilter=='یونیفارم'?'selected':''; ?>>یونیفارم / لباس</option>
-                                <option value="بیج" <?php echo $catFilter=='بیج'?'selected':''; ?>>بیجز و ٹوپیاں</option>
-                                <option value="اسٹیشنری" <?php echo $catFilter=='اسٹیشنری'?'selected':''; ?>>اسٹیشنری و کاپیاں</option>
-                                <option value="عام" <?php echo $catFilter=='عام'?'selected':''; ?>>دیگر اشیاء</option>
+                                <option value="all"><?php echo __('تمام کیٹیگریز', 'All Categories'); ?></option>
+                                <option value="کتب" <?php echo $catFilter=='کتب'?'selected':''; ?>><?php echo __('درسی کتب', 'Textbooks'); ?></option>
+                                <option value="یونیفارم" <?php echo $catFilter=='یونیفارم'?'selected':''; ?>><?php echo __('یونیفارم / لباس', 'Uniform / Clothing'); ?></option>
+                                <option value="بیج" <?php echo $catFilter=='بیج'?'selected':''; ?>><?php echo __('بیجز و ٹوپیاں', 'Badges & Caps'); ?></option>
+                                <option value="اسٹیشنری" <?php echo $catFilter=='اسٹیشنری'?'selected':''; ?>><?php echo __('اسٹیشنری و کاپیاں', 'Stationery & Notebooks'); ?></option>
+                                <option value="عام" <?php echo $catFilter=='عام'?'selected':''; ?>><?php echo __('دیگر اشیاء', 'Other Items'); ?></option>
                             </select>
                         </div>
                         <div class="col-md-4 d-flex gap-2">
-                            <button type="submit" class="btn btn-primary"><i class="fas fa-search me-1"></i> تلاش کریں</button>
-                            <a href="inventory.php" class="btn btn-outline-secondary">ری سیٹ</a>
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-search me-1"></i> <?php echo __('تلاش کریں', 'Search'); ?></button>
+                            <a href="inventory.php" class="btn btn-outline-secondary"><?php echo __('ری سیٹ', 'Reset'); ?></a>
                         </div>
                     </form>
 
@@ -295,20 +295,20 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>کوڈ</th>
-                                    <th>نامِ آئٹم</th>
-                                    <th>کیٹیگری</th>
-                                    <th>خرید قیمت</th>
-                                    <th>فروخت قیمت</th>
-                                    <th>موجودہ اسٹاک</th>
-                                    <th>اسٹیٹس</th>
-                                    <th>ایکشن</th>
+                                    <th><?php echo __('کوڈ', 'Code'); ?></th>
+                                    <th><?php echo __('نامِ آئٹم', 'Item Name'); ?></th>
+                                    <th><?php echo __('کیٹیگری', 'Category'); ?></th>
+                                    <th><?php echo __('خرید قیمت', 'Purchase Price'); ?></th>
+                                    <th><?php echo __('فروخت قیمت', 'Sale Price'); ?></th>
+                                    <th><?php echo __('موجودہ اسٹاک', 'Current Stock'); ?></th>
+                                    <th><?php echo __('اسٹیٹس', 'Status'); ?></th>
+                                    <th><?php echo __('ایکشن', 'Action'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($items)): ?>
                                     <tr>
-                                        <td colspan="8" class="text-center py-4 text-muted">کوئی آئٹم موجود نہیں ہے۔</td>
+                                        <td colspan="8" class="text-center py-4 text-muted"><?php echo __('کوئی آئٹم موجود نہیں ہے۔', 'No items found.'); ?></td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($items as $it): 
@@ -327,22 +327,22 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
                                             </td>
                                             <td>
                                                 <?php if ($it['current_stock'] <= 0): ?>
-                                                    <span class="badge bg-danger">ختم ہو چکا</span>
+                                                    <span class="badge bg-danger"><?php echo __('ختم ہو چکا', 'Out of Stock'); ?></span>
                                                 <?php elseif ($isLow): ?>
-                                                    <span class="badge bg-warning text-dark">اسٹاک کم ہے</span>
+                                                    <span class="badge bg-warning text-dark"><?php echo __('اسٹاک کم ہے', 'Low Stock'); ?></span>
                                                 <?php else: ?>
-                                                    <span class="badge bg-success">دستیاب</span>
+                                                    <span class="badge bg-success"><?php echo __('دستیاب', 'In Stock'); ?></span>
                                                 <?php endif; ?>
                                             </td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <button class="btn btn-outline-success" onclick="openSaleFor('<?php echo $it['id']; ?>', '<?php echo htmlspecialchars($it['name']); ?>', '<?php echo $it['unit_price']; ?>', '<?php echo $it['current_stock']; ?>')" title="فروخت کریں">
+                                                    <button class="btn btn-outline-success" onclick="openSaleFor('<?php echo $it['id']; ?>', '<?php echo htmlspecialchars($it['name']); ?>', '<?php echo $it['unit_price']; ?>', '<?php echo $it['current_stock']; ?>')" title="<?php echo __('فروخت کریں', 'Sell'); ?>">
                                                         <i class="fas fa-shopping-cart"></i>
                                                     </button>
-                                                    <button class="btn btn-outline-primary" onclick="openEditItem(<?php echo htmlspecialchars(json_encode($it)); ?>)" title="ترمیم">
+                                                    <button class="btn btn-outline-primary" onclick="openEditItem(<?php echo htmlspecialchars(json_encode($it)); ?>)" title="<?php echo __('ترمیم', 'Edit'); ?>">
                                                         <i class="fas fa-edit"></i>
                                                     </button>
-                                                    <a href="inventory.php?delete_item=<?php echo $it['id']; ?>" class="btn btn-outline-danger" onclick="return confirm('کیا آپ واقعی یہ آئٹم حذف کرنا چاہتے ہیں؟');" title="حذف">
+                                                    <a href="inventory.php?delete_item=<?php echo $it['id']; ?>" class="btn btn-outline-danger" onclick="return confirm('<?php echo __('کیا آپ واقعی یہ آئٹم حذف کرنا چاہتے ہیں؟', 'Are you sure you want to delete this item?'); ?>');" title="<?php echo __('حذف', 'Delete'); ?>">
                                                         <i class="fas fa-trash-alt"></i>
                                                     </a>
                                                 </div>
@@ -361,25 +361,25 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
         <div class="tab-pane fade" id="sales-pane">
             <div class="card border-0 shadow-sm rounded-3">
                 <div class="card-body p-3">
-                    <h5 class="fw-bold mb-3"><i class="fas fa-receipt me-2 text-primary"></i> حالیہ فروخت کا ریکارڈ</h5>
+                    <h5 class="fw-bold mb-3"><i class="fas fa-receipt me-2 text-primary"></i> <?php echo __('حالیہ فروخت کا ریکارڈ', 'Recent Sales Record'); ?></h5>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>رسید نمبر</th>
-                                    <th>تاریخ</th>
-                                    <th>نامِ آئٹم</th>
-                                    <th>خریدار</th>
-                                    <th>تعداد</th>
-                                    <th>قیمت فی عدد</th>
-                                    <th>کل رقم</th>
-                                    <th>طریقہ ادائیگی</th>
+                                    <th><?php echo __('رسید نمبر', 'Receipt #'); ?></th>
+                                    <th><?php echo __('تاریخ', 'Date'); ?></th>
+                                    <th><?php echo __('نامِ آئٹم', 'Item Name'); ?></th>
+                                    <th><?php echo __('خریدار', 'Customer'); ?></th>
+                                    <th><?php echo __('تعداد', 'Qty'); ?></th>
+                                    <th><?php echo __('قیمت فی عدد', 'Unit Price'); ?></th>
+                                    <th><?php echo __('کل رقم', 'Total Amount'); ?></th>
+                                    <th><?php echo __('طریقہ ادائیگی', 'Payment Mode'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($recentSales)): ?>
                                     <tr>
-                                        <td colspan="8" class="text-center py-4 text-muted">ابھی تک کوئی فروخت درج نہیں ہوئی۔</td>
+                                        <td colspan="8" class="text-center py-4 text-muted"><?php echo __('ابھی تک کوئی فروخت درج نہیں ہوئی۔', 'No sales recorded yet.'); ?></td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($recentSales as $s): ?>
@@ -387,7 +387,7 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
                                             <td><span class="badge bg-dark"><?php echo htmlspecialchars($s['sale_no']); ?></span></td>
                                             <td><?php echo htmlspecialchars($s['date']); ?></td>
                                             <td class="fw-bold"><?php echo htmlspecialchars($s['item_name']); ?></td>
-                                            <td><?php echo htmlspecialchars($s['customer_name'] ?: 'عام گاہک'); ?></td>
+                                            <td><?php echo htmlspecialchars($s['customer_name'] ?: __('عام گاہک', 'Walk-in Customer')); ?></td>
                                             <td><span class="badge bg-secondary"><?php echo $s['quantity']; ?></span></td>
                                             <td>Rs. <?php echo number_format($s['unit_price'], 0); ?></td>
                                             <td class="fw-bold text-success">Rs. <?php echo number_format($s['total_amount'], 0); ?></td>
@@ -409,58 +409,58 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
     <div class="modal-dialog">
         <form method="POST" class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title fw-bold"><i class="fas fa-plus-circle me-1"></i> نیا آئٹم شامل کریں</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-plus-circle me-1"></i> <?php echo __('نیا آئٹم شامل کریں', 'Add New Item'); ?></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">نامِ آئٹم <span class="text-danger">*</span></label>
-                    <input type="text" name="name" class="form-control" required placeholder="مثلاً نورانی قاعدہ، قمیص شلوار، اسکول بیگ">
+                    <label class="form-label fw-bold"><?php echo __('نامِ آئٹم', 'Item Name'); ?> <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control" required placeholder="<?php echo __('مثلاً نورانی قاعدہ، قمیص شلوار، اسکول بیگ', 'e.g. Noorani Qaida, Uniform, School Bag'); ?>">
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">کیٹیگری</label>
+                        <label class="form-label fw-bold"><?php echo __('کیٹیگری', 'Category'); ?></label>
                         <select name="category" class="form-select">
-                            <option value="کتب">درسی کتب</option>
-                            <option value="یونیفارم">یونیفارم / لباس</option>
-                            <option value="بیج">بیجز و ٹوپیاں</option>
-                            <option value="اسٹیشنری">اسٹیشنری و کاپیاں</option>
-                            <option value="عام">عام اشیاء</option>
+                            <option value="کتب"><?php echo __('درسی کتب', 'Textbooks'); ?></option>
+                            <option value="یونیفارم"><?php echo __('یونیفارم / لباس', 'Uniform / Clothing'); ?></option>
+                            <option value="بیج"><?php echo __('بیجز و ٹوپیاں', 'Badges & Caps'); ?></option>
+                            <option value="اسٹیشنری"><?php echo __('اسٹیشنری و کاپیاں', 'Stationery & Notebooks'); ?></option>
+                            <option value="عام"><?php echo __('عام اشیاء', 'General Items'); ?></option>
                         </select>
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">آئٹم کوڈ (اختیاری)</label>
-                        <input type="text" name="item_code" class="form-control" placeholder="آٹو جنریٹ">
+                        <label class="form-label fw-bold"><?php echo __('آئٹم کوڈ (اختیاری)', 'Item Code (Optional)'); ?></label>
+                        <input type="text" name="item_code" class="form-control" placeholder="<?php echo __('آٹو جنریٹ', 'Auto Generated'); ?>">
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">خرید قیمت</label>
+                        <label class="form-label fw-bold"><?php echo __('خرید قیمت', 'Purchase Price'); ?></label>
                         <input type="number" step="0.01" name="purchase_price" class="form-control" value="0">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">فروخت قیمت <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" name="unit_price" class="form-control" required placeholder="روپے">
+                        <label class="form-label fw-bold"><?php echo __('فروخت قیمت', 'Sale Price'); ?> <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="unit_price" class="form-control" required placeholder="<?php echo __('روپے', 'PKR'); ?>">
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">ابتدائی اسٹاک</label>
+                        <label class="form-label fw-bold"><?php echo __('ابتدائی اسٹاک', 'Initial Stock'); ?></label>
                         <input type="number" name="current_stock" class="form-control" value="10">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">الرٹ حد (Low Stock)</label>
+                        <label class="form-label fw-bold"><?php echo __('الرٹ حد (Low Stock)', 'Low Stock Alert Limit'); ?></label>
                         <input type="number" name="alert_threshold" class="form-control" value="5">
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">تفصیل / نوٹس</label>
+                    <label class="form-label fw-bold"><?php echo __('تفصیل / نوٹس', 'Description / Notes'); ?></label>
                     <textarea name="description" class="form-control" rows="2"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="add_item" class="btn btn-success fw-bold">محفوظ کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="add_item" class="btn btn-success fw-bold"><?php echo __('محفوظ کریں', 'Save Item'); ?></button>
             </div>
         </form>
     </div>
@@ -471,35 +471,35 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
     <div class="modal-dialog">
         <form method="POST" class="modal-content">
             <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title fw-bold"><i class="fas fa-cash-register me-1"></i> فوری فروخت (Point of Sale)</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-cash-register me-1"></i> <?php echo __('فوری فروخت (Point of Sale)', 'Quick POS Sale'); ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">آئٹم منتخب کریں <span class="text-danger">*</span></label>
+                    <label class="form-label fw-bold"><?php echo __('آئٹم منتخب کریں', 'Select Item'); ?> <span class="text-danger">*</span></label>
                     <select name="item_id" id="pos_item_id" class="form-select" required onchange="updatePosPrice()">
-                        <option value="">-- منتخب کریں --</option>
+                        <option value=""><?php echo __('-- منتخب کریں --', '-- Select Item --'); ?></option>
                         <?php foreach ($items as $it): ?>
                             <option value="<?php echo $it['id']; ?>" data-price="<?php echo $it['unit_price']; ?>" data-stock="<?php echo $it['current_stock']; ?>">
-                                <?php echo htmlspecialchars($it['name']) . " (اسٹاک: {$it['current_stock']}, قیمت: Rs. {$it['unit_price']})"; ?>
+                                <?php echo htmlspecialchars($it['name']) . ' (' . __('اسٹاک: ', 'Stock: ') . $it['current_stock'] . ', ' . __('قیمت: Rs. ', 'Price: Rs. ') . $it['unit_price'] . ')'; ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">تعداد <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold"><?php echo __('تعداد', 'Quantity'); ?> <span class="text-danger">*</span></label>
                         <input type="number" name="quantity" id="pos_quantity" class="form-control" value="1" min="1" required oninput="calcPosTotal()">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">کل رقم (روپے)</label>
+                        <label class="form-label fw-bold"><?php echo __('کل رقم (روپے)', 'Total Amount (PKR)'); ?></label>
                         <input type="text" id="pos_total_display" class="form-control fw-bold text-success" readonly value="0">
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">طالب علم (اختیاری)</label>
+                    <label class="form-label fw-bold"><?php echo __('طالب علم (اختیاری)', 'Student (Optional)'); ?></label>
                     <select name="student_id" class="form-select">
-                        <option value="">-- عام گاہک / کیش کاؤنٹر --</option>
+                        <option value=""><?php echo __('-- عام گاہک / کیش کاؤنٹر --', '-- Walk-in Customer / Cash --'); ?></option>
                         <?php foreach ($students as $st): ?>
                             <option value="<?php echo $st['id']; ?>">
                                 <?php echo htmlspecialchars($st['name']) . " ({$st['admission_number']})"; ?>
@@ -509,25 +509,25 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">خریدار کا نام (اگر طالب علم نہ ہو)</label>
-                        <input type="text" name="customer_name" class="form-control" placeholder="گاہک کا نام">
+                        <label class="form-label fw-bold"><?php echo __('خریدار کا نام (اگر طالب علم نہ ہو)', 'Customer Name (if not student)'); ?></label>
+                        <input type="text" name="customer_name" class="form-control" placeholder="<?php echo __('گاہک کا نام', 'Customer Name'); ?>">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">ادائیگی کا طریقہ</label>
+                        <label class="form-label fw-bold"><?php echo __('ادائیگی کا طریقہ', 'Payment Mode'); ?></label>
                         <select name="payment_mode" class="form-select">
-                            <option value="Cash">نقد (Cash)</option>
-                            <option value="Online">آن لائن / بینک</option>
-                            <option value="Fee Account">فیس کھاتے میں شامل</option>
+                            <option value="Cash"><?php echo __('نقد (Cash)', 'Cash'); ?></option>
+                            <option value="Online"><?php echo __('آن لائن / بینک', 'Online / Bank'); ?></option>
+                            <option value="Fee Account"><?php echo __('فیس کھاتے میں شامل', 'Add to Fee Account'); ?></option>
                         </select>
                     </div>
                 </div>
                 <div class="alert alert-info py-2 small mb-0">
-                    <i class="fas fa-info-circle me-1"></i> فروخت درج ہوتے ہی خودکار طور پر ERP فنانس میں کیش ڈیبٹ اور شاپ سیلز کریڈٹ کا واؤچر بن جائے گا۔
+                    <i class="fas fa-info-circle me-1"></i> <?php echo __('فروخت درج ہوتے ہی خودکار طور پر ERP فنانس میں کیش ڈیبٹ اور شاپ سیلز کریڈٹ کا واؤچر بن جائے گا۔', 'Recording a sale will automatically create ERP financial voucher (Cash Debit & Shop Sales Credit).'); ?>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="record_sale" class="btn btn-warning fw-bold text-dark">فروخت درج کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="record_sale" class="btn btn-warning fw-bold text-dark"><?php echo __('فروخت درج کریں', 'Record Sale'); ?></button>
             </div>
         </form>
     </div>
@@ -539,52 +539,52 @@ $students = $pdo->query("SELECT id, name, admission_number FROM $std_table WHERE
         <form method="POST" class="modal-content">
             <input type="hidden" name="item_id" id="edit_item_id">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold"><i class="fas fa-edit me-1"></i> آئٹم میں ترمیم و اسٹاک اضافہ</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-edit me-1"></i> <?php echo __('آئٹم میں ترمیم و اسٹاک اضافہ', 'Edit Item & Stock Update'); ?></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">نامِ آئٹم</label>
+                    <label class="form-label fw-bold"><?php echo __('نامِ آئٹم', 'Item Name'); ?></label>
                     <input type="text" name="name" id="edit_name" class="form-control" required>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">کیٹیگری</label>
+                        <label class="form-label fw-bold"><?php echo __('کیٹیگری', 'Category'); ?></label>
                         <select name="category" id="edit_category" class="form-select">
-                            <option value="کتب">درسی کتب</option>
-                            <option value="یونیفارم">یونیفارم / لباس</option>
-                            <option value="بیج">بیجز و ٹوپیاں</option>
-                            <option value="اسٹیشنری">اسٹیشنری و کاپیاں</option>
-                            <option value="عام">عام اشیاء</option>
+                            <option value="کتب"><?php echo __('درسی کتب', 'Textbooks'); ?></option>
+                            <option value="یونیفارم"><?php echo __('یونیفارم / لباس', 'Uniform / Clothing'); ?></option>
+                            <option value="بیج"><?php echo __('بیجز و ٹوپیاں', 'Badges & Caps'); ?></option>
+                            <option value="اسٹیشنری"><?php echo __('اسٹیشنری و کاپیاں', 'Stationery & Notebooks'); ?></option>
+                            <option value="عام"><?php echo __('عام اشیاء', 'General Items'); ?></option>
                         </select>
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">فروخت قیمت</label>
+                        <label class="form-label fw-bold"><?php echo __('فروخت قیمت', 'Sale Price'); ?></label>
                         <input type="number" step="0.01" name="unit_price" id="edit_unit_price" class="form-control" required>
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">خرید قیمت</label>
+                        <label class="form-label fw-bold"><?php echo __('خرید قیمت', 'Purchase Price'); ?></label>
                         <input type="number" step="0.01" name="purchase_price" id="edit_purchase_price" class="form-control">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold text-success">+ نیا اسٹاک شامل کریں</label>
+                        <label class="form-label fw-bold text-success"><?php echo __('+ نیا اسٹاک شامل کریں', '+ Add New Stock'); ?></label>
                         <input type="number" name="add_stock" class="form-control" value="0">
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">الرٹ حد (Low Stock)</label>
+                    <label class="form-label fw-bold"><?php echo __('الرٹ حد (Low Stock)', 'Low Stock Alert Limit'); ?></label>
                     <input type="number" name="alert_threshold" id="edit_alert_threshold" class="form-control">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">تفصیل</label>
+                    <label class="form-label fw-bold"><?php echo __('تفصیل', 'Description'); ?></label>
                     <textarea name="description" id="edit_description" class="form-control" rows="2"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="edit_item" class="btn btn-primary fw-bold">تبدیلیاں محفوظ کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="edit_item" class="btn btn-primary fw-bold"><?php echo __('تبدیلیاں محفوظ کریں', 'Save Changes'); ?></button>
             </div>
         </form>
     </div>

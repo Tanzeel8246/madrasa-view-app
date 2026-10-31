@@ -1,6 +1,6 @@
 name: madrasa_app
 description: "Mindcrafts AI Madrasa Management System (SaaS)"
-version: 5.7.124+343
+version: 5.7.138+357
 
 
 environment:
@@ -42,11 +42,11 @@ dev_dependencies:
   flutter_lints: ^3.0.0
 
 flutter_native_splash:
-  color: "#284D3D"
-  image: assets/logo_white.png
+  color: "#051812"
+  image: assets/logo.png
   android_12:
-    image: assets/logo_white.png
-    color: "#284D3D"
+    image: assets/logo.png
+    color: "#051812"
   fullscreen: true
 
 flutter:

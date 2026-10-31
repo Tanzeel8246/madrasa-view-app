@@ -2,7 +2,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 
-import '../config/app_colors.dart';
 import '../utils/globals.dart';
 import '../utils/network_service.dart';
 import '../utils/system_type_global.dart';
@@ -37,11 +36,14 @@ class AppBrandLogo extends StatelessWidget {
           valueListenable: isMasjid ? currentTenantMasjidLogoPath : currentTenantLogoPath,
           builder: (context, logoPath, _) {
             // اگر مسجد موڈ میں الگ لوگو نہ ہو تو مین مدرسہ لوگو پر فال بیک کریں
-            final effectiveLogoPath = (logoPath != null && logoPath.trim().isNotEmpty)
+            final rawLogo = (logoPath != null && logoPath.trim().isNotEmpty)
                 ? logoPath.trim()
                 : (currentTenantLogoPath.value != null && currentTenantLogoPath.value!.trim().isNotEmpty
                     ? currentTenantLogoPath.value!.trim()
                     : null);
+            final effectiveLogoPath = (rawLogo != null && rawLogo != 'logo.png' && !rawLogo.contains('ashraf'))
+                ? rawLogo
+                : null;
 
             Widget logoContent;
 
@@ -134,7 +136,7 @@ class AppBrandLogo extends StatelessWidget {
   /// مائنڈ کرافٹس اے آئی کا جدید و باوقار SaaS برانڈ لوگو
   Widget _buildMindcraftsBrandLogo(bool isMasjid) {
     final primaryColor = defaultColor ?? const Color(0xFF284D3D);
-    final accentColor = const Color(0xFFD97706);
+    const accentColor = Color(0xFFD97706);
 
     return Container(
       width: size,

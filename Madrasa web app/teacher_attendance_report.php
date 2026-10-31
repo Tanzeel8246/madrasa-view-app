@@ -450,8 +450,8 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
         <div class="card-header bg-light p-0">
             <div class="d-flex justify-content-between align-items-center px-2">
                 <ul class="nav nav-tabs fw-bold border-0">
-                    <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='month'?'active bg-white':''; ?>" onclick="window.location='?mode=month'">ماہانہ</button></li>
-                    <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='range'?'active bg-white text-primary':'text-muted'; ?>" onclick="window.location='?mode=range'">کسٹم رینج</button></li>
+                    <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='month'?'active bg-white':''; ?>" onclick="window.location='?mode=month'"><?php echo __('ماہانہ', 'Monthly'); ?></button></li>
+                    <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='range'?'active bg-white text-primary':'text-muted'; ?>" onclick="window.location='?mode=range'"><?php echo __('کسٹم رینج', 'Custom Range'); ?></button></li>
                 </ul>
                 <form method="POST" class="d-flex align-items-center gap-1 bg-white border rounded px-2 py-1 shadow-sm" style="height: 30px;">
                     <span class="small fw-bold text-muted">چاند فرق:</span>
@@ -484,13 +484,13 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
                             ?>
                         </select>
                         <select name="t_id" class="form-select form-select-sm" style="width: 150px;" onchange="this.form.submit()">
-                            <option value="">تمام اساتذہ</option>
+                            <option value=""><?php echo __('-- تمام اساتذہ --', '-- All Teachers --'); ?></option>
                             <?php 
                             $t_id = $_GET['t_id'] ?? '';
                             foreach($all_ts as $t) echo "<option value='{$t['id']}' ".($t_id==$t['id']?'selected':'').">{$t['name']}</option>";
                             ?>
                         </select>
-                        <button type="submit" class="btn btn-primary btn-sm">رپورٹ دیکھیں</button>
+                        <button type="submit" class="btn btn-primary btn-sm"><?php echo __('رپورٹ دیکھیں', 'View Report'); ?></button>
                     </form>
                     <?php else: ?>
                     <form class="d-flex gap-2 align-items-center">
@@ -498,18 +498,18 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
                         <input type="date" name="from" id="tAttRangeFrom" class="form-control form-control-sm" value="<?php echo $start_date; ?>" onchange="if(this.value && document.getElementById('tAttRangeTo').value) this.form.submit();">
                         <input type="date" name="to" id="tAttRangeTo" class="form-control form-control-sm" value="<?php echo $end_date; ?>" onchange="if(this.value && document.getElementById('tAttRangeFrom').value) this.form.submit();">
                         <select name="t_id" class="form-select form-select-sm" style="width: 150px;" onchange="this.form.submit()">
-                            <option value="">تمام اساتذہ</option>
+                            <option value=""><?php echo __('-- تمام اساتذہ --', '-- All Teachers --'); ?></option>
                             <?php 
                             $t_id = $_GET['t_id'] ?? '';
                             foreach($all_ts as $t) echo "<option value='{$t['id']}' ".($t_id==$t['id']?'selected':'').">{$t['name']}</option>";
                             ?>
                         </select>
-                        <button type="submit" class="btn btn-primary btn-sm">رپورٹ دیکھیں</button>
+                        <button type="submit" class="btn btn-primary btn-sm"><?php echo __('رپورٹ دیکھیں', 'View Report'); ?></button>
                     </form>
                     <?php endif; ?>
                 </div>
                 <div class="col-md-3 text-end">
-                    <button onclick="printLandscape()" class="btn btn-success btn-sm fw-bold shadow"><i class="fas fa-print me-2"></i> پرنٹ (Landscape)</button>
+                    <button onclick="printLandscape()" class="btn btn-success btn-sm fw-bold shadow"><i class="fas fa-print me-2"></i> <?php echo __('پرنٹ (Landscape)', 'Print (Landscape)'); ?></button>
                 </div>
             </div>
         </div>
@@ -518,7 +518,7 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
     <!-- Print Title Bar — صرف پرنٹ میں ظاہر -->
     <div class="print-title-bar">
         <div style="text-align:center; border-bottom:2px solid var(--primary); margin-bottom:6px; padding-bottom:5px; font-family:'Noto Nastaliq Urdu',sans-serif;">
-            <h4 style="color:var(--primary); margin:0; font-size:13pt;">اساتذہ حاضری رجسٹر</h4>
+            <h4 style="color:var(--primary); margin:0; font-size:13pt;"><?php echo __('اساتذہ حاضری رجسٹر', 'Teachers Attendance Register'); ?></h4>
             <p style="margin:1px 0; font-size:8.5pt;">
                 <?php echo htmlspecialchars($header_madrasa_name ?? ($_SESSION['tenant_name'] ?? 'ادارہ')); ?>
                 &nbsp;|&nbsp; مدت: <strong><?php echo date('d M Y', strtotime($start_date)); ?> تا <?php echo date('d M Y', strtotime($end_date)); ?></strong>
@@ -563,15 +563,15 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
                     <div class="mt-1 fw-bold text-primary" style="font-family: 'Noto Nastaliq Urdu', sans-serif; font-size: 14px;"><?php echo $cName; ?></div>
                 </div>
                 <div class="text-end" style="width: 25%;">
-                    <h3 class="fw-bold m-0 text-decoration-underline">اساتذہ حاضری رجسٹر</h3>
+                    <h3 class="fw-bold m-0 text-decoration-underline"><?php echo __('اساتذہ حاضری رجسٹر', 'Teachers Attendance Register'); ?></h3>
                 </div>
             </div>
 
             <div class="text-center mb-2" style="font-size: 11px;">
-                <span class="badge rounded-pill border border-success text-success bg-light mx-1">P حاضر</span>
-                <span class="badge rounded-pill border border-info text-info bg-light mx-1">T تاخیر</span>
-                <span class="badge rounded-pill border border-danger text-danger bg-light mx-1">A غیر حاضر</span>
-                <span class="badge rounded-pill border border-warning text-dark bg-light mx-1">L رخصت</span>
+                <span class="badge rounded-pill border border-success text-success bg-light mx-1"><?php echo __('P حاضر', 'P Present'); ?></span>
+                <span class="badge rounded-pill border border-info text-info bg-light mx-1"><?php echo __('T تاخیر', 'T Late'); ?></span>
+                <span class="badge rounded-pill border border-danger text-danger bg-light mx-1"><?php echo __('A غیر حاضر', 'A Absent'); ?></span>
+                <span class="badge rounded-pill border border-warning text-dark bg-light mx-1"><?php echo __('L رخصت', 'L Leave'); ?></span>
             </div>
 
             <div class="table-responsive">
@@ -579,7 +579,7 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
                     <thead>
                         <tr class="bg-light">
                             <th style="width: 25px;">#</th>
-                            <th class="teacher-name-cell" style="width: <?php echo $teacherNameColWidth; ?>px; min-width: <?php echo $teacherNameColWidth; ?>px; text-align:right; padding-right:5px;">نام استاد</th>
+                            <th class="teacher-name-cell" style="width: <?php echo $teacherNameColWidth; ?>px; min-width: <?php echo $teacherNameColWidth; ?>px; text-align:right; padding-right:5px;"><?php echo __('نام استاد', 'Teacher Name'); ?></th>
                             <?php foreach($dates_array as $date_str): 
                                 $is_friday = (date('N', strtotime($date_str)) == 5);
                                 $g_day = (int)date('d', strtotime($date_str));
@@ -593,12 +593,12 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
                                     </div>
                                 </th>
                             <?php endforeach; ?>
-                            <th class="bg-light text-success" style="width: 30px; font-size:10px;">حاضر</th>
-                            <th class="bg-light text-warning" style="width: 30px; font-size:10px; color: #fd7e14 !important;">تاخیر</th>
-                            <th class="bg-light text-warning" style="width: 38px; font-size:10px; color: #fd7e14 !important;">تاخیر منٹ</th>
-                            <th class="bg-light text-danger" style="width: 30px; font-size:10px;">غیرحاضر</th>
-                            <th class="bg-light text-warning" style="width: 30px; font-size:10px;">رخصت</th>
-                            <th class="bg-light text-primary" style="width: 50px; font-size:10px;">کیفیت</th>
+                            <th class="bg-light text-success" style="width: 30px; font-size:10px;"><?php echo __('حاضر', 'Present'); ?></th>
+                            <th class="bg-light text-warning" style="width: 30px; font-size:10px; color: #fd7e14 !important;"><?php echo __('تاخیر', 'Late'); ?></th>
+                            <th class="bg-light text-warning" style="width: 38px; font-size:10px; color: #fd7e14 !important;"><?php echo __('تاخیر منٹ', 'Late Mins'); ?></th>
+                            <th class="bg-light text-danger" style="width: 30px; font-size:10px;"><?php echo __('غیرحاضر', 'Absent'); ?></th>
+                            <th class="bg-light text-warning" style="width: 30px; font-size:10px;"><?php echo __('رخصت', 'Leave'); ?></th>
+                            <th class="bg-light text-primary" style="width: 50px; font-size:10px;"><?php echo __('کیفیت', 'Status'); ?></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -757,15 +757,15 @@ $grand_total_p = 0; $grand_total_late = 0; $grand_total_a = 0; $grand_total_l = 
     ?>
     <div class="card shadow border-dark mt-4 no-print-break" style="max-width: 900px; margin: 0 auto;">
         <div class="card-header bg-dark text-white text-center fw-bold">
-            مجموعی کارکردگی رپورٹ (<?php echo date('d M', strtotime($start_date)) . " تا " . date('d M', strtotime($end_date)); ?>)
+            <?php echo __('مجموعی کارکردگی رپورٹ', 'Overall Attendance Summary'); ?> (<?php echo date('d M', strtotime($start_date)) . " " . __('تا', 'to') . " " . date('d M', strtotime($end_date)); ?>)
         </div>
         <div class="card-body">
             <div class="row text-center">
-                <div class="col border-end"><h4 class="text-success fw-bold mb-0"><?php echo $grand_total_attendance; ?></h4><small>کل حاضریاں (<?php echo round((($grand_total_attendance) / $base) * 100, 1); ?>%)</small></div>
-                <div class="col border-end"><h4 class="text-warning fw-bold mb-0" style="color: #fd7e14 !important;"><?php echo $grand_total_late; ?></h4><small>تاخیر تعداد (<?php echo $perc_late; ?>%)</small></div>
-                <div class="col border-end"><h4 class="text-warning fw-bold mb-0" style="color: #fd7e14 !important;"><?php echo $grand_total_late_mins; ?></h4><small>کل تاخیر منٹ</small></div>
-                <div class="col border-end"><h4 class="text-danger fw-bold mb-0"><?php echo $grand_total_a; ?></h4><small>غیر حاضر (<?php echo $perc_a; ?>%)</small></div>
-                <div class="col"><h4 class="text-info fw-bold mb-0"><?php echo $grand_total_l; ?></h4><small>رخصت (<?php echo $perc_l; ?>%)</small></div>
+                <div class="col border-end"><h4 class="text-success fw-bold mb-0"><?php echo $grand_total_attendance; ?></h4><small><?php echo __('کل حاضریاں', 'Total Present'); ?> (<?php echo round((($grand_total_attendance) / $base) * 100, 1); ?>%)</small></div>
+                <div class="col border-end"><h4 class="text-warning fw-bold mb-0" style="color: #fd7e14 !important;"><?php echo $grand_total_late; ?></h4><small><?php echo __('تاخیر تعداد', 'Late Count'); ?> (<?php echo $perc_late; ?>%)</small></div>
+                <div class="col border-end"><h4 class="text-warning fw-bold mb-0" style="color: #fd7e14 !important;"><?php echo $grand_total_late_mins; ?></h4><small><?php echo __('کل تاخیر منٹ', 'Total Late Mins'); ?></small></div>
+                <div class="col border-end"><h4 class="text-danger fw-bold mb-0"><?php echo $grand_total_a; ?></h4><small><?php echo __('غیر حاضر', 'Absent'); ?> (<?php echo $perc_a; ?>%)</small></div>
+                <div class="col"><h4 class="text-info fw-bold mb-0"><?php echo $grand_total_l; ?></h4><small><?php echo __('رخصت', 'Leave'); ?> (<?php echo $perc_l; ?>%)</small></div>
             </div>
         </div>
     </div>

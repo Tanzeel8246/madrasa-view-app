@@ -23,12 +23,12 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
       text: DateTime.now().toIso8601String().split('T')[0]);
   String? _selectedCategory;
   final List<String> _categories = [
-    'تعلیمی (Educational)',
-    'اخلاقی / تربیتی (Behavioral)',
-    'نظم و ضبط (Discipline)',
-    'فیس / مالیات (Financial)',
-    'دیگر (Other)',
-    'نیا شامل کریں (Add New)'
+    'ØªØ¹Ù„ÛŒÙ…ÛŒ (Educational)',
+    'Ø§Ø®Ù„Ø§Ù‚ÛŒ / ØªØ±Ø¨ÛŒØªÛŒ (Behavioral)',
+    'Ù†Ø¸Ù… Ùˆ Ø¶Ø¨Ø· (Discipline)',
+    'ÙÛŒØ³ / Ù…Ø§Ù„ÛŒØ§Øª (Financial)',
+    'Ø¯ÛŒÚ¯Ø± (Other)',
+    'Ù†ÛŒØ§ Ø´Ø§Ù…Ù„ Ú©Ø±ÛŒÚº (Add New)'
   ];
   final _customCategoryController = TextEditingController();
   List<Map<String, dynamic>> _recentComplaints = [];
@@ -75,7 +75,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
       );
       final father = (student['father_name'] ?? student['father'] ?? '').toString().trim();
       final name = student['name'] ?? '-';
-      final fullName = father.isNotEmpty ? "$name ولد $father" : name;
+      final fullName = father.isNotEmpty ? "$name ÙˆÙ„Ø¯ $father" : name;
       recent.add({
         ...c,
         'student_name': fullName,
@@ -101,20 +101,20 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(isUrduGlobal.value ? 'تصدیق' : 'Confirm'),
+        title: Text(isUrduGlobal.value ? 'ØªØµØ¯ÛŒÙ‚' : 'Confirm'),
         content: Text(isUrduGlobal.value
-            ? 'کیا آپ یہ شکایت حذف کرنا چاہتے ہیں؟'
+            ? 'Ú©ÛŒØ§ Ø¢Ù¾ ÛŒÛ Ø´Ú©Ø§ÛŒØª Ø­Ø°Ù Ú©Ø±Ù†Ø§ Ú†Ø§ÛØªÛ’ ÛÛŒÚºØŸ'
             : 'Delete this complaint?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(isUrduGlobal.value ? 'نہیں' : 'No'),
+            child: Text(isUrduGlobal.value ? 'Ù†ÛÛŒÚº' : 'No'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isUrduGlobal.value ? 'حذف کریں' : 'Delete'),
+            child: Text(isUrduGlobal.value ? 'Ø­Ø°Ù Ú©Ø±ÛŒÚº' : 'Delete'),
           ),
         ],
       ),
@@ -127,7 +127,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(isUrduGlobal.value
-              ? 'شکایت حذف کر دی گئی ہے'
+              ? 'Ø´Ú©Ø§ÛŒØª Ø­Ø°Ù Ú©Ø± Ø¯ÛŒ Ú¯Ø¦ÛŒ ÛÛ’'
               : 'Complaint deleted'),
           backgroundColor: Colors.green,
         ),
@@ -166,19 +166,19 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(isUrduGlobal.value
-                ? "طالب علم، نوعیت اور تفصیل لکھنا ضروری ہے"
+                ? "Ø·Ø§Ù„Ø¨ Ø¹Ù„Ù…ØŒ Ù†ÙˆØ¹ÛŒØª Ø§ÙˆØ± ØªÙØµÛŒÙ„ Ù„Ú©Ú¾Ù†Ø§ Ø¶Ø±ÙˆØ±ÛŒ ÛÛ’"
                 : "Student, Category and Description are required")),
       );
       return;
     }
 
     String finalCategory = _selectedCategory!;
-    if (_selectedCategory == 'نیا شامل کریں (Add New)') {
+    if (_selectedCategory == 'Ù†ÛŒØ§ Ø´Ø§Ù…Ù„ Ú©Ø±ÛŒÚº (Add New)') {
       if (_customCategoryController.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(isUrduGlobal.value
-                  ? "نئی کیٹیگری کا نام لکھیں"
+                  ? "Ù†Ø¦ÛŒ Ú©ÛŒÙ¹ÛŒÚ¯Ø±ÛŒ Ú©Ø§ Ù†Ø§Ù… Ù„Ú©Ú¾ÛŒÚº"
                   : "Enter new category name")),
         );
         return;
@@ -193,7 +193,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
           await DBHelper().insertComplaint({
             'student_id': studentId,
             'complaint':
-                "[${currentUserRole.value == 'admin' ? 'ایڈمن' : 'استاد'} کی طرف سے]: $finalCategory - ${_complaintController.text.trim()}",
+                "[${currentUserRole.value == 'admin' ? 'Ø§ÛŒÚˆÙ…Ù†' : 'Ø§Ø³ØªØ§Ø¯'} Ú©ÛŒ Ø·Ø±Ù Ø³Û’]: $finalCategory - ${_complaintController.text.trim()}",
             'date': _dateController.text,
             'is_synced': 0,
           });
@@ -213,6 +213,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
       _complaintController.clear();
       setState(() => _selectedCategory = null);
       _loadHistory();
+      SyncService.runTwoWaySync().catchError((_) {});
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -224,7 +225,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
       SnackBar(
         content: Text(
           isUrduGlobal.value
-              ? 'شکایت کامیابی سے درج کر دی گئی ہے۔'
+              ? 'Ø´Ú©Ø§ÛŒØª Ú©Ø§Ù…ÛŒØ§Ø¨ÛŒ Ø³Û’ Ø¯Ø±Ø¬ Ú©Ø± Ø¯ÛŒ Ú¯Ø¦ÛŒ ÛÛ’Û”'
               : 'Complaint submitted successfully.',
         ),
         backgroundColor: Colors.green,
@@ -241,7 +242,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
           builder: (context, setDialogState) {
             return AlertDialog(
               title: Text(
-                  isUrduGlobal.value ? 'طلبہ منتخب کریں' : 'Select Students'),
+                  isUrduGlobal.value ? 'Ø·Ù„Ø¨Û Ù…Ù†ØªØ®Ø¨ Ú©Ø±ÛŒÚº' : 'Select Students'),
               content: SizedBox(
                 width: double.maxFinite,
                 child: ListView.builder(
@@ -252,7 +253,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                     final isSelected = initialSelected.contains(student['id']);
                     final father = (student['father_name'] ?? student['father'] ?? '').toString().trim();
                     final displayName = father.isNotEmpty
-                        ? "${student['name']} ولد $father"
+                        ? "${student['name']} ÙˆÙ„Ø¯ $father"
                         : "${student['name']}";
                     return CheckboxListTile(
                       title: Text(displayName),
@@ -273,7 +274,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text(isUrduGlobal.value ? 'منسوخ' : 'Cancel'),
+                  child: Text(isUrduGlobal.value ? 'Ù…Ù†Ø³ÙˆØ®' : 'Cancel'),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -283,7 +284,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                     _loadHistory();
                     Navigator.pop(context);
                   },
-                  child: Text(isUrduGlobal.value ? 'منتخب کریں' : 'Select'),
+                  child: Text(isUrduGlobal.value ? 'Ù…Ù†ØªØ®Ø¨ Ú©Ø±ÛŒÚº' : 'Select'),
                 ),
               ],
             );
@@ -318,7 +319,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                   ),
                 ),
                 title: Text(
-                  isUrdu ? 'تجاویز و شکایات' : 'Suggestions & Complaints',
+                  isUrdu ? 'ØªØ¬Ø§ÙˆÛŒØ² Ùˆ Ø´Ú©Ø§ÛŒØ§Øª' : 'Suggestions & Complaints',
                   style: TextStyle(
                       color: primaryGreen, fontWeight: FontWeight.bold),
                 ),
@@ -359,10 +360,10 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                               label: Text(
                                 _selectedStudentIds.isEmpty
                                     ? (isUrdu
-                                        ? 'طلبہ منتخب کریں'
+                                        ? 'Ø·Ù„Ø¨Û Ù…Ù†ØªØ®Ø¨ Ú©Ø±ÛŒÚº'
                                         : 'Select Students')
                                     : (isUrdu
-                                        ? '${_selectedStudentIds.length} طلبہ منتخب ہیں'
+                                        ? '${_selectedStudentIds.length} Ø·Ù„Ø¨Û Ù…Ù†ØªØ®Ø¨ ÛÛŒÚº'
                                         : '${_selectedStudentIds.length} Students Selected'),
                               ),
                               onPressed: _showMultiSelectDialog,
@@ -390,7 +391,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                               }
                             },
                             decoration: InputDecoration(
-                              labelText: isUrdu ? 'تاریخ وقوعہ (Date)' : 'Date',
+                              labelText: isUrdu ? 'ØªØ§Ø±ÛŒØ® ÙˆÙ‚ÙˆØ¹Û (Date)' : 'Date',
                               border: const OutlineInputBorder(),
                               prefixIcon: const Icon(Icons.calendar_today),
                             ),
@@ -400,7 +401,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                             value: _selectedCategory,
                             decoration: InputDecoration(
                               labelText: isUrdu
-                                  ? 'شکایت کی نوعیت (Category)'
+                                  ? 'Ø´Ú©Ø§ÛŒØª Ú©ÛŒ Ù†ÙˆØ¹ÛŒØª (Category)'
                                   : 'Category',
                               border: const OutlineInputBorder(),
                               prefixIcon: const Icon(Icons.category),
@@ -418,13 +419,13 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                             },
                           ),
                           if (_selectedCategory ==
-                              'نیا شامل کریں (Add New)') ...[
+                              'Ù†ÛŒØ§ Ø´Ø§Ù…Ù„ Ú©Ø±ÛŒÚº (Add New)') ...[
                             const SizedBox(height: 15),
                             TextField(
                               controller: _customCategoryController,
                               decoration: InputDecoration(
                                 labelText: isUrduGlobal.value
-                                    ? 'نئی کیٹیگری کا نام لکھیں'
+                                    ? 'Ù†Ø¦ÛŒ Ú©ÛŒÙ¹ÛŒÚ¯Ø±ÛŒ Ú©Ø§ Ù†Ø§Ù… Ù„Ú©Ú¾ÛŒÚº'
                                     : 'Enter New Category',
                                 border: const OutlineInputBorder(),
                               ),
@@ -436,7 +437,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                             maxLines: 4,
                             decoration: InputDecoration(
                               labelText: isUrdu
-                                  ? 'تفصیل (Description)'
+                                  ? 'ØªÙØµÛŒÙ„ (Description)'
                                   : 'Description',
                               border: const OutlineInputBorder(),
                               alignLabelWithHint: true,
@@ -450,7 +451,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                             ),
                             onPressed: _submitComplaint,
                             child: Text(
-                              isUrdu ? 'شکایت درج کریں' : 'Submit Complaint',
+                              isUrdu ? 'Ø´Ú©Ø§ÛŒØª Ø¯Ø±Ø¬ Ú©Ø±ÛŒÚº' : 'Submit Complaint',
                               style: const TextStyle(
                                   fontSize: 18, color: Colors.white),
                             ),
@@ -477,7 +478,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                             },
                             icon: Icon(Icons.history, color: primaryGreen),
                             label: Text(
-                              isUrdu ? 'سابقہ ہسٹری دیکھیں' : 'View History',
+                              isUrdu ? 'Ø³Ø§Ø¨Ù‚Û ÛØ³Ù¹Ø±ÛŒ Ø¯ÛŒÚ©Ú¾ÛŒÚº' : 'View History',
                               style: TextStyle(
                                   fontSize: 18,
                                   color: primaryGreen,
@@ -516,7 +517,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                 Expanded(
                   child: Text(
                     isUrdu
-                        ? 'حالیہ ریکارڈ (آخری 50)'
+                        ? 'Ø­Ø§Ù„ÛŒÛ Ø±ÛŒÚ©Ø§Ø±Úˆ (Ø¢Ø®Ø±ÛŒ 50)'
                         : 'Recent Records (Last 50)',
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 16),
@@ -530,7 +531,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Center(
                   child: Text(isUrdu
-                      ? 'کوئی شکایت / نوٹ موجود نہیں'
+                      ? 'Ú©ÙˆØ¦ÛŒ Ø´Ú©Ø§ÛŒØª / Ù†ÙˆÙ¹ Ù…ÙˆØ¬ÙˆØ¯ Ù†ÛÛŒÚº'
                       : 'No complaint or note found'),
                 ),
               )
@@ -587,7 +588,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                                   const EdgeInsets.symmetric(horizontal: 8)),
                           onPressed: () => _deleteRecentComplaint(complaint),
                           icon: const Icon(Icons.delete_outline, size: 18),
-                          label: Text(isUrdu ? 'حذف' : 'Delete'),
+                          label: Text(isUrdu ? 'Ø­Ø°Ù' : 'Delete'),
                         ),
                       ),
                     ],

@@ -202,13 +202,13 @@ try {
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
         <div>
             <h3 class="fw-bold mb-1 text-primary">
-                <i class="fas fa-calendar-minus me-2"></i>اساتذہ کی رخصت (Teacher Leave Management)
+                <i class="fas fa-calendar-minus me-2"></i><?php echo __('اساتذہ کی رخصت (Teacher Leave Management)', 'Teacher Leave Management'); ?>
             </h3>
-            <p class="text-muted mb-0">اساتذہ کی چھٹیوں کا باقاعدہ اندراج، منظوری اور خودکار حاضری انضمام</p>
+            <p class="text-muted mb-0"><?php echo __('اساتذہ کی چھٹیوں کا باقاعدہ اندراج، منظوری اور خودکار حاضری انضمام', 'Formal recording of teacher leaves, approval, and auto attendance integration'); ?></p>
         </div>
         <div>
             <button type="button" class="btn btn-primary px-4 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#newLeaveModal">
-                <i class="fas fa-plus-circle me-1"></i> نئی رخصت کا اندراج
+                <i class="fas fa-plus-circle me-1"></i> <?php echo __('نئی رخصت کا اندراج', 'New Leave Request'); ?>
             </button>
         </div>
     </div>
@@ -233,7 +233,7 @@ try {
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-primary border-4">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <span class="text-muted d-block small fw-bold">کل درخواستیں</span>
+                        <span class="text-muted d-block small fw-bold"><?php echo __('کل درخواستیں', 'Total Requests'); ?></span>
                         <h4 class="fw-bold mb-0 text-primary mt-1"><?php echo $total_count; ?></h4>
                     </div>
                     <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary">
@@ -246,7 +246,7 @@ try {
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-warning border-4">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <span class="text-muted d-block small fw-bold">زیرِ غور (Pending)</span>
+                        <span class="text-muted d-block small fw-bold"><?php echo __('زیرِ غور (Pending)', 'Pending'); ?></span>
                         <h4 class="fw-bold mb-0 text-warning mt-1"><?php echo $pending_count; ?></h4>
                     </div>
                     <div class="rounded-circle bg-warning bg-opacity-10 p-3 text-warning">
@@ -259,7 +259,7 @@ try {
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-success border-4">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <span class="text-muted d-block small fw-bold">منظور شدہ (Approved)</span>
+                        <span class="text-muted d-block small fw-bold"><?php echo __('منظور شدہ (Approved)', 'Approved'); ?></span>
                         <h4 class="fw-bold mb-0 text-success mt-1"><?php echo $approved_count; ?></h4>
                     </div>
                     <div class="rounded-circle bg-success bg-opacity-10 p-3 text-success">
@@ -272,7 +272,7 @@ try {
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-danger border-4">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <span class="text-muted d-block small fw-bold">مسترد شدہ (Rejected)</span>
+                        <span class="text-muted d-block small fw-bold"><?php echo __('مسترد شدہ (Rejected)', 'Rejected'); ?></span>
                         <h4 class="fw-bold mb-0 text-danger mt-1"><?php echo $rejected_count; ?></h4>
                     </div>
                     <div class="rounded-circle bg-danger bg-opacity-10 p-3 text-danger">
@@ -289,9 +289,9 @@ try {
             <form method="GET" class="row g-2 align-items-end">
                 <?php if (!$is_teacher): ?>
                 <div class="col-md-3 col-12">
-                    <label class="form-label small fw-bold text-muted mb-1">استاذ کا انتخاب:</label>
+                    <label class="form-label small fw-bold text-muted mb-1"><?php echo __('استاذ کا انتخاب:', 'Select Teacher:'); ?></label>
                     <select name="filter_teacher" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="0">تمام اساتذہ</option>
+                        <option value="0"><?php echo __('تمام اساتذہ', 'All Teachers'); ?></option>
                         <?php foreach ($all_teachers as $t): ?>
                             <option value="<?php echo $t['id']; ?>" <?php echo ($filter_teacher == $t['id']) ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($t['name']); ?>
@@ -302,28 +302,28 @@ try {
                 <?php endif; ?>
 
                 <div class="col-md-2 col-6">
-                    <label class="form-label small fw-bold text-muted mb-1">اسٹیٹس:</label>
+                    <label class="form-label small fw-bold text-muted mb-1"><?php echo __('اسٹیٹس:', 'Status:'); ?></label>
                     <select name="filter_status" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">تمام اسٹیٹس</option>
-                        <option value="Pending" <?php echo ($filter_status === 'Pending') ? 'selected' : ''; ?>>زیرِ غور (Pending)</option>
-                        <option value="Approved" <?php echo ($filter_status === 'Approved') ? 'selected' : ''; ?>>منظور شدہ (Approved)</option>
-                        <option value="Rejected" <?php echo ($filter_status === 'Rejected') ? 'selected' : ''; ?>>مسترد شدہ (Rejected)</option>
+                        <option value=""><?php echo __('تمام اسٹیٹس', 'All Statuses'); ?></option>
+                        <option value="Pending" <?php echo ($filter_status === 'Pending') ? 'selected' : ''; ?>><?php echo __('زیرِ غور (Pending)', 'Pending'); ?></option>
+                        <option value="Approved" <?php echo ($filter_status === 'Approved') ? 'selected' : ''; ?>><?php echo __('منظور شدہ (Approved)', 'Approved'); ?></option>
+                        <option value="Rejected" <?php echo ($filter_status === 'Rejected') ? 'selected' : ''; ?>><?php echo __('مسترد شدہ (Rejected)', 'Rejected'); ?></option>
                     </select>
                 </div>
 
                 <div class="col-md-2 col-6">
-                    <label class="form-label small fw-bold text-muted mb-1">تاریخ (از):</label>
+                    <label class="form-label small fw-bold text-muted mb-1"><?php echo __('تاریخ (از):', 'Date From:'); ?></label>
                     <input type="date" name="filter_from" id="leaveFrom" class="form-control form-control-sm" value="<?php echo htmlspecialchars($filter_from); ?>" onchange="if(this.value && document.getElementById('leaveTo').value) this.form.submit();">
                 </div>
 
                 <div class="col-md-2 col-6">
-                    <label class="form-label small fw-bold text-muted mb-1">تاریخ (تا):</label>
+                    <label class="form-label small fw-bold text-muted mb-1"><?php echo __('تاریخ (تا):', 'Date To:'); ?></label>
                     <input type="date" name="filter_to" id="leaveTo" class="form-control form-control-sm" value="<?php echo htmlspecialchars($filter_to); ?>" onchange="if(this.value && document.getElementById('leaveFrom').value) this.form.submit();">
                 </div>
 
                 <div class="col-md-3 col-6 d-flex gap-2">
                     <button type="submit" class="btn btn-primary btn-sm flex-fill fw-bold">
-                        <i class="fas fa-filter me-1"></i> تلاش کریں
+                        <i class="fas fa-filter me-1"></i> <?php echo __('تلاش کریں', 'Search'); ?>
                     </button>
                     <a href="teacher_leaves.php" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-undo"></i>
@@ -337,23 +337,23 @@ try {
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
         <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
             <h5 class="fw-bold mb-0 text-dark">
-                <i class="fas fa-table text-primary me-2"></i>درخواستوں کی فہرست
+                <i class="fas fa-table text-primary me-2"></i><?php echo __('درخواستوں کی فہرست', 'Leave Requests List'); ?>
             </h5>
-            <span class="badge bg-light text-muted border px-2 py-1">کل نتائج: <?php echo count($leaves_list); ?></span>
+            <span class="badge bg-light text-muted border px-2 py-1"><?php echo __('کل نتائج:', 'Total Results:'); ?> <?php echo count($leaves_list); ?></span>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 text-center">
                 <thead class="table-light text-muted">
                     <tr>
                         <th style="width: 50px;">#</th>
-                        <th>استاذ محترم</th>
-                        <th>نوعیتِ رخصت</th>
-                        <th>مدت (تاریخ از / تا)</th>
-                        <th>کل ایام</th>
-                        <th>وجہ</th>
-                        <th>اسٹیٹس</th>
-                        <th>منظور کنندہ</th>
-                        <th>کارروائی</th>
+                        <th><?php echo __('استاذ محترم', 'Teacher'); ?></th>
+                        <th><?php echo __('نوعیتِ رخصت', 'Leave Type'); ?></th>
+                        <th><?php echo __('مدت (تاریخ از / تا)', 'Duration (From / To)'); ?></th>
+                        <th><?php echo __('کل ایام', 'Total Days'); ?></th>
+                        <th><?php echo __('وجہ', 'Reason'); ?></th>
+                        <th><?php echo __('اسٹیٹس', 'Status'); ?></th>
+                        <th><?php echo __('منظور کنندہ', 'Approved By'); ?></th>
+                        <th><?php echo __('کارروائی', 'Actions'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -361,7 +361,7 @@ try {
                         <tr>
                             <td colspan="9" class="py-5 text-muted">
                                 <i class="fas fa-inbox fa-3x mb-3 text-secondary opacity-50"></i>
-                                <p class="mb-0 fw-bold">کوئی درخواست نہیں ملی۔</p>
+                                <p class="mb-0 fw-bold"><?php echo __('کوئی درخواست نہیں ملی۔', 'No requests found.'); ?></p>
                             </td>
                         </tr>
                     <?php else: ?>
@@ -388,7 +388,7 @@ try {
                                 <small class="text-muted">تا <?php echo date('d M Y', $end); ?></small>
                             </td>
                             <td>
-                                <span class="badge bg-secondary rounded-pill"><?php echo $days; ?> دن</span>
+                                <span class="badge bg-secondary rounded-pill"><?php echo $days; ?> <?php echo __('دن', 'Days'); ?></span>
                             </td>
                             <td class="text-start" style="max-width: 250px;">
                                 <small class="text-secondary"><?php echo nl2br(htmlspecialchars($row['reason'] ?: '—')); ?></small>
@@ -396,7 +396,7 @@ try {
                             <td>
                                 <?php if ($row['status'] === 'Approved'): ?>
                                     <span class="badge bg-success-subtle text-success border border-success px-2 py-1 rounded-pill">
-                                        <i class="fas fa-check me-1"></i>منظور شدہ
+                                        <i class="fas fa-check me-1"></i><?php echo __('منظور شدہ', 'Approved'); ?>
                                     </span>
                                 <?php elseif ($row['status'] === 'Rejected'): ?>
                                     <span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1 rounded-pill">
@@ -473,7 +473,7 @@ try {
         <div class="modal-content rounded-4 border-0 shadow">
             <div class="modal-header border-0 bg-primary text-white">
                 <h5 class="modal-title fw-bold" id="newLeaveModalLabel">
-                    <i class="fas fa-calendar-plus me-2"></i>نئی رخصت کا اندراج
+                    <i class="fas fa-calendar-plus me-2"></i><?php echo __('نئی رخصت کا اندراج', 'New Leave Request'); ?>
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -483,14 +483,14 @@ try {
 
                     <?php if ($is_teacher): ?>
                         <div class="mb-3">
-                            <label class="form-label fw-bold small text-muted">استاذ کا نام:</label>
+                            <label class="form-label fw-bold small text-muted"><?php echo __('استاذ کا نام:', 'Teacher Name:'); ?></label>
                             <input type="text" class="form-control" value="<?php echo htmlspecialchars($_SESSION['user_name'] ?? 'آپ'); ?>" disabled>
                         </div>
                     <?php else: ?>
                         <div class="mb-3">
-                            <label class="form-label fw-bold small text-muted">استاذ کا انتخاب کریں: <span class="text-danger">*</span></label>
+                            <label class="form-label fw-bold small text-muted"><?php echo __('استاذ کا انتخاب کریں:', 'Select Teacher:'); ?> <span class="text-danger">*</span></label>
                             <select name="teacher_id" class="form-select" required>
-                                <option value="">— استاذ منتخب کریں —</option>
+                                <option value=""><?php echo __('— استاذ منتخب کریں —', '— Select Teacher —'); ?></option>
                                 <?php foreach ($all_teachers as $t): ?>
                                     <option value="<?php echo $t['id']; ?>"><?php echo htmlspecialchars($t['name']); ?></option>
                                 <?php endforeach; ?>
@@ -499,45 +499,45 @@ try {
                     <?php endif; ?>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted">نوعیتِ رخصت (Leave Type): <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold small text-muted"><?php echo __('نوعیتِ رخصت (Leave Type):', 'Leave Type:'); ?> <span class="text-danger">*</span></label>
                         <select name="leave_type" class="form-select" required>
-                            <option value="اتفاقی (Casual)">اتفاقی رخصت (Casual Leave)</option>
-                            <option value="طبی / بیماری (Medical)">طبی رخصت (Sick / Medical)</option>
-                            <option value="ضروری کام (Personal)">ضروری کام (Personal)</option>
-                            <option value="حج / عمرہ (Pilgrimage)">حج / عمرہ (Hajj / Umrah)</option>
-                            <option value="دیگر (Other)">دیگر (Other)</option>
+                            <option value="اتفاقی (Casual)"><?php echo __('اتفاقی رخصت (Casual Leave)', 'Casual Leave'); ?></option>
+                            <option value="طبی / بیماری (Medical)"><?php echo __('طبی رخصت (Sick / Medical)', 'Sick / Medical Leave'); ?></option>
+                            <option value="ضروری کام (Personal)"><?php echo __('ضروری کام (Personal)', 'Personal Leave'); ?></option>
+                            <option value="حج / عمرہ (Pilgrimage)"><?php echo __('حج / عمرہ (Hajj / Umrah)', 'Hajj / Umrah Leave'); ?></option>
+                            <option value="دیگر (Other)"><?php echo __('دیگر (Other)', 'Other'); ?></option>
                         </select>
                     </div>
 
                     <div class="row g-2 mb-3">
                         <div class="col-6">
-                            <label class="form-label fw-bold small text-muted">تاریخ (سے): <span class="text-danger">*</span></label>
+                            <label class="form-label fw-bold small text-muted"><?php echo __('تاریخ (سے):', 'Date (From):'); ?> <span class="text-danger">*</span></label>
                             <input type="date" name="start_date" id="modal_start_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                         </div>
                         <div class="col-6">
-                            <label class="form-label fw-bold small text-muted">تاریخ (تک): <span class="text-danger">*</span></label>
+                            <label class="form-label fw-bold small text-muted"><?php echo __('تاریخ (تک):', 'Date (To):'); ?> <span class="text-danger">*</span></label>
                             <input type="date" name="end_date" id="modal_end_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                         </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted">چھٹی کی وجہ / تفصیل:</label>
-                        <textarea name="reason" rows="3" class="form-control" placeholder="تفصیل یا عذر بیان کریں..."></textarea>
+                        <label class="form-label fw-bold small text-muted"><?php echo __('چھٹی کی وجہ / تفصیل:', 'Leave Reason / Details:'); ?></label>
+                        <textarea name="reason" rows="3" class="form-control" placeholder="<?php echo __('تفصیل یا عذر بیان کریں...', 'State reason or details...'); ?>"></textarea>
                     </div>
 
                     <?php if ($can_manage): ?>
                         <div class="form-check form-switch p-0 d-flex align-items-center gap-2 mb-2">
                             <input class="form-check-input ms-0 me-2" type="checkbox" name="auto_approve" value="1" id="autoApproveCheck" checked>
                             <label class="form-check-label fw-bold small text-dark" for="autoApproveCheck">
-                                فوری منظور کریں اور حاضری میں خودکار 'L' درج کریں
+                                <?php echo __('فوری منظور کریں اور حاضری میں خودکار \'L\' درج کریں', 'Auto-approve immediately and mark \'L\' in attendance'); ?>
                             </label>
                         </div>
                     <?php endif; ?>
                 </div>
                 <div class="modal-footer border-0 p-3 bg-light">
-                    <button type="button" class="btn btn-secondary px-3" data-bs-dismiss="modal">منسوخ کریں</button>
+                    <button type="button" class="btn btn-secondary px-3" data-bs-dismiss="modal"><?php echo __('منسوخ کریں', 'Cancel'); ?></button>
                     <button type="submit" class="btn btn-primary px-4 fw-bold">
-                        <i class="fas fa-save me-1"></i> محفوظ کریں
+                        <i class="fas fa-save me-1"></i> <?php echo __('محفوظ کریں', 'Save'); ?>
                     </button>
                 </div>
             </form>

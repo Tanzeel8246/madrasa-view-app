@@ -482,5 +482,150 @@ class StudentsSyncSaver {
         debugPrint("Sync Error (husn_saut_record): $e");
       }
     }
+
+    // 13. Course Structure
+    if (data['course_structure'] != null) {
+      try {
+        for (var item in data['course_structure']) {
+          final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          batch.insert(
+            'course_structure',
+            {
+              'id': serverId > 0 ? serverId : null,
+              'name': item['name']?.toString() ?? '',
+              'course_type': item['course_type']?.toString() ?? 'Darse_Nizami',
+              'total_years': int.tryParse(item['total_years']?.toString() ?? '8') ?? 8,
+              'gender': item['gender']?.toString() ?? 'بنین',
+              'description': item['description']?.toString() ?? '',
+              'is_active': int.tryParse(item['is_active']?.toString() ?? '1') ?? 1,
+              'is_deleted': int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
+              'is_synced': 1,
+              'created_at': item['created_at']?.toString(),
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      } catch (e) {
+        debugPrint("Sync Error (course_structure): $e");
+      }
+    }
+
+    // 14. Course Subjects
+    if (data['course_subjects'] != null) {
+      try {
+        for (var item in data['course_subjects']) {
+          final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          batch.insert(
+            'course_subjects',
+            {
+              'id': serverId > 0 ? serverId : null,
+              'course_id': int.tryParse(item['course_id']?.toString() ?? '0') ?? 0,
+              'year_no': int.tryParse(item['year_no']?.toString() ?? '1') ?? 1,
+              'year_title': item['year_title']?.toString() ?? '',
+              'subject_name': item['subject_name']?.toString() ?? '',
+              'book_name': item['book_name']?.toString() ?? '',
+              'max_marks': double.tryParse(item['max_marks']?.toString() ?? '100') ?? 100.0,
+              'pass_marks': double.tryParse(item['pass_marks']?.toString() ?? '40') ?? 40.0,
+              'subject_order': int.tryParse(item['subject_order']?.toString() ?? '0') ?? 0,
+              'is_optional': int.tryParse(item['is_optional']?.toString() ?? '0') ?? 0,
+              'is_deleted': int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
+              'is_synced': 1,
+              'created_at': item['created_at']?.toString(),
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      } catch (e) {
+        debugPrint("Sync Error (course_subjects): $e");
+      }
+    }
+
+    // 15. Student Course Enrollment
+    if (data['student_course_enrollment'] != null) {
+      try {
+        for (var item in data['student_course_enrollment']) {
+          final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          batch.insert(
+            'student_course_enrollment',
+            {
+              'id': serverId > 0 ? serverId : null,
+              'student_id': int.tryParse(item['student_id']?.toString() ?? '0') ?? 0,
+              'course_id': int.tryParse(item['course_id']?.toString() ?? '0') ?? 0,
+              'current_year': int.tryParse(item['current_year']?.toString() ?? '1') ?? 1,
+              'academic_session': item['academic_session']?.toString() ?? '',
+              'enrollment_date': item['enrollment_date']?.toString() ?? '',
+              'status': item['status']?.toString() ?? 'active',
+              'is_deleted': int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
+              'is_synced': 1,
+              'created_at': item['created_at']?.toString(),
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      } catch (e) {
+        debugPrint("Sync Error (student_course_enrollment): $e");
+      }
+    }
+
+    // 16. Exam Subject Results
+    if (data['exam_subject_results'] != null) {
+      try {
+        for (var item in data['exam_subject_results']) {
+          final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          batch.insert(
+            'exam_subject_results',
+            {
+              'id': serverId > 0 ? serverId : null,
+              'exam_id': int.tryParse(item['exam_id']?.toString() ?? '0') ?? 0,
+              'student_id': int.tryParse(item['student_id']?.toString() ?? '0') ?? 0,
+              'course_id': int.tryParse(item['course_id']?.toString() ?? '0') ?? 0,
+              'year_no': int.tryParse(item['year_no']?.toString() ?? '1') ?? 1,
+              'subject_id': int.tryParse(item['subject_id']?.toString() ?? '0') ?? 0,
+              'subject_name': item['subject_name']?.toString() ?? '',
+              'marks_obtained': double.tryParse(item['marks_obtained']?.toString() ?? '0') ?? 0.0,
+              'max_marks': double.tryParse(item['max_marks']?.toString() ?? '100') ?? 100.0,
+              'is_absent': int.tryParse(item['is_absent']?.toString() ?? '0') ?? 0,
+              'grade': item['grade']?.toString() ?? 'مقبول',
+              'remarks': item['remarks']?.toString() ?? '',
+              'is_deleted': int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
+              'is_synced': 1,
+              'created_at': item['created_at']?.toString(),
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      } catch (e) {
+        debugPrint("Sync Error (exam_subject_results): $e");
+      }
+    }
+
+    // 17. Student Year Promotion
+    if (data['student_year_promotion'] != null) {
+      try {
+        for (var item in data['student_year_promotion']) {
+          final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          batch.insert(
+            'student_year_promotion',
+            {
+              'id': serverId > 0 ? serverId : null,
+              'student_id': int.tryParse(item['student_id']?.toString() ?? '0') ?? 0,
+              'course_id': int.tryParse(item['course_id']?.toString() ?? '0') ?? 0,
+              'from_year': int.tryParse(item['from_year']?.toString() ?? '1') ?? 1,
+              'to_year': int.tryParse(item['to_year']?.toString() ?? '2') ?? 2,
+              'academic_session': item['academic_session']?.toString() ?? '',
+              'status': item['status']?.toString() ?? 'Promoted',
+              'promoted_by': int.tryParse(item['promoted_by']?.toString() ?? ''),
+              'remarks': item['remarks']?.toString() ?? '',
+              'is_deleted': int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
+              'is_synced': 1,
+              'created_at': item['created_at']?.toString(),
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      } catch (e) {
+        debugPrint("Sync Error (student_year_promotion): $e");
+      }
+    }
   }
 }

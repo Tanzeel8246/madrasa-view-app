@@ -144,11 +144,11 @@ if (isset($_GET['msg'])) {
 ?>
 <?php include 'header.php'; ?>
 
-<div class="container-fluid py-4">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="text-primary fw-bold mb-0"><i class="fas fa-box-open me-2"></i> <?php echo ($lang == 'ur') ? ' ' : 'In-Kind Donations'; ?></h4>
+        <h4 class="text-primary fw-bold mb-0"><i class="fas fa-box-open me-2"></i> <?php echo __('عطیات و اشیاء (In-Kind Donations)', 'In-Kind Donations'); ?></h4>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
-            <i class="fas fa-plus-circle me-1"></i> <?php echo (isset($lang) && $lang=='en') ? 'Add In-Kind Donation' : 'نیا جنسی عطیہ درج کریں'; ?>
+            <i class="fas fa-plus-circle me-1"></i> <?php echo __('نیا جنسی عطیہ درج کریں', 'Add In-Kind Donation'); ?>
         </button>
     </div>
 
@@ -163,13 +163,13 @@ if (isset($_GET['msg'])) {
         <div class="card-body bg-light">
             <form method="GET" class="row g-3">
                 <div class="col-md-5">
-                    <input type="text" name="search" class="form-control" placeholder="       ..." value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>">
+                    <input type="text" name="search" class="form-control" placeholder="<?php echo __('نام، شے یا رسید نمبر تلاش کریں...', 'Search donor, item or receipt #...'); ?>" value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>">
                 </div>
                 <div class="col-md-3">
                     <input type="date" name="filter_date" class="form-control" value="<?php echo htmlspecialchars($_GET['filter_date'] ?? ''); ?>">
                 </div>
                 <div class="col-md-4">
-                    <button type="submit" class="btn btn-secondary w-100"><i class="fas fa-search me-1"></i>  </button>
+                    <button type="submit" class="btn btn-secondary w-100"><i class="fas fa-search me-1"></i> <?php echo __('تلاش کریں', 'Search'); ?></button>
                 </div>
             </form>
         </div>
@@ -205,10 +205,10 @@ if (isset($_GET['msg'])) {
                                 <td><?php echo htmlspecialchars($r['description']); ?></td>
                                 <td class="text-center">
                                     <div class="btn-group">
-                                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal<?php echo $r['id']; ?>" title=" "><i class="fas fa-edit"></i></button>
-                                        <a href="print_in_kind_receipt.php?id=<?php echo $r['id']; ?>" class="btn btn-sm btn-outline-primary" target="_blank" title=" "><i class="fas fa-print"></i></a>
+                                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal<?php echo $r['id']; ?>" title="<?php echo __('ترمیم', 'Edit'); ?>"><i class="fas fa-edit"></i></button>
+                                        <a href="print_in_kind_receipt.php?id=<?php echo $r['id']; ?>" class="btn btn-sm btn-outline-primary" target="_blank" title="<?php echo __('پرنٹ', 'Print'); ?>"><i class="fas fa-print"></i></a>
                                         <?php if(has_perm('delete_records') || in_array($_SESSION['role'], ['admin','nazim'])): ?>
-                                        <a href="in_kind_donations.php?del_id=<?php echo $r['id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('        ')" title=" "><i class="fas fa-trash"></i></a>
+                                        <a href="in_kind_donations.php?del_id=<?php echo $r['id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('<?php echo __('کیا آپ واقعی یہ ریکارڈ حذف کرنا چاہتے ہیں؟', 'Are you sure you want to delete this record?'); ?>');" title="<?php echo __('حذف', 'Delete'); ?>"><i class="fas fa-trash"></i></a>
                                         <?php endif; ?>
                                     </div>
                                     
@@ -217,7 +217,7 @@ if (isset($_GET['msg'])) {
                                         <div class="modal-dialog modal-lg">
                                             <div class="modal-content">
                                                 <div class="modal-header bg-secondary text-white">
-                                                    <h5 class="modal-title"><i class="fas fa-edit me-2"></i>     </h5>
+                                                    <h5 class="modal-title"><i class="fas fa-edit me-2"></i> <?php echo __('عطیہ ریکارڈ میں ترمیم', 'Edit In-Kind Donation'); ?></h5>
                                                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                                                 </div>
                                                 <form method="POST">
@@ -225,15 +225,15 @@ if (isset($_GET['msg'])) {
                                                     <div class="modal-body">
                                                         <div class="row g-3">
                                                             <div class="col-md-6">
-                                                                <label class="form-label"> <span class="text-danger">*</span></label>
+                                                                <label class="form-label"><?php echo __('تاریخ', 'Date'); ?> <span class="text-danger">*</span></label>
                                                                 <input type="date" name="date" class="form-control" value="<?php echo $r['date']; ?>" required>
                                                             </div>
                                                             <div class="col-md-6">
-                                                                <label class="form-label">   ()</label>
+                                                                <label class="form-label"><?php echo __('مینوئل رسید نمبر (اختیاری)', 'Manual Receipt # (Optional)'); ?></label>
                                                                 <input type="text" name="manual_receipt_no" class="form-control" value="<?php echo htmlspecialchars($r['manual_receipt_no']); ?>">
                                                             </div>
                                                             <div class="col-md-6">
-                                                                <label class="form-label">    <span class="text-danger">*</span></label>
+                                                                <label class="form-label"><?php echo __('شے یا جنس کا نام', 'Donated Item Name'); ?> <span class="text-danger">*</span></label>
                                                                 <input type="text" name="donor_name" class="form-control" value="<?php echo htmlspecialchars($r['donor_name']); ?>" required>
                                                             </div>
                                                             <div class="col-md-6">
@@ -241,19 +241,19 @@ if (isset($_GET['msg'])) {
                                                                 <input type="text" name="donor_phone" class="form-control" value="<?php echo htmlspecialchars($r['donor_phone']); ?>">
                                                             </div>
                                                             <div class="col-12">
-                                                                <label class="form-label"></label>
+                                                                <label class="form-label"><?php echo __('پتہ', 'Address'); ?></label>
                                                                 <input type="text" name="donor_address" class="form-control" value="<?php echo htmlspecialchars($r['donor_address']); ?>">
                                                             </div>
                                                             <div class="col-md-6">
-                                                                <label class="form-label">    <span class="text-danger">*</span></label>
+                                                                <label class="form-label"><?php echo __('شے یا جنس کا نام', 'Donated Item Name'); ?> <span class="text-danger">*</span></label>
                                                                 <input type="text" name="item_name" class="form-control" value="<?php echo htmlspecialchars($r['item_name']); ?>" required>
                                                             </div>
                                                             <div class="col-md-6">
-                                                                <label class="form-label"> /  <span class="text-danger">*</span></label>
+                                                                <label class="form-label"><?php echo __('مقدار یا تعداد', 'Quantity'); ?> <span class="text-danger">*</span></label>
                                                                 <input type="text" name="quantity" class="form-control" value="<?php echo htmlspecialchars($r['quantity']); ?>" required>
                                                             </div>
                                                             <div class="col-md-6">
-                                                                <label class="form-label">  ( )</label>
+                                                                <label class="form-label"><?php echo __('تخمینی مالیت (روپے)', 'Estimated Value (PKR)'); ?></label>
                                                                 <input type="number" step="0.01" name="estimated_value" class="form-control" value="<?php echo $r['estimated_value']; ?>">
                                                             </div>
                                                             <div class="col-md-6">
@@ -263,8 +263,8 @@ if (isset($_GET['msg'])) {
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer bg-light">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"> </button>
-                                                        <button type="submit" name="edit_donation" class="btn btn-primary"><i class="fas fa-save me-1"></i>  </button>
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                                                        <button type="submit" name="edit_donation" class="btn btn-primary"><i class="fas fa-save me-1"></i> <?php echo __('تبدیلیاں محفوظ کریں', 'Save Changes'); ?></button>
                                                     </div>
                                                 </form>
                                             </div>
@@ -274,7 +274,7 @@ if (isset($_GET['msg'])) {
                             </tr>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <tr><td colspan="7" class="text-center text-muted py-4">   </td></tr>
+                            <tr><td colspan="7" class="text-center text-muted py-4"><?php echo __('کوئی جنسی عطیہ موصول نہیں ہوا ہے۔', 'No in-kind donations recorded.'); ?></td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -300,22 +300,22 @@ if (isset($_GET['msg'])) {
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="fas fa-plus-circle me-2"></i>    </h5>
+                <h5 class="modal-title"><i class="fas fa-plus-circle me-2"></i> <?php echo __('نیا جنسی عطیہ درج کریں', 'Add In-Kind Donation'); ?></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST">
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label"> <span class="text-danger">*</span></label>
+                            <label class="form-label"><?php echo __('تاریخ', 'Date'); ?> <span class="text-danger">*</span></label>
                             <input type="date" name="date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">   ()</label>
+                            <label class="form-label"><?php echo __('مینوئل رسید نمبر (اختیاری)', 'Manual Receipt # (Optional)'); ?></label>
                             <input type="text" name="manual_receipt_no" class="form-control">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">    <span class="text-danger">*</span></label>
+                            <label class="form-label"><?php echo __('عطیہ دہندہ کا نام', 'Donor Name'); ?> <span class="text-danger">*</span></label>
                             <input type="text" name="donor_name" class="form-control" required>
                         </div>
                         <div class="col-md-6">
@@ -323,19 +323,19 @@ if (isset($_GET['msg'])) {
                             <input type="text" name="donor_phone" class="form-control">
                         </div>
                         <div class="col-12">
-                            <label class="form-label"></label>
+                            <label class="form-label"><?php echo __('پتہ', 'Address'); ?></label>
                             <input type="text" name="donor_address" class="form-control">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">    (:  ) <span class="text-danger">*</span></label>
+                            <label class="form-label"><?php echo __('شے یا جنس کا نام', 'Item Name'); ?> (<?php echo __('مثلاً: گندم، پنکھے', 'e.g. Wheat, Fans'); ?>) <span class="text-danger">*</span></label>
                             <input type="text" name="item_name" class="form-control" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label"> /  <span class="text-danger">*</span></label>
-                            <input type="text" name="quantity" class="form-control" placeholder=": 50   10 " required>
+                            <label class="form-label"><?php echo __('مقدار یا تعداد', 'Quantity'); ?> <span class="text-danger">*</span></label>
+                            <input type="text" name="quantity" class="form-control" placeholder="<?php echo __('مثلاً: 50 بوری، 10 عدد', 'e.g. 50 bags, 10 pcs'); ?>" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">  (  - )</label>
+                            <label class="form-label"><?php echo __('تخمینی مالیت (اختیاری)', 'Estimated Value (Optional)'); ?></label>
                             <input type="number" step="0.01" name="estimated_value" class="form-control">
                         </div>
                         <div class="col-md-6">
@@ -346,7 +346,7 @@ if (isset($_GET['msg'])) {
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"> </button>
-                    <button type="submit" name="add_donation" class="btn btn-primary"><i class="fas fa-save me-1"></i>  </button>
+                    <button type="submit" name="add_donation" class="btn btn-primary"><i class="fas fa-save me-1"></i> <?php echo __('عطیہ محفوظ کریں', 'Save Donation'); ?></button>
                 </div>
             </form>
         </div>

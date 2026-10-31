@@ -432,10 +432,10 @@ if (!function_exists('get_tenant_plan_limits')) {
             if ($row && !empty($row['plan_name'])) {
                 return [
                     'plan_name' => $row['plan_name'],
-                    'plan_code' => $row['plan_code'] ?: 'basic',
-                    'max_students' => (int)($row['max_students'] ?: 50),
-                    'max_classes' => (int)($row['max_classes'] ?: 3),
-                    'max_teachers' => (int)($row['max_teachers'] ?: 4),
+                    'plan_code' => $row['plan_code'] ?: 'free',
+                    'max_students' => (int)($row['max_students'] ?: 20),
+                    'max_classes' => (int)($row['max_classes'] ?: 1),
+                    'max_teachers' => (int)($row['max_teachers'] ?: 2),
                     'has_mobile_app' => (int)($row['has_mobile_app'] ?? 1),
                     'has_desktop_app' => (int)($row['has_desktop_app'] ?? 1),
                     'status' => $row['sub_status'] ?: ($row['tenant_status'] ?: 'trial'),
@@ -461,10 +461,10 @@ if (!function_exists('get_tenant_plan_limits')) {
             if ($row2 && !empty($row2['plan_name'])) {
                 return [
                     'plan_name' => $row2['plan_name'],
-                    'plan_code' => $row2['plan_code'] ?: 'basic',
-                    'max_students' => (int)($row2['max_students'] ?: 50),
-                    'max_classes' => (int)($row2['max_classes'] ?: 3),
-                    'max_teachers' => (int)($row2['max_teachers'] ?: 4),
+                    'plan_code' => $row2['plan_code'] ?: 'free',
+                    'max_students' => (int)($row2['max_students'] ?: 20),
+                    'max_classes' => (int)($row2['max_classes'] ?: 1),
+                    'max_teachers' => (int)($row2['max_teachers'] ?: 2),
                     'has_mobile_app' => (int)($row2['has_mobile_app'] ?? 1),
                     'has_desktop_app' => (int)($row2['has_desktop_app'] ?? 1),
                     'status' => $row2['sub_status'] ?: ($row2['tenant_status'] ?: 'trial'),
@@ -474,15 +474,128 @@ if (!function_exists('get_tenant_plan_limits')) {
         } catch (Throwable $e) {}
 
         return [
-            'plan_name' => 'بنیادی پیکج (Basic)',
-            'plan_code' => 'basic',
-            'max_students' => 50,
-            'max_classes' => 3,
-            'max_teachers' => 4,
+            'plan_name' => 'مفت آزمائش (Free Trial)',
+            'plan_code' => 'free',
+            'max_students' => 20,
+            'max_classes' => 1,
+            'max_teachers' => 2,
             'has_mobile_app' => 1,
             'has_desktop_app' => 1,
             'status' => 'trial',
             'system_type' => 'Madrasa'
+        ];
+    }
+}
+
+/**
+ * ٹیننٹ کے لائیو استعمال کے میٹرکس کا واحد باضابطہ ذریعہ (Single Source of Truth)
+ * تمام اسکرینوں (سبسکرپشن، ڈیش بورڈ، کوٹہ چیک، موبائل API) کے لیے 100% یکساں گنتی
+ */
+if (!function_exists('get_tenant_live_usage')) {
+    function get_tenant_live_usage($pdo, $tenantId = null, $sys = null) {
+        $tid = ($tenantId !== null) ? (int)$tenantId : (int)get_current_tenant_id();
+        if ($sys === null) {
+            $sys = $_SESSION['system_type'] ?? $_SESSION['tenant_system_type'] ?? null;
+            if (!$sys && $tid) {
+                try {
+                    $stStmt = $pdo->prepare("SELECT system_type FROM tenants WHERE id = ? LIMIT 1");
+                    $stStmt->execute([$tid]);
+                    $sys = $stStmt->fetchColumn();
+                } catch (Throwable $e) {}
+            }
+            if (!$sys) $sys = 'Madrasa';
+        }
+
+        $usedClasses = 0;
+        $usedStudents = 0;
+        $usedTeachers = 0;
+
+        $tCond = ($tid <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $tid";
+
+        // Helper to check column existence safely
+        $hasCol = function($tbl, $col) use ($pdo) {
+            try {
+                return (bool)$pdo->query("SHOW COLUMNS FROM `$tbl` LIKE '$col'")->fetch();
+            } catch (Throwable $e) { return false; }
+        };
+
+        // 1. Classes Count (100% Isolated to System Type)
+        try {
+            $hasIsDel = $hasCol('classes', 'is_deleted');
+            $delCls = $hasIsDel ? " AND (is_deleted = 0 OR is_deleted IS NULL)" : "";
+            $hasStatus = $hasCol('classes', 'status');
+            $actCls = $hasStatus ? " AND (status = 'Active' OR status = '' OR status IS NULL)" : "";
+            $hasSys = $hasCol('classes', 'system_type');
+
+            if ($sys === 'Masjid') {
+                if ($hasSys) {
+                    $usedClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes WHERE $tCond AND system_type = 'Masjid' $delCls $actCls")->fetchColumn();
+                } else {
+                    try {
+                        $usedClasses = (int)$pdo->query("SELECT COUNT(*) FROM maktab_classes WHERE $tCond $delCls $actCls")->fetchColumn();
+                    } catch (Throwable $eM) { $usedClasses = 0; }
+                }
+            } else {
+                $sysCond = $hasSys ? " AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')" : "";
+                $usedClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes WHERE $tCond $sysCond $delCls $actCls")->fetchColumn();
+            }
+        } catch (Throwable $e) {}
+
+        // 2. Teachers Count
+        try {
+            $hasIsDel = $hasCol('teachers', 'is_deleted');
+            $delTea = $hasIsDel ? " AND (is_deleted = 0 OR is_deleted IS NULL)" : "";
+            $hasStatus = $hasCol('teachers', 'status');
+            $actTea = $hasStatus ? " AND (status = 'Active' OR status = '' OR status IS NULL)" : "";
+            $hasSys = $hasCol('teachers', 'system_type');
+
+            if ($sys === 'Masjid') {
+                if ($hasSys) {
+                    $usedTeachers = (int)$pdo->query("SELECT COUNT(*) FROM teachers WHERE $tCond AND system_type = 'Masjid' $delTea $actTea")->fetchColumn();
+                } else {
+                    try {
+                        $usedTeachers = (int)$pdo->query("SELECT COUNT(*) FROM maktab_teachers WHERE $tCond $delTea $actTea")->fetchColumn();
+                    } catch (Throwable $eM) { $usedTeachers = 0; }
+                }
+            } else {
+                $sysCond = $hasSys ? " AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')" : "";
+                $usedTeachers = (int)$pdo->query("SELECT COUNT(*) FROM teachers WHERE $tCond $sysCond $delTea $actTea")->fetchColumn();
+            }
+        } catch (Throwable $e) {}
+
+        // 3. Students Count (Excludes alumni/struck off/inactive)
+        try {
+            $hasIsDel = $hasCol('students', 'is_deleted');
+            $delStd = $hasIsDel ? " AND (is_deleted = 0 OR is_deleted IS NULL)" : "";
+            $hasStatus = $hasCol('students', 'status');
+            $actStd = $hasStatus ? " AND (status = 'Active' OR status = '' OR status IS NULL OR status = 'حاضر')" : "";
+            $hasSys = $hasCol('students', 'system_type');
+
+            if ($sys === 'Masjid') {
+                $hasMaktabTable = false;
+                try {
+                    $hasMaktabTable = !empty($pdo->query("SHOW TABLES LIKE 'maktab_students'")->fetchAll());
+                } catch (Throwable $eT) {}
+
+                if ($hasMaktabTable) {
+                    $hasIsDelM = $hasCol('maktab_students', 'is_deleted');
+                    $delStdM = $hasIsDelM ? " AND (is_deleted = 0 OR is_deleted IS NULL)" : "";
+                    $hasStatusM = $hasCol('maktab_students', 'status');
+                    $actStdM = $hasStatusM ? " AND (status = 'Active' OR status = '' OR status IS NULL OR status = 'حاضر')" : "";
+                    $usedStudents = (int)$pdo->query("SELECT COUNT(*) FROM maktab_students WHERE $tCond $delStdM $actStdM")->fetchColumn();
+                } elseif ($hasSys) {
+                    $usedStudents = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE $tCond AND system_type = 'Masjid' $delStd $actStd")->fetchColumn();
+                }
+            } else {
+                $sysCond = $hasSys ? " AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')" : "";
+                $usedStudents = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE $tCond $sysCond $delStd $actStd")->fetchColumn();
+            }
+        } catch (Throwable $e) {}
+
+        return [
+            'classes' => $usedClasses,
+            'teachers' => $usedTeachers,
+            'students' => $usedStudents
         ];
     }
 }
@@ -498,24 +611,11 @@ if (!function_exists('check_quota_limit')) {
         }
 
         $limits = get_tenant_plan_limits($pdo, $tid);
+        $usage = get_tenant_live_usage($pdo, $tid);
 
         // 1. درجات و کلاسز کی حد (Classes Quota)
         if ($type === 'classes') {
-            $totalClasses = 0;
-            try {
-                // Count active classes in classes table
-                $stmt1 = $pdo->prepare("SELECT COUNT(*) FROM classes WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
-                $stmt1->execute([$tid]);
-                $totalClasses += (int)$stmt1->fetchColumn();
-
-                // Also check maktab_classes table if exists
-                try {
-                    $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM maktab_classes WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
-                    $stmt2->execute([$tid]);
-                    $totalClasses += (int)$stmt2->fetchColumn();
-                } catch (Throwable $eMak) {}
-            } catch (Throwable $e) {}
-
+            $totalClasses = $usage['classes'];
             $max = (int)$limits['max_classes'];
             if ($totalClasses >= $max) {
                 return [
@@ -530,19 +630,7 @@ if (!function_exists('check_quota_limit')) {
 
         // 2. اساتذہ کی حد (Teachers Quota)
         if ($type === 'teachers') {
-            $totalTeachers = 0;
-            try {
-                $stmt1 = $pdo->prepare("SELECT COUNT(*) FROM teachers WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
-                $stmt1->execute([$tid]);
-                $totalTeachers += (int)$stmt1->fetchColumn();
-
-                try {
-                    $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM maktab_teachers WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
-                    $stmt2->execute([$tid]);
-                    $totalTeachers += (int)$stmt2->fetchColumn();
-                } catch (Throwable $eMak) {}
-            } catch (Throwable $e) {}
-
+            $totalTeachers = $usage['teachers'];
             $max = (int)$limits['max_teachers'];
             if ($totalTeachers >= $max) {
                 return [
@@ -557,19 +645,7 @@ if (!function_exists('check_quota_limit')) {
 
         // 3. طلبہ کی حد (Students Quota)
         if ($type === 'students') {
-            $totalStudents = 0;
-            try {
-                $stmt1 = $pdo->prepare("SELECT COUNT(*) FROM students WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
-                $stmt1->execute([$tid]);
-                $totalStudents += (int)$stmt1->fetchColumn();
-
-                try {
-                    $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM maktab_students WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
-                    $stmt2->execute([$tid]);
-                    $totalStudents += (int)$stmt2->fetchColumn();
-                } catch (Throwable $eMak) {}
-            } catch (Throwable $e) {}
-
+            $totalStudents = $usage['students'];
             $max = (int)$limits['max_students'];
             if ($totalStudents >= $max) {
                 return [
@@ -703,9 +779,9 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                         'name' => 'بنیادی پیکج (Basic)',
                         'name_en' => 'Basic Plan',
                         'description' => '50 طلبہ، 3 کلاسز، 4 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + اینڈرائڈ + ونڈوز)',
-                        'price' => 1500.00,
-                        'price_monthly' => 1500.00,
-                        'price_yearly' => 15000.00,
+                        'price' => 1000.00,
+                        'price_monthly' => 1000.00,
+                        'price_yearly' => 10000.00,
                         'max_students' => 50,
                         'max_classes' => 3,
                         'max_teachers' => 4,
@@ -719,9 +795,9 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                         'name' => 'معیاری پیکج (Standard)',
                         'name_en' => 'Standard Plan',
                         'description' => '100 طلبہ، 6 کلاسز، 8 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + اینڈرائڈ + ونڈوز)',
-                        'price' => 2500.00,
-                        'price_monthly' => 2500.00,
-                        'price_yearly' => 25000.00,
+                        'price' => 2000.00,
+                        'price_monthly' => 2000.00,
+                        'price_yearly' => 20000.00,
                         'max_students' => 100,
                         'max_classes' => 6,
                         'max_teachers' => 8,
@@ -735,9 +811,9 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                         'name' => 'ایڈوانس پیکج (Advanced)',
                         'name_en' => 'Advanced Plan',
                         'description' => '200 طلبہ، 12 کلاسز، 16 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + اینڈرائڈ + ونڈوز)',
-                        'price' => 4000.00,
-                        'price_monthly' => 4000.00,
-                        'price_yearly' => 40000.00,
+                        'price' => 3000.00,
+                        'price_monthly' => 3000.00,
+                        'price_yearly' => 30000.00,
                         'max_students' => 200,
                         'max_classes' => 12,
                         'max_teachers' => 16,
@@ -1101,7 +1177,7 @@ if (!function_exists('check_tenant_subscription')) {
                 }
             } elseif ($t['status'] === 'trial' && !empty($t['trial_ends_at'])) {
                 if (strtotime($t['trial_ends_at']) < strtotime(date('Y-m-d'))) {
-                    return ['ok' => false, 'message' => 'آپ کا 14 روزہ مفت ٹرائل ختم ہو چکا ہے۔ جاری رکھنے کے لیے پلان منتخب کریں۔'];
+                    return ['ok' => false, 'message' => 'آپ کا 30 روزہ مفت ٹرائل ختم ہو چکا ہے۔ جاری رکھنے کے لیے پلان منتخب کریں۔'];
                 }
             }
 

@@ -510,8 +510,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sWhereParts[] = "s.admission_number = ?";
                     $stdParams[] = $username;
                 }
+                if (in_array('roll_number', $studentCols)) {
+                    $sWhereParts[] = "s.roll_number = ?";
+                    $stdParams[] = $username;
+                }
                 if (in_array('phone', $studentCols)) {
                     $sWhereParts[] = "s.phone = ?";
+                    $stdParams[] = $username;
+                }
+                if (in_array('contact_number', $studentCols)) {
+                    $sWhereParts[] = "s.contact_number = ?";
+                    $stdParams[] = $username;
+                }
+                if (in_array('guardian_phone', $studentCols)) {
+                    $sWhereParts[] = "s.guardian_phone = ?";
                     $stdParams[] = $username;
                 }
                 if (in_array('name', $studentCols)) {
@@ -568,7 +580,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 foreach ($candStudents as $student) {
                     $sRehash = false;
-                    if (!empty($student['password']) && smart_verify_login_password($password, $student['password'], $sRehash)) {
+                    $storedPass = trim((string)($student['password'] ?? ''));
+                    // اگر طالب علم کے ریکارڈ میں پاسورڈ خالی ہے تو ڈیفالٹ 123456 تسلیم کریں
+                    $isPassValid = (!empty($storedPass)) 
+                        ? smart_verify_login_password($password, $storedPass, $sRehash) 
+                        : ($password === '123456');
+
+                    if ($isPassValid) {
                         $tId = (int)($student['t_id'] ?? $student['tenant_id'] ?? 1);
                         $tCode = !empty($student['t_code']) ? $student['t_code'] : 'MAIN01';
                         $tName = !empty($student['t_name']) ? $student['t_name'] : 'کلاؤڈ ساس ادارہ';
@@ -731,8 +749,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ڈائنامک پورٹل برانڈنگ و لوگو (بائے مائنڈ کرافٹس اے آئی)
-$mindcrafts_logo = "logo_mindcrafts.svg";
-$portal_name = "مدرسہ مینیجمنٹ سسٹم";
+$mindcrafts_logo = "app_logo_mcmms.svg";
+$portal_name = "MC-MMS (مدرسہ و مسجد مینجمنٹ سسٹم)";
 $portal_sub = "بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI Cloud ERP)";
 $portal_logo = $mindcrafts_logo;
 $is_custom_tenant = false;
@@ -742,14 +760,14 @@ if (!empty($tenant_code)) {
         $tInfo = resolve_tenant_by_code($pdo, $tenant_code);
         if ($tInfo && !empty($tInfo['name'])) {
             $portal_name = $tInfo['name'];
-            $portal_sub = ($tInfo['system_type'] === 'Masjid') ? 'جامع مسجد و مکتب کلاؤڈ پورٹل' : 'جامع نظامِ انتظام و تعلیم';
+            $isMasjid = ($tInfo['system_type'] === 'Masjid');
+            $portal_sub = $isMasjid ? 'جامع مسجد و مکتب کلاؤڈ پورٹل' : 'جامع نظامِ انتظام و تعلیم';
             $is_custom_tenant = true;
             $appSet = get_tenant_settings($pdo, $tInfo['id']);
-            if (!empty($appSet['logo_path']) && $appSet['logo_path'] !== 'logo.png' && file_exists(__DIR__ . '/' . $appSet['logo_path'])) {
+            if (!empty($appSet['logo_path']) && $appSet['logo_path'] !== 'logo.png' && !str_contains(strtolower($appSet['logo_path']), 'ashraf') && file_exists(__DIR__ . '/' . $appSet['logo_path'])) {
                 $portal_logo = $appSet['logo_path'];
             } else {
-                // اگر ادارے نے اپنا لوگو اپلوڈ نہ کیا ہو تو مائنڈ کرافٹس اے آئی کا لوگو لگائیں، کبھی بھی اشرف المدارس کا لوگو نہ دکھائیں
-                $portal_logo = $mindcrafts_logo;
+                $portal_logo = $isMasjid ? 'default_masjid_logo.svg' : 'default_madrasa_logo.svg';
             }
         }
     } catch (Throwable $e) {}
@@ -757,11 +775,11 @@ if (!empty($tenant_code)) {
 ?>
 
 <!DOCTYPE html>
-<html lang="ur" dir="rtl">
+<html lang="<?php echo $lang; ?>" dir="<?php echo ($lang=='ur')?'rtl':'ltr'; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لاگ ان - <?php echo htmlspecialchars($portal_name); ?></title>
+    <title><?php echo ($lang=='ur')?'لاگ ان':'Login'; ?> - <?php echo htmlspecialchars($portal_name); ?></title>
     
     <script>
         // Immediate theme load logic to prevent FOUC
@@ -773,7 +791,11 @@ if (!empty($tenant_code)) {
         })();
     </script>
 
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <?php if($lang == 'ur'): ?>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <?php else: ?>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <?php endif; ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
     
@@ -781,7 +803,7 @@ if (!empty($tenant_code)) {
 
     <style>
         body {
-            font-family: 'Noto Nastaliq Urdu', Tahoma, sans-serif;
+            font-family: <?php echo ($lang=='ur') ? "'Noto Nastaliq Urdu', Tahoma, sans-serif" : "'Plus Jakarta Sans', Roboto, sans-serif"; ?>;
             background-color: var(--bg) !important;
             color: var(--text-main) !important;
             display: flex;
@@ -842,19 +864,19 @@ if (!empty($tenant_code)) {
             <h3 class="mb-1 text-success fw-bold urdu-font"><?php echo htmlspecialchars($portal_name); ?></h3>
             <p class="text-muted small mb-2 urdu-font"><?php echo htmlspecialchars($portal_sub); ?></p>
             <div class="badge px-3 py-1 mb-2" style="background: rgba(6, 182, 212, 0.15); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 50px; font-size: 11px;">
-                <i class="fas fa-brain me-1"></i> بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)
+                <i class="fas fa-brain me-1"></i> <?php echo ($lang=='en') ? 'By Mindcrafts AI Cloud ERP' : 'بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)'; ?>
             </div>
         </div>
         
         <?php if (isset($_GET['registered']) || (isset($_GET['msg']) && $_GET['msg'] === 'registered')): ?>
             <div class="alert alert-success p-2 small mb-3 text-start border-0 shadow-sm" style="background: rgba(16, 185, 129, 0.18); color: #10b981; border-radius: 12px;">
-                <i class="fas fa-check-circle me-1"></i> <strong>مبارک ہو!</strong> آپ کا ادارہ کامیابی سے رجسٹر ہو گیا ہے۔ براہِ کرم اپنے یوزر نیم اور پاسورڈ سے لاگ ان کریں۔
+                <i class="fas fa-check-circle me-1"></i> <strong><?php echo ($lang=='en') ? 'Congratulations!' : 'مبارک ہو!'; ?></strong> <?php echo ($lang=='en') ? 'Your institute has been successfully registered. Please log in with your credentials.' : 'آپ کا ادارہ کامیابی سے رجسٹر ہو گیا ہے۔ براہِ کرم اپنے یوزر نیم اور پاسورڈ سے لاگ ان کریں۔'; ?>
             </div>
         <?php endif; ?>
 
         <?php if (isset($_GET['timeout'])): ?>
             <div class="alert alert-warning p-2 small mb-3 text-start border-0 shadow-sm" style="background: rgba(245, 158, 11, 0.18); color: #f59e0b; border-radius: 12px;">
-                <i class="fas fa-clock me-1"></i> سیشن کی میعاد ختم ہو گئی ہے۔ براہِ کرم دوبارہ لاگ ان کریں۔
+                <i class="fas fa-clock me-1"></i> <?php echo ($lang=='en') ? 'Your session has expired. Please log in again.' : 'سیشن کی میعاد ختم ہو گئی ہے۔ براہِ کرم دوبارہ لاگ ان کریں۔'; ?>
             </div>
         <?php endif; ?>
 
@@ -866,35 +888,35 @@ if (!empty($tenant_code)) {
         
         <form method="POST" action="login.php">
             <div class="mb-3 text-start">
-                <label class="form-label text-success fw-bold small">ادارہ کوڈ (Institute Code) — اختیاری</label>
+                <label class="form-label text-success fw-bold small"><?php echo ($lang=='en') ? 'Institute Code (Optional)' : 'ادارہ کوڈ (Institute Code) — اختیاری'; ?></label>
                 <div class="input-group">
                     <span class="input-group-text border-end-0" style="background-color: var(--input-bg, #161D2B); border-color: var(--input-border, rgba(255,255,255,0.15)); color: var(--primary, #10b981);">
                         <i class="fas fa-university"></i>
                     </span>
-                    <input type="text" name="tenant_code" class="form-control text-uppercase border-start-0" value="<?php echo htmlspecialchars($tenant_code); ?>" placeholder="مثلاً M-26-001 (یا خالی چھوڑیں)">
+                    <input type="text" name="tenant_code" class="form-control text-uppercase border-start-0" value="<?php echo htmlspecialchars($tenant_code); ?>" placeholder="<?php echo ($lang=='en') ? 'e.g. M-26-001 (or leave blank)' : 'مثلاً M-26-001 (یا خالی چھوڑیں)'; ?>">
                 </div>
                 <small class="text-muted d-block mt-1" style="font-size: 11px;">
-                    نئے ادارے اپنا رجسٹریشن کوڈ درج کر سکتے ہیں، یا اسے خالی چھوڑ کر براہِ راست لاگ ان کریں۔
+                    <?php echo ($lang=='en') ? 'New institutes can enter their registration code, or leave blank to log in directly.' : 'نئے ادارے اپنا رجسٹریشن کوڈ درج کر سکتے ہیں، یا اسے خالی چھوڑ کر براہِ راست لاگ ان کریں۔'; ?>
                 </small>
             </div>
             
             <div class="mb-3 text-start">
-                <label class="form-label text-success fw-bold small">یوزر نیم / ای میل / فون نمبر / ادارہ کوڈ</label>
+                <label class="form-label text-success fw-bold small"><?php echo ($lang=='en') ? 'Username / Email / Phone / Institute Code' : 'یوزر نیم / ای میل / فون نمبر / ادارہ کوڈ'; ?></label>
                 <div class="input-group">
                     <span class="input-group-text border-end-0" style="background-color: var(--input-bg, #161D2B); border-color: var(--input-border, rgba(255,255,255,0.15)); color: var(--primary, #10b981);">
                         <i class="fas fa-user"></i>
                     </span>
-                    <input type="text" name="username" class="form-control border-start-0" required placeholder="یوزر نیم، ای میل، فون یا ادارہ کوڈ درج کریں..." value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>">
+                    <input type="text" name="username" class="form-control border-start-0" required placeholder="<?php echo ($lang=='en') ? 'Enter username, email, phone or institute code...' : 'یوزر نیم، ای میل، فون یا ادارہ کوڈ درج کریں...'; ?>" value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>">
                 </div>
             </div>
             
             <div class="mb-4 text-start">
-                <label class="form-label text-success fw-bold small">پاسورڈ</label>
+                <label class="form-label text-success fw-bold small"><?php echo ($lang=='en') ? 'Password' : 'پاسورڈ'; ?></label>
                 <div class="input-group">
                     <span class="input-group-text border-end-0" style="background-color: var(--input-bg, #161D2B); border-color: var(--input-border, rgba(255,255,255,0.15)); color: var(--primary, #10b981);">
                         <i class="fas fa-lock"></i>
                     </span>
-                    <input type="password" name="password" id="login_password" class="form-control border-start-0 border-end-0" required placeholder="پاسورڈ درج کریں...">
+                    <input type="password" name="password" id="login_password" class="form-control border-start-0 border-end-0" required placeholder="<?php echo ($lang=='en') ? 'Enter password...' : 'پاسورڈ درج کریں...'; ?>">
                     <button class="btn" type="button" onclick="togglePassView()" style="background-color: var(--input-bg, #161D2B); border: 1px solid var(--input-border, rgba(255,255,255,0.15)); border-right: 0; color: var(--text-muted, #94a3b8);">
                         <i class="fas fa-eye" id="pass_eye_icon"></i>
                     </button>
@@ -902,21 +924,21 @@ if (!empty($tenant_code)) {
             </div>
             
             <button type="submit" name="login" class="btn btn-success w-100 py-2 fw-bold shadow-sm" style="border-radius: 12px; font-size: 16px;">
-                <i class="fas fa-sign-in-alt me-1"></i> محفوظ لاگ ان کریں
+                <i class="fas fa-sign-in-alt me-1"></i> <?php echo ($lang=='en') ? 'Secure Login' : 'محفوظ لاگ ان کریں'; ?>
             </button>
         </form>
 
         <div class="mt-4 pt-3 border-top" style="border-color: rgba(255,255,255,0.1) !important;">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <a href="register.php" class="text-success text-decoration-none small fw-bold"><i class="fas fa-plus-circle me-1"></i> نیا ادارہ رجسٹر کریں</a>
-                <a href="forgot_password.php" class="text-danger text-decoration-none small">پاسورڈ بھول گئے؟</a>
+                <a href="register.php" class="text-success text-decoration-none small fw-bold"><i class="fas fa-plus-circle me-1"></i> <?php echo ($lang=='en') ? 'Register New Institute' : 'نیا ادارہ رجسٹر کریں'; ?></a>
+                <a href="forgot_password.php" class="text-danger text-decoration-none small"><?php echo ($lang=='en') ? 'Forgot Password?' : 'پاسورڈ بھول گئے؟'; ?></a>
             </div>
             <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top border-secondary border-opacity-10">
-                <a href="index.php" class="small text-muted text-decoration-none">← ہوم لینڈنگ پیج پر جائیں</a>
-                <a href="super_admin.php" class="small text-info text-opacity-75 text-decoration-none"><i class="fas fa-shield-alt me-1"></i> سپر ایڈمن پورٹل</a>
+                <a href="index.php" class="small text-muted text-decoration-none"><?php echo ($lang=='en') ? '← Go to Home Page' : '← ہوم لینڈنگ پیج پر جائیں'; ?></a>
+                <a href="super_admin.php" class="small text-info text-opacity-75 text-decoration-none"><i class="fas fa-shield-alt me-1"></i> <?php echo ($lang=='en') ? 'Super Admin Portal' : 'سپر ایڈمن پورٹل'; ?></a>
             </div>
             <div class="text-center mt-3 pt-2 border-top border-secondary border-opacity-10">
-                <span class="badge bg-secondary bg-opacity-25 text-secondary border font-monospace" style="font-size: 11px;">v5.7.123 (SaaS Edition)</span>
+                <span class="badge bg-secondary bg-opacity-25 text-secondary border font-monospace" style="font-size: 11px;">v5.7.134 (SaaS Edition)</span>
             </div>
         </div>
     </div>

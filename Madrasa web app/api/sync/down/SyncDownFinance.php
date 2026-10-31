@@ -171,21 +171,49 @@ class SyncDownFinance {
             try { $pdo->exec("ALTER TABLE staff_loans ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"); } catch (Throwable $e) {}
             try { $pdo->exec("ALTER TABLE loan_transactions ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"); } catch (Throwable $e) {}
 
-            $deptDateCond = $since_dt ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')" : "";
-            $data['departments'] = $ctx->fetchAll("SELECT * FROM departments WHERE $tCond $deptDateCond ORDER BY name ASC LIMIT 1000");
+            // Departments
+            try {
+                $deptDateCond = $since_dt ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')" : "";
+                $data['departments'] = $ctx->fetchAll("SELECT * FROM departments WHERE $tCond $deptDateCond ORDER BY name ASC LIMIT 1000");
+            } catch (Throwable $e) {
+                try {
+                    $data['departments'] = $ctx->fetchAll("SELECT * FROM departments WHERE $tCond ORDER BY name ASC LIMIT 1000");
+                } catch (Throwable $e2) { $data['departments'] = []; }
+            }
 
-            $accDateCond = $since_dt ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')" : "";
-            $data['acc_chart_of_accounts'] = $ctx->fetchAll("SELECT * FROM acc_chart_of_accounts WHERE $tCond $accDateCond ORDER BY code ASC LIMIT 1000");
+            // Chart of Accounts
+            try {
+                $accDateCond = $since_dt ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')" : "";
+                $data['acc_chart_of_accounts'] = $ctx->fetchAll("SELECT * FROM acc_chart_of_accounts WHERE $tCond $accDateCond ORDER BY code ASC LIMIT 1000");
+            } catch (Throwable $e) {
+                try {
+                    $data['acc_chart_of_accounts'] = $ctx->fetchAll("SELECT * FROM acc_chart_of_accounts WHERE $tCond ORDER BY code ASC LIMIT 1000");
+                } catch (Throwable $e2) { $data['acc_chart_of_accounts'] = []; }
+            }
 
-            $voucherDateCond = $since_dt 
-                ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')"
-                : ($since_date ? " AND (date >= '$since_date' OR created_at >= '$since_date' OR type = 'Contra' OR reference LIKE 'TRANSFER-%')" : "");
-            $data['acc_vouchers'] = $ctx->fetchAll("SELECT * FROM acc_vouchers WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$voucherDateCond ORDER BY date DESC, id DESC LIMIT 1000");
+            // Vouchers
+            try {
+                $voucherDateCond = $since_dt 
+                    ? " AND (created_at >= '$since_dt' OR date >= '" . substr($since_dt, 0, 10) . "' OR type = 'Contra' OR reference LIKE 'TRANSFER-%')"
+                    : ($since_date ? " AND (date >= '$since_date' OR created_at >= '$since_date' OR type = 'Contra' OR reference LIKE 'TRANSFER-%')" : "");
+                $data['acc_vouchers'] = $ctx->fetchAll("SELECT * FROM acc_vouchers WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$voucherDateCond ORDER BY date DESC, id DESC LIMIT 1000");
+            } catch (Throwable $e) {
+                try {
+                    $data['acc_vouchers'] = $ctx->fetchAll("SELECT * FROM acc_vouchers WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY date DESC, id DESC LIMIT 500");
+                } catch (Throwable $e2) { $data['acc_vouchers'] = []; }
+            }
 
-            $ledgerDateCond = $since_dt 
-                ? " AND (e.created_at >= '$since_dt' OR v.updated_at >= '$since_dt' OR v.created_at >= '$since_dt')"
-                : ($since_date ? " AND (v.date >= '$since_date' OR v.created_at >= '$since_date' OR v.type = 'Contra' OR v.reference LIKE 'TRANSFER-%')" : "");
-            $data['acc_ledger_entries'] = $ctx->fetchAll("SELECT e.*, v.voucher_no FROM acc_ledger_entries e JOIN acc_vouchers v ON e.voucher_id = v.id WHERE (v.tenant_id = $tId OR v.tenant_id IS NULL) AND (v.is_deleted = 0 OR v.is_deleted IS NULL)$ledgerDateCond ORDER BY e.id DESC LIMIT 5000");
+            // Ledger Entries
+            try {
+                $ledgerDateCond = $since_dt 
+                    ? " AND (v.created_at >= '$since_dt' OR v.date >= '" . substr($since_dt, 0, 10) . "' OR v.type = 'Contra' OR v.reference LIKE 'TRANSFER-%')"
+                    : ($since_date ? " AND (v.date >= '$since_date' OR v.created_at >= '$since_date' OR v.type = 'Contra' OR v.reference LIKE 'TRANSFER-%')" : "");
+                $data['acc_ledger_entries'] = $ctx->fetchAll("SELECT e.*, v.voucher_no FROM acc_ledger_entries e JOIN acc_vouchers v ON e.voucher_id = v.id WHERE (v.tenant_id = $tId OR v.tenant_id IS NULL) AND (v.is_deleted = 0 OR v.is_deleted IS NULL)$ledgerDateCond ORDER BY e.id DESC LIMIT 5000");
+            } catch (Throwable $e) {
+                try {
+                    $data['acc_ledger_entries'] = $ctx->fetchAll("SELECT e.*, v.voucher_no FROM acc_ledger_entries e JOIN acc_vouchers v ON e.voucher_id = v.id WHERE (v.tenant_id = $tId OR v.tenant_id IS NULL) AND (v.is_deleted = 0 OR v.is_deleted IS NULL) ORDER BY e.id DESC LIMIT 2000");
+                } catch (Throwable $e2) { $data['acc_ledger_entries'] = []; }
+            }
 
             $payrollDateCond = $since_dt
                 ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')"

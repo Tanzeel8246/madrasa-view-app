@@ -53,6 +53,12 @@ class SyncConfig {
     'job_applicants',
     'web_pages',
     'announcements',
+    'course_structure',
+    'course_subjects',
+    'student_course_enrollment',
+    'exam_subject_results',
+    'student_year_promotion',
+    'settings',
   ];
 
   static const Map<String, String> apiKeyMap = {
@@ -103,6 +109,12 @@ class SyncConfig {
     'job_applicants': 'job_applicants',
     'web_pages': 'web_pages',
     'announcements': 'announcements',
+    'course_structure': 'course_structure',
+    'course_subjects': 'course_subjects',
+    'student_course_enrollment': 'student_course_enrollment',
+    'exam_subject_results': 'exam_subject_results',
+    'student_year_promotion': 'student_year_promotion',
+    'settings': 'settings',
   };
 
   static const Map<String, String> uploadPermissionMap = {
@@ -159,5 +171,11 @@ class SyncConfig {
     'job_applicants': 'manage_teachers',
     'web_pages': 'manage_notices',
     'announcements': 'manage_notices',
+    'course_structure': 'manage_academics',
+    'course_subjects': 'manage_academics',
+    'student_course_enrollment': 'manage_academics',
+    'exam_subject_results': 'manage_exams',
+    'student_year_promotion': 'manage_academics',
+    'settings': 'manage_settings',
   };
 }

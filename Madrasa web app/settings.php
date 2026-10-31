@@ -98,7 +98,7 @@ if (isset($_POST['update'])) {
         $_SESSION['tenant_name'] = $_POST['m_name'];
     } catch (Throwable $te) {}
     
-    echo "<div class='container mt-3'><div class='alert alert-success fw-bold shadow-sm'><i class='fas fa-check-circle me-2'></i> سیٹنگ اور تمام کسٹم دستاویزات کامیابی سے محفوظ ہو گئیں!</div></div>";
+    echo "<div class='container mt-3'><div class='alert alert-success fw-bold shadow-sm'><i class='fas fa-check-circle me-2'></i> " . __('سیٹنگ اور تمام کسٹم دستاویزات کامیابی سے محفوظ ہو گئیں!', 'Settings and all custom documents saved successfully!') . "</div></div>";
     // Refresh settings
     $set = get_tenant_settings($pdo, $cur_tenant_id);
 }
@@ -106,10 +106,10 @@ if (isset($_POST['update'])) {
 
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <h2 class="text-dark fw-bold m-0"><i class="fas fa-sliders-h me-2 text-primary"></i> سافٹ ویئر سیٹنگز و ملٹی ٹیننٹ کسٹم برانڈنگ</h2>
+        <h2 class="text-dark fw-bold m-0"><i class="fas fa-sliders-h me-2 text-primary"></i> <?php echo __('سافٹ ویئر سیٹنگز و ملٹی ٹیننٹ کسٹم برانڈنگ', 'Software Settings & Multi-Tenant Custom Branding'); ?></h2>
         <div class="d-flex gap-2">
-            <a href="setup_wizard.php" class="btn btn-success fw-bold shadow-sm"><i class="fas fa-magic me-1"></i> نیا سیٹ اپ وزرڈ کھولیں</a>
-            <span class="badge bg-primary px-3 py-2 fs-6 d-flex align-items-center"><i class="fas fa-building me-1"></i> ٹیننٹ پروفائل مینجمنٹ</span>
+            <a href="setup_wizard.php" class="btn btn-success fw-bold shadow-sm"><i class="fas fa-magic me-1"></i> <?php echo __('نیا سیٹ اپ وزرڈ کھولیں', 'Open Setup Wizard'); ?></a>
+            <span class="badge bg-primary px-3 py-2 fs-6 d-flex align-items-center"><i class="fas fa-building me-1"></i> <?php echo __('ٹیننٹ پروفائل مینجمنٹ', 'Tenant Profile Management'); ?></span>
         </div>
     </div>
 
@@ -121,40 +121,40 @@ if (isset($_POST['update'])) {
                 <!-- کارڈ 1: مدرسہ بنیادی معلومات -->
                 <div class="card shadow-sm border-0 mb-4" style="border-radius: 12px;">
                     <div class="card-header bg-white border-0 pt-4 px-4 pb-0">
-                        <h5 class="text-primary fw-bold"><i class="fas fa-university me-2"></i> مدرسہ / ادارے کی بنیادی معلومات</h5>
-                        <p class="text-muted small">یہ معلومات تمام رسیدوں، سٹوڈنٹ کارڈز اور اسناد پر خودکار طور پر نمایاں ہوں گی۔</p>
+                        <h5 class="text-primary fw-bold"><i class="fas fa-university me-2"></i> <?php echo __('مدرسہ / ادارے کی بنیادی معلومات', 'Madrasa / Institute Basic Information'); ?></h5>
+                        <p class="text-muted small"><?php echo __('یہ معلومات تمام رسیدوں، سٹوڈنٹ کارڈز اور اسناد پر خودکار طور پر نمایاں ہوں گی۔', 'This information will automatically appear on all receipts, student cards, and certificates.'); ?></p>
                     </div>
                     <div class="card-body p-4 pt-2">
                         <div class="mb-3">
-                            <label class="fw-bold mb-1">مدرسہ کا آفیشل نام <span class="text-danger">*</span></label>
-                            <input type="text" name="m_name" class="form-control form-control-lg fw-bold" value="<?php echo htmlspecialchars($set['madrasa_name'] ?? ''); ?>" required placeholder="مثلاً: جامعہ اشرف المدارس">
+                            <label class="fw-bold mb-1"><?php echo __('مدرسہ کا آفیشل نام', 'Official Madrasa Name'); ?> <span class="text-danger">*</span></label>
+                            <input type="text" name="m_name" class="form-control form-control-lg fw-bold" value="<?php echo htmlspecialchars($set['madrasa_name'] ?? ''); ?>" required placeholder="<?php echo __('مثلاً: جامعہ اشرف المدارس', 'e.g. Jamia Ashraf-ul-Madaris'); ?>">
                         </div>
 
                         <div class="mb-3">
-                            <label class="fw-bold mb-1">سلوگن یا ذیلی عنوان (Tagline)</label>
-                            <input type="text" name="tagline" class="form-control" value="<?php echo htmlspecialchars($set['tagline'] ?? 'العلم نور - تعلیم و تربیت کا گہوارہ'); ?>" placeholder="مثلاً: شعبہ حفظ و ناظرہ و تجوید القرآن">
+                            <label class="fw-bold mb-1"><?php echo __('سلوگن یا ذیلی عنوان (Tagline)', 'Tagline or Subtitle'); ?></label>
+                            <input type="text" name="tagline" class="form-control" value="<?php echo htmlspecialchars($set['tagline'] ?? 'العلم نور - تعلیم و تربیت کا گہوارہ'); ?>" placeholder="<?php echo __('مثلاً: شعبہ حفظ و ناظرہ و تجوید القرآن', 'e.g. Department of Hifz & Nazra'); ?>">
                         </div>
 
                         <div class="row g-2 mb-3">
                             <div class="col-md-6">
-                                <label class="fw-bold mb-1">رابطہ فون نمبر / واٹس ایپ</label>
+                                <label class="fw-bold mb-1"><?php echo __('رابطہ فون نمبر / واٹس ایپ', 'Contact Phone / WhatsApp'); ?></label>
                                 <input type="text" name="phone" class="form-control" value="<?php echo htmlspecialchars($set['phone'] ?? ''); ?>" placeholder="0300-1234567">
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold mb-1 text-danger">موجودہ ہجری سال (Current Hijri Year)</label>
+                                <label class="fw-bold mb-1 text-danger"><?php echo __('موجودہ ہجری سال (Current Hijri Year)', 'Current Hijri Year'); ?></label>
                                 <input type="text" name="h_year" class="form-control fw-bold fs-5 text-center" value="<?php echo htmlspecialchars($set['current_hijri_year'] ?? '1447'); ?>" required>
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="fw-bold mb-1">مدرسہ کا مکمل پتہ</label>
-                            <textarea name="address" class="form-control" rows="2" placeholder="شہر، علاقہ، گلی یا قریبی معروف مقام"><?php echo htmlspecialchars($set['address'] ?? ''); ?></textarea>
+                            <label class="fw-bold mb-1"><?php echo __('مدرسہ کا مکمل پتہ', 'Full Madrasa Address'); ?></label>
+                            <textarea name="address" class="form-control" rows="2" placeholder="<?php echo __('شہر، علاقہ، گلی یا قریبی معروف مقام', 'City, Area, Street or landmark'); ?>"><?php echo htmlspecialchars($set['address'] ?? ''); ?></textarea>
                         </div>
 
                         <div class="mb-3 p-3 bg-light rounded border border-success border-opacity-25">
-                            <label class="fw-bold mb-1 text-success"><i class="fas fa-mosque me-1"></i> مسجد کا آفیشل نام (Masjid Name)</label>
-                            <input type="text" name="masjid_name" class="form-control fw-bold" value="<?php echo htmlspecialchars($set['masjid_name'] ?? 'مسجد اشرف المدارس'); ?>" placeholder="مثلاً: جامع مسجد اشرف المدارس">
-                            <small class="text-muted d-block mt-1">مسجد موڈ اور مسجد عطیات/رسیدوں پر یہ نام استعمال ہوگا۔</small>
+                            <label class="fw-bold mb-1 text-success"><i class="fas fa-mosque me-1"></i> <?php echo __('مسجد کا آفیشل نام (Masjid Name)', 'Official Masjid Name'); ?></label>
+                            <input type="text" name="masjid_name" class="form-control fw-bold" value="<?php echo htmlspecialchars($set['masjid_name'] ?? 'مسجد اشرف المدارس'); ?>" placeholder="<?php echo __('مثلاً: جامع مسجد اشرف المدارس', 'e.g. Jamia Masjid Ashraf-ul-Madaris'); ?>">
+                            <small class="text-muted d-block mt-1"><?php echo __('مسجد موڈ اور مسجد عطیات/رسیدوں پر یہ نام استعمال ہوگا۔', 'This name will be used in Masjid Mode and for Masjid receipts.'); ?></small>
                         </div>
                     </div>
                 </div>
@@ -162,18 +162,18 @@ if (isset($_POST['update'])) {
                 <!-- کارڈ 2: لوگو اور مہر اپلوڈ -->
                 <div class="card shadow-sm border-0 mb-4" style="border-radius: 12px;">
                     <div class="card-header bg-white border-0 pt-4 px-4 pb-0">
-                        <h5 class="text-success fw-bold"><i class="fas fa-certificate me-2"></i> کسٹم لوگو اور دستخط / مہر</h5>
-                        <p class="text-muted small">مدرسہ کا آفیشل لوگو اور مجاز دستخط کنندہ کے ڈیجیٹل دستخط و مہر۔</p>
+                        <h5 class="text-success fw-bold"><i class="fas fa-certificate me-2"></i> <?php echo __('کسٹم لوگو اور دستخط / مہر', 'Custom Logo & Stamp / Signature'); ?></h5>
+                        <p class="text-muted small"><?php echo __('مدرسہ کا آفیشل لوگو اور مجاز دستخط کنندہ کے ڈیجیٹل دستخط و مہر۔', 'Official Madrasa logo and digital signature/stamp of authorized signatory.'); ?></p>
                     </div>
                     <div class="card-body p-4 pt-2">
                         <!-- لوگو اپلوڈ -->
                         <div class="p-3 mb-3 bg-light rounded border">
                             <div class="d-flex align-items-center justify-content-between mb-2">
-                                <label class="fw-bold m-0"><i class="fas fa-image me-1 text-primary"></i> مدرسہ کا آفیشل لوگو (Logo)</label>
+                                <label class="fw-bold m-0"><i class="fas fa-image me-1 text-primary"></i> <?php echo __('مدرسہ کا آفیشل لوگو (Logo)', 'Official Madrasa Logo'); ?></label>
                                 <?php if (!empty($set['logo_path']) && file_exists(__DIR__ . '/' . $set['logo_path'])): ?>
-                                    <span class="badge bg-success">فعال لوگو موجود ہے</span>
+                                    <span class="badge bg-success"><?php echo __('فعال لوگو موجود ہے', 'Active logo uploaded'); ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary">ڈیفالٹ لوگو</span>
+                                    <span class="badge bg-secondary"><?php echo __('ڈیفالٹ لوگو', 'Default Logo'); ?></span>
                                 <?php endif; ?>
                             </div>
                             <div class="d-flex gap-3 align-items-center">
@@ -182,7 +182,7 @@ if (isset($_POST['update'])) {
                                 </div>
                                 <div class="flex-grow-1">
                                     <input type="file" name="logo_file" class="form-control mb-2" accept="image/*">
-                                    <small class="text-muted d-block">سفارش کردہ فارمیٹ: شفاف PNG یا WebP (سائز 500x500 پکسل)</small>
+                                    <small class="text-muted d-block"><?php echo __('سفارش کردہ فارمیٹ: شفاف PNG یا WebP (سائز 500x500 پکسل)', 'Recommended format: Transparent PNG or WebP (Size 500x500 px)'); ?></small>
                                 </div>
                             </div>
                         </div>
@@ -190,11 +190,11 @@ if (isset($_POST['update'])) {
                         <!-- مسجد کا آفیشل لوگو اپلوڈ -->
                         <div class="p-3 mb-3 bg-light rounded border border-success border-opacity-25">
                             <div class="d-flex align-items-center justify-content-between mb-2">
-                                <label class="fw-bold m-0 text-success"><i class="fas fa-mosque me-1"></i> مسجد کا آفیشل لوگو (Masjid Logo)</label>
+                                <label class="fw-bold m-0 text-success"><i class="fas fa-mosque me-1"></i> <?php echo __('مسجد کا آفیشل لوگو (Masjid Logo)', 'Official Masjid Logo'); ?></label>
                                 <?php if (!empty($set['masjid_logo_path']) && file_exists(__DIR__ . '/' . $set['masjid_logo_path'])): ?>
-                                    <span class="badge bg-success">لوگو موجود ہے</span>
+                                    <span class="badge bg-success"><?php echo __('لوگو موجود ہے', 'Logo uploaded'); ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary">ڈیفالٹ لوگو</span>
+                                    <span class="badge bg-secondary"><?php echo __('ڈیفالٹ لوگو', 'Default Logo'); ?></span>
                                 <?php endif; ?>
                             </div>
                             <div class="d-flex gap-3 align-items-center">
@@ -207,7 +207,7 @@ if (isset($_POST['update'])) {
                                 </div>
                                 <div class="flex-grow-1">
                                     <input type="file" name="masjid_logo_file" class="form-control mb-2" accept="image/*">
-                                    <small class="text-muted d-block">مسجد کا مخصوص لوگو (شفاف PNG یا WebP)</small>
+                                    <small class="text-muted d-block"><?php echo __('مسجد کا مخصوص لوگو (شفاف PNG یا WebP)', 'Specific Masjid Logo (Transparent PNG or WebP)'); ?></small>
                                 </div>
                             </div>
                         </div>
@@ -215,11 +215,11 @@ if (isset($_POST['update'])) {
                         <!-- دستخط و مہر اپلوڈ -->
                         <div class="p-3 bg-light rounded border">
                             <div class="d-flex align-items-center justify-content-between mb-2">
-                                <label class="fw-bold m-0"><i class="fas fa-stamp me-1 text-warning"></i> پرنسپل / مہتمم کے ڈیجیٹل دستخط و مہر</label>
+                                <label class="fw-bold m-0"><i class="fas fa-stamp me-1 text-warning"></i> <?php echo __('پرنسپل / مہتمم کے ڈیجیٹل دستخط و مہر', 'Digital Signature & Stamp of Principal/Admin'); ?></label>
                                 <?php if (!empty($set['signature_stamp_path']) && file_exists(__DIR__ . '/' . $set['signature_stamp_path'])): ?>
-                                    <span class="badge bg-success">مہر موجود ہے</span>
+                                    <span class="badge bg-success"><?php echo __('مہر موجود ہے', 'Stamp uploaded'); ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary">سیٹ نہیں ہے</span>
+                                    <span class="badge bg-secondary"><?php echo __('سیٹ نہیں ہے', 'Not configured'); ?></span>
                                 <?php endif; ?>
                             </div>
                             <div class="d-flex gap-3 align-items-center">
@@ -232,7 +232,7 @@ if (isset($_POST['update'])) {
                                 </div>
                                 <div class="flex-grow-1">
                                     <input type="file" name="signature_stamp_file" class="form-control mb-2" accept="image/*">
-                                    <small class="text-muted d-block">شفاف پس منظر (Transparent PNG) دستخط یا مہر کی تصویر، جو رسید اور سند پر پرنٹ ہوگی۔</small>
+                                    <small class="text-muted d-block"><?php echo __('شفاف پس منظر (Transparent PNG) دستخط یا مہر کی تصویر، جو رسید اور سند پر پرنٹ ہوگی۔', 'Transparent PNG image of signature or stamp, printed on receipts and certificates.'); ?></small>
                                 </div>
                             </div>
                         </div>
@@ -245,16 +245,16 @@ if (isset($_POST['update'])) {
                 <!-- کارڈ 3: کسٹم بیک گراؤنڈز (رسید، کارڈ، سند) -->
                 <div class="card shadow-sm border-0 mb-4" style="border-radius: 12px;">
                     <div class="card-header bg-white border-0 pt-4 px-4 pb-0">
-                        <h5 class="text-warning fw-bold"><i class="fas fa-file-invoice me-2"></i> کسٹم رسید، سٹوڈنٹ کارڈ و سند بیک گراؤنڈز</h5>
-                        <p class="text-muted small">مدرسہ کی اپنی آفیشل پرنٹ شدہ رسیدیں، کارڈز یا اسناد کے خالی بیک گراؤنڈز یہاں اپلوڈ کریں۔</p>
+                        <h5 class="text-warning fw-bold"><i class="fas fa-file-invoice me-2"></i> <?php echo __('کسٹم رسید، سٹوڈنٹ کارڈ و سند بیک گراؤنڈز', 'Custom Receipt, Student ID Card & Certificate Backgrounds'); ?></h5>
+                        <p class="text-muted small"><?php echo __('مدرسہ کی اپنی آفیشل پرنٹ شدہ رسیدیں، کارڈز یا اسناد کے خالی بیک گراؤنڈز یہاں اپلوڈ کریں۔', 'Upload blank scanned templates of your official receipts, cards, and certificates here.'); ?></p>
                     </div>
                     <div class="card-body p-4 pt-2">
                         
                         <!-- 1. مدرسہ رسید بیک گراؤنڈ -->
                         <div class="p-3 mb-3 bg-light rounded border">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <label class="fw-bold m-0"><i class="fas fa-receipt me-1 text-success"></i> مدرسہ رسید کا کسٹم بیک گراؤنڈ</label>
-                                <a href="print_receipt.php?id=1" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 11px;">پریویو دیکھیں</a>
+                                <label class="fw-bold m-0"><i class="fas fa-receipt me-1 text-success"></i> <?php echo __('مدرسہ رسید کا کسٹم بیک گراؤنڈ', 'Madrasa Receipt Custom Background'); ?></label>
+                                <a href="print_receipt.php?id=1" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 11px;"><?php echo __('پریویو دیکھیں', 'View Preview'); ?></a>
                             </div>
                             <div class="d-flex gap-3 align-items-center">
                                 <div class="border rounded bg-white p-1 text-center" style="width: 100px; height: 65px;">
@@ -262,7 +262,7 @@ if (isset($_POST['update'])) {
                                 </div>
                                 <div class="flex-grow-1">
                                     <input type="file" name="receipt_bg_file" class="form-control mb-1" accept="image/*">
-                                    <small class="text-muted">مدرسہ کی آفیشل خالی رسید کا اسکین شدہ پس منظر (Landscape)</small>
+                                    <small class="text-muted"><?php echo __('مدرسہ کی آفیشل خالی رسید کا اسکین شدہ پس منظر (Landscape)', 'Scanned background of official blank receipt (Landscape)'); ?></small>
                                 </div>
                             </div>
                         </div>
@@ -270,8 +270,8 @@ if (isset($_POST['update'])) {
                         <!-- 2. مسجد رسید بیک گراؤنڈ -->
                         <div class="p-3 mb-3 bg-light rounded border">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <label class="fw-bold m-0"><i class="fas fa-mosque me-1 text-info"></i> مسجد رسید کا کسٹم بیک گراؤنڈ</label>
-                                <span class="badge bg-secondary">مسجد موڈ رسید</span>
+                                <label class="fw-bold m-0"><i class="fas fa-mosque me-1 text-info"></i> <?php echo __('مسجد رسید کا کسٹم بیک گراؤنڈ', 'Masjid Receipt Custom Background'); ?></label>
+                                <span class="badge bg-secondary"><?php echo __('مسجد موڈ رسید', 'Masjid Mode Receipt'); ?></span>
                             </div>
                             <div class="d-flex gap-3 align-items-center">
                                 <div class="border rounded bg-white p-1 text-center" style="width: 100px; height: 65px;">
@@ -279,7 +279,7 @@ if (isset($_POST['update'])) {
                                 </div>
                                 <div class="flex-grow-1">
                                     <input type="file" name="masjid_receipt_bg_file" class="form-control mb-1" accept="image/*">
-                                    <small class="text-muted">مسجد فنڈز کے لیے مخصوص رسید کا پس منظر</small>
+                                    <small class="text-muted"><?php echo __('مسجد فنڈز کے لیے مخصوص رسید کا پس منظر', 'Background specifically for Masjid donations receipt'); ?></small>
                                 </div>
                             </div>
                         </div>
@@ -287,11 +287,11 @@ if (isset($_POST['update'])) {
                         <!-- 3. سٹوڈنٹ کارڈ کسٹم بیک گراؤنڈ -->
                         <div class="p-3 mb-3 bg-light rounded border">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <label class="fw-bold m-0"><i class="fas fa-id-card me-1 text-primary"></i> سٹوڈنٹ آئی ڈی کارڈ کسٹم بیک گراؤنڈ</label>
+                                <label class="fw-bold m-0"><i class="fas fa-id-card me-1 text-primary"></i> <?php echo __('سٹوڈنٹ آئی ڈی کارڈ کسٹم بیک گراؤنڈ', 'Student ID Card Custom Background'); ?></label>
                                 <?php if (!empty($set['id_card_bg']) && file_exists(__DIR__ . '/' . $set['id_card_bg'])): ?>
-                                    <span class="badge bg-success">کسٹم کارڈ سیٹ ہے</span>
+                                    <span class="badge bg-success"><?php echo __('کسٹم کارڈ سیٹ ہے', 'Custom Card Active'); ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary">سسٹم ڈیفالٹ کارڈ</span>
+                                    <span class="badge bg-secondary"><?php echo __('سسٹم ڈیفالٹ کارڈ', 'System Default Card'); ?></span>
                                 <?php endif; ?>
                             </div>
                             <div class="d-flex gap-3 align-items-center">
@@ -304,7 +304,7 @@ if (isset($_POST['update'])) {
                                 </div>
                                 <div class="flex-grow-1">
                                     <input type="file" name="id_card_bg_file" class="form-control mb-1" accept="image/*">
-                                    <small class="text-muted">سٹینڈرڈ کارڈ سائز (CR80 یا 3.375 x 2.125 انچ)</small>
+                                    <small class="text-muted"><?php echo __('سٹینڈرڈ کارڈ سائز (CR80 یا 3.375 x 2.125 انچ)', 'Standard card size (CR80 or 3.375 x 2.125 in)'); ?></small>
                                 </div>
                             </div>
                         </div>
@@ -312,11 +312,11 @@ if (isset($_POST['update'])) {
                         <!-- 4. فارغ التحصیل طلبہ کی سند کا بیک گراؤنڈ -->
                         <div class="p-3 bg-light rounded border border-2 border-warning">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <label class="fw-bold m-0 text-dark"><i class="fas fa-award me-1 text-warning"></i> فارغ التحصیل طلبہ کی سند (Sanad Background Template)</label>
+                                <label class="fw-bold m-0 text-dark"><i class="fas fa-award me-1 text-warning"></i> <?php echo __('فارغ التحصیل طلبہ کی سند (Sanad Background Template)', 'Graduation Certificate (Sanad Background Template)'); ?></label>
                                 <?php if (!empty($set['sanad_bg']) && file_exists(__DIR__ . '/' . $set['sanad_bg'])): ?>
-                                    <span class="badge bg-success">آفیشل سند سیٹ ہے</span>
+                                    <span class="badge bg-success"><?php echo __('آفیشل سند سیٹ ہے', 'Official Certificate Active'); ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-info text-dark">شاہکار اسلامی بارڈر موڈ</span>
+                                    <span class="badge bg-info text-dark"><?php echo __('شاہکار اسلامی بارڈر موڈ', 'Master Islamic Border Mode'); ?></span>
                                 <?php endif; ?>
                             </div>
                             <div class="d-flex gap-3 align-items-center">
@@ -329,7 +329,7 @@ if (isset($_POST['update'])) {
                                 </div>
                                 <div class="flex-grow-1">
                                     <input type="file" name="sanad_bg_file" class="form-control mb-1" accept="image/*">
-                                    <small class="text-muted">مدرسہ کی آفیشل سند کا خالی فریم (A4 Landscape - 297x210mm)۔ اگر اپلوڈ نہ ہو تو سسٹم کا شاہکار اسلامی بارڈر استعمال ہوگا۔</small>
+                                    <small class="text-muted"><?php echo __('مدرسہ کی آفیشل سند کا خالی فریم (A4 Landscape - 297x210mm)۔ اگر اپلوڈ نہ ہو تو سسٹم کا شاہکار اسلامی بارڈر استعمال ہوگا۔', 'Blank frame of official certificate (A4 Landscape - 297x210mm). If not uploaded, the system Islamic border is used.'); ?></small>
                                 </div>
                             </div>
                         </div>
@@ -340,15 +340,23 @@ if (isset($_POST['update'])) {
                 <!-- کارڈ 4: AI، نوٹیفیکیشن و سسٹم سیٹنگز -->
                 <div class="card shadow-sm border-0 mb-4" style="border-radius: 12px;">
                     <div class="card-header bg-white border-0 pt-4 px-4 pb-0">
-                        <h5 class="text-secondary fw-bold"><i class="fas fa-robot me-2"></i> خودکار پیغامات و AI کنفیگریشن</h5>
+                        <h5 class="text-secondary fw-bold"><i class="fas fa-robot me-2"></i> <?php echo __('خودکار پیغامات و AI کنفیگریشن', 'Automated Notifications & AI Configuration'); ?></h5>
                     </div>
                     <div class="card-body p-4 pt-2">
                         <div class="row g-2 mb-3">
                             <div class="col-md-6">
-                                <label class="fw-bold mb-1">ہفتہ وار رپورٹ کا آغاز</label>
+                                <label class="fw-bold mb-1"><?php echo __('ہفتہ وار رپورٹ کا آغاز', 'Week Start Day'); ?></label>
                                 <select name="w_start" class="form-select">
                                     <?php
-                                    $days = [0 => 'Sunday', 1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday'];
+                                    $days = [
+                                        0 => __('اتوار (Sunday)', 'Sunday'),
+                                        1 => __('پیر (Monday)', 'Monday'),
+                                        2 => __('منگل (Tuesday)', 'Tuesday'),
+                                        3 => __('بدھ (Wednesday)', 'Wednesday'),
+                                        4 => __('جمعرات (Thursday)', 'Thursday'),
+                                        5 => __('جمعہ (Friday)', 'Friday'),
+                                        6 => __('ہفتہ (Saturday)', 'Saturday')
+                                    ];
                                     $currentWStart = $set['week_start_day'] ?? 6;
                                     foreach ($days as $val => $label) {
                                         $sel = ($currentWStart == $val) ? 'selected' : '';
@@ -358,7 +366,7 @@ if (isset($_POST['update'])) {
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold mb-1">AI Provider</label>
+                                <label class="fw-bold mb-1"><?php echo __('AI فراہم کنندہ (AI Provider)', 'AI Provider'); ?></label>
                                 <select name="ai_provider" class="form-select">
                                     <option value="gemini" <?php echo (($set['ai_provider'] ?? 'gemini') === 'gemini') ? 'selected' : ''; ?>>Google Gemini</option>
                                     <option value="groq" <?php echo (($set['ai_provider'] ?? '') === 'groq') ? 'selected' : ''; ?>>Groq (Llama)</option>
@@ -368,7 +376,7 @@ if (isset($_POST['update'])) {
 
                         <div class="row g-2 mb-3">
                             <div class="col-md-6">
-                                <label class="fw-bold mb-1">خودکار رپورٹ کا دن</label>
+                                <label class="fw-bold mb-1"><?php echo __('خودکار رپورٹ کا دن', 'Auto Notification Day'); ?></label>
                                 <select name="a_day" class="form-select">
                                     <?php foreach ($days as $val => $label) {
                                         $sel = (($set['auto_notify_day']??4) == $val) ? 'selected' : '';
@@ -377,7 +385,7 @@ if (isset($_POST['update'])) {
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold mb-1">وقت</label>
+                                <label class="fw-bold mb-1"><?php echo __('وقت', 'Time'); ?></label>
                                 <input type="time" name="a_time" class="form-control" value="<?php echo $set['auto_notify_time'] ?? '18:00'; ?>">
                             </div>
                         </div>
@@ -412,10 +420,10 @@ if (isset($_POST['update'])) {
         <div class="card shadow-lg border-0 sticky-bottom p-3 bg-white" style="border-radius: 12px; z-index: 1020;">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="text-muted small">
-                    <i class="fas fa-info-circle text-primary me-1"></i> تمام تبدیلیاں فورا محفوظ ہو کر رسیدوں، کارڈز اور اسناد پر نافذ ہو جائیں گی۔
+                    <i class="fas fa-info-circle text-primary me-1"></i> <?php echo __('تمام تبدیلیاں فورا محفوظ ہو کر رسیدوں، کارڈز اور اسناد پر نافذ ہو جائیں گی۔', 'All changes will be saved instantly and applied to receipts, cards, and certificates.'); ?>
                 </div>
                 <button type="submit" name="update" class="btn btn-primary btn-lg px-5 fw-bold shadow">
-                    <i class="fas fa-save me-2"></i> تمام سیٹنگز و کسٹم برانڈنگ محفوظ کریں
+                    <i class="fas fa-save me-2"></i> <?php echo __('تمام سیٹنگز و کسٹم برانڈنگ محفوظ کریں', 'Save All Settings & Custom Branding'); ?>
                 </button>
             </div>
         </div>

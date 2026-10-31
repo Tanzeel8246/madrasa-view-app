@@ -672,7 +672,7 @@ class _StudentsPageState extends State<StudentsPage> {
                       final isSuper = currentUserRole.value == 'superadmin' || 
                           (currentUserRole.value == 'admin' && currentUserId.value == 1);
                       final maxStd = currentTenantMaxStudents.value;
-                      if (!isSuper && (_activeStudents.length + _alumniStudents.length) >= maxStd) {
+                      if (!isSuper && _activeStudents.length >= maxStd) {
                         showDialog(
                           context: context,
                           builder: (ctx) => AlertDialog(

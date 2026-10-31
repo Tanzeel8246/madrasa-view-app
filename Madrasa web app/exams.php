@@ -27,27 +27,27 @@ if (isset($_POST['add_exam'])) {
     }
 }
 ?>
-<h2 class="mb-4">امتحانات کی فہرست (Exams List)</h2>
+<h2 class="mb-4"><?php echo __('امتحانات کی فہرست (Exams List)', 'Exams List'); ?></h2>
 <div class="card p-4 mb-4">
     <form method="POST" class="row g-3">
         <div class="col-md-4">
-            <label class="form-label fw-bold">امتحان کا نام</label>
-            <input type="text" name="name" class="form-control" placeholder="مثلاً: سالانہ امتحان 2024" required>
+            <label class="form-label fw-bold"><?php echo __('امتحان کا نام', 'Exam Name'); ?></label>
+            <input type="text" name="name" class="form-control" placeholder="<?php echo __('مثلاً: سالانہ امتحان 2024', 'e.g. Annual Exam 2024'); ?>" required>
         </div>
         <div class="col-md-2">
-            <label class="form-label fw-bold">تاریخ</label>
+            <label class="form-label fw-bold"><?php echo __('تاریخ', 'Date'); ?></label>
             <input type="date" name="date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
         </div>
         <div class="col-md-2">
-            <label class="form-label fw-bold">کل نمبر</label>
+            <label class="form-label fw-bold"><?php echo __('کل نمبر', 'Total Marks'); ?></label>
             <input type="number" name="total_marks" class="form-control" value="100" required>
         </div>
         <div class="col-md-2">
-            <label class="form-label fw-bold">پاسنگ مارکس</label>
+            <label class="form-label fw-bold"><?php echo __('پاسنگ مارکس', 'Passing Marks'); ?></label>
             <input type="number" name="passing_marks" class="form-control" value="33" required>
         </div>
         <div class="col-md-2 d-flex align-items-end">
-            <button type="submit" name="add_exam" class="btn btn-primary w-100 fw-bold">شامل کریں</button>
+            <button type="submit" name="add_exam" class="btn btn-primary w-100 fw-bold"><?php echo __('شامل کریں', 'Add Exam'); ?></button>
         </div>
     </form>
 </div>
@@ -56,9 +56,9 @@ if (isset($_POST['add_exam'])) {
         <thead class="table-dark">
             <tr>
                 <th class="px-4">ID</th>
-                <th>امتحان کا نام</th>
-                <th>تاریخ</th>
-                <th class="text-center">ایکشن</th>
+                <th><?php echo __('امتحان کا نام', 'Exam Name'); ?></th>
+                <th><?php echo __('تاریخ', 'Date'); ?></th>
+                <th class="text-center"><?php echo __('ایکشن', 'Action'); ?></th>
             </tr>
         </thead>
         <tbody>
@@ -77,6 +77,11 @@ if (isset($_POST['add_exam'])) {
                 $perc = $row['total_students'] > 0 ? round(($row['result_count'] / $row['total_students']) * 100) : 0;
                 $status_color = ($perc == 100) ? 'success' : 'warning';
                 $status_text = ($perc == 100) ? 'مکمل' : 'جاری';
+                $lbl_res = __('رزلٹ:', 'Result:');
+                $lbl_tot = __('کل نمبر:', 'Total Marks:');
+                $lbl_pass = __('پاس:', 'Pass:');
+                $lbl_enter = __('رزلٹ درج کریں', 'Enter Results');
+                $lbl_reg = __('رزلٹ رجسٹر', 'Result Register');
                 
                 echo "<tr>
                         <td class='px-4'>{$row['id']}</td>
@@ -85,16 +90,16 @@ if (isset($_POST['add_exam'])) {
                             <div class='progress mt-1' style='height: 5px; width: 100px;'>
                                 <div class='progress-bar bg-$status_color' style='width: $perc%'></div>
                             </div>
-                            <small class='text-muted' style='font-size: 10px;'>رزلٹ: $perc% ($row[result_count]/$row[total_students])</small>
+                            <small class='text-muted' style='font-size: 10px;'>{$lbl_res} {$perc}% ({$row['result_count']}/{$row['total_students']})</small>
                         </td>
                         <td>
                             <div class='fw-bold'>{$row['exam_date']}</div>
-                            <small class='text-muted' style='font-size: 10px;'>کل نمبر: {$row['total_marks']} | پاس: {$row['passing_marks']}</small>
+                            <small class='text-muted' style='font-size: 10px;'>{$lbl_tot} {$row['total_marks']} | {$lbl_pass} {$row['passing_marks']}</small>
                         </td>
                         <td class='text-center'>
                             <div class='btn-group shadow-sm'>
-                                <a href='exam_results_entry.php?exam_id={$row['id']}' class='btn btn-sm btn-primary' title='رزلٹ درج کریں'><i class='fas fa-edit'></i></a>
-                                <a href='result_register.php?exam_id={$row['id']}' class='btn btn-sm btn-success' title='رزلٹ رجسٹر'><i class='fas fa-list-alt'></i></a>
+                                <a href='exam_results_entry.php?exam_id={$row['id']}' class='btn btn-sm btn-primary' title='{$lbl_enter}'><i class='fas fa-edit'></i></a>
+                                <a href='result_register.php?exam_id={$row['id']}' class='btn btn-sm btn-success' title='{$lbl_reg}'><i class='fas fa-list-alt'></i></a>
                             </div>
                         </td>
                       </tr>";

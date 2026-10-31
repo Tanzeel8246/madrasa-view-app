@@ -70,21 +70,21 @@ class SyncDownStudents {
             : " AND (is_deleted = 0 OR is_deleted IS NULL)";
 
         $allowedStudentIds = [];
-        if ($userRole === 'admin' || $userRole === 'nazim' || in_array('manage_students', $user['permissions'] ?? [], true)) {
+        if ($userRole === 'admin' || $userRole === 'nazim' || in_array($userRole, ['superadmin', 'super_admin', 'administrator'], true) || in_array('manage_students', $user['permissions'] ?? [], true)) {
             $data['students'] = array_map('strip_sensitive_row', $ctx->fetchAll("SELECT * FROM students WHERE $tCond $stdDateCond ORDER BY id DESC LIMIT 10000"));
-            $data['complaints'] = $ctx->fetchAll("SELECT * FROM complaints WHERE $tCond " . ($since_date ? "AND date >= '$since_date'" : "") . " ORDER BY date DESC LIMIT 1000");
+            $data['complaints'] = $ctx->fetchAll("SELECT * FROM complaints WHERE $tCond ORDER BY date DESC, id DESC LIMIT 1000");
         } else {
             $allowed_class_names = array_column($data['classes'] ?? [], 'name');
             if (empty($allowed_class_names)) {
                 $data['students'] = array_map('strip_sensitive_row', $ctx->fetchAll("SELECT * FROM students WHERE $tCond $stdDateCond ORDER BY id DESC LIMIT 10000"));
-                $data['complaints'] = $ctx->fetchAll("SELECT * FROM complaints WHERE $tCond " . ($since_date ? "AND date >= '$since_date'" : "") . " ORDER BY date DESC LIMIT 1000");
+                $data['complaints'] = $ctx->fetchAll("SELECT * FROM complaints WHERE $tCond ORDER BY date DESC, id DESC LIMIT 1000");
             } else {
                 $inClasses = implode(',', array_map(function($c) use ($pdo) { return $pdo->quote($c); }, $allowed_class_names));
                 $data['students'] = array_map('strip_sensitive_row', $ctx->fetchAll("SELECT * FROM students WHERE $tCond AND (class IN ($inClasses) OR class_name IN ($inClasses)) $stdDateCond ORDER BY id DESC LIMIT 10000"));
                 $sIds = array_column($data['students'], 'id');
                 if (!empty($sIds)) {
                     $inStudentIds = implode(',', array_map('intval', $sIds));
-                    $data['complaints'] = $ctx->fetchAll("SELECT * FROM complaints WHERE student_id IN ($inStudentIds) AND $tCond" . ($since_date ? " AND date >= '$since_date'" : "") . " ORDER BY date DESC LIMIT 1000");
+                    $data['complaints'] = $ctx->fetchAll("SELECT * FROM complaints WHERE student_id IN ($inStudentIds) AND $tCond ORDER BY date DESC, id DESC LIMIT 1000");
                     $allowedStudentIds = $sIds;
                 } else {
                     $data['complaints'] = [];
@@ -93,11 +93,11 @@ class SyncDownStudents {
         }
 
         // Exams and Results
-        $hasExams = ($userRole === 'admin' || has_permission($userRole, $user['permissions'] ?? [], 'manage_exams', $requested_sys) || has_permission($userRole, $user['permissions'] ?? [], 'manage_masjid_exams', $requested_sys));
+        $hasExams = ($userRole === 'admin' || $userRole === 'nazim' || in_array($userRole, ['superadmin', 'super_admin', 'administrator'], true) || has_permission($userRole, $user['permissions'] ?? [], 'manage_exams', $requested_sys) || has_permission($userRole, $user['permissions'] ?? [], 'manage_masjid_exams', $requested_sys));
         if ($hasExams) {
-            $data['exams'] = $ctx->fetchAll("SELECT * FROM exams WHERE $tCond " . ($since_date ? "AND exam_date >= '$since_date'" : "") . " ORDER BY exam_date DESC, id DESC LIMIT 1000");
-            if ($userRole === 'admin' || $userRole === 'nazim') {
-                $data['exam_results'] = $ctx->fetchAll("SELECT * FROM exam_results WHERE $tCond " . ($since_dt ? "AND created_at >= '$since_dt'" : "") . " ORDER BY id DESC LIMIT 5000");
+            $data['exams'] = $ctx->fetchAll("SELECT * FROM exams WHERE $tCond ORDER BY exam_date DESC, id DESC LIMIT 1000");
+            if ($userRole === 'admin' || $userRole === 'nazim' || in_array($userRole, ['superadmin', 'super_admin', 'administrator'], true)) {
+                $data['exam_results'] = $ctx->fetchAll("SELECT * FROM exam_results WHERE $tCond ORDER BY id DESC LIMIT 5000");
             } else {
                 $inAllowedStdExams = !empty($allowedStudentIds) ? implode(',', array_map('intval', $allowedStudentIds)) : null;
                 if (!$inAllowedStdExams) {
@@ -109,7 +109,7 @@ class SyncDownStudents {
                     }
                 }
                 if ($inAllowedStdExams) {
-                    $data['exam_results'] = $ctx->fetchAll("SELECT * FROM exam_results WHERE student_id IN ($inAllowedStdExams) AND $tCond" . ($since_dt ? " AND created_at >= '$since_dt'" : "") . " ORDER BY id DESC LIMIT 5000");
+                    $data['exam_results'] = $ctx->fetchAll("SELECT * FROM exam_results WHERE student_id IN ($inAllowedStdExams) AND $tCond ORDER BY id DESC LIMIT 5000");
                 } else {
                     $data['exam_results'] = [];
                 }
@@ -120,9 +120,9 @@ class SyncDownStudents {
         }
 
         // Requests & Complaints
-        if ($userRole === 'admin' || $userRole === 'nazim' || has_permission($userRole, $user['permissions'] ?? [], 'manage_requests', $requested_sys)) {
-            $data['parent_complaints'] = $ctx->fetchAll("SELECT * FROM parent_complaints WHERE $tCond " . ($since_date ? "AND date >= '$since_date'" : "") . " ORDER BY date DESC LIMIT 300");
-            $data['leave_applications'] = $ctx->fetchAll("SELECT * FROM leave_applications WHERE $tCond " . ($since_date ? "AND (created_at >= '$since_dt' OR date >= '$since_date')" : "") . " ORDER BY id DESC LIMIT 300");
+        if ($userRole === 'admin' || $userRole === 'nazim' || in_array($userRole, ['superadmin', 'super_admin', 'administrator'], true) || has_permission($userRole, $user['permissions'] ?? [], 'manage_requests', $requested_sys)) {
+            $data['parent_complaints'] = $ctx->fetchAll("SELECT * FROM parent_complaints WHERE $tCond ORDER BY date DESC, id DESC LIMIT 300");
+            $data['leave_applications'] = $ctx->fetchAll("SELECT * FROM leave_applications WHERE $tCond ORDER BY id DESC LIMIT 300");
         }
 
         // Hifz & Nazira History
@@ -221,6 +221,47 @@ class SyncDownStudents {
                     $data['husn_saut_record'] = [];
                 }
             }
+        }
+
+        // Academic Courses & Subjects System (Dars-e-Nizami & Modern Studies)
+        try {
+            $data['course_structure'] = $ctx->fetchAll("SELECT * FROM course_structure WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY sort_order ASC, id ASC");
+        } catch (Throwable $e) {
+            try {
+                $data['course_structure'] = $ctx->fetchAll("SELECT * FROM course_structure WHERE $tCond ORDER BY id ASC");
+            } catch (Throwable $e2) { $data['course_structure'] = []; }
+        }
+
+        try {
+            $data['course_subjects'] = $ctx->fetchAll("SELECT * FROM course_subjects WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY subject_order ASC, id ASC");
+        } catch (Throwable $e) {
+            try {
+                $data['course_subjects'] = $ctx->fetchAll("SELECT * FROM course_subjects WHERE $tCond ORDER BY id ASC");
+            } catch (Throwable $e2) { $data['course_subjects'] = []; }
+        }
+
+        try {
+            $data['student_course_enrollment'] = $ctx->fetchAll("SELECT * FROM student_course_enrollment WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
+        } catch (Throwable $e) {
+            try {
+                $data['student_course_enrollment'] = $ctx->fetchAll("SELECT * FROM student_course_enrollment WHERE $tCond ORDER BY id DESC LIMIT 5000");
+            } catch (Throwable $e2) { $data['student_course_enrollment'] = []; }
+        }
+
+        try {
+            $data['exam_subject_results'] = $ctx->fetchAll("SELECT * FROM exam_subject_results WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
+        } catch (Throwable $e) {
+            try {
+                $data['exam_subject_results'] = $ctx->fetchAll("SELECT * FROM exam_subject_results WHERE $tCond ORDER BY id DESC LIMIT 5000");
+            } catch (Throwable $e2) { $data['exam_subject_results'] = []; }
+        }
+
+        try {
+            $data['student_year_promotion'] = $ctx->fetchAll("SELECT * FROM student_year_promotion WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
+        } catch (Throwable $e) {
+            try {
+                $data['student_year_promotion'] = $ctx->fetchAll("SELECT * FROM student_year_promotion WHERE $tCond ORDER BY id DESC LIMIT 5000");
+            } catch (Throwable $e2) { $data['student_year_promotion'] = []; }
         }
     }
 }

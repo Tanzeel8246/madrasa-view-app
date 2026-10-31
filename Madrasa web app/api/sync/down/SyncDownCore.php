@@ -99,53 +99,108 @@ class SyncDownCore {
 
         // Admission Inquiries (Phase 2)
         try {
-            $data['admission_inquiries'] = $ctx->fetchAll("SELECT * FROM admission_inquiries WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY id DESC LIMIT 1000");
-        } catch (Throwable $e) { $data['admission_inquiries'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['admission_inquiries'] = $ctx->fetchAll("SELECT * FROM admission_inquiries WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
+        } catch (Throwable $e) {
+            try {
+                $data['admission_inquiries'] = $ctx->fetchAll("SELECT * FROM admission_inquiries WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 1000");
+            } catch (Throwable $e2) { $data['admission_inquiries'] = []; }
+        }
 
         // Library Books (Phase 2)
         try {
-            $data['lib_books'] = $ctx->fetchAll("SELECT * FROM lib_books WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY id DESC LIMIT 5000");
-        } catch (Throwable $e) { $data['lib_books'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['lib_books'] = $ctx->fetchAll("SELECT * FROM lib_books WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
+        } catch (Throwable $e) {
+            try {
+                $data['lib_books'] = $ctx->fetchAll("SELECT * FROM lib_books WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
+            } catch (Throwable $e2) { $data['lib_books'] = []; }
+        }
 
         // Library Issues (Phase 2)
         try {
-            $data['lib_issues'] = $ctx->fetchAll("SELECT * FROM lib_issues WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY id DESC LIMIT 5000");
-        } catch (Throwable $e) { $data['lib_issues'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['lib_issues'] = $ctx->fetchAll("SELECT * FROM lib_issues WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
+        } catch (Throwable $e) {
+            try {
+                $data['lib_issues'] = $ctx->fetchAll("SELECT * FROM lib_issues WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
+            } catch (Throwable $e2) { $data['lib_issues'] = []; }
+        }
 
         // Phase 3: School Shop & Inventory
         try {
-            $data['inventory_items'] = $ctx->fetchAll("SELECT * FROM inventory_items WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY id DESC LIMIT 5000");
-        } catch (Throwable $e) { $data['inventory_items'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['inventory_items'] = $ctx->fetchAll("SELECT * FROM inventory_items WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
+        } catch (Throwable $e) {
+            try {
+                $data['inventory_items'] = $ctx->fetchAll("SELECT * FROM inventory_items WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
+            } catch (Throwable $e2) { $data['inventory_items'] = []; }
+        }
 
         try {
-            $data['inventory_sales'] = $ctx->fetchAll("SELECT * FROM inventory_sales WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY id DESC LIMIT 5000");
-        } catch (Throwable $e) { $data['inventory_sales'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['inventory_sales'] = $ctx->fetchAll("SELECT * FROM inventory_sales WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
+        } catch (Throwable $e) {
+            try {
+                $data['inventory_sales'] = $ctx->fetchAll("SELECT * FROM inventory_sales WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
+            } catch (Throwable $e2) { $data['inventory_sales'] = []; }
+        }
 
         // Phase 3: Hostel Management
         try {
-            $data['hostel_rooms'] = $ctx->fetchAll("SELECT * FROM hostel_rooms WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY id DESC LIMIT 1000");
-        } catch (Throwable $e) { $data['hostel_rooms'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['hostel_rooms'] = $ctx->fetchAll("SELECT * FROM hostel_rooms WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
+        } catch (Throwable $e) {
+            try {
+                $data['hostel_rooms'] = $ctx->fetchAll("SELECT * FROM hostel_rooms WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 1000");
+            } catch (Throwable $e2) { $data['hostel_rooms'] = []; }
+        }
 
         try {
-            $data['hostel_allocations'] = $ctx->fetchAll("SELECT * FROM hostel_allocations WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY id DESC LIMIT 2000");
-        } catch (Throwable $e) { $data['hostel_allocations'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['hostel_allocations'] = $ctx->fetchAll("SELECT * FROM hostel_allocations WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 2000");
+        } catch (Throwable $e) {
+            try {
+                $data['hostel_allocations'] = $ctx->fetchAll("SELECT * FROM hostel_allocations WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 2000");
+            } catch (Throwable $e2) { $data['hostel_allocations'] = []; }
+        }
 
         // Phase 4: Jobs & Recruitment
         try {
-            $data['job_postings'] = $ctx->fetchAll("SELECT * FROM job_postings WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY id DESC LIMIT 1000");
-        } catch (Throwable $e) { $data['job_postings'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['job_postings'] = $ctx->fetchAll("SELECT * FROM job_postings WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
+        } catch (Throwable $e) {
+            try {
+                $data['job_postings'] = $ctx->fetchAll("SELECT * FROM job_postings WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 1000");
+            } catch (Throwable $e2) { $data['job_postings'] = []; }
+        }
 
         try {
-            $data['job_applicants'] = $ctx->fetchAll("SELECT * FROM job_applicants WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY id DESC LIMIT 2000");
-        } catch (Throwable $e) { $data['job_applicants'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['job_applicants'] = $ctx->fetchAll("SELECT * FROM job_applicants WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 2000");
+        } catch (Throwable $e) {
+            try {
+                $data['job_applicants'] = $ctx->fetchAll("SELECT * FROM job_applicants WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 2000");
+            } catch (Throwable $e2) { $data['job_applicants'] = []; }
+        }
 
         // Phase 4: Website CMS & Announcements
         try {
-            $data['web_pages'] = $ctx->fetchAll("SELECT * FROM web_pages WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY sort_order ASC, id DESC LIMIT 500");
-        } catch (Throwable $e) { $data['web_pages'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['web_pages'] = $ctx->fetchAll("SELECT * FROM web_pages WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 500");
+        } catch (Throwable $e) {
+            try {
+                $data['web_pages'] = $ctx->fetchAll("SELECT * FROM web_pages WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 500");
+            } catch (Throwable $e2) { $data['web_pages'] = []; }
+        }
 
         try {
-            $data['announcements'] = $ctx->fetchAll("SELECT * FROM announcements WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "") . " ORDER BY publish_date DESC, id DESC LIMIT 1000");
-        } catch (Throwable $e) { $data['announcements'] = []; }
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['announcements'] = $ctx->fetchAll("SELECT * FROM announcements WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
+        } catch (Throwable $e) {
+            try {
+                $data['announcements'] = $ctx->fetchAll("SELECT * FROM announcements WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 1000");
+            } catch (Throwable $e2) { $data['announcements'] = []; }
+        }
     }
 }

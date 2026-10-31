@@ -70,13 +70,18 @@ class SyncUploader {
 
       // Convert file paths to base64 for image columns
       chunk = await SyncImageProcessor.processImagesForSync(chunk, table);
-      if (table == 'students') {
-        chunk = chunk.map((row) {
-          final copy = Map<String, dynamic>.from(row);
+      chunk = chunk.map((row) {
+        final copy = Map<String, dynamic>.from(row);
+        if (table == 'students') {
           copy.remove('password');
-          return copy;
-        }).toList();
-      }
+        }
+        // Ensure client_uuid is present for robust idempotency
+        if (copy['client_uuid'] == null || copy['client_uuid'].toString().trim().isEmpty) {
+          final rowId = copy['id'] ?? '0';
+          copy['client_uuid'] = '${table}_${rowId}_${DateTime.now().millisecondsSinceEpoch}';
+        }
+        return copy;
+      }).toList();
 
       try {
         final response = await postWithRetry(
@@ -139,7 +144,11 @@ class SyncUploader {
               }
               await db.markTeacherLeaveAsSynced(localId, serverId);
             } else {
-              await db.markAsSynced(table, localId);
+              int? serverId;
+              if (serverIds is Map && serverIds[id.toString()] != null) {
+                serverId = int.tryParse(serverIds[id.toString()].toString());
+              }
+              await db.markRecordAsSynced(table, localId, serverId);
             }
             tableUploaded++;
           }

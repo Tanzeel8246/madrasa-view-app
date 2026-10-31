@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Deep Obsidian Backdrop -->
+    <radialGradient id="bgA" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#0a2a1f" />
+      <stop offset="50%" stop-color="#04140e" />
+      <stop offset="100%" stop-color="#010604" />
+    </radialGradient>
+
+    <!-- Metallic Brushed Champagne Gold -->
+    <linearGradient id="goldA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fffbeb" />
+      <stop offset="25%" stop-color="#fde68a" />
+      <stop offset="60%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+
+    <!-- Top Isometric Face: Luminous Radiant Emerald -->
+    <linearGradient id="topFaceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+
+    <!-- Left Isometric Face: Deep Emerald Shade -->
+    <linearGradient id="leftFaceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#065f46" />
+      <stop offset="100%" stop-color="#022c22" />
+    </linearGradient>
+
+    <!-- Right Isometric Face: Cyber Lapis Teal Shade -->
+    <linearGradient id="rightFaceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0c4a6e" />
+    </linearGradient>
+
+    <!-- Inner Core Glow -->
+    <radialGradient id="coreGlowA" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="0.9" />
+      <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0. />
+    </radialGradient>
+
+    <filter id="softGlowA" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Modern Rounded Squircle Base -->
+  <rect x="20" y="20" width="472" height="472" rx="112" fill="url(#bgA)" stroke="url(#goldA)" stroke-width="4.5" />
+  <rect x="32" y="32" width="448" height="448" rx="100" fill="none" stroke="rgba(245, 158, 11, 0.2)" stroke-width="1.5" stroke-dasharray="6,6" />
+
+  <!-- Background Sacred Geometry 8-Point Rub-el-Hizb Aura -->
+  <g stroke="rgba(16, 185, 129, 0.15)" stroke-width="1.5" fill="none" transform="translate(256, 195)">
+    <rect x="-95" y="-95" width="190" height="190" rx="12" />
+    <rect x="-95" y="-95" width="190" height="190" rx="12" transform="rotate(45)" stroke="rgba(245, 158, 11, 0.2)" />
+    <circle cx="0" cy="0" r="130" stroke="rgba(56, 189, 248, 0.15)" stroke-dasharray="4,4" />
+  </g>
+
+  <!-- Central Glowing Halo behind Prism -->
+  <circle cx="256" cy="195" r="90" fill="url(#coreGlowA)" />
+
+  <!-- ============================================================ -->
+  <!-- 3D ISOMETRIC SACRED NEXUS: THE QURANIC CRYSTAL CUBE          -->
+  <!-- ============================================================ -->
+  <g id="isometric-prism" transform="translate(0, -10)">
+
+    <!-- Top Floating Diamond Star Crown -->
+    <g transform="translate(256, 75)" filter="url(#softGlowA)">
+      <polygon points="0,-16 6,-4 18,0 6,4 0,16 -6,4 -18,0 -6,-4" fill="url(#goldA)" />
+      <circle cx="0" cy="0" r="3" fill="#ffffff" />
+    </g>
+
+    <!-- Top Face: Folded Book Leaves (Isometric Diamond) -->
+    <!-- Left Leaf of Open Quran on Top -->
+    <polygon points="256,120 160,165 256,210 256,120" fill="url(#topFaceGrad)" stroke="url(#goldA)" stroke-width="2" />
+    <!-- Quran Scripture Lines on Left Leaf -->
+    <line x1="185" y1="162" x2="235" y2="185" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.9" />
+    <line x1="195" y1="150" x2="240" y2="170" stroke="url(#goldA)" stroke-width="2" stroke-linecap="round" />
+    <line x1="205" y1="138" x2="245" y2="155" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.9" />
+
+    <!-- Right Leaf of Open Quran on Top -->
+    <polygon points="256,120 352,165 256,210 256,120" fill="#f8fafc" stroke="url(#goldA)" stroke-width="2" />
+    <!-- Quran Scripture Lines on Right Leaf -->
+    <line x1="327" y1="162" x2="277" y2="185" stroke="#059669" stroke-width="2" stroke-linecap="round" />
+    <line x1="317" y1="150" x2="272" y2="170" stroke="url(#goldA)" stroke-width="2" stroke-linecap="round" />
+    <line x1="307" y1="138" x2="267" y2="155" stroke="#059669" stroke-width="1.8" stroke-linecap="round" />
+
+    <!-- Left Vertical Face of Cube (Emerald Tech Facet) -->
+    <polygon points="160,165 256,210 256,310 160,265" fill="url(#leftFaceGrad)" stroke="url(#goldA)" stroke-width="2" />
+    <!-- Isometric Circuit Detail on Left Face -->
+    <line x1="180" y1="215" x2="230" y2="240" stroke="#34d399" stroke-width="2" opacity="0.7" />
+    <circle cx="180" cy="215" r="3.5" fill="#34d399" />
+    <line x1="195" y1="245" x2="235" y2="265" stroke="#34d399" stroke-width="1.5" opacity="0.6" />
+
+    <!-- Right Vertical Face of Cube (Azure Cyber Facet) -->
+    <polygon points="256,210 352,165 352,265 256,310" fill="url(#rightFaceGrad)" stroke="url(#goldA)" stroke-width="2" />
+    <!-- Isometric Circuit Detail on Right Face -->
+    <line x1="332" y1="215" x2="282" y2="240" stroke="#38bdf8" stroke-width="2" opacity="0.8" />
+    <circle cx="332" cy="215" r="3.5" fill="#38bdf8" />
+    <line x1="317" y1="245" x2="277" y2="265" stroke="#38bdf8" stroke-width="1.5" opacity="0.6" />
+
+    <!-- Center Spine & Radiating Pearl Node -->
+    <line x1="256" y1="120" x2="256" y2="310" stroke="url(#goldA)" stroke-width="3" />
+    <circle cx="256" cy="210" r="7" fill="#ffffff" stroke="url(#goldA)" stroke-width="2.5" filter="url(#softGlowA)" />
+  </g>
+
+  <!-- SaaS Typography Banner -->
+  <g transform="translate(0, 362)">
+    <rect x="86" y="0" width="340" height="54" rx="27" fill="rgba(4, 20, 14, 0.85)" stroke="url(#goldA)" stroke-width="2" />
+    <text x="256" y="37" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="30" font-weight="900" letter-spacing="4" fill="url(#goldA)">
+      MC-MMS
+    </text>
+    <text x="256" y="78" text-anchor="middle" font-family="'Noto Nastaliq Urdu', 'Plus Jakarta Sans', Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="1" fill="#38bdf8">
+      بائے مائنڈ کرافٹس اے آئی (Cloud ERP)
+    </text>
+    <text x="256" y="98" text-anchor="middle" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="10" font-weight="600" letter-spacing="3" fill="#94a3b8">
+      ISLAMIC CLOUD INTELLIGENCE
+    </text>
+  </g>
+</svg>

@@ -113,71 +113,71 @@ include 'header.php';
 
 // Categorized Permissions
 $madrasa_perms = [
-    'manage_classes' => 'کلاسز کا انتظام',
-    'manage_students' => 'طلباء کا ریکارڈ',
-    'manage_teachers' => 'اساتذہ کا ریکارڈ',
-    'manage_attendance' => 'طالب علموں کی حاضری',
-    'manage_teacher_attendance' => 'اساتذہ کی حاضری',
-    'manage_attendance_report' => 'حاضری تفصیلی رپورٹ',
-    'manage_hifz' => 'حفظ (روزانہ اندراج و رپورٹ)',
-    'manage_hifz_daily' => 'حفظ (روزانہ اندراج)',
-    'manage_hifz_report' => 'حفظ (تعلیمی رپورٹ)',
-    'manage_academic_dashboard' => 'تعلیمی کارکردگی (اندراج ڈیش بورڈ)',
-    'manage_academic_entry' => 'تعلیمی رپورٹ (اندراج)',
-    'manage_academic_view' => 'تعلیمی کارکردگی (رپورٹ دیکھیں)',
-    'manage_academics' => 'تعلیمی رپورٹ (جنرل)',
-    'manage_exams' => 'امتحانات و نتائج',
-    'manage_finance' => 'آمدن و خرچ (سادہ فنانس - تمام)',
-    'manage_finance_entry' => 'آمدن و خرچ اندراج',
-    'manage_finance_report' => 'مالیاتی رپورٹ',
-    'manage_financial_reports' => 'مالیاتی تفصیلی گوشوارے و سالانہ رپورٹ',
-    'manage_fee_defaulters' => 'فیس و واجبات / نادہندگان',
-    'manage_loans' => 'ایڈوانس و قرض مینیجمنٹ',
-    'manage_stipends' => 'وظائف مینیجمنٹ',
-    'manage_assets' => 'اثاثہ جات (Assets - مدرسہ)',
-    'manage_in_kind_donations' => 'اشیاء و عطیات (In-Kind Donations - مدرسہ)',
-    'manage_petty_cash' => 'پیٹی کیش رجسٹر',
-    'manage_erp' => 'ای آر پی اکاؤنٹس (ERP Accounting)',
-    'manage_admissions' => 'داخلہ درخواستیں',
-    'manage_notices' => 'نوٹس بورڈ / اعلانات',
-    'manage_requests' => 'درخواستیں و شکایات',
-    'add_complaint' => 'شکایت اندراج',
-    'manage_complaints' => 'شکایات ریکارڈ',
-    'manage_library' => 'لائبریری مینیجمنٹ (Library Management)',
-    'manage_inventory' => 'سکول شاپ و انونٹری (School Shop & Inventory)',
-    'manage_hostel' => 'ہاسٹل مینیجمنٹ (Hostel Management)',
-    'manage_recruitment' => 'بھرتی و تقرری (HR & Recruitment)',
-    'manage_website' => 'ویب سائٹ و سوشل CMS (Website CMS)',
-    'manage_saas' => 'سپر ایڈمن پورٹل (Super Admin Portal SaaS)',
-    'manage_users' => 'یوزرز کا انتظام (User Management)',
+    'manage_classes' => __('کلاسز کا انتظام', 'Manage Classes'),
+    'manage_students' => __('طلباء کا ریکارڈ', 'Student Records'),
+    'manage_teachers' => __('اساتذہ کا ریکارڈ', 'Teacher Records'),
+    'manage_attendance' => __('طالب علموں کی حاضری', 'Student Attendance'),
+    'manage_teacher_attendance' => __('اساتذہ کی حاضری', 'Teacher Attendance'),
+    'manage_attendance_report' => __('حاضری تفصیلی رپورٹ', 'Detailed Attendance Report'),
+    'manage_hifz' => __('حفظ (روزانہ اندراج و رپورٹ)', 'Hifz (Daily Entry & Report)'),
+    'manage_hifz_daily' => __('حفظ (روزانہ اندراج)', 'Hifz (Daily Entry)'),
+    'manage_hifz_report' => __('حفظ (تعلیمی رپورٹ)', 'Hifz (Academic Report)'),
+    'manage_academic_dashboard' => __('تعلیمی کارکردگی (اندراج ڈیش بورڈ)', 'Academic Performance (Entry Dashboard)'),
+    'manage_academic_entry' => __('تعلیمی رپورٹ (اندراج)', 'Academic Report (Entry)'),
+    'manage_academic_view' => __('تعلیمی کارکردگی (رپورٹ دیکھیں)', 'Academic Performance (View Report)'),
+    'manage_academics' => __('تعلیمی رپورٹ (جنرل)', 'Academic Report (General)'),
+    'manage_exams' => __('امتحانات و نتائج', 'Exams & Results'),
+    'manage_finance' => __('آمدن و خرچ (سادہ فنانس - تمام)', 'Income & Expense (Simple Finance - All)'),
+    'manage_finance_entry' => __('آمدن و خرچ اندراج', 'Income & Expense Entry'),
+    'manage_finance_report' => __('مالیاتی رپورٹ', 'Financial Report'),
+    'manage_financial_reports' => __('مالیاتی تفصیلی گوشوارے و سالانہ رپورٹ', 'Detailed Financial Statements & Annual Report'),
+    'manage_fee_defaulters' => __('فیس و واجبات / نادہندگان', 'Fees & Dues / Defaulters'),
+    'manage_loans' => __('ایڈوانس و قرض مینیجمنٹ', 'Advance & Loan Management'),
+    'manage_stipends' => __('وظائف مینیجمنٹ', 'Stipends Management'),
+    'manage_assets' => __('اثاثہ جات (Assets - مدرسہ)', 'Assets (Madrasa Assets)'),
+    'manage_in_kind_donations' => __('اشیاء و عطیات (In-Kind Donations - مدرسہ)', 'In-Kind Donations (Madrasa)'),
+    'manage_petty_cash' => __('پیٹی کیش رجسٹر', 'Petty Cash Register'),
+    'manage_erp' => __('ای آر پی اکاؤنٹس (ERP Accounting)', 'ERP Accounting'),
+    'manage_admissions' => __('داخلہ درخواستیں', 'Admission Applications'),
+    'manage_notices' => __('نوٹس بورڈ / اعلانات', 'Notice Board / Announcements'),
+    'manage_requests' => __('درخواستیں و شکایات', 'Requests & Complaints'),
+    'add_complaint' => __('شکایت اندراج', 'Submit Complaint'),
+    'manage_complaints' => __('شکایات ریکارڈ', 'Complaints Record'),
+    'manage_library' => __('لائبریری مینیجمنٹ (Library Management)', 'Library Management'),
+    'manage_inventory' => __('سکول شاپ و انونٹری (School Shop & Inventory)', 'School Shop & Inventory'),
+    'manage_hostel' => __('ہاسٹل مینیجمنٹ (Hostel Management)', 'Hostel Management'),
+    'manage_recruitment' => __('بھرتی و تقرری (HR & Recruitment)', 'HR & Recruitment'),
+    'manage_website' => __('ویب سائٹ و سوشل CMS (Website CMS)', 'Website CMS'),
+    'manage_saas' => __('سپر ایڈمن پورٹل (Super Admin Portal SaaS)', 'Super Admin Portal (SaaS)'),
+    'manage_users' => __('یوزرز کا انتظام (User Management)', 'User Management'),
 ];
 
 $masjid_perms = [
-    'manage_masjid_classes' => 'مکتب: کلاسز کا انتظام',
-    'manage_masjid_students' => 'مکتب: طلباء کا ریکارڈ',
-    'manage_masjid_teachers' => 'مکتب: اساتذہ کا ریکارڈ',
-    'manage_masjid_attendance' => 'مکتب: طالب علموں کی حاضری',
-    'manage_masjid_teacher_attendance' => 'مکتب: اساتذہ کی حاضری',
-    'manage_masjid_attendance_report' => 'مکتب: حاضری تفصیلی رپورٹ',
-    'manage_masjid_hifz' => 'مکتب: حفظ (روزانہ اندراج و رپورٹ)',
-    'manage_masjid_hifz_daily' => 'مکتب: حفظ (روزانہ اندراج)',
-    'manage_masjid_hifz_report' => 'مکتب: حفظ (تعلیمی رپورٹ)',
-    'manage_masjid_academic_dashboard' => 'مکتب: تعلیمی کارکردگی (اندراج ڈیش بورڈ)',
-    'manage_masjid_academic_entry' => 'مکتب: تعلیمی رپورٹ (اندراج)',
-    'manage_masjid_academic_view' => 'مکتب: تعلیمی کارکردگی (رپورٹ دیکھیں)',
-    'manage_masjid_academics' => 'مکتب: تعلیمی رپورٹ (جنرل)',
-    'manage_masjid_exams' => 'مکتب: امتحانات و نتائج',
-    'manage_masjid_finance' => 'مسجد: آمدن و خرچ (سادہ فنانس - تمام)',
-    'manage_masjid_finance_entry' => 'مسجد: آمدن و خرچ اندراج',
-    'manage_masjid_finance_report' => 'مسجد: مالیاتی رپورٹ',
-    'manage_masjid_financial_reports' => 'مسجد: مالیاتی تفصیلی گوشوارے',
-    'manage_masjid_fee_defaulters' => 'مسجد: فیس و واجبات',
-    'manage_masjid_loans' => 'مسجد: ایڈوانس و قرض مینیجمنٹ',
-    'manage_masjid_stipends' => 'مسجد: وظائف مینیجمنٹ',
-    'manage_masjid_assets' => 'مسجد: اثاثہ جات',
-    'manage_masjid_in_kind_donations' => 'مسجد: اشیاء و عطیات',
-    'manage_masjid_petty_cash' => 'مسجد: پیٹی کیش رجسٹر',
-    'manage_masjid_itikaf' => 'مسجد: اعتکاف مینیجمنٹ',
+    'manage_masjid_classes' => __('مکتب: کلاسز کا انتظام', 'Maktab: Manage Classes'),
+    'manage_masjid_students' => __('مکتب: طلباء کا ریکارڈ', 'Maktab: Student Records'),
+    'manage_masjid_teachers' => __('مکتب: اساتذہ کا ریکارڈ', 'Maktab: Teacher Records'),
+    'manage_masjid_attendance' => __('مکتب: طالب علموں کی حاضری', 'Maktab: Student Attendance'),
+    'manage_masjid_teacher_attendance' => __('مکتب: اساتذہ کی حاضری', 'Maktab: Teacher Attendance'),
+    'manage_masjid_attendance_report' => __('مکتب: حاضری تفصیلی رپورٹ', 'Maktab: Detailed Attendance Report'),
+    'manage_masjid_hifz' => __('مکتب: حفظ (روزانہ اندراج و رپورٹ)', 'Maktab: Hifz (Daily Entry & Report)'),
+    'manage_masjid_hifz_daily' => __('مکتب: حفظ (روزانہ اندراج)', 'Maktab: Hifz (Daily Entry)'),
+    'manage_masjid_hifz_report' => __('مکتب: حفظ (تعلیمی رپورٹ)', 'Maktab: Hifz (Academic Report)'),
+    'manage_masjid_academic_dashboard' => __('مکتب: تعلیمی کارکردگی (اندراج ڈیش بورڈ)', 'Maktab: Academic Performance (Entry Dashboard)'),
+    'manage_masjid_academic_entry' => __('مکتب: تعلیمی رپورٹ (اندراج)', 'Maktab: Academic Report (Entry)'),
+    'manage_masjid_academic_view' => __('مکتب: تعلیمی کارکردگی (رپورٹ دیکھیں)', 'Maktab: Academic Performance (View Report)'),
+    'manage_masjid_academics' => __('مکتب: تعلیمی رپورٹ (جنرل)', 'Maktab: Academic Report (General)'),
+    'manage_masjid_exams' => __('مکتب: امتحانات و نتائج', 'Maktab: Exams & Results'),
+    'manage_masjid_finance' => __('مسجد: آمدن و خرچ (سادہ فنانس - تمام)', 'Masjid: Income & Expense (Simple Finance - All)'),
+    'manage_masjid_finance_entry' => __('مسجد: آمدن و خرچ اندراج', 'Masjid: Income & Expense Entry'),
+    'manage_masjid_finance_report' => __('مسجد: مالیاتی رپورٹ', 'Masjid: Financial Report'),
+    'manage_masjid_financial_reports' => __('مسجد: مالیاتی تفصیلی گوشوارے', 'Masjid: Detailed Financial Statements'),
+    'manage_masjid_fee_defaulters' => __('مسجد: فیس و واجبات', 'Masjid: Fees & Dues'),
+    'manage_masjid_loans' => __('مسجد: ایڈوانس و قرض مینیجمنٹ', 'Masjid: Advance & Loan Management'),
+    'manage_masjid_stipends' => __('مسجد: وظائف مینیجمنٹ', 'Masjid: Stipends Management'),
+    'manage_masjid_assets' => __('مسجد: اثاثہ جات', 'Masjid: Assets Management'),
+    'manage_masjid_in_kind_donations' => __('مسجد: اشیاء و عطیات', 'Masjid: In-Kind Donations'),
+    'manage_masjid_petty_cash' => __('مسجد: پیٹی کیش رجسٹر', 'Masjid: Petty Cash Register'),
+    'manage_masjid_itikaf' => __('مسجد: اعتکاف مینیجمنٹ', 'Masjid: Itikaf Management'),
 ];
 
 $all_perms = array_merge($madrasa_perms, $masjid_perms);
@@ -285,36 +285,36 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
 <!-- Add / Edit User Form Card (Full Width) -->
 <div class="card shadow-sm mb-4" id="user_form_card">
     <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center" id="form_card_title">
-        <span><i class="fas fa-user-plus me-2"></i> <?php echo t('add_new_user'); ?></span>
-        <button type="button" class="btn btn-sm btn-outline-light d-none" id="cancel_edit_btn" onclick="resetForm()">منسوخ کریں</button>
+        <span><i class="fas fa-user-plus me-2"></i> <?php echo __('نیا یوزر شامل کریں', 'Add New User'); ?></span>
+        <button type="button" class="btn btn-sm btn-outline-light d-none" id="cancel_edit_btn" onclick="resetForm()"><?php echo __('منسوخ کریں', 'Cancel'); ?></button>
     </div>
     <div class="card-body">
         <form method="POST" id="user_form">
             <input type="hidden" name="user_id" id="form_user_id" value="">
             <div id="edit_alert" class="alert alert-warning d-none py-2 mb-3">
-                <i class="fas fa-pen me-1"></i> <strong>ترمیم موڈ</strong> — یوزر کی معلومات تبدیل کریں
+                <i class="fas fa-pen me-1"></i> <strong><?php echo __('ترمیم موڈ', 'Edit Mode'); ?></strong> — <?php echo __('یوزر کی معلومات تبدیل کریں', 'Update user information'); ?>
             </div>
 
             <!-- Top Row: User Basic Info in 4 Columns -->
             <div class="row g-3 mb-4">
                 <div class="col-md-3">
-                    <label class="form-label fw-bold"><?php echo t('name'); ?> <span class="text-danger">*</span></label>
-                    <input type="text" name="name" id="form_name" class="form-control" placeholder="نام درج کریں" required>
+                    <label class="form-label fw-bold"><?php echo __('نام', 'Name'); ?> <span class="text-danger">*</span></label>
+                    <input type="text" name="name" id="form_name" class="form-control" placeholder="<?php echo __('نام درج کریں', 'Enter name'); ?>" required>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label fw-bold"><?php echo t('username'); ?> <span class="text-danger">*</span></label>
-                    <input type="text" name="username" id="form_username" class="form-control" placeholder="یوزر نیم درج کریں" required>
+                    <label class="form-label fw-bold"><?php echo __('یوزر نیم', 'Username'); ?> <span class="text-danger">*</span></label>
+                    <input type="text" name="username" id="form_username" class="form-control" placeholder="<?php echo __('یوزر نیم درج کریں', 'Enter username'); ?>" required>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label fw-bold">پاس ورڈ <small class="text-muted">(تبدیل نہ کرنے پر خالی رکھیں)</small></label>
-                    <input type="password" name="password" class="form-control" placeholder="پاس ورڈ">
+                    <label class="form-label fw-bold"><?php echo __('پاس ورڈ', 'Password'); ?> <small class="text-muted">(<?php echo __('تبدیل نہ کرنے پر خالی رکھیں', 'Leave blank to keep unchanged'); ?>)</small></label>
+                    <input type="password" name="password" class="form-control" placeholder="<?php echo __('پاس ورڈ', 'Password'); ?>">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label fw-bold">رول (Role)</label>
+                    <label class="form-label fw-bold"><?php echo __('رول (Role)', 'Role'); ?></label>
                     <select name="role" id="form_role" class="form-select" onchange="handleRoleChange(this.value)">
-                        <option value="admin">ایڈمن (Admin - Full Access)</option>
-                        <option value="nazim">ناظم (Nazim)</option>
-                        <option value="teacher">استاد (Teacher)</option>
+                        <option value="admin"><?php echo __('ایڈمن (مکمل رسائی)', 'Admin (Full Access)'); ?></option>
+                        <option value="nazim"><?php echo __('ناظم', 'Nazim'); ?></option>
+                        <option value="teacher"><?php echo __('استاد', 'Teacher'); ?></option>
                     </select>
                 </div>
             </div>
@@ -325,15 +325,15 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                 <div class="col-lg-4 col-md-4">
                     <div class="perm-col-box">
                         <div class="perm-col-header">
-                            <h6 class="box-title text-success"><i class="fas fa-university me-1"></i> مدرسہ پرمیشنز</h6>
+                            <h6 class="box-title text-success"><i class="fas fa-university me-1"></i> <?php echo __('مدرسہ پرمیشنز', 'Madrasa Permissions'); ?></h6>
                             <div class="box-actions">
-                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-success" onclick="togglePermGroup('madrasa', true)">تمام منتخب</button>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-success" onclick="togglePermGroup('madrasa', true)"><?php echo __('تمام منتخب', 'Select All'); ?></button>
                                 <span class="text-muted">|</span>
-                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-danger" onclick="togglePermGroup('madrasa', false)">تمام ختم</button>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-danger" onclick="togglePermGroup('madrasa', false)"><?php echo __('تمام ختم', 'Deselect All'); ?></button>
                             </div>
                         </div>
                         <div class="perm-search-box">
-                            <input type="text" class="perm-search-input" placeholder="مدرسہ پرمیشن تلاش کریں..." onkeyup="filterPermList(this, 'madrasa_list')">
+                            <input type="text" class="perm-search-input" placeholder="<?php echo __('مدرسہ پرمیشن تلاش کریں...', 'Search madrasa permissions...'); ?>" onkeyup="filterPermList(this, 'madrasa_list')">
                         </div>
                         <div class="perm-col-body" id="madrasa_list">
                             <?php foreach ($madrasa_perms as $key => $val): ?>
@@ -344,8 +344,8 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                             <?php endforeach; ?>
                         </div>
                         <div class="perm-col-footer">
-                            <span>کل اختیارات: <?php echo count($madrasa_perms); ?></span>
-                            <span class="badge bg-success" id="madrasa_count_badge">0 منتخب</span>
+                            <span><?php echo __('کل اختیارات:', 'Total Permissions:'); ?> <?php echo count($madrasa_perms); ?></span>
+                            <span class="badge bg-success" id="madrasa_count_badge">0 <?php echo __('منتخب', 'Selected'); ?></span>
                         </div>
                     </div>
                 </div>
@@ -354,19 +354,19 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                 <div class="col-lg-4 col-md-4">
                     <div class="perm-col-box">
                         <div class="perm-col-header">
-                            <h6 class="box-title text-primary"><i class="fas fa-chalkboard me-1"></i> متعلقہ کلاسز (Classes)</h6>
+                            <h6 class="box-title text-primary"><i class="fas fa-chalkboard me-1"></i> <?php echo __('متعلقہ کلاسز (Classes)', 'Assigned Classes'); ?></h6>
                             <div class="box-actions">
-                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-primary" onclick="toggleAllClasses(true)">تمام منتخب</button>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-primary" onclick="toggleAllClasses(true)"><?php echo __('تمام منتخب', 'Select All'); ?></button>
                                 <span class="text-muted">|</span>
-                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-danger" onclick="toggleAllClasses(false)">تمام ختم</button>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-danger" onclick="toggleAllClasses(false)"><?php echo __('تمام ختم', 'Deselect All'); ?></button>
                             </div>
                         </div>
                         <div class="perm-search-box">
-                            <input type="text" class="perm-search-input" placeholder="کلاس تلاش کریں..." onkeyup="filterPermList(this, 'classes_list')">
+                            <input type="text" class="perm-search-input" placeholder="<?php echo __('کلاس تلاش کریں...', 'Search class...'); ?>" onkeyup="filterPermList(this, 'classes_list')">
                         </div>
                         <div class="perm-col-body" id="classes_list">
                             <?php if (empty($all_classes)): ?>
-                                <p class="text-muted small p-3 text-center">کوئی کلاس موجود نہیں۔</p>
+                                <p class="text-muted small p-3 text-center"><?php echo __('کوئی کلاس موجود نہیں۔', 'No classes available.'); ?></p>
                             <?php else: ?>
                                 <?php foreach ($all_classes as $cls): 
                                     $is_masjid_cls = (($cls['system_type'] ?? '') === 'Masjid');
@@ -377,7 +377,7 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                                         <?php echo e($cls['name']); ?> 
                                         <?php echo !empty($cls['section']) ? ' - ' . e($cls['section']) : ''; ?>
                                         <?php if ($is_masjid_cls): ?>
-                                            <span class="badge bg-warning text-dark me-1" style="font-size: 10px;">مکتب</span>
+                                            <span class="badge bg-warning text-dark me-1" style="font-size: 10px;"><?php echo __('مکتب', 'Maktab'); ?></span>
                                         <?php endif; ?>
                                     </label>
                                 </div>
@@ -385,8 +385,8 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                             <?php endif; ?>
                         </div>
                         <div class="perm-col-footer">
-                            <span>کل کلاسز: <?php echo count($all_classes); ?></span>
-                            <span class="badge bg-primary" id="classes_count_badge">0 منتخب</span>
+                            <span><?php echo __('کل کلاسز:', 'Total Classes:'); ?> <?php echo count($all_classes); ?></span>
+                            <span class="badge bg-primary" id="classes_count_badge">0 <?php echo __('منتخب', 'Selected'); ?></span>
                         </div>
                     </div>
                 </div>
@@ -395,15 +395,15 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                 <div class="col-lg-4 col-md-4">
                     <div class="perm-col-box">
                         <div class="perm-col-header">
-                            <h6 class="box-title text-warning"><i class="fas fa-mosque me-1"></i> مسجد پرمیشنز</h6>
+                            <h6 class="box-title text-warning"><i class="fas fa-mosque me-1"></i> <?php echo __('مسجد پرمیشنز', 'Masjid Permissions'); ?></h6>
                             <div class="box-actions">
-                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-warning" onclick="togglePermGroup('masjid', true)">تمام منتخب</button>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-warning" onclick="togglePermGroup('masjid', true)"><?php echo __('تمام منتخب', 'Select All'); ?></button>
                                 <span class="text-muted">|</span>
-                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-danger" onclick="togglePermGroup('masjid', false)">تمام ختم</button>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-danger" onclick="togglePermGroup('masjid', false)"><?php echo __('تمام ختم', 'Deselect All'); ?></button>
                             </div>
                         </div>
                         <div class="perm-search-box">
-                            <input type="text" class="perm-search-input" placeholder="مسجد پرمیشن تلاش کریں..." onkeyup="filterPermList(this, 'masjid_list')">
+                            <input type="text" class="perm-search-input" placeholder="<?php echo __('مسجد پرمیشن تلاش کریں...', 'Search masjid permissions...'); ?>" onkeyup="filterPermList(this, 'masjid_list')">
                         </div>
                         <div class="perm-col-body" id="masjid_list">
                             <?php foreach ($masjid_perms as $key => $val): ?>
@@ -414,8 +414,8 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                             <?php endforeach; ?>
                         </div>
                         <div class="perm-col-footer">
-                            <span>کل اختیارات: <?php echo count($masjid_perms); ?></span>
-                            <span class="badge bg-warning text-dark" id="masjid_count_badge">0 منتخب</span>
+                            <span><?php echo __('کل اختیارات:', 'Total Permissions:'); ?> <?php echo count($masjid_perms); ?></span>
+                            <span class="badge bg-warning text-dark" id="masjid_count_badge">0 <?php echo __('منتخب', 'Selected'); ?></span>
                         </div>
                     </div>
                 </div>
@@ -424,14 +424,14 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
             <!-- Bottom Row: Buttons & Admin Note -->
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pt-3 border-top">
                 <div class="text-muted small">
-                    <i class="fas fa-info-circle me-1 text-primary"></i> <?php echo t('admin_perm_notice'); ?>
+                    <i class="fas fa-info-circle me-1 text-primary"></i> <?php echo __('ایڈمن کو خودکار طور پر تمام اختیارات حاصل ہوتے ہیں۔ ناظم اور اساتذہ کے لیے مخصوص اختیارات منتخب کریں۔', 'Admin automatically has full access. For Nazim and Teachers, select specific permissions.'); ?>
                 </div>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-outline-secondary px-4" onclick="resetForm()">
-                        <i class="fas fa-times me-1"></i> <?php echo t('clear_form'); ?>
+                        <i class="fas fa-times me-1"></i> <?php echo __('فارم خالی کریں', 'Clear Form'); ?>
                     </button>
                     <button type="submit" name="save_user" class="btn btn-success px-4 fw-bold">
-                        <i class="fas fa-save me-1"></i> <?php echo t('btn_save_ur'); ?>
+                        <i class="fas fa-save me-1"></i> <?php echo __('محفوظ کریں', 'Save'); ?>
                     </button>
                 </div>
             </div>
@@ -442,9 +442,9 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
 <!-- Current Users & Staff Table (Full Width) -->
 <div class="card shadow-sm mb-5">
     <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between align-items-center">
-        <span><i class="fas fa-users-cog me-2"></i> <?php echo t('current_users_staff'); ?> (کل: <?php echo count($users); ?>)</span>
-        <a href="cleanup_and_reorder_users.php" class="btn btn-sm btn-warning text-dark fw-bold shadow-sm" title="فالتو اکاؤنٹس ختم کریں اور آئی ڈیز 1 تا 4 ری آرڈر کریں">
-            <i class="fas fa-broom me-1"></i> اکاؤنٹس صفائی و ترتیبِ نو (1 تا 4)
+        <span><i class="fas fa-users-cog me-2"></i> <?php echo __('موجودہ یوزرز و عملہ', 'Current Users & Staff'); ?> (<?php echo __('کل:', 'Total:'); ?> <?php echo count($users); ?>)</span>
+        <a href="cleanup_and_reorder_users.php" class="btn btn-sm btn-warning text-dark fw-bold shadow-sm" title="<?php echo __('فالتو اکاؤنٹس ختم کریں اور آئی ڈیز 1 تا 4 ری آرڈر کریں', 'Remove extra accounts and reorder IDs 1 to 4'); ?>">
+            <i class="fas fa-broom me-1"></i> <?php echo __('اکاؤنٹس صفائی و ترتیبِ نو (1 تا 4)', 'Cleanup & Reorder Accounts (1 to 4)'); ?>
         </a>
     </div>
     <div class="card-body p-0">
@@ -453,17 +453,17 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                 <thead class="table-light">
                     <tr>
                         <th style="width: 60px;">#</th>
-                        <th><?php echo t('name'); ?></th>
-                        <th><?php echo t('username'); ?></th>
-                        <th><?php echo t('role'); ?></th>
-                        <th><?php echo t('permissions'); ?></th>
-                        <th>متعلقہ کلاسز</th>
-                        <th style="width: 120px;"><?php echo t('action_col'); ?></th>
+                        <th><?php echo __('نام', 'Name'); ?></th>
+                        <th><?php echo __('یوزر نیم', 'Username'); ?></th>
+                        <th><?php echo __('رول', 'Role'); ?></th>
+                        <th><?php echo __('پرمیشنز', 'Permissions'); ?></th>
+                        <th><?php echo __('متعلقہ کلاسز', 'Assigned Classes'); ?></th>
+                        <th style="width: 120px;"><?php echo __('کارروائی', 'Actions'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($users)): ?>
-                        <tr><td colspan="7" class="py-4 text-muted">کوئی یوزر موجود نہیں۔</td></tr>
+                        <tr><td colspan="7" class="py-4 text-muted"><?php echo __('کوئی یوزر موجود نہیں۔', 'No users found.'); ?></td></tr>
                     <?php else: ?>
                         <?php foreach ($users as $index => $u): 
                             $uPerms = json_decode($u['permissions'] ?? '[]', true) ?: [];
@@ -475,41 +475,41 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                             <td><code><?php echo e($u['username']); ?></code></td>
                             <td>
                                 <?php 
-                                if($u['role']=='admin') echo '<span class="badge bg-danger">' . t('role_admin') . '</span>';
-                                elseif($u['role']=='nazim') echo '<span class="badge bg-primary">' . t('role_nazim') . '</span>';
-                                else echo '<span class="badge bg-info text-dark">' . t('role_teacher') . '</span>';
+                                if($u['role']=='admin') echo '<span class="badge bg-danger">' . __('ایڈمن', 'Admin') . '</span>';
+                                elseif($u['role']=='nazim') echo '<span class="badge bg-primary">' . __('ناظم', 'Nazim') . '</span>';
+                                else echo '<span class="badge bg-info text-dark">' . __('استاد', 'Teacher') . '</span>';
                                 ?>
                             </td>
                             <td>
                                 <?php if ($u['role'] === 'admin'): ?>
-                                    <span class="badge bg-success">تمام اختیارات (All)</span>
+                                    <span class="badge bg-success"><?php echo __('تمام اختیارات (All)', 'All Permissions (All)'); ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary"><?php echo count($uPerms); ?> پرمیشنز</span>
+                                    <span class="badge bg-secondary"><?php echo count($uPerms); ?> <?php echo __('پرمیشنز', 'Permissions'); ?></span>
                                 <?php endif; ?>
                             </td>
                             <td>
                                 <?php if ($u['role'] === 'admin'): ?>
-                                    <span class="badge bg-success">تمام کلاسز (All)</span>
+                                    <span class="badge bg-success"><?php echo __('تمام کلاسز (All)', 'All Classes (All)'); ?></span>
                                 <?php elseif (empty($uClasses)): ?>
-                                    <small class="text-muted">کوئی مخصوص کلاس نہیں</small>
+                                    <small class="text-muted"><?php echo __('کوئی مخصوص کلاس نہیں', 'No specific class'); ?></small>
                                 <?php else: ?>
-                                    <span class="badge bg-info text-dark"><?php echo count($uClasses); ?> کلاسز الاٹ</span>
+                                    <span class="badge bg-info text-dark"><?php echo count($uClasses); ?> <?php echo __('کلاسز الاٹ', 'Classes Assigned'); ?></span>
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary me-1" title="ترمیم" onclick='editUser(<?php echo json_encode($u); ?>)'><i class="fas fa-edit"></i></button>
+                                <button class="btn btn-sm btn-outline-primary me-1" title="<?php echo __('ترمیم', 'Edit'); ?>" onclick='editUser(<?php echo json_encode($u); ?>)'><i class="fas fa-edit"></i></button>
                                 <?php if ((int)$u['id'] === 1): ?>
-                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle px-2 py-1 small" title="مرکزی ایڈمن اکاؤنٹ (نان ڈیلیٹ ایبل)">
-                                        <i class="fas fa-shield-alt me-1"></i> مین اکاؤنٹ
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle px-2 py-1 small" title="<?php echo __('مرکزی ایڈمن اکاؤنٹ (نان ڈیلیٹ ایبل)', 'Main Admin Account (Non-deletable)'); ?>">
+                                        <i class="fas fa-shield-alt me-1"></i> <?php echo __('مین اکاؤنٹ', 'Main Account'); ?>
                                     </span>
                                 <?php elseif ($u['id'] == $_SESSION['user_id']): ?>
-                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary-subtle px-2 py-1 small" title="آپ اس وقت اس اکاؤنٹ سے لاگ ان ہیں">
-                                        <i class="fas fa-user-check me-1"></i> خود لاگ ان
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary-subtle px-2 py-1 small" title="<?php echo __('آپ اس وقت اس اکاؤنٹ سے لاگ ان ہیں', 'You are currently logged in with this account'); ?>">
+                                        <i class="fas fa-user-check me-1"></i> <?php echo __('خود لاگ ان', 'Self Logged In'); ?>
                                     </span>
                                 <?php else: ?>
-                                    <form method="POST" class="d-inline" onsubmit="return confirm('<?php echo t('confirm_del_user'); ?>');">
+                                    <form method="POST" class="d-inline" onsubmit="return confirm('<?php echo __('کیا آپ واقعی اس یوزر کو ڈیلیٹ کرنا چاہتے ہیں؟', 'Are you sure you want to delete this user?'); ?>');">
                                         <input type="hidden" name="delete_user" value="<?php echo $u['id']; ?>">
-                                        <button class="btn btn-sm btn-outline-danger" title="حذف کریں"><i class="fas fa-trash"></i></button>
+                                        <button class="btn btn-sm btn-outline-danger" title="<?php echo __('حذف کریں', 'Delete'); ?>"><i class="fas fa-trash"></i></button>
                                     </form>
                                 <?php endif; ?>
                             </td>
@@ -566,10 +566,11 @@ function updateSelectedCounts() {
     let elM = document.getElementById('madrasa_count_badge');
     let elC = document.getElementById('classes_count_badge');
     let elJ = document.getElementById('masjid_count_badge');
+    let selSuffix = ' <?php echo __('منتخب', 'Selected'); ?>';
 
-    if (elM) elM.textContent = madrasaSel + ' منتخب';
-    if (elC) elC.textContent = classesSel + ' منتخب';
-    if (elJ) elJ.textContent = masjidSel + ' منتخب';
+    if (elM) elM.textContent = madrasaSel + selSuffix;
+    if (elC) elC.textContent = classesSel + selSuffix;
+    if (elJ) elJ.textContent = masjidSel + selSuffix;
 }
 
 function handleRoleChange(role) {
@@ -612,7 +613,7 @@ function resetForm() {
         let body = inp.closest('.perm-col-box').querySelector('.perm-col-body');
         if (body) filterPermList(inp, body.id);
     });
-    document.getElementById('form_card_title').innerHTML = '<span><i class="fas fa-user-plus me-2"></i> <?php echo t("add_new_user"); ?></span>';
+    document.getElementById('form_card_title').innerHTML = '<span><i class="fas fa-user-plus me-2"></i> <?php echo __('نیا یوزر شامل کریں', 'Add New User'); ?></span>';
     document.getElementById('form_card_title').className = 'card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center';
     document.getElementById('edit_alert').classList.add('d-none');
     document.getElementById('cancel_edit_btn').classList.add('d-none');
@@ -626,7 +627,7 @@ function editUser(u) {
     document.getElementById('form_role').value = u.role || 'teacher';
     
     // Update card header to show edit mode
-    document.getElementById('form_card_title').innerHTML = '<span><i class="fas fa-user-edit me-2"></i> یوزر اپڈیٹ کریں: ' + u.name + '</span><button type="button" class="btn btn-sm btn-outline-dark" onclick="resetForm()">منسوخ کریں</button>';
+    document.getElementById('form_card_title').innerHTML = '<span><i class="fas fa-user-edit me-2"></i> <?php echo __('یوزر اپڈیٹ کریں:', 'Update User:'); ?> ' + u.name + '</span><button type="button" class="btn btn-sm btn-outline-dark" onclick="resetForm()"><?php echo __('منسوخ کریں', 'Cancel'); ?></button>';
     document.getElementById('form_card_title').className = 'card-header bg-warning text-dark fw-bold d-flex justify-content-between align-items-center';
     document.getElementById('edit_alert').classList.remove('d-none');
     

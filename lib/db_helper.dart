@@ -9,6 +9,7 @@ import 'utils/globals.dart';
 import 'utils/system_type_global.dart';
 
 import 'db/migrations/migration_engine.dart';
+import 'db/db_safety_backup.dart';
 import 'db/migrations/app_migrations.dart';
 
 export 'db/db_sync_read.dart';
@@ -842,6 +843,11 @@ class DBHelper {
         }
       },
       onOpen: (db) async {
+        try {
+          await DbSafetyBackup.createBackupAndValidateDryRun(reason: 'pre_migration_v48');
+        } catch (e) {
+          debugPrint('[DBHelper] Safety backup warning: $e');
+        }
         await forceMigrate(db);
         await _ensureIndexes(db);
         await MigrationEngine.runMigrations(db, migrations: AppMigrations.all);
@@ -2303,19 +2309,9 @@ class DBHelper {
       debugPrint('Error auto-reconciling advance expenses (Masjid): $e');
     }
 
-    // Build admin lookup for canonical Urdu names & IDs
-    final Map<int, String> adminNamesById = {
-      1: 'تنزیل الرحمن',
-      2: 'قاری حماد اللہ ساجد صاحب',
-      3: 'قاری سلیم اللہ صاحب',
-      4: 'محمد عثمان معاویہ',
-    };
-    final Map<String, String> adminNamesByUsername = {
-      'tanzeel': 'تنزیل الرحمن',
-      'hammad': 'قاری حماد اللہ ساجد صاحب',
-      'saleem': 'قاری سلیم اللہ صاحب',
-      'usman': 'محمد عثمان معاویہ',
-    };
+    // Build admin lookup for names & IDs
+    final Map<int, String> adminNamesById = {};
+    final Map<String, String> adminNamesByUsername = {};
     try {
       final Database db = await database;
       final adminList = await db.rawQuery(
@@ -2331,29 +2327,21 @@ class DBHelper {
     } catch (_) {}
 
     int resolveCanonicalUid(int rawUid, String rawUname) {
+      if (rawUid > 0) return rawUid;
       final lowerName = rawUname.toLowerCase();
-      if (lowerName.contains('tanzeel') || lowerName.contains('تنزیل'))
-        return 1;
-      if (lowerName.contains('hammad') || lowerName.contains('حماد')) return 2;
-      if (lowerName.contains('saleem') || lowerName.contains('سلیم')) return 3;
-      if (lowerName.contains('usman') || lowerName.contains('عثمان')) return 4;
-      if (rawUid == 7) return 3;
-      return rawUid > 0 ? rawUid : 1;
+      for (final entry in adminNamesByUsername.entries) {
+        if (entry.key == lowerName || lowerName.contains(entry.key)) {
+          for (final idEntry in adminNamesById.entries) {
+            if (idEntry.value == entry.value) return idEntry.key;
+          }
+        }
+      }
+      return 1;
     }
 
     String resolveCanonicalName(int uid, String rawUname) {
-      final lower = rawUname.toLowerCase();
-      if (lower.contains('tanzeel') || lower.contains('تنزیل') || uid == 1)
-        return 'تنزیل الرحمن';
-      if (lower.contains('hammad') || lower.contains('حماد') || uid == 2)
-        return 'قاری حماد اللہ ساجد صاحب';
-      if (lower.contains('saleem') ||
-          lower.contains('سلیم') ||
-          uid == 3 ||
-          uid == 7) return 'قاری سلیم اللہ صاحب';
-      if (lower.contains('usman') || lower.contains('عثمان') || uid == 4)
-        return 'محمد عثمان معاویہ';
       if (adminNamesById.containsKey(uid)) return adminNamesById[uid]!;
+      final lower = rawUname.toLowerCase();
       if (adminNamesByUsername.containsKey(lower))
         return adminNamesByUsername[lower]!;
       if (rawUname.isNotEmpty && !rawUname.contains('@') && rawUname != 'Admin')
@@ -2647,19 +2635,9 @@ class DBHelper {
       debugPrint('Error auto-reconciling advance expenses: $e');
     }
 
-    // Build admin lookup for canonical Urdu names & IDs
-    final Map<int, String> adminNamesById = {
-      1: 'تنزیل الرحمن',
-      2: 'قاری حماد اللہ ساجد صاحب',
-      3: 'قاری سلیم اللہ صاحب',
-      4: 'محمد عثمان معاویہ',
-    };
-    final Map<String, String> adminNamesByUsername = {
-      'tanzeel': 'تنزیل الرحمن',
-      'hammad': 'قاری حماد اللہ ساجد صاحب',
-      'saleem': 'قاری سلیم اللہ صاحب',
-      'usman': 'محمد عثمان معاویہ',
-    };
+    // Build admin lookup for names & IDs
+    final Map<int, String> adminNamesById = {};
+    final Map<String, String> adminNamesByUsername = {};
     try {
       final Database db = await database;
       final adminList = await db.rawQuery(
@@ -2675,29 +2653,21 @@ class DBHelper {
     } catch (_) {}
 
     int resolveCanonicalUid(int rawUid, String rawUname) {
+      if (rawUid > 0) return rawUid;
       final lowerName = rawUname.toLowerCase();
-      if (lowerName.contains('tanzeel') || lowerName.contains('تنزیل'))
-        return 1;
-      if (lowerName.contains('hammad') || lowerName.contains('حماد')) return 2;
-      if (lowerName.contains('saleem') || lowerName.contains('سلیم')) return 3;
-      if (lowerName.contains('usman') || lowerName.contains('عثمان')) return 4;
-      if (rawUid == 7) return 3;
-      return rawUid > 0 ? rawUid : 1;
+      for (final entry in adminNamesByUsername.entries) {
+        if (entry.key == lowerName || lowerName.contains(entry.key)) {
+          for (final idEntry in adminNamesById.entries) {
+            if (idEntry.value == entry.value) return idEntry.key;
+          }
+        }
+      }
+      return 1;
     }
 
     String resolveCanonicalName(int uid, String rawUname) {
-      final lower = rawUname.toLowerCase();
-      if (lower.contains('tanzeel') || lower.contains('تنزیل') || uid == 1)
-        return 'تنزیل الرحمن';
-      if (lower.contains('hammad') || lower.contains('حماد') || uid == 2)
-        return 'قاری حماد اللہ ساجد صاحب';
-      if (lower.contains('saleem') ||
-          lower.contains('سلیم') ||
-          uid == 3 ||
-          uid == 7) return 'قاری سلیم اللہ صاحب';
-      if (lower.contains('usman') || lower.contains('عثمان') || uid == 4)
-        return 'محمد عثمان معاویہ';
       if (adminNamesById.containsKey(uid)) return adminNamesById[uid]!;
+      final lower = rawUname.toLowerCase();
       if (adminNamesByUsername.containsKey(lower))
         return adminNamesByUsername[lower]!;
       if (rawUname.isNotEmpty && !rawUname.contains('@') && rawUname != 'Admin')
@@ -5264,16 +5234,25 @@ class DBHelper {
     try {
       await db.execute('ALTER TABLE settings ADD COLUMN masjid_logo_path TEXT');
     } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE settings ADD COLUMN is_synced INTEGER DEFAULT 1');
+    } catch (_) {}
 
     var res = await db.query('settings', where: 'id = 1');
-    if (res.isNotEmpty) return res.first;
+    if (res.isNotEmpty) {
+      final curName = (res.first['madrasa_name'] ?? '').toString();
+      if (curName.contains('اشرف المدارس') || curName.toLowerCase().contains('ashraf')) {
+        await db.update('settings', {'madrasa_name': 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)'}, where: 'id = 1');
+        res = await db.query('settings', where: 'id = 1');
+      }
+      return res.first;
+    }
 
     await db.insert(
         'settings',
         {
           'id': 1,
-          'madrasa_name':
-              '\u0645\u062f\u0631\u0633\u06c1 \u0627\u0634\u0631\u0641 \u0627\u0644\u0645\u062f\u0627\u0631\u0633',
+          'madrasa_name': 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)',
           'phone': '',
           'current_hijri_year': '1447',
           'week_start_day': 6,
@@ -5309,15 +5288,17 @@ class DBHelper {
 
   Future<void> insertExamResult(Map<String, dynamic> row) async {
     final db = await database;
+    var data = Map<String, dynamic>.from(row);
+    data['is_synced'] = 0;
     final existing = await db.query('exam_results',
         where: 'exam_id = ? AND student_id = ?',
-        whereArgs: [row['exam_id'], row['student_id']]);
+        whereArgs: [data['exam_id'], data['student_id']]);
 
     if (existing.isNotEmpty) {
-      await db.update('exam_results', row,
+      await db.update('exam_results', data,
           where: 'id = ?', whereArgs: [existing.first['id']]);
     } else {
-      await db.insert('exam_results', row);
+      await db.insert('exam_results', data);
     }
   }
 

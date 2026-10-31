@@ -51,5 +51,57 @@ class AppMigrations {
         } catch (_) {}
       },
     ),
+    DatabaseMigration(
+      version: 48,
+      description: 'Ensure offline_sync_queue and audit columns (client_uuid, sync_status)',
+      up: (Database db) async {
+        // 1. Ensure persistent offline queue table
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS offline_sync_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT NOT NULL,
+            entity_id INTEGER,
+            action TEXT NOT NULL,
+            client_uuid TEXT NOT NULL UNIQUE,
+            tenant_id INTEGER NOT NULL,
+            payload_json TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        ''');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON offline_sync_queue(status, tenant_id)');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_sync_queue_uuid ON offline_sync_queue(client_uuid)');
+
+        // 2. Add client_uuid, sync_status and conflict_flag to core business tables
+        final coreTables = [
+          'students',
+          'attendance',
+          'hifz_record',
+          'nazira_record',
+          'qaida_records',
+          'finance',
+          'masjid_finance',
+          'maktab_students',
+          'maktab_attendance',
+          'classes',
+          'teachers'
+        ];
+
+        for (final tbl in coreTables) {
+          try {
+            await db.execute("ALTER TABLE $tbl ADD COLUMN client_uuid TEXT");
+          } catch (_) {}
+          try {
+            await db.execute("ALTER TABLE $tbl ADD COLUMN sync_status TEXT DEFAULT 'synced'");
+          } catch (_) {}
+          try {
+            await db.execute("ALTER TABLE $tbl ADD COLUMN conflict_flag INTEGER DEFAULT 0");
+          } catch (_) {}
+        }
+      },
+    ),
   ];
 }

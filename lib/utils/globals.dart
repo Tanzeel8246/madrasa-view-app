@@ -32,14 +32,14 @@ ValueNotifier<List<String>> currentTenantAllowedModules = ValueNotifier([]);
 // SaaS سبسکرپشن و ٹرائل گلوبل متغیرات
 ValueNotifier<bool> currentTenantIsTrial = ValueNotifier(false);
 ValueNotifier<int> currentTenantTrialDaysLeft = ValueNotifier(0);
-ValueNotifier<String> currentTenantPlanName = ValueNotifier('بنیادی پیکج (Basic)');
-ValueNotifier<String> currentTenantPlanCode = ValueNotifier('basic');
+ValueNotifier<String> currentTenantPlanName = ValueNotifier('مفت آزمائش (Free Trial)');
+ValueNotifier<String> currentTenantPlanCode = ValueNotifier('free');
 ValueNotifier<String> currentTenantSubscriptionEndsAt = ValueNotifier('');
 ValueNotifier<String> currentTenantSubscriptionStatus = ValueNotifier('active');
 ValueNotifier<String> currentTenantSystemType = ValueNotifier('Both'); // 'Madrasa', 'Masjid', or 'Both'
-ValueNotifier<int> currentTenantMaxStudents = ValueNotifier(50);
-ValueNotifier<int> currentTenantMaxClasses = ValueNotifier(3);
-ValueNotifier<int> currentTenantMaxTeachers = ValueNotifier(4);
+ValueNotifier<int> currentTenantMaxStudents = ValueNotifier(20);
+ValueNotifier<int> currentTenantMaxClasses = ValueNotifier(1);
+ValueNotifier<int> currentTenantMaxTeachers = ValueNotifier(2);
 
 /// ماڈیول چیکر: اگر سوپر ایڈمن نے ماڈیول بند کر رکھا ہو تو false واپس کرتا ہے
 bool isTenantModuleAllowed(String moduleKey) {
@@ -48,7 +48,8 @@ bool isTenantModuleAllowed(String moduleKey) {
     return true;
   }
   // اگر سوپر ایڈمن خود ہو تو تمام اختیارات کھلے ہیں
-  if (currentUserRole.value == 'admin' && currentUserId.value == 1) {
+  final role = (currentUserRole.value ?? '').toLowerCase();
+  if (role == 'superadmin' || role == 'super_admin' || (role == 'admin' && currentTenantId.value == 1 && currentUserId.value == 1)) {
     return true;
   }
   // اگر لسٹ ابھی خالی ہو (مثلاً پرانا کیش یا بغیر پابندی کے)، تو ڈیفالٹ میں کھلا رکھیں

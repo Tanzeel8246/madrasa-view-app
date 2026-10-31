@@ -937,6 +937,100 @@ $trans = [
 'on_time' => ['ur' => 'بروقت', 'en' => 'On Time'],
 'teachers_record' => ['ur' => 'اساتذہ ریکارڈ', 'en' => 'Teachers Record'],
 'attendance_register' => ['ur' => 'حاضری رجسٹر', 'en' => 'Attendance Register'],
+'today_attendance_perc' => ['ur' => 'آج کی حاضری فیصد', 'en' => "Today's Attendance %"],
+'monthly_attendance_perc' => ['ur' => 'ماہانہ اوسط حاضری', 'en' => 'Monthly Avg Attendance'],
+'this_month_expenses' => ['ur' => 'رواں ماہ کے اخراجات', 'en' => 'This Month Expenses'],
+'alumni_graduates' => ['ur' => 'فارغ التحصیل حفاظ و علماء', 'en' => 'Alumni / Graduates'],
+'active_teachers' => ['ur' => 'اساتذہ و عملہ', 'en' => 'Active Teachers & Staff'],
+'active_classes' => ['ur' => 'فعال کلاسز', 'en' => 'Active Classes'],
+'notices' => ['ur' => 'اعلانات و نوٹسز', 'en' => 'Notices & Circulars'],
+// Smart Alerts
+'smart_alerts_panel' => ['ur' => 'اسمارٹ نوٹیفکیشن والرٹ پینل', 'en' => 'Smart Notification & Alert Panel'],
+'smart_alerts_sub' => ['ur' => 'روزانہ ناغہ جات، غیر حاضریاں، مسلسل غفلت، فیس بقایا جات اور فوری توجہ طلب معاملات کی جامع رپورٹ', 'en' => 'Comprehensive daily report for leaves, absences, continuous negligence, fee dues, and urgent administrative matters'],
+'refresh_alerts' => ['ur' => 'تازہ کریں', 'en' => 'Refresh'],
+'total_active_alerts' => ['ur' => 'کل فعال الرٹس', 'en' => 'Total Active Alerts'],
+'filter_date' => ['ur' => 'تاریخ کا فلٹر', 'en' => 'Date Filter'],
+'filter_status' => ['ur' => 'اسٹیٹس فلٹر', 'en' => 'Status Filter'],
+'apply_filter' => ['ur' => 'فلٹر کریں', 'en' => 'Apply Filter'],
+'all_alerts' => ['ur' => 'تمام الرٹس', 'en' => 'All Alerts'],
+'hifz_academics' => ['ur' => 'حفظ و تعلیم', 'en' => 'Hifz & Academics'],
+'attendance_absent' => ['ur' => 'حاضری و غیر حاضری', 'en' => 'Attendance & Absence'],
+'fee_finance' => ['ur' => 'فیس و مالیات', 'en' => 'Fee & Finance'],
+'leave_complaints' => ['ur' => 'رخصت و شکایات', 'en' => 'Leaves & Complaints'],
+'no_alerts_found' => ['ur' => 'کوئی الرٹ یا انتباہ موجود نہیں ہے!', 'en' => 'No alerts or warnings found!'],
+'all_records_clean' => ['ur' => 'تمام طلبہ، اساتذہ اور انتظامی شعبہ جات کا ریکارڈ مکمل اور درست ہے۔', 'en' => 'All records for students, teachers, and administrative departments are up to date and clean.'],
+// Requests & Complaints
+'requests_complaints_portal' => ['ur' => 'درخواستیں و شکایات پورٹل', 'en' => 'Requests & Complaints Portal'],
+'parent_student_requests' => ['ur' => 'والدین و طلبہ کی ریکویسٹس', 'en' => 'Parent & Student Requests'],
+'online_fee_received' => ['ur' => 'موصول شدہ آن لائن تعاون / فیس', 'en' => 'Online Fee / Contribution Submissions'],
+'leave_requests' => ['ur' => 'چھٹی کی درخواستیں', 'en' => 'Leave Applications'],
+'parent_complaints_tab' => ['ur' => 'والدین کی شکایات', 'en' => 'Parent Complaints'],
+'received_fees_list' => ['ur' => 'موصول شدہ آن لائن تعاون / فیس کی فہرست', 'en' => 'List of Received Online Fees & Contributions'],
+'no_fee_entries' => ['ur' => 'کوئی فیس انٹری موصول نہیں ہوئی۔', 'en' => 'No online fee submissions received.'],
+'account_head' => ['ur' => 'مد (حساب)', 'en' => 'Account / Head'],
+'receipt_proof' => ['ur' => 'رسید (ثبوت)', 'en' => 'Receipt (Proof)'],
+// Notice Board
+'new_notice' => ['ur' => 'نیا اعلان (Notice)', 'en' => 'New Notice / Announcement'],
+'notice_title_label' => ['ur' => 'عنوان (Title)', 'en' => 'Notice Title'],
+'notice_title_placeholder' => ['ur' => 'مثلاً: چھٹی کا اعلان', 'en' => 'e.g. Holiday Announcement'],
+'notice_message_label' => ['ur' => 'تفصیل (Message)', 'en' => 'Notice Message / Details'],
+'publish_notice' => ['ur' => 'نوٹس بورڈ پر لگائیں', 'en' => 'Publish on Notice Board'],
+'existing_notices' => ['ur' => 'موجودہ اعلانات', 'en' => 'Current Notices / Circulars'],
+'notice_title_desc' => ['ur' => 'عنوان / تفصیل', 'en' => 'Title / Description'],
+// Dashboard Highlights
+'enrolled_students' => ['ur' => 'زیرِ تعلیم طلبہ', 'en' => 'Enrolled Students'],
+'advisory_tip' => ['ur' => 'مشورہ', 'en' => 'Advisory / Tip'],
+'today_situation' => ['ur' => 'آج کی مجموعی حاضری صورتحال', 'en' => "Today's Overall Attendance Situation"],
+'live_attendance_progress' => ['ur' => 'کے لیے حاضری اندراج کی لائیو صورتحال', 'en' => 'Live attendance entry progress for'],
+'classes_attendance_progress' => ['ur' => 'قرآنی و درسی کلاسز کی حاضری:', 'en' => 'Classes Attendance Progress:'],
+'classes_done' => ['ur' => 'کلاسز مکمل', 'en' => 'Classes Done'],
+'all_classes_marked' => ['ur' => 'ماشاءاللہ! آج تمام کلاسز کی حاضری مکمل ہو چکی ہے۔', 'en' => 'Alhamdulillah! All classes attendance marked today.'],
+'unmarked_classes_alert' => ['ur' => 'غیر درج شدہ کلاسز (ایکشن مطلوب):', 'en' => 'Unmarked Classes (Action Required):'],
+'teachers_attendance_section' => ['ur' => 'اساتذہ کرام کی حاضری:', 'en' => 'Teachers Attendance:'],
+'leaves_record_link' => ['ur' => 'چھٹیوں کا ریکارڈ ->', 'en' => 'Leaves Record ->'],
+'present_label' => ['ur' => 'حاضر', 'en' => 'Present'],
+'leave_label' => ['ur' => 'رخصت', 'en' => 'On Leave'],
+'absent_label' => ['ur' => 'غیر حاضر', 'en' => 'Absent'],
+'late_label' => ['ur' => 'تاخیر', 'en' => 'Late'],
+'recent_activities' => ['ur' => 'حالیہ سرگرمیاں', 'en' => 'Recent Activities'],
+'live_log' => ['ur' => 'لائیو لاگ', 'en' => 'Live Log'],
+'no_recent_activities' => ['ur' => 'فی الوقت کوئی نئی سرگرمی درج نہیں ہے۔', 'en' => 'No recent activities recorded currently.'],
+'top_5_students' => ['ur' => 'نمایاں طلبہ', 'en' => 'Top 5 Students'],
+'all_students_btn' => ['ur' => 'تمام طلبہ', 'en' => 'All Students'],
+'active_student_badge' => ['ur' => 'فعال طالب علم', 'en' => 'Active Student'],
+'view_all' => ['ur' => 'تمام دیکھیں', 'en' => 'View All'],
+// Login & Auth
+'login_btn' => ['ur' => 'محفوظ لاگ ان کریں', 'en' => 'Secure Login'],
+'institute_code_opt' => ['ur' => 'ادارہ کوڈ (Institute Code) — اختیاری', 'en' => 'Institute Code (Optional)'],
+'institute_code_placeholder' => ['ur' => 'مثلاً M-26-001 (یا خالی چھوڑیں)', 'en' => 'e.g. M-26-001 (or leave blank)'],
+'institute_code_help' => ['ur' => 'نئے ادارے اپنا رجسٹریشن کوڈ درج کر سکتے ہیں، یا اسے خالی چھوڑ کر براہِ راست لاگ ان کریں۔', 'en' => 'Institutes can enter their registration code, or leave blank to log in directly.'],
+'username_label' => ['ur' => 'یوزر نیم / ای میل / فون نمبر / ادارہ کوڈ', 'en' => 'Username / Email / Phone / Institute Code'],
+'username_placeholder' => ['ur' => 'یوزر نیم، ای میل، فون یا ادارہ کوڈ درج کریں...', 'en' => 'Enter username, email, phone or institute code...'],
+'password_label' => ['ur' => 'پاسورڈ', 'en' => 'Password'],
+'password_placeholder' => ['ur' => 'پاسورڈ درج کریں...', 'en' => 'Enter password...'],
+'register_new_inst' => ['ur' => 'نیا ادارہ رجسٹر کریں', 'en' => 'Register New Institute'],
+'forgot_password' => ['ur' => 'پاسورڈ بھول گئے؟', 'en' => 'Forgot Password?'],
+'back_to_home' => ['ur' => '← ہوم لینڈنگ پیج پر جائیں', 'en' => '← Go to Home Page'],
+'super_admin_portal' => ['ur' => 'سپر ایڈمن پورٹل', 'en' => 'Super Admin Portal'],
+'login_error_invalid' => ['ur' => 'غلط یوزر نیم یا پاسورڈ درج کیا گیا ہے۔ براہِ کرم درست معلومات درج کریں۔', 'en' => 'Invalid username or password. Please check your credentials.'],
+'session_timeout_msg' => ['ur' => 'سیشن کی میعاد ختم ہو گئی ہے۔ براہِ کرم دوبارہ لاگ ان کریں۔', 'en' => 'Your session has expired. Please log in again.'],
+'reg_success_msg' => ['ur' => 'آپ کا ادارہ کامیابی سے رجسٹر ہو گیا ہے۔ براہِ کرم اپنے یوزر نیم اور پاسورڈ سے لاگ ان کریں۔', 'en' => 'Your institute has been successfully registered. Please log in with your credentials.'],
+// General UI Navigation
+'home' => ['ur' => 'ہوم', 'en' => 'Home'],
+'smart_alerts' => ['ur' => 'اسمارٹ الرٹس', 'en' => 'Smart Alerts'],
+'admission_requests' => ['ur' => 'داخلہ درخواستیں', 'en' => 'Admission Requests'],
+'admissions_stages' => ['ur' => 'مراحلِ داخلہ', 'en' => 'Admissions Stages'],
+'academic_performance_entry' => ['ur' => 'تعلیمی رپورٹ (اندراج)', 'en' => 'Academic Performance (Entry)'],
+'academic_performance' => ['ur' => 'تعلیمی کارکردگی', 'en' => 'Academic Performance'],
+'alumni' => ['ur' => 'فارغ التحصیل طلبہ', 'en' => 'Alumni'],
+'teacher_attendance' => ['ur' => 'اساتذہ حاضری', 'en' => 'Teacher Attendance'],
+'teacher_attendance_report' => ['ur' => 'اساتذہ حاضری رپورٹ', 'en' => 'Teacher Attendance Report'],
+'teacher_leaves' => ['ur' => 'اساتذہ رخصت', 'en' => 'Teacher Leaves'],
+'qr_attendance' => ['ur' => 'کیو آر حاضری', 'en' => 'QR Attendance'],
+'all_marks' => ['ur' => 'تمام نمبرات', 'en' => 'All Marks'],
+'data_backup_export' => ['ur' => 'ڈیٹا بیک اپ و ایکسپورٹ', 'en' => 'Data Backup & Export'],
+'cleanup_test_data' => ['ur' => 'ٹیسٹ ڈیٹا صفائی', 'en' => 'Cleanup Test Data'],
+'recycle_bin_trash' => ['ur' => 'ری سائیکل بن (ٹریش)', 'en' => 'Recycle Bin (Trash)'],
 ];
 
 function t($key) { 
@@ -963,6 +1057,17 @@ function t($key) {
 }
 
 // فنکشن: تاریخ کو اردو مہینوں میں دکھانے کے لیے
+if (!function_exists('__')) {
+    function __($ur, $en = null) {
+        global $lang;
+        $cur_lang = !empty($lang) ? $lang : ($_SESSION['lang'] ?? ($_COOKIE['app_language'] ?? ($_COOKIE['app_lang'] ?? 'ur')));
+        if ($cur_lang === 'en') {
+            return ($en !== null) ? $en : $ur;
+        }
+        return $ur;
+    }
+}
+
 function translateDate($dateStr) {
     global $lang;
     if(!$dateStr) return '-';

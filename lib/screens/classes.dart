@@ -494,7 +494,8 @@ class _ClassesPageState extends State<ClassesPage> {
                     final isSuper = currentUserRole.value == 'superadmin' || 
                         (currentUserRole.value == 'admin' && currentUserId.value == 1);
                     final maxCls = currentTenantMaxClasses.value;
-                    if (!isSuper && _classes.length >= maxCls) {
+                    final activeCount = _classes.where((c) => (c['status'] == 'Active' || c['status'] == null || c['status'] == '') && (c['is_deleted'] == 0 || c['is_deleted'] == null)).length;
+                    if (!isSuper && activeCount >= maxCls) {
                       showDialog(
                         context: context,
                         builder: (ctx) => AlertDialog(

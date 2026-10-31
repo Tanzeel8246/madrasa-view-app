@@ -174,7 +174,7 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="fw-bold" style="color:var(--primary);">
-            <i class="fas fa-graduation-cap me-2"></i> داخلہ درخواستیں
+            <i class="fas fa-graduation-cap me-2"></i> <?php echo __('داخلہ درخواستیں', 'Admission Applications'); ?>
         </h2>
     </div>
 
@@ -193,7 +193,7 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
             <a href="admin_admissions.php?filter=pending" class="text-decoration-none">
                 <div class="card border-0 shadow-sm text-white h-100" style="background:#fd7e14;">
                     <div class="card-body d-flex justify-content-between align-items-center">
-                        <div><h6 class="mb-1">زیرِ التواء</h6><h2 class="fw-bold mb-0"><?php echo $countMap['pending']; ?></h2></div>
+                        <div><h6 class="mb-1"><?php echo __('زیرِ التواء', 'Pending'); ?></h6><h2 class="fw-bold mb-0"><?php echo $countMap['pending']; ?></h2></div>
                         <i class="fas fa-hourglass-half fs-1 opacity-50"></i>
                     </div>
                 </div>
@@ -203,7 +203,7 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
             <a href="admin_admissions.php?filter=interview" class="text-decoration-none">
                 <div class="card border-0 shadow-sm text-white h-100" style="background:#6f42c1;">
                     <div class="card-body d-flex justify-content-between align-items-center">
-                        <div><h6 class="mb-1">ٹیسٹ / انٹرویو</h6><h2 class="fw-bold mb-0"><?php echo $countMap['interview']; ?></h2></div>
+                        <div><h6 class="mb-1"><?php echo __('ٹیسٹ / انٹرویو', 'Test / Interview'); ?></h6><h2 class="fw-bold mb-0"><?php echo $countMap['interview']; ?></h2></div>
                         <i class="fas fa-calendar-check fs-1 opacity-50"></i>
                     </div>
                 </div>
@@ -213,7 +213,7 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
             <a href="admin_admissions.php?filter=approved" class="text-decoration-none">
                 <div class="card border-0 shadow-sm text-white bg-success h-100">
                     <div class="card-body d-flex justify-content-between align-items-center">
-                        <div><h6 class="mb-1">منظور شدہ</h6><h2 class="fw-bold mb-0"><?php echo $countMap['approved']; ?></h2></div>
+                        <div><h6 class="mb-1"><?php echo __('منظور شدہ', 'Approved'); ?></h6><h2 class="fw-bold mb-0"><?php echo $countMap['approved']; ?></h2></div>
                         <i class="fas fa-check-circle fs-1 opacity-50"></i>
                     </div>
                 </div>
@@ -223,7 +223,7 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
             <a href="admin_admissions.php?filter=rejected" class="text-decoration-none">
                 <div class="card border-0 shadow-sm text-white bg-danger h-100">
                     <div class="card-body d-flex justify-content-between align-items-center">
-                        <div><h6 class="mb-1">مسترد</h6><h2 class="fw-bold mb-0"><?php echo $countMap['rejected']; ?></h2></div>
+                        <div><h6 class="mb-1"><?php echo __('مسترد', 'Rejected'); ?></h6><h2 class="fw-bold mb-0"><?php echo $countMap['rejected']; ?></h2></div>
                         <i class="fas fa-times-circle fs-1 opacity-50"></i>
                     </div>
                 </div>
@@ -233,11 +233,11 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
 
     <!-- Filter Tabs -->
     <ul class="nav nav-pills mb-3">
-        <li class="nav-item"><a class="nav-link <?php echo $filter==='all'?'active':''; ?>" href="?filter=all">تمام (<?php echo array_sum($countMap); ?>)</a></li>
-        <li class="nav-item"><a class="nav-link <?php echo $filter==='pending'?'active':''; ?>" href="?filter=pending">زیرِ التواء (<?php echo $countMap['pending']; ?>)</a></li>
-        <li class="nav-item"><a class="nav-link <?php echo $filter==='interview'?'active':''; ?>" href="?filter=interview">ٹیسٹ / انٹرویو (<?php echo $countMap['interview']; ?>)</a></li>
-        <li class="nav-item"><a class="nav-link <?php echo $filter==='approved'?'active':''; ?>" href="?filter=approved">منظور شدہ (<?php echo $countMap['approved']; ?>)</a></li>
-        <li class="nav-item"><a class="nav-link <?php echo $filter==='rejected'?'active':''; ?>" href="?filter=rejected">مسترد (<?php echo $countMap['rejected']; ?>)</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $filter==='all'?'active':''; ?>" href="?filter=all"><?php echo __('تمام', 'All'); ?> (<?php echo array_sum($countMap); ?>)</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $filter==='pending'?'active':''; ?>" href="?filter=pending"><?php echo __('زیرِ التواء', 'Pending'); ?> (<?php echo $countMap['pending']; ?>)</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $filter==='interview'?'active':''; ?>" href="?filter=interview"><?php echo __('ٹیسٹ / انٹرویو', 'Test / Interview'); ?> (<?php echo $countMap['interview']; ?>)</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $filter==='approved'?'active':''; ?>" href="?filter=approved"><?php echo __('منظور شدہ', 'Approved'); ?> (<?php echo $countMap['approved']; ?>)</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $filter==='rejected'?'active':''; ?>" href="?filter=rejected"><?php echo __('مسترد', 'Rejected'); ?> (<?php echo $countMap['rejected']; ?>)</a></li>
     </ul>
 
     <!-- Applications Table -->
@@ -247,34 +247,34 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                 <thead style="background:var(--primary); color:white;">
                     <tr>
                         <th>#</th>
-                        <th>تصویر</th>
-                        <th class="text-start">طالب علم</th>
-                        <th>والد کا نام</th>
-                        <th>فون نمبر</th>
-                        <th>شعبہ</th>
-                        <th>عمر</th>
-                        <th>تاریخ درخواست</th>
-                        <th>حالت</th>
-                        <th>اقدامات</th>
+                        <th><?php echo __('تصویر', 'Photo'); ?></th>
+                        <th class="text-start"><?php echo __('طالب علم', 'Student'); ?></th>
+                        <th><?php echo __('والد کا نام', 'Father Name'); ?></th>
+                        <th><?php echo __('فون نمبر', 'Phone'); ?></th>
+                        <th><?php echo __('شعبہ', 'Department'); ?></th>
+                        <th><?php echo __('عمر', 'Age'); ?></th>
+                        <th><?php echo __('تاریخ درخواست', 'Application Date'); ?></th>
+                        <th><?php echo __('حالت', 'Status'); ?></th>
+                        <th><?php echo __('اقدامات', 'Actions'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if(empty($apps)): ?>
-                        <tr><td colspan="10" class="text-center py-5 text-muted">کوئی درخواست موجود نہیں</td></tr>
+                        <tr><td colspan="10" class="text-center py-5 text-muted"><?php echo __('کوئی درخواست موجود نہیں', 'No applications found'); ?></td></tr>
                     <?php else: foreach($apps as $app): 
                         $currentStatus = strtolower($app['status'] ?? '');
                         if ($currentStatus === 'approved') {
                             $badgeClass = 'bg-success';
-                            $statusLabel = 'منظور شدہ';
+                            $statusLabel = __('منظور شدہ', 'Approved');
                         } elseif ($currentStatus === 'rejected') {
                             $badgeClass = 'bg-danger';
-                            $statusLabel = 'مسترد';
+                            $statusLabel = __('مسترد', 'Rejected');
                         } elseif ($currentStatus === 'interview') {
                             $badgeClass = 'text-white';
-                            $statusLabel = 'ٹیسٹ / انٹرویو';
+                            $statusLabel = __('ٹیسٹ / انٹرویو', 'Test / Interview');
                         } else {
                             $badgeClass = 'bg-warning text-dark';
-                            $statusLabel = 'زیرِ التواء';
+                            $statusLabel = __('زیرِ التواء', 'Pending');
                         }
                         $photoSrc = !empty($app['photo']) ? htmlspecialchars($app['photo']) : 'assets/img/default-avatar.png';
                         $phoneNum = htmlspecialchars($app['mobile_number'] ?? $app['mobile_no'] ?? '');
@@ -312,7 +312,7 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                                         $dob = new DateTime($dobVal);
                                         $now = new DateTime();
                                         $age = $now->diff($dob)->y;
-                                        echo $age . " سال";
+                                        echo $age . " " . __('سال', 'Years');
                                     } catch (Exception $e) { echo "-"; }
                                 } else {
                                     echo "-";
@@ -332,28 +332,28 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                                 <?php endif; ?>
                                 <?php if($currentStatus === 'approved'): ?>
                                     <br><small class="text-success">
-                                        <?php echo ($app['sms_sent'] ?? 0) ? '✅ SMS بھیجا گیا' : '⚠️ SMS نہیں بھیجا'; ?>
+                                        <?php echo ($app['sms_sent'] ?? 0) ? __('✅ SMS بھیجا گیا', '✅ SMS Sent') : __('⚠️ SMS نہیں بھیجا', '⚠️ SMS Not Sent'); ?>
                                     </small>
                                 <?php endif; ?>
                             </td>
                             <td>
                                 <!-- View Button -->
                                 <button class="btn btn-info btn-sm rounded-pill mb-1 text-white" onclick='openViewModal(<?php echo htmlspecialchars(json_encode($app), ENT_QUOTES, "UTF-8"); ?>)'>
-                                    <i class="fas fa-eye me-1"></i> تفصیل
+                                    <i class="fas fa-eye me-1"></i> <?php echo __('تفصیل', 'Details'); ?>
                                 </button>
 
                                 <?php if($currentStatus === 'pending'): ?>
                                     <!-- Schedule Interview -->
                                     <button class="btn btn-sm rounded-pill mb-1 text-white fw-bold" style="background:#6f42c1;"
                                         onclick="openScheduleModal(<?php echo $app['id']; ?>, '<?php echo htmlspecialchars(addslashes($app['student_name'])); ?>')">
-                                        <i class="fas fa-calendar-alt me-1"></i> ٹیسٹ / انٹرویو
+                                        <i class="fas fa-calendar-alt me-1"></i> <?php echo __('ٹیسٹ / انٹرویو', 'Test / Interview'); ?>
                                     </button>
                                     <!-- Direct Approve -->
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('کیا آپ واقعی یہ داخلہ براہ راست منظور کرنا چاہتے ہیں؟')">
                                         <input type="hidden" name="action" value="approve">
                                         <input type="hidden" name="id" value="<?php echo $app['id']; ?>">
                                         <button class="btn btn-success btn-sm rounded-pill mb-1" type="submit">
-                                            <i class="fas fa-check me-1"></i> منظور
+                                            <i class="fas fa-check me-1"></i> <?php echo __('منظور', 'Approve'); ?>
                                         </button>
                                     </form>
                                     <!-- Reject Button -->
@@ -361,26 +361,26 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                                         <input type="hidden" name="action" value="reject">
                                         <input type="hidden" name="id" value="<?php echo $app['id']; ?>">
                                         <button class="btn btn-danger btn-sm rounded-pill mb-1" type="submit">
-                                            <i class="fas fa-times me-1"></i> مسترد
+                                            <i class="fas fa-times me-1"></i> <?php echo __('مسترد', 'Reject'); ?>
                                         </button>
                                     </form>
 
                                 <?php elseif($currentStatus === 'interview'): ?>
                                     <!-- WhatsApp Notice -->
                                     <a href="<?php echo $waUrl; ?>" target="_blank" class="btn btn-success btn-sm rounded-pill mb-1 fw-bold text-white">
-                                        <i class="fab fa-whatsapp me-1"></i> واٹس ایپ نوٹس
+                                        <i class="fab fa-whatsapp me-1"></i> <?php echo __('واٹس ایپ نوٹس', 'WhatsApp Notice'); ?>
                                     </a>
                                     <!-- Change Schedule -->
                                     <button class="btn btn-outline-primary btn-sm rounded-pill mb-1"
                                         onclick="openScheduleModal(<?php echo $app['id']; ?>, '<?php echo htmlspecialchars(addslashes($app['student_name'])); ?>')">
-                                        <i class="fas fa-edit me-1"></i> تاریخ تبدیل
+                                        <i class="fas fa-edit me-1"></i> <?php echo __('تاریخ تبدیل', 'Reschedule'); ?>
                                     </button>
                                     <!-- Approve & Enroll -->
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('کیا آپ واقعی ٹیسٹ و انٹرویو کے بعد یہ داخلہ باقاعدہ منظور کرنا چاہتے ہیں؟ باضابطہ داخلہ نمبر بن جائے گا۔')">
                                         <input type="hidden" name="action" value="approve">
                                         <input type="hidden" name="id" value="<?php echo $app['id']; ?>">
                                         <button class="btn btn-success btn-sm rounded-pill mb-1 fw-bold" type="submit">
-                                            <i class="fas fa-user-check me-1"></i> داخلہ منظور کریں
+                                            <i class="fas fa-user-check me-1"></i> <?php echo __('داخلہ منظور کریں', 'Approve Admission'); ?>
                                         </button>
                                     </form>
                                     <!-- Reject Button -->
@@ -388,14 +388,14 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                                         <input type="hidden" name="action" value="reject">
                                         <input type="hidden" name="id" value="<?php echo $app['id']; ?>">
                                         <button class="btn btn-danger btn-sm rounded-pill mb-1" type="submit">
-                                            <i class="fas fa-times me-1"></i> مسترد
+                                            <i class="fas fa-times me-1"></i> <?php echo __('مسترد', 'Reject'); ?>
                                         </button>
                                     </form>
 
                                 <?php elseif($currentStatus === 'approved'): ?>
                                     <?php if(!($app['sms_sent'] ?? 0)): ?>
                                         <button class="btn btn-warning btn-sm rounded-pill" onclick="retrySMS(<?php echo $app['id']; ?>)">
-                                            <i class="fas fa-sms me-1"></i> SMS دوبارہ
+                                            <i class="fas fa-sms me-1"></i> <?php echo __('SMS دوبارہ', 'Retry SMS'); ?>
                                         </button>
                                     <?php endif; ?>
                                 <?php endif; ?>

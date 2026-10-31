@@ -19,7 +19,8 @@ if (isset($_POST['add_notice'])) {
     $stmt = $pdo->prepare("INSERT INTO notices (title, message, date, system_type, tenant_id) VALUES (?, ?, ?, ?, ?)");
     $stmt->execute([$_POST['title'], $_POST['message'], $_POST['date'], $sys, $cur_tenant_id]);
     sendPushNotificationFCM($pdo, $_POST['title'], $_POST['message'], 'new_notice');
-    echo "<div class='alert alert-success'>✅ نوٹس بورڈ پر اعلان لگ گیا اور پش نوٹیفکیشن بھیج دیا گیا!</div>";
+    $notice_succ = __('نوٹس بورڈ پر اعلان لگ گیا اور پش نوٹیفکیشن بھیج دیا گیا!', 'Notice posted to notice board and push notification sent!');
+    echo "<div class='alert alert-success'>✅ " . $notice_succ . "</div>";
 }
 
 // نوٹس ڈیلیٹ کرنا
@@ -37,22 +38,22 @@ $notices = $notices_stmt->fetchAll();
 <div class="row">
     <div class="col-md-4">
         <div class="card shadow border-top border-4 border-danger">
-            <div class="card-header bg-white fw-bold"><i class="fas fa-bullhorn me-2 text-danger"></i> نیا اعلان (Notice)</div>
+            <div class="card-header bg-white fw-bold"><i class="fas fa-bullhorn me-2 text-danger"></i> <?php echo __('نیا اعلان', 'New Notice / Announcement'); ?></div>
             <div class="card-body">
                 <form method="POST">
                     <div class="mb-3">
-                        <label>عنوان (Title)</label>
-                        <input type="text" name="title" class="form-control" placeholder="مثلاً: چھٹی کا اعلان" required>
+                        <label><?php echo __('عنوان', 'Title'); ?></label>
+                        <input type="text" name="title" class="form-control" placeholder="<?php echo __('مثلاً: چھٹی کا اعلان', 'e.g. Holiday Announcement'); ?>" required>
                     </div>
                     <div class="mb-3">
                         <label><?php echo t('date_ur'); ?></label>
                         <input type="date" name="date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                     </div>
                     <div class="mb-3">
-                        <label>تفصیل (Message)</label>
+                        <label><?php echo __('تفصیل', 'Message / Details'); ?></label>
                         <textarea name="message" class="form-control" rows="4" required></textarea>
                     </div>
-                    <button type="submit" name="add_notice" class="btn btn-danger w-100 fw-bold">نوٹس بورڈ پر لگائیں</button>
+                    <button type="submit" name="add_notice" class="btn btn-danger w-100 fw-bold"><?php echo __('نوٹس بورڈ پر لگائیں', 'Publish on Notice Board'); ?></button>
                 </form>
             </div>
         </div>
@@ -60,10 +61,10 @@ $notices = $notices_stmt->fetchAll();
 
     <div class="col-md-8">
         <div class="card shadow">
-            <div class="card-header bg-dark text-white fw-bold">موجودہ اعلانات</div>
+            <div class="card-header bg-dark text-white fw-bold"><?php echo __('موجودہ اعلانات', 'Current Notices & Circulars'); ?></div>
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
-                    <thead><tr><th><?php echo t('date_ur'); ?></th><th>عنوان / تفصیل</th><th><?php echo t('action_ur'); ?></th></tr></thead>
+                    <thead><tr><th><?php echo __('تاریخ', 'Date'); ?></th><th><?php echo __('عنوان / تفصیل', 'Title / Description'); ?></th><th><?php echo __('ایکشن', 'Action'); ?></th></tr></thead>
                     <tbody>
                         <?php foreach($notices as $n): ?>
                         <tr>

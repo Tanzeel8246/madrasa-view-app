@@ -341,7 +341,8 @@ function att_count_status(&$pCount, &$lateCount, &$aCount, &$lCount, $status, $l
 }
 
 function att_period_display_name($pNo, $totalPeriods = 8) {
-    return 'سبق ' . $pNo;
+    global $lang;
+    return ($lang === 'en') ? ('Period ' . $pNo) : ('سبق ' . $pNo);
 }
 ?>
 
@@ -409,8 +410,8 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
         <div class="card-header bg-light p-0">
             <div class="d-flex justify-content-between align-items-center px-2">
                 <ul class="nav nav-tabs fw-bold border-0">
-                    <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='month'?'active bg-white':''; ?>" onclick="window.location='attendance_report.php?mode=month'">ماہانہ</button></li>
-                    <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='range'?'active bg-white text-primary':'text-muted'; ?>" onclick="window.location='attendance_report.php?mode=range'">کسٹم رینج</button></li>
+                    <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='month'?'active bg-white':''; ?>" onclick="window.location='attendance_report.php?mode=month'"><?php echo __('ماہانہ', 'Monthly'); ?></button></li>
+                    <li class="nav-item"><button class="nav-link border-0 <?php echo $mode=='range'?'active bg-white text-primary':'text-muted'; ?>" onclick="window.location='attendance_report.php?mode=range'"><?php echo __('کسٹم رینج', 'Custom Range'); ?></button></li>
                 </ul>
                 <form method="POST" class="d-flex align-items-center gap-1 bg-white border rounded px-2 py-1 shadow-sm" style="height: 30px;">
                     <span class="small fw-bold text-muted">چاند فرق:</span>
@@ -443,16 +444,16 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
                             ?>
                         </select>
                         <select name="std_id" class="form-select form-select-sm" style="width: 150px;" onchange="this.form.submit()">
-                            <option value="">تمام طلبہ</option>
+                            <option value=""><?php echo __('-- تمام طلبہ --', '-- All Students --'); ?></option>
                             <?php 
                             $st_id = $_GET['std_id'] ?? '';
                             $all_sts = $pdo->query("SELECT id, name FROM students WHERE ($class_condition) AND status='Active' AND is_deleted=0 ORDER BY name ASC")->fetchAll();
                             foreach($all_sts as $st) echo "<option value='{$st['id']}' ".($st_id==$st['id']?'selected':'').">{$st['name']}</option>";
                             ?>
                         </select>
-                        <button type="submit" class="btn btn-primary btn-sm">رپورٹ دیکھیں</button>
+                        <button type="submit" class="btn btn-primary btn-sm"><?php echo __('رپورٹ دیکھیں', 'View Report'); ?></button>
                         <?php if($st_id): ?>
-                            <a href="parent_report.php?std_id=<?php echo $st_id; ?>" class="btn btn-info btn-sm fw-bold"><i class="fas fa-user me-1"></i> انفرادی رپورٹ</a>
+                            <a href="parent_report.php?std_id=<?php echo $st_id; ?>" class="btn btn-info btn-sm fw-bold"><i class="fas fa-user me-1"></i> <?php echo __('انفرادی رپورٹ', 'Individual Report'); ?></a>
                         <?php endif; ?>
                     </form>
                     <?php else: ?>
@@ -460,12 +461,12 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
                         <input type="hidden" name="mode" value="range">
                         <input type="date" name="from" id="attRangeFrom" class="form-control form-control-sm" value="<?php echo $start_date; ?>" onchange="if(this.value && document.getElementById('attRangeTo').value) this.form.submit();">
                         <input type="date" name="to" id="attRangeTo" class="form-control form-control-sm" value="<?php echo $end_date; ?>" onchange="if(this.value && document.getElementById('attRangeFrom').value) this.form.submit();">
-                        <button type="submit" class="btn btn-primary btn-sm">رپورٹ دیکھیں</button>
+                        <button type="submit" class="btn btn-primary btn-sm"><?php echo __('رپورٹ دیکھیں', 'View Report'); ?></button>
                     </form>
                     <?php endif; ?>
                 </div>
                 <div class="col-md-3 text-end">
-                    <button onclick="printLandscape()" class="btn btn-success btn-sm fw-bold shadow"><i class="fas fa-print me-2"></i> پرنٹ (Landscape)</button>
+                    <button onclick="printLandscape()" class="btn btn-success btn-sm fw-bold shadow"><i class="fas fa-print me-2"></i> <?php echo __('پرنٹ (Landscape)', 'Print (Landscape)'); ?></button>
                 </div>
             </div>
         </div>
@@ -1024,7 +1025,7 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
                         </select>
                     </div>
                     <h5 class="fw-bold mb-0 text-dark" style="font-family: 'Noto Nastaliq Urdu', sans-serif; font-size: 18px;">
-                        پیریڈ وائز حاضری سمری
+                        <?php echo __('پیریڈ وائز حاضری سمری', 'Period-wise Attendance Summary'); ?>
                     </h5>
                 </div>
 
@@ -1046,22 +1047,22 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
                             <span class="period-stat-btn" style="color: #0d9488; cursor: pointer; text-decoration: underline;" 
                                   title="حاضر طلبہ کی فہرست دیکھنے کے لیے کلک کریں"
                                   onclick="openPeriodStudentsModal('<?php echo $cls_safe_id; ?>', <?php echo $pNo; ?>, 'p', '<?php echo htmlspecialchars(addslashes($cName), ENT_QUOTES); ?>')">
-                                ح: <span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_p"><?php echo $curr_p; ?></span>
+                                <?php echo ($lang === 'en') ? 'P: ' : 'ح: '; ?><span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_p"><?php echo $curr_p; ?></span>
                             </span>
                             <span class="period-stat-btn" style="color: #ea580c; cursor: pointer; text-decoration: underline;" 
                                   title="تاخیر والے طلبہ کی فہرست دیکھنے کے لیے کلک کریں"
                                   onclick="openPeriodStudentsModal('<?php echo $cls_safe_id; ?>', <?php echo $pNo; ?>, 'late', '<?php echo htmlspecialchars(addslashes($cName), ENT_QUOTES); ?>')">
-                                ت: <span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_late"><?php echo $curr_late; ?></span>
+                                <?php echo ($lang === 'en') ? 'L: ' : 'ت: '; ?><span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_late"><?php echo $curr_late; ?></span>
                             </span>
                             <span class="period-stat-btn" style="color: #dc2626; cursor: pointer; text-decoration: underline;" 
                                   title="غیر حاضر طلبہ کی فہرست دیکھنے کے لیے کلک کریں"
                                   onclick="openPeriodStudentsModal('<?php echo $cls_safe_id; ?>', <?php echo $pNo; ?>, 'a', '<?php echo htmlspecialchars(addslashes($cName), ENT_QUOTES); ?>')">
-                                غ: <span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_a"><?php echo $curr_a; ?></span>
+                                <?php echo ($lang === 'en') ? 'A: ' : 'غ: '; ?><span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_a"><?php echo $curr_a; ?></span>
                             </span>
                             <span class="period-stat-btn" style="color: #ca8a04; cursor: pointer; text-decoration: underline;" 
                                   title="رخصت والے طلبہ کی فہرست دیکھنے کے لیے کلک کریں"
                                   onclick="openPeriodStudentsModal('<?php echo $cls_safe_id; ?>', <?php echo $pNo; ?>, 'l', '<?php echo htmlspecialchars(addslashes($cName), ENT_QUOTES); ?>')">
-                                ر: <span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_l"><?php echo $curr_l; ?></span>
+                                <?php echo ($lang === 'en') ? 'Lv: ' : 'ر: '; ?><span id="<?php echo $cls_safe_id; ?>_p<?php echo $pNo; ?>_l"><?php echo $curr_l; ?></span>
                             </span>
                         </div>
                     </div>
@@ -1092,12 +1093,12 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
     ?>
     <div class="card shadow border-dark mt-4 no-print-break" style="max-width: 600px; margin: 0 auto;">
         <div class="card-header bg-dark text-white text-center fw-bold">
-            مجموعی کارکردگی رپورٹ (<?php echo date('d M', strtotime($start_date)) . " تا " . date('d M', strtotime($end_date)); ?>)
+            <?php echo __('مجموعی کارکردگی رپورٹ', 'Overall Performance Report'); ?> (<?php echo date('d M', strtotime($start_date)) . " " . __('تا', 'to') . " " . date('d M', strtotime($end_date)); ?>)
         </div>
         <div class="card-body">
             <div class="row text-center">
                 <div class="col-3 border-end"><h4 class="text-success fw-bold mb-0"><?php echo $perc_p; ?>%</h4><small><?php echo t('on_time'); ?></small></div>
-                <div class="col-3 border-end"><h4 class="text-warning fw-bold mb-0" style="color: #fd7e14 !important;"><?php echo $perc_late; ?>%</h4><small>تاخیر</small></div>
+                <div class="col-3 border-end"><h4 class="text-warning fw-bold mb-0" style="color: #fd7e14 !important;"><?php echo $perc_late; ?>%</h4><small><?php echo __('تاخیر', 'Late'); ?></small></div>
                 <div class="col-3 border-end"><h4 class="text-danger fw-bold mb-0"><?php echo $perc_a; ?>%</h4><small><?php echo t('status_absent'); ?></small></div>
                 <div class="col-3"><h4 class="text-info fw-bold mb-0"><?php echo $perc_l; ?>%</h4><small><?php echo t('status_leave'); ?></small></div>
             </div>
@@ -1113,7 +1114,7 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
                 <div class="d-flex align-items-center gap-2">
                     <i class="fas fa-users fs-5"></i>
                     <h5 class="modal-title fw-bold m-0" id="periodStudentsModalLabel" style="font-family: 'Noto Nastaliq Urdu', sans-serif; font-size: 18px;">
-                        فہرست طلبہ
+                        <?php echo __('فہرست طلبہ', 'Students List'); ?>
                     </h5>
                 </div>
                 <button type="button" class="btn-close btn-close-white ms-0 me-auto" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -1135,10 +1136,10 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
                         <thead class="table-secondary sticky-top">
                             <tr>
                                 <th style="width: 50px;">#</th>
-                                <th style="width: 110px;">رول / داخلہ نمبر</th>
-                                <th>نام طالب علم</th>
-                                <th>والد کا نام</th>
-                                <th style="width: 130px;">کیفیت</th>
+                                <th style="width: 110px;"><?php echo __('رول / داخلہ نمبر', 'Roll / Adm No'); ?></th>
+                                <th><?php echo __('نام طالب علم', 'Student Name'); ?></th>
+                                <th><?php echo __('والد کا نام', 'Father Name'); ?></th>
+                                <th style="width: 130px;"><?php echo __('کیفیت', 'Status'); ?></th>
                             </tr>
                         </thead>
                         <tbody id="periodStudentsTableBody">
@@ -1147,7 +1148,7 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
                     </table>
                 </div>
                 <div id="emptyModalMsg" class="alert alert-info text-center mt-2 d-none fw-bold">
-                    اس کیٹیگری میں فی الوقت کوئی طالب علم موجود نہیں ہے۔
+                    <?php echo __('اس کیٹیگری میں فی الوقت کوئی طالب علم موجود نہیں ہے۔', 'No students currently found in this category.'); ?>
                 </div>
             </div>
             <div class="modal-footer py-2 px-3 bg-light d-flex justify-content-between">
@@ -1258,7 +1259,7 @@ function printModalStudentsList() {
     win.document.write('</head><body>');
     win.document.write('<h3 class="text-center fw-bold mb-1">مدرسہ اشرف المدارس</h3>');
     win.document.write('<h5 class="text-center text-muted mb-3">' + title + ' (' + cls + ' | ' + dt + ')</h5>');
-    win.document.write('<table class="table table-bordered"><thead><tr><th>#</th><th>رول / داخلہ نمبر</th><th>نام طالب علم</th><th>والد کا نام</th><th>کیفیت</th></tr></thead><tbody>' + tbody + '</tbody></table>');
+    win.document.write('<table class="table table-bordered"><thead><tr><th>#</th><th>رول / داخلہ نمبر</th><th><?php echo __('نام طالب علم', 'Student Name'); ?></th><th><?php echo __('والد کا نام', 'Father Name'); ?></th><th>کیفیت</th></tr></thead><tbody>' + tbody + '</tbody></table>');
     win.document.write('</body></html>');
     win.document.close();
     win.focus();

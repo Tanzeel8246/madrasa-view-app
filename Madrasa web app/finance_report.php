@@ -136,7 +136,7 @@ foreach ($by_user as $u) {
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h4 class="text-primary fw-bold mb-0">
             <i class="fas fa-file-invoice-dollar me-2"></i> 
-            <?php echo ($sys === 'Masjid') ? 'فنانس رپورٹ (مسجد)' : 'فنانس رپورٹ (مدرسہ)'; ?>
+            <?php echo ($sys === 'Masjid') ? __('فنانس رپورٹ (مسجد)', 'Finance Report (Masjid)') : __('فنانس رپورٹ (مدرسہ)', 'Finance Report (Madrasa)'); ?>
         </h4>
     </div>
 
@@ -144,42 +144,42 @@ foreach ($by_user as $u) {
     <ul class="nav nav-pills mb-3 d-print-none flex-nowrap overflow-x-auto text-nowrap border-bottom pb-2" id="reportTypeTabs" style="overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: thin;">
         <li class="nav-item me-2" style="flex: 0 0 auto;">
             <a class="nav-link fw-bold px-3 py-2 <?php echo ($type_filter=='All')?'active bg-primary text-white shadow-sm':'text-dark bg-white border'; ?>" href="?from=<?php echo $start_date; ?>&to=<?php echo $end_date; ?>&type=All<?php echo ($selected_user_id >= 0) ? '&user_id='.$selected_user_id : ''; ?>" style="white-space: nowrap;">
-                <i class="fas fa-list me-1"></i> مکمل رپورٹ (All)
+                <i class="fas fa-list me-1"></i> <?php echo __('مکمل رپورٹ (All)', 'Full Report'); ?>
             </a>
         </li>
         <li class="nav-item me-2" style="flex: 0 0 auto;">
             <a class="nav-link fw-bold px-3 py-2 <?php echo ($type_filter=='Income')?'active bg-success text-white shadow-sm':'text-dark bg-white border'; ?>" href="?from=<?php echo $start_date; ?>&to=<?php echo $end_date; ?>&type=Income<?php echo ($selected_user_id >= 0) ? '&user_id='.$selected_user_id : ''; ?>" style="white-space: nowrap;">
-                <i class="fas fa-arrow-down me-1 text-success"></i> آمدن رپورٹ (Income)
+                <i class="fas fa-arrow-down me-1 text-success"></i> <?php echo __('آمدن رپورٹ (Income)', 'Income Report'); ?>
             </a>
         </li>
         <li class="nav-item" style="flex: 0 0 auto;">
             <a class="nav-link fw-bold px-3 py-2 <?php echo ($type_filter=='Expense')?'active bg-danger text-white shadow-sm':'text-dark bg-white border'; ?>" href="?from=<?php echo $start_date; ?>&to=<?php echo $end_date; ?>&type=Expense<?php echo ($selected_user_id >= 0) ? '&user_id='.$selected_user_id : ''; ?>" style="white-space: nowrap;">
-                <i class="fas fa-arrow-up me-1 text-danger"></i> اخراجات رپورٹ (Expense)
+                <i class="fas fa-arrow-up me-1 text-danger"></i> <?php echo __('اخراجات رپورٹ (Expense)', 'Expense Report'); ?>
             </a>
         </li>
     </ul>
 
     <form method="GET" class="row g-2 align-items-end">
         <div class="col-md-2 col-6">
-            <label class="fw-bold">تاریخ (ابتداء)</label>
+            <label class="fw-bold"><?php echo __('تاریخ (ابتداء)', 'From Date'); ?></label>
             <input type="date" name="from" id="finFromDate" class="form-control" value="<?php echo $start_date; ?>" onchange="if(this.value && document.getElementById('finToDate').value) this.form.submit();">
         </div>
         <div class="col-md-2 col-6">
-            <label class="fw-bold">تاریخ (اختتام)</label>
+            <label class="fw-bold"><?php echo __('تاریخ (اختتام)', 'To Date'); ?></label>
             <input type="date" name="to" id="finToDate" class="form-control" value="<?php echo $end_date; ?>" onchange="if(this.value && document.getElementById('finFromDate').value) this.form.submit();">
         </div>
         <div class="col-md-2 col-6">
-            <label class="fw-bold">قسم</label>
+            <label class="fw-bold"><?php echo __('قسم', 'Type'); ?></label>
             <select name="type" class="form-select" onchange="this.form.submit()">
-                <option value="All" <?php echo ($type_filter=='All')?'selected':''; ?>>مکمل (All)</option>
-                <option value="Income" <?php echo ($type_filter=='Income')?'selected':''; ?>>آمدن (Income)</option>
+                <option value="All" <?php echo ($type_filter=='All')?'selected':''; ?>><?php echo __('مکمل (All)', 'All'); ?></option>
+                <option value="Income" <?php echo ($type_filter=='Income')?'selected':''; ?>><?php echo __('آمدن (Income)', 'Income'); ?></option>
                 <option value="Expense" <?php echo ($type_filter=='Expense')?'selected':''; ?>><?php echo t('type_expense'); ?></option>
             </select>
         </div>
         <div class="col-md-3 col-6">
-            <label class="fw-bold">صارف / کیشیئر (User)</label>
+            <label class="fw-bold"><?php echo __('صارف / کیشیئر (User)', 'User / Cashier'); ?></label>
             <select name="user_id" class="form-select" onchange="this.form.submit()">
-                <option value="" <?php echo ($selected_user_id < 0)?'selected':''; ?>>تمام صارفین (All Users)</option>
+                <option value="" <?php echo ($selected_user_id < 0)?'selected':''; ?>><?php echo __('تمام صارفین (All Users)', 'All Users'); ?></option>
                 <?php foreach ($users_list as $u_item): ?>
                     <option value="<?php echo $u_item['user_id']; ?>" <?php echo ($selected_user_id == $u_item['user_id'])?'selected':''; ?>>
                         <?php echo htmlspecialchars($u_item['user_name']); ?>
@@ -188,12 +188,12 @@ foreach ($by_user as $u) {
             </select>
         </div>
         <div class="col-md-3 col-12">
-            <button type="submit" class="btn btn-primary w-100 mb-1 fw-bold">تلاش کریں</button>
+            <button type="submit" class="btn btn-primary w-100 mb-1 fw-bold"><?php echo __('تلاش کریں', 'Filter'); ?></button>
             <div class="d-flex gap-1 mb-1 d-print-none">
-                <button type="button" onclick="toggleAllIncome()" class="btn btn-outline-success btn-sm flex-fill fw-bold"><i class="fas fa-eye me-1"></i> آمدن</button>
-                <button type="button" onclick="toggleAllExpense()" class="btn btn-outline-danger btn-sm flex-fill fw-bold"><i class="fas fa-eye me-1"></i> خرچ</button>
+                <button type="button" onclick="toggleAllIncome()" class="btn btn-outline-success btn-sm flex-fill fw-bold"><i class="fas fa-eye me-1"></i> <?php echo __('آمدن', 'Income'); ?></button>
+                <button type="button" onclick="toggleAllExpense()" class="btn btn-outline-danger btn-sm flex-fill fw-bold"><i class="fas fa-eye me-1"></i> <?php echo __('خرچ', 'Expense'); ?></button>
             </div>
-            <button type="button" onclick="window.print()" class="btn btn-dark w-100 fw-bold">پرنٹ کریں</button>
+            <button type="button" onclick="window.print()" class="btn btn-dark w-100 fw-bold"><?php echo __('پرنٹ کریں', 'Print'); ?></button>
         </div>
     </form>
 </div>
@@ -201,7 +201,7 @@ foreach ($by_user as $u) {
 <div id="printableArea" class="bg-white p-4 border rounded">
     <div class="text-center border-bottom border-2 border-dark mb-4 pb-2">
         <h2 class="fw-bold text-success m-0"><?php echo htmlspecialchars(!empty($tenant_settings['madrasa_name']) ? $tenant_settings['madrasa_name'] : (!empty($_SESSION['madrasa_name']) ? $_SESSION['madrasa_name'] : (($sys === 'Masjid') ? 'مسجد انتظامیہ' : 'جامعہ دارالعلوم'))); ?></h2>
-        <h4 class="mt-2 text-uppercase fw-bold">فنانس رپورٹ (یوزر وائز) - [<?php echo htmlspecialchars($sys); ?>]</h4>
+        <h4 class="mt-2 text-uppercase fw-bold"><?php echo __('فنانس رپورٹ (یوزر وائز)', 'Finance Report (User-wise)'); ?> - [<?php echo htmlspecialchars($sys); ?>]</h4>
         <p class="text-muted mb-1">
             مدت: <strong><?php echo date('d-m-Y', strtotime($start_date)); ?></strong> تا <strong><?php echo date('d-m-Y', strtotime($end_date)); ?></strong>
             <?php 
@@ -217,7 +217,7 @@ foreach ($by_user as $u) {
     </div>
 
     <?php if (empty($by_user)): ?>
-        <div class="alert alert-info text-center">کوئی مالیاتی ریکارڈ موجود نہیں ہے۔</div>
+        <div class="alert alert-info text-center"><?php echo __('کوئی مالیاتی ریکارڈ موجود نہیں ہے۔', 'No financial records found.'); ?></div>
     <?php else: ?>
         <?php foreach ($by_user as $uid => $user_data): ?>
         <?php
@@ -230,12 +230,12 @@ foreach ($by_user as $u) {
             <div class="finance-user-header d-flex justify-content-between align-items-center bg-dark text-white p-2 rounded mb-3">
                 <h5 class="finance-user-name mb-0 text-white"><i class="fas fa-user-circle me-2"></i> <?php echo htmlspecialchars($user_data['name']); ?></h5>
                 <div class="d-flex align-items-center gap-1">
-                    <span class="badge badge-inc-box">آمدن: <?php echo number_format($u_inc); ?></span>
-                    <span class="badge badge-exp-box">خرچ: <?php echo number_format($u_exp); ?></span>
+                    <span class="badge badge-inc-box"><?php echo __('آمدن: ', 'Inc: '); ?><?php echo number_format($u_inc); ?></span>
+                    <span class="badge badge-exp-box"><?php echo __('خرچ: ', 'Exp: '); ?><?php echo number_format($u_exp); ?></span>
                     <?php if ($u_bal >= 0): ?>
-                        <span class="badge badge-bal-box">بچت: Rs. <?php echo number_format($u_bal); ?></span>
+                        <span class="badge badge-bal-box"><?php echo __('بچت: Rs. ', 'Balance: Rs. '); ?><?php echo number_format($u_bal); ?></span>
                     <?php else: ?>
-                        <span class="badge badge-bal-box" style="background-color: #dc3545 !important; color: #ffffff !important; border: 1px solid #dc3545 !important;">خسارہ: Rs. <?php echo number_format(abs($u_bal)); ?></span>
+                        <span class="badge badge-bal-box" style="background-color: #dc3545 !important; color: #ffffff !important; border: 1px solid #dc3545 !important;"><?php echo __('خسارہ: Rs. ', 'Deficit: Rs. '); ?><?php echo number_format(abs($u_bal)); ?></span>
                     <?php endif; ?>
                 </div>
             </div>
@@ -243,8 +243,8 @@ foreach ($by_user as $u) {
             <!-- آمدن کی تفصیل (Expandable / Collapsible) -->
             <?php if (($type_filter == 'All' || $type_filter == 'Income') && !empty($user_data['income'])): ?>
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="text-success fw-bold m-0"><i class="fas fa-arrow-down me-1"></i> آمدن (Income)</h6>
-                <button type="button" class="btn btn-sm btn-outline-success border-0 fw-bold d-print-none" onclick="toggleFinSection('inc_sec_<?php echo $uid; ?>', this)"><i class="fas fa-chevron-up me-1"></i> بند کریں</button>
+                <h6 class="text-success fw-bold m-0"><i class="fas fa-arrow-down me-1"></i> <?php echo __('آمدن (Income)', 'Income'); ?></h6>
+                <button type="button" class="btn btn-sm btn-outline-success border-0 fw-bold d-print-none" onclick="toggleFinSection('inc_sec_<?php echo $uid; ?>', this)"><i class="fas fa-chevron-up me-1"></i> <?php echo __('بند کریں', 'Collapse'); ?></button>
             </div>
             <div id="inc_sec_<?php echo $uid; ?>">
                 <div class="table-responsive">
@@ -252,10 +252,10 @@ foreach ($by_user as $u) {
                         <thead class="table-light">
                             <tr>
                                 <th>#</th>
-                                <th>تاریخ</th>
-                                <th>ہیڈ (معد)</th>
-                                <th>تفصیل</th>
-                                <th class="text-end">رقم</th>
+                                <th><?php echo __('تاریخ', 'Date'); ?></th>
+                                <th><?php echo __('ہیڈ (مد)', 'Category'); ?></th>
+                                <th><?php echo __('تفصیل', 'Description'); ?></th>
+                                <th class="text-end"><?php echo __('رقم', 'Amount'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -277,8 +277,8 @@ foreach ($by_user as $u) {
             <!-- اخراجات کی تفصیل (Expandable / Collapsible) -->
             <?php if (($type_filter == 'All' || $type_filter == 'Expense') && !empty($user_data['expense'])): ?>
             <div class="d-flex justify-content-between align-items-center mb-2 mt-3">
-                <h6 class="text-danger fw-bold m-0"><i class="fas fa-arrow-up me-1"></i> اخراجات (Expenses)</h6>
-                <button type="button" class="btn btn-sm btn-outline-danger border-0 fw-bold d-print-none" onclick="toggleFinSection('exp_sec_<?php echo $uid; ?>', this)"><i class="fas fa-chevron-up me-1"></i> بند کریں</button>
+                <h6 class="text-danger fw-bold m-0"><i class="fas fa-arrow-up me-1"></i> <?php echo __('اخراجات (Expenses)', 'Expenses'); ?></h6>
+                <button type="button" class="btn btn-sm btn-outline-danger border-0 fw-bold d-print-none" onclick="toggleFinSection('exp_sec_<?php echo $uid; ?>', this)"><i class="fas fa-chevron-up me-1"></i> <?php echo __('بند کریں', 'Collapse'); ?></button>
             </div>
             <div id="exp_sec_<?php echo $uid; ?>">
                 <div class="table-responsive">
@@ -286,10 +286,10 @@ foreach ($by_user as $u) {
                         <thead class="table-light">
                             <tr>
                                 <th>#</th>
-                                <th>تاریخ</th>
-                                <th>ہیڈ (معد)</th>
-                                <th>تفصیل</th>
-                                <th class="text-end">رقم</th>
+                                <th><?php echo __('تاریخ', 'Date'); ?></th>
+                                <th><?php echo __('ہیڈ (مد)', 'Category'); ?></th>
+                                <th><?php echo __('تفصیل', 'Description'); ?></th>
+                                <th class="text-end"><?php echo __('رقم', 'Amount'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -316,19 +316,19 @@ foreach ($by_user as $u) {
     <div class="row mt-4 avoid-break">
         <div class="col-md-6 ms-auto">
             <div class="card border-dark">
-                <div class="card-header bg-dark text-white text-center fw-bold">حتمی خلاصہ - تمام یوزرز (Grand Summary)</div>
+                <div class="card-header bg-dark text-white text-center fw-bold"><?php echo __('حتمی خلاصہ - تمام یوزرز (Grand Summary)', 'Grand Summary - All Users'); ?></div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-bordered mb-0">
                             <?php if($type_filter == 'All' || $type_filter == 'Income'): ?>
                             <tr>
-                                <td class="text-success fw-bold ps-3 fs-5">کل آمدن (Total Income)</td>
+                                <td class="text-success fw-bold ps-3 fs-5"><?php echo __('کل آمدن (Total Income)', 'Total Income'); ?></td>
                                 <td class="text-end pe-3 fs-5 fw-bold"><?php echo number_format($grand_inc); ?></td>
                             </tr>
                             <?php endif; ?>
                             <?php if($type_filter == 'All' || $type_filter == 'Expense'): ?>
                             <tr>
-                                <td class="text-danger fw-bold ps-3 fs-5">کل خرچ (Total Expense)</td>
+                                <td class="text-danger fw-bold ps-3 fs-5"><?php echo __('کل خرچ (Total Expense)', 'Total Expense'); ?></td>
                                 <td class="text-end pe-3 fs-5 fw-bold"><?php echo number_format($grand_exp); ?></td>
                             </tr>
                             <?php endif; ?>
@@ -336,10 +336,10 @@ foreach ($by_user as $u) {
                             <?php $grand_diff = $grand_inc - $grand_exp; ?>
                             <tr class="bg-light">
                                 <?php if($grand_diff >= 0): ?>
-                                    <th class="text-success ps-3 fs-4">بچت / موجودہ بیلنس</th>
+                                    <th class="text-success ps-3 fs-4"><?php echo __('بچت / موجودہ بیلنس', 'Net Balance / Savings'); ?></th>
                                     <th class="text-end pe-3 fs-4 text-success"><span dir="ltr">Rs. <?php echo number_format($grand_diff); ?></span></th>
                                 <?php else: ?>
-                                    <th class="text-danger ps-3 fs-4">خسارہ (Deficit)</th>
+                                    <th class="text-danger ps-3 fs-4"><?php echo __('خسارہ (Deficit)', 'Deficit'); ?></th>
                                     <th class="text-end pe-3 fs-4 text-danger"><span dir="ltr">Rs. <?php echo number_format(abs($grand_diff)); ?></span></th>
                                 <?php endif; ?>
                             </tr>
@@ -353,12 +353,12 @@ foreach ($by_user as $u) {
     <?php endif; ?>
 
     <div class="row mt-5 pt-5 text-center avoid-break">
-        <div class="col-4 border-top border-dark pt-2 fw-bold">اکاؤنٹنٹ</div>
+        <div class="col-4 border-top border-dark pt-2 fw-bold"><?php echo __('اکاؤنٹنٹ', 'Accountant'); ?></div>
         <div class="col-4"></div>
-        <div class="col-4 border-top border-dark pt-2 fw-bold">مہتمم / ناظم</div>
+        <div class="col-4 border-top border-dark pt-2 fw-bold"><?php echo __('مہتمم / ناظم', 'Mohtamim / Nazim'); ?></div>
     </div>
     <div class="text-center mt-4 small text-muted">
-        تاریخ تیاری: <?php echo date('d-m-Y H:i A'); ?>
+        <?php echo __('تاریخ تیاری:', 'Report Generated:'); ?> <?php echo date('d-m-Y H:i A'); ?>
     </div>
 </div>
 

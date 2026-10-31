@@ -51,9 +51,9 @@ class SessionManager {
       'subscriptionEndsAt': subscriptionEndsAt ?? '',
       'subscriptionStatus': subscriptionStatus ?? 'active',
       'systemType': systemType ?? 'Both',
-      'maxStudents': maxStudents ?? 50,
-      'maxClasses': maxClasses ?? 3,
-      'maxTeachers': maxTeachers ?? 4,
+      'maxStudents': maxStudents ?? 20,
+      'maxClasses': maxClasses ?? 1,
+      'maxTeachers': maxTeachers ?? 2,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
     await _storage.write(key: _sessionKey, value: jsonEncode(data));
@@ -113,14 +113,14 @@ class SessionManager {
     currentTenantAllowedModules.value = [];
     currentTenantIsTrial.value = false;
     currentTenantTrialDaysLeft.value = 0;
-    currentTenantPlanName.value = 'بنیادی پیکج (Basic)';
-    currentTenantPlanCode.value = 'basic';
+    currentTenantPlanName.value = 'مفت آزمائش (Free Trial)';
+    currentTenantPlanCode.value = 'free';
     currentTenantSubscriptionEndsAt.value = '';
     currentTenantSubscriptionStatus.value = 'active';
     currentTenantSystemType.value = 'Both';
-    currentTenantMaxStudents.value = 50;
-    currentTenantMaxClasses.value = 3;
-    currentTenantMaxTeachers.value = 4;
+    currentTenantMaxStudents.value = 20;
+    currentTenantMaxClasses.value = 1;
+    currentTenantMaxTeachers.value = 2;
 
     // ملٹی ٹیننٹ ڈیٹا آئسولیشن: لاگ آؤٹ پر لوکل ڈیٹا بیس مکمل ری سیٹ
     try {

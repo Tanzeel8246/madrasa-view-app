@@ -159,34 +159,34 @@ if ($selected_exam_id > 0 && $selected_course_id > 0) {
 }
 
 $darse_nizami_year_names = [
-    1 => 'سال اول (درجہ اولیٰ)',
-    2 => 'سال دوم (درجہ ثانیہ)',
-    3 => 'سال سوم (درجہ ثالثہ)',
-    4 => 'سال چہارم (درجہ رابعہ)',
-    5 => 'سال پنجم (درجہ خامسہ)',
-    6 => 'سال ششم (درجہ سادسہ)',
-    7 => 'سال ہفتم (درجہ عالیہ)',
-    8 => 'سال ہشتم (درجہ عالمیہ / دورۂ حدیث)'
+    1 => __('سال اول (درجہ اولیٰ)', 'Year 1 (Ula)'),
+    2 => __('سال دوم (درجہ ثانیہ)', 'Year 2 (Sania)'),
+    3 => __('سال سوم (درجہ ثالثہ)', 'Year 3 (Salisa)'),
+    4 => __('سال چہارم (درجہ رابعہ)', 'Year 4 (Rabia)'),
+    5 => __('سال پنجم (درجہ خامسہ)', 'Year 5 (Khamisa)'),
+    6 => __('سال ششم (درجہ سادسہ)', 'Year 6 (Sadisa)'),
+    7 => __('سال ہفتم (درجہ عالیہ)', 'Year 7 (Aliya)'),
+    8 => __('سال ہشتم (درجہ عالمیہ / دورۂ حدیث)', 'Year 8 (Almiya / Hadith)')
 ];
 
 include 'header.php';
 ?>
 
-<div class="container-fluid py-4" dir="rtl">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <!-- Top Header -->
     <div class="card border-0 shadow-sm rounded-4 mb-4 text-white p-4" style="background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-                <h2 class="fw-bold mb-1"><i class="fas fa-edit me-2"></i> درس نظامی و عصری علوم — مضامین وار امتحانی نتائج انٹری</h2>
-                <p class="mb-0 text-white-50">تمام کتب اور مضامین کے نمبرات کا ریلیشنل اندراج، خودکار مجموعی نمبر، اور وفاقی گریڈنگ</p>
+                <h2 class="fw-bold mb-1"><i class="fas fa-edit me-2"></i> <?php echo __('درس نظامی و عصری علوم — مضامین وار امتحانی نتائج انٹری', 'Dars-e-Nizami & Contemporary Studies — Subject Results Entry'); ?></h2>
+                <p class="mb-0 text-white-50"><?php echo __('تمام کتب اور مضامین کے نمبرات کا ریلیشنل اندراج، خودکار مجموعی نمبر، اور وفاقی گریڈنگ', 'Relational entry of all books and subject marks, automated totals and grading'); ?></p>
             </div>
             <div class="d-flex gap-2">
                 <button type="button" class="btn btn-warning text-dark fw-bold px-3 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#quickExamModal">
-                    <i class="fas fa-calendar-plus me-1"></i> نیا امتحان تشکیل دیں
+                    <i class="fas fa-calendar-plus me-1"></i> <?php echo __('نیا امتحان تشکیل دیں', 'Create New Exam'); ?>
                 </button>
                 <?php if ($selected_exam_id > 0 && $selected_course_id > 0): ?>
                     <a href="print_academic_result_card.php?exam_id=<?php echo $selected_exam_id; ?>&course_id=<?php echo $selected_course_id; ?>&year_no=<?php echo $selected_year_no; ?>" target="_blank" class="btn btn-light text-success fw-bold px-3 rounded-pill shadow-sm">
-                        <i class="fas fa-print me-1"></i> رزلٹ کارڈز پرنٹ
+                        <i class="fas fa-print me-1"></i> <?php echo __('رزلٹ کارڈز پرنٹ', 'Print Result Cards'); ?>
                     </a>
                 <?php endif; ?>
             </div>
@@ -211,21 +211,21 @@ include 'header.php';
     <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
         <form method="GET" class="row g-3 align-items-end">
             <div class="col-md-4">
-                <label class="form-label fw-bold">امتحان کا انتخاب (Exam)</label>
+                <label class="form-label fw-bold"><?php echo __('امتحان کا انتخاب (Exam)', 'Select Exam'); ?></label>
                 <select name="exam_id" class="form-select rounded-3" onchange="this.form.submit()">
                     <?php if (empty($all_exams)): ?>
                         <option value="0">کوئی امتحان موجود نہیں۔ نیا امتحان بنائیں</option>
                     <?php else: ?>
                         <?php foreach ($all_exams as $ex): ?>
                             <option value="<?php echo $ex['id']; ?>" <?php echo ($selected_exam_id == $ex['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($ex['exam_name']); ?> (تاریخ: <?php echo $ex['exam_date']; ?>)
+                                <?php echo htmlspecialchars($ex['exam_name']); ?> (<?php echo __('تاریخ:', 'Date:'); ?> <?php echo $ex['exam_date']; ?>)
                             </option>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label fw-bold">تعلیمی کورس (Course)</label>
+                <label class="form-label fw-bold"><?php echo __('تعلیمی کورس (Course)', 'Course'); ?></label>
                 <select name="course_id" class="form-select rounded-3" onchange="this.form.submit()">
                     <?php foreach ($all_courses as $c): ?>
                         <option value="<?php echo $c['id']; ?>" <?php echo ($selected_course_id == $c['id']) ? 'selected' : ''; ?>>
@@ -235,7 +235,7 @@ include 'header.php';
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label fw-bold">سال / درجہ (Year)</label>
+                <label class="form-label fw-bold"><?php echo __('سال / درجہ (Year)', 'Year / Grade'); ?></label>
                 <select name="year_no" class="form-select rounded-3" onchange="this.form.submit()">
                     <?php 
                     $max_yrs = $curr_course ? (int)$curr_course['total_years'] : 8;
@@ -247,7 +247,7 @@ include 'header.php';
                 </select>
             </div>
             <div class="col-md-1">
-                <button type="submit" class="btn btn-success w-100 rounded-3"><i class="fas fa-filter me-1"></i> فلٹر</button>
+                <button type="submit" class="btn btn-success w-100 rounded-3"><i class="fas fa-filter me-1"></i> <?php echo __('فلٹر', 'Filter'); ?></button>
             </div>
         </form>
     </div>
@@ -256,22 +256,22 @@ include 'header.php';
     <?php if (empty($subjects)): ?>
         <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-white">
             <i class="fas fa-book-open fa-3x text-warning mb-3"></i>
-            <h4 class="fw-bold">اس سال میں کوئی مضمون شامل نہیں ہے</h4>
-            <p class="text-muted">نتائج درج کرنے سے پہلے کورس سیٹ اپ میں جا کر اس درجہ کے کتب و مضامین شامل کریں۔</p>
+            <h4 class="fw-bold"><?php echo __('اس سال میں کوئی مضمون شامل نہیں ہے', 'No subjects found for this year'); ?></h4>
+            <p class="text-muted"><?php echo __('نتائج درج کرنے سے پہلے کورس سیٹ اپ میں جا کر اس درجہ کے کتب و مضامین شامل کریں۔', 'Before entering results, go to course setup and add books/subjects for this grade.'); ?></p>
             <div>
                 <a href="course_manager.php?course_id=<?php echo $selected_course_id; ?>&year_no=<?php echo $selected_year_no; ?>" class="btn btn-success rounded-pill px-4">
-                    <i class="fas fa-plus me-1"></i> مضامین شامل کریں
+                    <i class="fas fa-plus me-1"></i> <?php echo __('مضامین شامل کریں', 'Add Subjects'); ?>
                 </a>
             </div>
         </div>
     <?php elseif (empty($students)): ?>
         <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-white">
             <i class="fas fa-user-graduate fa-3x text-primary mb-3"></i>
-            <h4 class="fw-bold">اس سال / درجے میں کوئی طالب علم داخل نہیں ہے</h4>
-            <p class="text-muted">پہلے طلبہ کو اس کورس اور سال میں انرول (داخل) کریں۔</p>
+            <h4 class="fw-bold"><?php echo __('اس سال / درجے میں کوئی طالب علم داخل نہیں ہے', 'No students enrolled in this year/grade'); ?></h4>
+            <p class="text-muted"><?php echo __('پہلے طلبہ کو اس کورس اور سال میں انرول (داخل) کریں۔', 'First enroll students in this course and year.'); ?></p>
             <div>
                 <a href="student_course_enrollment.php?course_id=<?php echo $selected_course_id; ?>&year_no=<?php echo $selected_year_no; ?>" class="btn btn-primary rounded-pill px-4">
-                    <i class="fas fa-user-plus me-1"></i> طلبہ داخل کریں
+                    <i class="fas fa-user-plus me-1"></i> <?php echo __('طلبہ داخل کریں', 'Enroll Students'); ?>
                 </a>
             </div>
         </div>
@@ -287,12 +287,12 @@ include 'header.php';
                     <div>
                         <h5 class="fw-bold mb-0 text-dark">
                             <i class="fas fa-table-cells me-2 text-success"></i> 
-                            جدولِ نتائج: <span class="text-primary"><?php echo $darse_nizami_year_names[$selected_year_no] ?? "سال {$selected_year_no}"; ?></span>
+                            <?php echo __('جدولِ نتائج:', 'Results Sheet:'); ?> <span class="text-primary"><?php echo $darse_nizami_year_names[$selected_year_no] ?? "Year {$selected_year_no}"; ?></span>
                         </h5>
-                        <small class="text-muted">ہر مضمون کے خانے میں حاصل کردہ نمبر درج کریں۔ غیر حاضری کی صورت میں چیک باکس لگائیں۔</small>
+                        <small class="text-muted"><?php echo __('ہر مضمون کے خانے میں حاصل کردہ نمبر درج کریں۔ غیر حاضری کی صورت میں چیک باکس لگائیں۔', 'Enter marks obtained for each subject. Check absent box if absent.'); ?></small>
                     </div>
                     <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm">
-                        <i class="fas fa-save me-1"></i> نتائج محفوظ کریں
+                        <i class="fas fa-save me-1"></i> <?php echo __('نتائج محفوظ کریں', 'Save Results'); ?>
                     </button>
                 </div>
 
@@ -300,8 +300,8 @@ include 'header.php';
                     <table class="table table-bordered align-middle mb-0 text-center" id="resultsGridTable">
                         <thead class="table-dark">
                             <tr>
-                                <th style="width: 60px;">رول نمبر</th>
-                                <th class="text-end" style="min-width: 170px;">طالب علم کا نام</th>
+                                <th style="width: 60px;"><?php echo __('رول نمبر', 'Roll No'); ?></th>
+                                <th class="text-end" style="min-width: 170px;"><?php echo __('طالب علم کا نام', 'Student Name'); ?></th>
                                 <?php 
                                 $total_possible_marks = 0;
                                 foreach ($subjects as $sub): 
@@ -310,13 +310,13 @@ include 'header.php';
                                     <th style="min-width: 130px;">
                                         <div class="fw-bold"><?php echo htmlspecialchars($sub['subject_name']); ?></div>
                                         <small class="text-warning d-block" style="font-size: 11px;">
-                                            <?php echo !empty($sub['book_name']) ? htmlspecialchars($sub['book_name']) : ''; ?> (کل: <?php echo (float)$sub['max_marks']; ?>)
+                                            <?php echo !empty($sub['book_name']) ? htmlspecialchars($sub['book_name']) : ''; ?> (<?php echo __('کل:', 'Total:'); ?> <?php echo (float)$sub['max_marks']; ?>)
                                         </small>
                                     </th>
                                 <?php endforeach; ?>
-                                <th style="min-width: 100px;">حاصل کردہ / کل</th>
-                                <th style="min-width: 80px;">فیصد</th>
-                                <th style="min-width: 100px;">گریڈ</th>
+                                <th style="min-width: 100px;"><?php echo __('حاصل کردہ / کل', 'Obt / Total'); ?></th>
+                                <th style="min-width: 80px;"><?php echo __('فیصد', 'Percentage'); ?></th>
+                                <th style="min-width: 100px;"><?php echo __('گریڈ', 'Grade'); ?></th>
                             </tr>
                         </thead>
                         <tbody>

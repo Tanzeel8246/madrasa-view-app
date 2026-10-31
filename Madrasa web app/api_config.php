@@ -52,4 +52,23 @@ function send_sms($number, $message) {
     curl_close($ch);
     return $response; // جواب واپس کریں
 }
-?>
+
+/**
+ * ملٹی ٹیننٹ واٹس ایپ نوٹیفکیشن جنریٹر (URL & Gateway Dispatcher)
+ * والدین کو غیر حاضری اور فیس یاددہانی کا براہ راست واٹس ایپ لنک یا گیٹ وے ریکویسٹ فراہم کرتا ہے
+ */
+function send_whatsapp($number, $message) {
+    if (empty($number) || empty($message)) return false;
+    $cleanNumber = preg_replace('/[^0-9]/', '', (string)$number);
+    if (str_starts_with($cleanNumber, '03')) {
+        $cleanNumber = '92' . substr($cleanNumber, 1);
+    }
+    $waUrl = "https://api.whatsapp.com/send?phone=" . urlencode($cleanNumber) . "&text=" . urlencode($message);
+    return [
+        'success' => true,
+        'phone' => $cleanNumber,
+        'message' => $message,
+        'wa_url' => $waUrl
+    ];
+}
+

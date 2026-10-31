@@ -1,4 +1,4 @@
-<?php require_once 'db.php'; include 'header.php'; 
+﻿<?php require_once 'db.php'; include 'header.php'; 
 
 if ($_SESSION['role'] != 'parent' && $_SESSION['role'] != 'admin') { 
     echo "<script>window.location='index.php';</script>"; exit; 

@@ -528,18 +528,18 @@ $total_alerts = count($academic_alerts) + count($attendance_alerts) + count($fin
     <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
         <div>
             <h3 class="fw-bold text-primary mb-1">
-                <i class="fas fa-bell text-warning me-2"></i> اسمارٹ نوٹیفیکیشن و الرٹ پینل
+                <i class="fas fa-bell text-warning me-2"></i> <?php echo ($lang=='en') ? 'Smart Notifications & Alerts Panel' : 'اسمارٹ نوٹیفیکیشن و الرٹ پینل'; ?>
             </h3>
             <p class="text-muted small mb-0">
-                روزانہ ناغہ جات، غیر حاضریاں، مسلسل غفلت، فیس بقایا جات اور فوری توجہ طلب معاملات کی جامع رپورٹ
+                <?php echo ($lang=='en') ? 'Comprehensive report for absences, leaves, deficiencies, fee dues, and urgent administrative matters' : 'روزانہ ناغہ جات، غیر حاضریاں، مسلسل غفلت، فیس بقایا جات اور فوری توجہ طلب معاملات کی جامع رپورٹ'; ?>
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-primary fs-6 px-3 py-2 rounded-pill">
-                کل فعال الرٹس: <?php echo $total_alerts; ?>
+                <?php echo ($lang=='en') ? 'Total Active Alerts: ' : 'کل فعال الرٹس: '; ?><?php echo $total_alerts; ?>
             </span>
             <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="window.location.reload();">
-                <i class="fas fa-sync-alt me-1"></i> تازہ کریں
+                <i class="fas fa-sync-alt me-1"></i> <?php echo ($lang=='en') ? 'Refresh' : 'تازہ کریں'; ?>
             </button>
         </div>
     </div>
@@ -549,34 +549,34 @@ $total_alerts = count($academic_alerts) + count($attendance_alerts) + count($fin
         <div class="card-body bg-light rounded-4">
             <form method="GET" class="row g-3 align-items-end" id="filterForm">
                 <div class="col-md-3">
-                    <label class="form-label small fw-bold">تاریخ کا فلٹر</label>
+                    <label class="form-label small fw-bold"><?php echo ($lang=='en') ? 'Date Filter' : 'تاریخ کا فلٹر'; ?></label>
                     <select name="date_filter" class="form-select rounded-pill" onchange="toggleCustomDates(this.value)">
-                        <option value="today" <?php if($date_filter=='today') echo 'selected'; ?>>آج</option>
-                        <option value="this_week" <?php if($date_filter=='this_week') echo 'selected'; ?>>رواں ہفتہ</option>
-                        <option value="this_month" <?php if($date_filter=='this_month') echo 'selected'; ?>>رواں مہینہ</option>
-                        <option value="all" <?php if($date_filter=='all') echo 'selected'; ?>>تمام تاریخیں</option>
-                        <option value="custom" <?php if($date_filter=='custom') echo 'selected'; ?>>منتخب تاریخیں (Custom)</option>
+                        <option value="today" <?php if($date_filter=='today') echo 'selected'; ?>><?php echo ($lang=='en') ? 'Today' : 'آج'; ?></option>
+                        <option value="this_week" <?php if($date_filter=='this_week') echo 'selected'; ?>><?php echo ($lang=='en') ? 'This Week' : 'رواں ہفتہ'; ?></option>
+                        <option value="this_month" <?php if($date_filter=='this_month') echo 'selected'; ?>><?php echo ($lang=='en') ? 'This Month' : 'رواں مہینہ'; ?></option>
+                        <option value="all" <?php if($date_filter=='all') echo 'selected'; ?>><?php echo ($lang=='en') ? 'All Dates' : 'تمام تاریخیں'; ?></option>
+                        <option value="custom" <?php if($date_filter=='custom') echo 'selected'; ?>><?php echo ($lang=='en') ? 'Custom Dates' : 'منتخب تاریخیں (Custom)'; ?></option>
                     </select>
                 </div>
                 <div class="col-md-2 custom-date-col" style="<?php echo ($date_filter=='custom')?'':'display:none;'; ?>">
-                    <label class="form-label small fw-bold">شروع کی تاریخ</label>
+                    <label class="form-label small fw-bold"><?php echo ($lang=='en') ? 'Start Date' : 'شروع کی تاریخ'; ?></label>
                     <input type="date" name="start_date" class="form-control rounded-pill" value="<?php echo $_GET['start_date'] ?? date('Y-m-01'); ?>">
                 </div>
                 <div class="col-md-2 custom-date-col" style="<?php echo ($date_filter=='custom')?'':'display:none;'; ?>">
-                    <label class="form-label small fw-bold">ختم ہونے کی تاریخ</label>
+                    <label class="form-label small fw-bold"><?php echo ($lang=='en') ? 'End Date' : 'ختم ہونے کی تاریخ'; ?></label>
                     <input type="date" name="end_date" class="form-control rounded-pill" value="<?php echo $_GET['end_date'] ?? date('Y-m-d'); ?>">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label small fw-bold">اسٹیٹس فلٹر</label>
+                    <label class="form-label small fw-bold"><?php echo ($lang=='en') ? 'Status Filter' : 'اسٹیٹس فلٹر'; ?></label>
                     <select name="status_filter" class="form-select rounded-pill">
-                        <option value="all" <?php if($status_filter=='all') echo 'selected'; ?>>تمام</option>
-                        <option value="unread" <?php if($status_filter=='unread') echo 'selected'; ?>>ان دیکھے (Unread)</option>
-                        <option value="read" <?php if($status_filter=='read') echo 'selected'; ?>>دیکھے گئے (Read)</option>
+                        <option value="all" <?php if($status_filter=='all') echo 'selected'; ?>><?php echo ($lang=='en') ? 'All' : 'تمام'; ?></option>
+                        <option value="unread" <?php if($status_filter=='unread') echo 'selected'; ?>><?php echo ($lang=='en') ? 'Unread' : 'ان دیکھے (Unread)'; ?></option>
+                        <option value="read" <?php if($status_filter=='read') echo 'selected'; ?>><?php echo ($lang=='en') ? 'Read' : 'دیکھے گئے (Read)'; ?></option>
                     </select>
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-primary w-100 rounded-pill">
-                        <i class="fas fa-filter me-1"></i> فلٹر کریں
+                        <i class="fas fa-filter me-1"></i> <?php echo ($lang=='en') ? 'Apply Filter' : 'فلٹر کریں'; ?>
                     </button>
                 </div>
             </form>
@@ -594,27 +594,27 @@ $total_alerts = count($academic_alerts) + count($attendance_alerts) + count($fin
     <ul class="nav nav-pills mb-4 gap-2 border-bottom pb-3" id="alertTabs" role="tablist">
         <li class="nav-item">
             <button class="nav-link active rounded-pill px-3 fw-bold" id="all-tab" data-bs-toggle="pill" data-bs-target="#tab-all" type="button">
-                تمام الرٹس (<?php echo $total_alerts; ?>)
+                <?php echo ($lang=='en') ? 'All Alerts' : 'تمام الرٹس'; ?> (<?php echo $total_alerts; ?>)
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link rounded-pill px-3 fw-bold" id="academic-tab" data-bs-toggle="pill" data-bs-target="#tab-academic" type="button">
-                <i class="fas fa-book-quran me-1"></i> حفظ و تعلیم (<?php echo count($academic_alerts); ?>)
+                <i class="fas fa-book-quran me-1"></i> <?php echo ($lang=='en') ? 'Hifz & Academics' : 'حفظ و تعلیم'; ?> (<?php echo count($academic_alerts); ?>)
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link rounded-pill px-3 fw-bold" id="attendance-tab" data-bs-toggle="pill" data-bs-target="#tab-attendance" type="button">
-                <i class="fas fa-user-check me-1"></i> حاضری و غیر حاضری (<?php echo count($attendance_alerts); ?>)
+                <i class="fas fa-user-check me-1"></i> <?php echo ($lang=='en') ? 'Attendance & Absence' : 'حاضری و غیر حاضری'; ?> (<?php echo count($attendance_alerts); ?>)
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link rounded-pill px-3 fw-bold" id="finance-tab" data-bs-toggle="pill" data-bs-target="#tab-finance" type="button">
-                <i class="fas fa-wallet me-1"></i> فیس و مالیات (<?php echo count($finance_alerts); ?>)
+                <i class="fas fa-wallet me-1"></i> <?php echo ($lang=='en') ? 'Fee & Finance' : 'فیس و مالیات'; ?> (<?php echo count($finance_alerts); ?>)
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link rounded-pill px-3 fw-bold" id="admin-tab" data-bs-toggle="pill" data-bs-target="#tab-admin" type="button">
-                <i class="fas fa-user-shield me-1"></i> رخصت و شکایات (<?php echo count($admin_alerts); ?>)
+                <i class="fas fa-user-shield me-1"></i> <?php echo ($lang=='en') ? 'Leaves & Complaints' : 'رخصت و شکایات'; ?> (<?php echo count($admin_alerts); ?>)
             </button>
         </li>
     </ul>
@@ -657,12 +657,15 @@ $total_alerts = count($academic_alerts) + count($attendance_alerts) + count($fin
 
 <?php
 function render_alert_list($items) {
+    global $lang;
     if (empty($items)) {
+        $no_alerts_title = ($lang=='en') ? 'No alerts or warnings found!' : 'کوئی الرٹ یا انتباہ موجود نہیں ہے!';
+        $no_alerts_desc = ($lang=='en') ? 'All records for students, teachers, and departments are up to date and clean.' : 'تمام طلبہ، اساتذہ اور انتظامی شعبہ جات کا ریکارڈ مکمل اور درست ہے۔';
         echo '
         <div class="text-center py-5">
             <i class="fas fa-check-circle text-success fs-1 mb-3"></i>
-            <h5 class="fw-bold">کوئی الرٹ یا انتباہ موجود نہیں ہے!</h5>
-            <p class="text-muted">تمام طلبہ، اساتذہ اور انتظامی شعبہ جات کا ریکارڈ مکمل اور درست ہے۔</p>
+            <h5 class="fw-bold">' . $no_alerts_title . '</h5>
+            <p class="text-muted">' . $no_alerts_desc . '</p>
         </div>';
         return;
     }
@@ -671,7 +674,7 @@ function render_alert_list($items) {
     foreach ($items as $item) {
         $bColor = ($item['severity'] === 'critical') ? 'border-danger' : (($item['severity'] === 'warning') ? 'border-warning' : 'border-info');
         $badgeClass = ($item['severity'] === 'critical') ? 'bg-danger text-white' : (($item['severity'] === 'warning') ? 'bg-warning text-dark' : 'bg-info text-white');
-        $badgeText = ($item['severity'] === 'critical') ? 'فوری توجہ' : (($item['severity'] === 'warning') ? 'انتباہ' : 'معلومات');
+        $badgeText = ($item['severity'] === 'critical') ? (($lang=='en') ? 'Urgent' : 'فوری توجہ') : (($item['severity'] === 'warning') ? (($lang=='en') ? 'Warning' : 'انتباہ') : (($lang=='en') ? 'Info' : 'معلومات'));
 
         echo '
         <div class="col-md-6 col-lg-4">
@@ -694,33 +697,38 @@ function render_alert_list($items) {
         if (!empty($item['contact_number'])) {
             $rawPhone = preg_replace('/[^0-9]/', '', $item['contact_number']);
             $waPhone = (substr($rawPhone, 0, 1) === '0') ? '92' . substr($rawPhone, 1) : $rawPhone;
+            $callTitle = ($lang=='en') ? 'Call' : 'کال کریں';
+            $waTitle = ($lang=='en') ? 'WhatsApp' : 'واٹس ایپ';
             echo '
-                <a href="tel:' . htmlspecialchars($rawPhone) . '" class="btn btn-sm btn-outline-success rounded-circle" title="کال کریں" style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0;">
+                <a href="tel:' . htmlspecialchars($rawPhone) . '" class="btn btn-sm btn-outline-success rounded-circle" title="' . $callTitle . '" style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0;">
                     <i class="fas fa-phone-alt"></i>
                 </a>
-                <a href="https://wa.me/' . htmlspecialchars($waPhone) . '" target="_blank" class="btn btn-sm btn-outline-success rounded-circle" title="واٹس ایپ" style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: #25D366; border-color: #25D366;">
+                <a href="https://wa.me/' . htmlspecialchars($waPhone) . '" target="_blank" class="btn btn-sm btn-outline-success rounded-circle" title="' . $waTitle . '" style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: #25D366; border-color: #25D366;">
                     <i class="fab fa-whatsapp"></i>
                 </a>';
         }
 
         $viewUrl = !empty($item['view_url']) ? $item['view_url'] : (!empty($item['student_id']) ? ("parent_report.php?std_id=" . $item['student_id']) : '');
         if (!empty($viewUrl)) {
+            $viewTitle = ($lang=='en') ? 'View Report' : 'رپورٹ دیکھیں (تفصیل)';
             echo '
-                <a href="' . htmlspecialchars($viewUrl) . '" target="_blank" class="btn btn-sm btn-outline-info rounded-circle" title="رپورٹ دیکھیں (تفصیل)" style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0;">
+                <a href="' . htmlspecialchars($viewUrl) . '" target="_blank" class="btn btn-sm btn-outline-info rounded-circle" title="' . $viewTitle . '" style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0;">
                     <i class="fas fa-eye"></i>
                 </a>';
         }
 
         if (!empty($item['action_url'])) {
+            $actionBtnText = ($lang=='en') ? 'Action' : 'کارروائی';
+            $arrowIcon = ($lang=='en') ? 'fa-arrow-right' : 'fa-arrow-left';
             echo '
                 <a href="' . htmlspecialchars($item['action_url']) . '" class="btn btn-sm btn-primary rounded-pill px-3 py-1">
-                    کارروائی <i class="fas fa-arrow-left ms-1"></i>
+                    ' . $actionBtnText . ' <i class="fas ' . $arrowIcon . ' ms-1"></i>
                 </a>';
         }
 
         $readBtnClass = $item['is_read'] ? 'btn-success text-white' : 'btn-outline-secondary';
         $readBtnIcon = $item['is_read'] ? 'fa-check-double' : 'fa-check';
-        $readBtnTitle = $item['is_read'] ? 'پڑھا ہوا (ان دیکھا کریں)' : 'دیکھا ہوا مارک کریں';
+        $readBtnTitle = $item['is_read'] ? (($lang=='en') ? 'Mark Unread' : 'پڑھا ہوا (ان دیکھا کریں)') : (($lang=='en') ? 'Mark Read' : 'دیکھا ہوا مارک کریں');
         
         echo '
                 <button type="button" class="btn btn-sm ' . $readBtnClass . ' rounded-circle ms-1" title="' . $readBtnTitle . '" onclick="toggleReadStatus(\'' . htmlspecialchars($item['id']) . '\', ' . ($item['is_read'] ? 'true' : 'false') . ', this)" style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0;">

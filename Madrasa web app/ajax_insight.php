@@ -1,6 +1,6 @@
 <?php
 // ✅ session_start() کو require سے پہلے چلانا ضروری ہے
-if (session_status() === PHP_SESSION_NONE) {
+if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
     session_start();
 }
 require_once 'db.php';
@@ -12,6 +12,9 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $current_tid = (int)get_current_tenant_id($pdo);
+$lang = isset($_GET['lang']) ? trim($_GET['lang']) : ($_SESSION['lang'] ?? 'ur');
+$is_en = ($lang === 'en');
+
 $st_q = $pdo->prepare("SELECT * FROM settings WHERE tenant_id = ? ORDER BY id ASC LIMIT 1");
 $st_q->execute([$current_tid]);
 $settings = $st_q->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -21,7 +24,9 @@ $groq_key = $settings['groq_api_key'] ?? '';
 $week_start_day = $settings['week_start_day'] ?? 6;
 
 try {
-    $total_students = $pdo->query("SELECT COUNT(*) FROM students WHERE status='Active'")->fetchColumn();
+    $stmt_std = $pdo->prepare("SELECT COUNT(*) FROM students WHERE (status='Active' OR status='' OR status IS NULL) AND tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)");
+    $stmt_std->execute([$current_tid]);
+    $total_students = (int)$stmt_std->fetchColumn();
     
     $now = new DateTime();
     $current_day_num = (int)$now->format('w');
@@ -29,14 +34,29 @@ try {
     $start_date = $now->modify("-$days_since_start days")->format('Y-m-d');
     $end_date = date('Y-m-d');
 
-    $weekly_excellent = $pdo->query("SELECT COUNT(*) FROM daily_hifz WHERE (sabaq_status='Excellent' OR manzil_status='Excellent' OR sabaq_status='ممتاز' OR manzil_status='ممتاز') AND date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
-    $weekly_weak = $pdo->query("SELECT COUNT(*) FROM daily_hifz WHERE (sabaq_status='Weak' OR manzil_status='Weak' OR sabaq_status='کمزور' OR manzil_status='کمزور') AND date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
-    $weekly_entries = $pdo->query("SELECT COUNT(*) FROM daily_hifz WHERE date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
-    $weekly_complaints = $pdo->query("SELECT COUNT(*) FROM complaints WHERE date BETWEEN '$start_date' AND '$end_date'")->fetchColumn();
+    $stmt_ex = $pdo->prepare("SELECT COUNT(*) FROM daily_hifz WHERE (sabaq_status='Excellent' OR manzil_status='Excellent' OR sabaq_status='ممتاز' OR manzil_status='ممتاز') AND tenant_id = ? AND date BETWEEN ? AND ?");
+    $stmt_ex->execute([$current_tid, $start_date, $end_date]);
+    $weekly_excellent = (int)$stmt_ex->fetchColumn();
 
-    $complaint_context = ($weekly_complaints > 0) ? "There are $weekly_complaints complaints this week regarding student behavior/discipline. Emphasize that Tarbiyat (upbringing/discipline) is equally important as Taleem (education), and advise teachers to focus on resolving these complaints." : "There are no complaints this week, behavior is good.";
+    $stmt_wk = $pdo->prepare("SELECT COUNT(*) FROM daily_hifz WHERE (sabaq_status='Weak' OR manzil_status='Weak' OR sabaq_status='کمزور' OR manzil_status='کمزور') AND tenant_id = ? AND date BETWEEN ? AND ?");
+    $stmt_wk->execute([$current_tid, $start_date, $end_date]);
+    $weekly_weak = (int)$stmt_wk->fetchColumn();
 
-    $prompt = "You are an educational and management advisor for a Quran Madrasa. Week Stats: Students: $total_students, Hifz Entries: $weekly_entries, Excellent: $weekly_excellent, Weak: $weekly_weak. Context: $complaint_context. Provide a 2-line strategic and reformative advice in URDU for the ADMIN and TEACHERS. Just Urdu text.";
+    $stmt_ent = $pdo->prepare("SELECT COUNT(*) FROM daily_hifz WHERE tenant_id = ? AND date BETWEEN ? AND ?");
+    $stmt_ent->execute([$current_tid, $start_date, $end_date]);
+    $weekly_entries = (int)$stmt_ent->fetchColumn();
+
+    $stmt_cmp = $pdo->prepare("SELECT COUNT(*) FROM complaints WHERE tenant_id = ? AND date BETWEEN ? AND ?");
+    $stmt_cmp->execute([$current_tid, $start_date, $end_date]);
+    $weekly_complaints = (int)$stmt_cmp->fetchColumn();
+
+    if ($is_en) {
+        $complaint_context = ($weekly_complaints > 0) ? "There are $weekly_complaints complaints this week regarding student behavior/discipline. Emphasize that Tarbiyat (discipline and ethics) is as vital as Taleem (academics), and advise teachers accordingly." : "There are no complaints this week, discipline and student conduct are commendable.";
+        $prompt = "You are an educational and administrative advisor for an Islamic Quran Madrasa. Week Stats: Students: $total_students, Hifz Entries: $weekly_entries, Excellent: $weekly_excellent, Weak: $weekly_weak. Context: $complaint_context. Provide a 2-line strategic and motivating advice in concise ENGLISH for the ADMIN and TEACHERS. Output pure English text only.";
+    } else {
+        $complaint_context = ($weekly_complaints > 0) ? "There are $weekly_complaints complaints this week regarding student behavior/discipline. Emphasize that Tarbiyat (upbringing/discipline) is equally important as Taleem (education), and advise teachers to focus on resolving these complaints." : "There are no complaints this week, behavior is good.";
+        $prompt = "You are an educational and management advisor for a Quran Madrasa. Week Stats: Students: $total_students, Hifz Entries: $weekly_entries, Excellent: $weekly_excellent, Weak: $weekly_weak. Context: $complaint_context. Provide a 2-line strategic and reformative advice in URDU for the ADMIN and TEACHERS. Just Urdu text.";
+    }
     
     $response_text = "";
     // Multiple keys support: Explode by comma and pick a random key
@@ -70,14 +90,14 @@ try {
                 if(!empty($selected_gemini_key)) {
                     $useGemini = true; $useGroq = false; $response_text = '';
                 } else {
-                    $response_text = "اے آئی سروس فی الوقت دستیاب نہیں ہے۔ برائے مہربانی بعد میں کوشش کریں۔";
+                    $response_text = $is_en ? "AI service is currently unavailable. Please try again later." : "اے آئی سروس فی الوقت دستیاب نہیں ہے۔ برائے مہربانی بعد میں کوشش کریں۔";
                 }
             }
         } else {
             if(!empty($selected_gemini_key)) {
                 $useGemini = true; $useGroq = false; $response_text = '';
             } else {
-                $response_text = "اے آئی سرور سے رابطہ قائم نہیں ہو سکا۔";
+                $response_text = $is_en ? "Could not connect to AI service server." : "اے آئی سرور سے رابطہ قائم نہیں ہو سکا۔";
             }
         }
     } 
@@ -100,16 +120,16 @@ try {
             if (isset($res['candidates'][0]['content']['parts'][0]['text'])) {
                 $response_text = $res['candidates'][0]['content']['parts'][0]['text'];
             } else {
-                $response_text = "اے آئی سروس فی الوقت دستیاب نہیں ہے۔ برائے مہربانی بعد میں کوشش کریں۔";
+                $response_text = $is_en ? "AI service is currently unavailable. Please try again later." : "اے آئی سروس فی الوقت دستیاب نہیں ہے۔ برائے مہربانی بعد میں کوشش کریں۔";
             }
         } else {
-            $response_text = "اے آئی سرور سے رابطہ قائم نہیں ہو سکا۔";
+            $response_text = $is_en ? "Could not connect to AI service server." : "اے آئی سرور سے رابطہ قائم نہیں ہو سکا۔";
         }
     } else if (!$useGroq && !$useGemini) {
-        $response_text = "اے آئی رہنمائی کے لیے ترتیبات میں API کلید درج کریں۔";
+        $response_text = $is_en ? "Please configure AI API key in Settings for automated management insights." : "اے آئی رہنمائی کے لیے ترتیبات میں API کلید درج کریں۔";
     }
     echo trim($response_text);
 } catch (Exception $e) {
-    error_log("AI Insight Error: " . $e->getMessage()); echo "انتظامی تجاویز فی الوقت دستیاب نہیں ہیں۔";
+    error_log("AI Insight Error: " . $e->getMessage());
+    echo $is_en ? "Management recommendations are currently unavailable." : "انتظامی تجاویز فی الوقت دستیاب نہیں ہیں۔";
 }
-?>

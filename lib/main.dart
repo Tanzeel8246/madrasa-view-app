@@ -74,6 +74,21 @@ void main() async {
     }
   } catch (_) {}
 
+  // Load Language Preference (Persistent across app exit and re-login)
+  try {
+    const storage = FlutterSecureStorage();
+    final savedLang = await storage.read(key: 'app_language_urdu');
+    if (savedLang != null) {
+      isUrduGlobal.value = (savedLang == 'true');
+    }
+    // Listen for language changes and persist immediately
+    isUrduGlobal.addListener(() async {
+      try {
+        await storage.write(key: 'app_language_urdu', value: isUrduGlobal.value.toString());
+      } catch (_) {}
+    });
+  } catch (_) {}
+
   // Load Dark Mode Preference
   try {
     const storage = FlutterSecureStorage();
@@ -121,9 +136,9 @@ void main() async {
     currentTenantSubscriptionEndsAt.value = session['subscriptionEndsAt']?.toString() ?? '';
     currentTenantSubscriptionStatus.value = session['subscriptionStatus']?.toString() ?? (currentTenantIsTrial.value ? 'trial' : 'active');
     currentTenantSystemType.value = session['systemType']?.toString() ?? 'Both';
-    currentTenantMaxStudents.value = int.tryParse(session['maxStudents']?.toString() ?? '50') ?? 50;
-    currentTenantMaxClasses.value = int.tryParse(session['maxClasses']?.toString() ?? '3') ?? 3;
-    currentTenantMaxTeachers.value = int.tryParse(session['maxTeachers']?.toString() ?? '4') ?? 4;
+    currentTenantMaxStudents.value = int.tryParse(session['maxStudents']?.toString() ?? '20') ?? 20;
+    currentTenantMaxClasses.value = int.tryParse(session['maxClasses']?.toString() ?? '1') ?? 1;
+    currentTenantMaxTeachers.value = int.tryParse(session['maxTeachers']?.toString() ?? '2') ?? 2;
     initialScreen = const DashboardPage();
   } else {
     currentUserRole.value = null;
@@ -147,13 +162,15 @@ void main() async {
   try {
     final s = await DBHelper().getSettings();
     if (s.isNotEmpty) {
-      if ((currentTenantName.value == null || currentTenantName.value!.isEmpty) &&
-          s['madrasa_name'] != null &&
-          s['madrasa_name'].toString().trim().isNotEmpty) {
-        currentTenantName.value = s['madrasa_name'].toString().trim();
+      final mName = s['madrasa_name']?.toString().trim() ?? '';
+      if (mName.contains('اشرف المدارس') || mName.toLowerCase().contains('ashraf')) {
+        currentTenantName.value = 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)';
+      } else if ((currentTenantName.value == null || currentTenantName.value!.isEmpty) && mName.isNotEmpty) {
+        currentTenantName.value = mName;
       }
-      if (s['logo_path'] != null && s['logo_path'].toString().trim().isNotEmpty) {
-        currentTenantLogoPath.value = s['logo_path'].toString().trim();
+      final lPath = s['logo_path']?.toString().trim() ?? '';
+      if (lPath.isNotEmpty && lPath != 'logo.png' && !lPath.contains('ashraf')) {
+        currentTenantLogoPath.value = lPath;
       }
       if (s['masjid_name'] != null && s['masjid_name'].toString().trim().isNotEmpty) {
         currentTenantMasjidName.value = s['masjid_name'].toString().trim();

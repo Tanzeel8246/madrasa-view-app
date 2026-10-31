@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Deep Royal Navy & Teal Gradient -->
+    <radialGradient id="masjidBg" cx="50%" cy="38%" r="68%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="55%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </radialGradient>
+
+    <!-- Royal Mosque Gold -->
+    <linearGradient id="masjidGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="35%" stop-color="#f59e0b" />
+      <stop offset="80%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+
+    <!-- Vibrant Teal Accent -->
+    <linearGradient id="masjidTeal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf" />
+      <stop offset="50%" stop-color="#0d9488" />
+      <stop offset="100%" stop-color="#115e59" />
+    </linearGradient>
+
+    <filter id="masjidGlow">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Outer Double Circle Container -->
+  <circle cx="256" cy="256" r="240" fill="url(#masjidBg)" stroke="url(#masjidGold)" stroke-width="8" />
+  <circle cx="256" cy="256" r="224" fill="none" stroke="rgba(45, 212, 191, 0.45)" stroke-width="2.5" stroke-dasharray="6,5" />
+  <circle cx="256" cy="256" r="214" fill="none" stroke="url(#masjidGold)" stroke-width="1.5" />
+
+  <!-- Stars in Night Sky Background -->
+  <g fill="#fef08a" opacity="0.6">
+    <circle cx="120" cy="110" r="1.5" />
+    <circle cx="140" cy="85" r="2" />
+    <circle cx="370" cy="95" r="2" />
+    <circle cx="395" cy="120" r="1.5" />
+    <circle cx="210" cy="70" r="1.8" />
+    <circle cx="305" cy="70" r="1.8" />
+  </g>
+
+  <!-- Top Arabic Verse Ribbon: إِنَّمَا يَعْمُرُ مَسَاجِدَ اللَّهِ -->
+  <g transform="translate(0, 15)">
+    <rect x="136" y="40" width="240" height="34" rx="17" fill="rgba(15, 23, 42, 0.9)" stroke="url(#masjidGold)" stroke-width="1.5" />
+    <text x="256" y="64" text-anchor="middle" font-family="'Noto Nastaliq Urdu', 'Traditional Arabic', serif" font-size="16" font-weight="bold" fill="#fef08a" filter="url(#masjidGlow)">
+      إِنَّمَا يَعْمُرُ مَسَاجِدَ اللَّهِ
+    </text>
+  </g>
+
+  <!-- Grand Mosque Silhouette & Structure (عظیم الشان مسجد کی عمارت) -->
+  <g id="masjid-architecture" transform="translate(0, 5)">
+    <!-- Flanking Minaret Left (بایاں مینار) -->
+    <g transform="translate(112, 120)">
+      <!-- Minaret Spire & Crescent -->
+      <path d="M 18 10 L 18 0 L 22 0 L 22 10 Z" fill="url(#masjidGold)" />
+      <path d="M 20 -4 A 5 5 0 1 0 20 4 A 4 4 0 1 1 20 -2 Z" fill="#fef08a" />
+      <path d="M 8 30 L 20 10 L 32 30 Z" fill="url(#masjidTeal)" stroke="url(#masjidGold)" stroke-width="1.5" />
+      <!-- Upper Balcony -->
+      <rect x="4" y="30" width="32" height="6" rx="2" fill="url(#masjidGold)" />
+      <!-- Tower Shaft -->
+      <rect x="10" y="36" width="20" height="150" fill="rgba(30, 41, 59, 0.85)" stroke="url(#masjidGold)" stroke-width="2" />
+      <!-- Arch Windows in Minaret -->
+      <path d="M 16 65 Q 20 58 24 65 L 24 80 L 16 80 Z" fill="url(#masjidGold)" opacity="0.8" />
+      <path d="M 16 110 Q 20 103 24 110 L 24 125 L 16 125 Z" fill="url(#masjidGold)" opacity="0.8" />
+    </g>
+
+    <!-- Flanking Minaret Right (دایاں مینار) -->
+    <g transform="translate(360, 120)">
+      <!-- Minaret Spire & Crescent -->
+      <path d="M 18 10 L 18 0 L 22 0 L 22 10 Z" fill="url(#masjidGold)" />
+      <path d="M 20 -4 A 5 5 0 1 0 20 4 A 4 4 0 1 1 20 -2 Z" fill="#fef08a" />
+      <path d="M 8 30 L 20 10 L 32 30 Z" fill="url(#masjidTeal)" stroke="url(#masjidGold)" stroke-width="1.5" />
+      <!-- Upper Balcony -->
+      <rect x="4" y="30" width="32" height="6" rx="2" fill="url(#masjidGold)" />
+      <!-- Tower Shaft -->
+      <rect x="10" y="36" width="20" height="150" fill="rgba(30, 41, 59, 0.85)" stroke="url(#masjidGold)" stroke-width="2" />
+      <!-- Arch Windows in Minaret -->
+      <path d="M 16 65 Q 20 58 24 65 L 24 80 L 16 80 Z" fill="url(#masjidGold)" opacity="0.8" />
+      <path d="M 16 110 Q 20 103 24 110 L 24 125 L 16 125 Z" fill="url(#masjidGold)" opacity="0.8" />
+    </g>
+
+    <!-- Grand Central Dome (گنبدِ عالیہ) -->
+    <g transform="translate(0, 0)">
+      <!-- Central Dome Finial & Crescent (ہلال و ستارہ) -->
+      <path d="M 256 82 L 256 98" stroke="url(#masjidGold)" stroke-width="3" />
+      <path d="M 256 70 A 12 12 0 1 0 256 94 A 9 9 0 1 1 256 74 Z" fill="url(#masjidGold)" filter="url(#masjidGlow)" />
+
+      <!-- Outer Dome Curve -->
+      <path d="M 175 220 C 175 140 215 105 256 98 C 297 105 337 140 337 220 Z" 
+            fill="url(#masjidTeal)" 
+            stroke="url(#masjidGold)" 
+            stroke-width="3.5" />
+
+      <!-- Inner Dome Decorative Ribs (گنبد کی سنہری لکیریں) -->
+      <path d="M 205 220 C 205 160 230 115 256 100 C 282 115 307 160 307 220" 
+            fill="none" 
+            stroke="url(#masjidGold)" 
+            stroke-width="2" 
+            opacity="0.85" />
+      <path d="M 256 98 L 256 220" stroke="url(#masjidGold)" stroke-width="2" opacity="0.75" />
+
+      <!-- Dome Base Drum (گردنِ گنبد مع محراب نما جالیاں) -->
+      <rect x="170" y="218" width="172" height="18" fill="url(#masjidGold)" rx="3" />
+      <!-- Arched Windows in Drum -->
+      <g fill="#020617" opacity="0.75">
+        <rect x="185" y="222" width="10" height="10" rx="3" />
+        <rect x="210" y="222" width="10" height="10" rx="3" />
+        <rect x="235" y="222" width="10" height="10" rx="3" />
+        <rect x="260" y="222" width="10" height="10" rx="3" />
+        <rect x="285" y="222" width="10" height="10" rx="3" />
+        <rect x="310" y="222" width="10" height="10" rx="3" />
+      </g>
+    </g>
+
+    <!-- Main Hall Facade & Grand Arch Gate (مرکزی دروازہ و محراب) -->
+    <path d="M 152 236 L 360 236 L 360 315 L 152 315 Z" fill="rgba(15, 23, 42, 0.95)" stroke="url(#masjidGold)" stroke-width="2.5" />
+    
+    <!-- Grand Entrance Arch (شاہی محراب) -->
+    <path d="M 220 315 L 220 270 Q 220 245 256 242 Q 292 245 292 270 L 292 315 Z" 
+          fill="url(#masjidTeal)" 
+          stroke="url(#masjidGold)" 
+          stroke-width="2.5" />
+    
+    <!-- Lantern in Arch (فانوسِ محراب) -->
+    <circle cx="256" cy="265" r="4" fill="#fef08a" filter="url(#masjidGlow)" />
+    <line x1="256" y1="245" x2="256" y2="262" stroke="url(#masjidGold)" stroke-width="1.5" />
+  </g>
+
+  <!-- Emblem Base Banner & Titles -->
+  <g transform="translate(0, 335)">
+    <!-- Golden Curved Banner -->
+    <path d="M 80 20 Q 256 -5 432 20 L 415 68 Q 256 46 97 68 Z" fill="url(#masjidGold)" filter="url(#masjidGlow)" />
+    <!-- Updated Title: مرکزی جامع مسجد -->
+    <text x="256" y="50" text-anchor="middle" font-family="'Noto Nastaliq Urdu', 'Urdu Typesetting', serif" font-size="26" font-weight="bold" fill="#020617">
+      مرکزی جامع مسجد
+    </text>
+
+    <!-- Subtitle: Central Grand Masjid -->
+    <text x="256" y="90" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" letter-spacing="2" fill="#fef08a">
+      CENTRAL GRAND MASJID
+    </text>
+    <text x="256" y="110" text-anchor="middle" font-family="'Noto Nastaliq Urdu', Tahoma, sans-serif" font-size="11" font-weight="500" fill="#2dd4bf">
+      مرکزِ عبادت، نماز و دینی تربیت
+    </text>
+  </g>
+</svg>

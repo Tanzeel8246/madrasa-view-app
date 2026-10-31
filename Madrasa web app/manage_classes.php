@@ -317,9 +317,20 @@ try {
 ?>
 
 <div class="container-fluid mt-3">
+    <?php $classQuota = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'classes', $cur_tenant_id) : ['allowed' => true]; ?>
+    <?php if (!$classQuota['allowed']): ?>
+        <div class="alert alert-danger fw-bold shadow-sm p-3 mb-3 border-2 border-danger d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-lock me-2 fs-5"></i> <strong><?php echo ($lang === 'en') ? 'Limit Reached:' : 'حد مکمل (Quota Reached):'; ?></strong> <?php echo ($lang === 'en') ? 'Your current plan maximum limit for classes has been reached. Please upgrade your subscription plan to add more classes.' : htmlspecialchars($classQuota['message']); ?>
+            </div>
+            <a href="subscription_status.php" class="btn btn-sm btn-danger px-3 py-1 fw-bold text-white shadow-sm">
+                <i class="fas fa-arrow-up me-1"></i> <?php echo ($lang === 'en') ? 'Upgrade Plan' : 'سبسکرپشن اپ گریڈ کریں'; ?>
+            </a>
+        </div>
+    <?php endif; ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="fw-bold text-primary">
-            <?php echo ($sys === 'Masjid') ? 'مکتب کلاسز مینجمنٹ (مسجد)' : 'کلاسز مینجمنٹ (مدرسہ)'; ?>
+            <?php echo ($sys === 'Masjid') ? (($lang=='en') ? 'Maktab Classes (Masjid)' : 'مکتب کلاسز مینجمنٹ (مسجد)') : (($lang=='en') ? 'Classes Management (Madrasa)' : 'کلاسز مینجمنٹ (مدرسہ)'); ?>
         </h2>
     </div>
 
@@ -327,10 +338,13 @@ try {
         <div class="col-md-4">
             <div class="neobox shadow-sm">
                 <h5 class="fw-bold mb-3"><?php echo ($sys === 'Masjid') ? 'نئی مکتب کلاس شامل کریں' : t('add_new_class'); ?></h5>
+                <?php if (!$classQuota['allowed']): ?>
+                    <div class="alert alert-danger fw-bold small mb-3"><i class="fas fa-lock me-1"></i> <?php echo ($lang === 'en') ? 'Class creation is locked because quota limit is reached.' : 'آپ کے پلان میں کلاسز کی حد مکمل ہے۔ نیا اندراج بلاک ہے۔'; ?> <a href="subscription_status.php" class="alert-link text-decoration-underline"><?php echo ($lang === 'en') ? 'Upgrade Plan' : 'اپ گریڈ کریں'; ?></a></div>
+                <?php endif; ?>
                 <form method="POST">
                     <?php echo csrf_field(); ?>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">کلاس کی قسم / کورس (Class Type / Course)</label>
+                        <label class="form-label fw-bold"><?php echo __('کلاس کی قسم / کورس', 'Class Type / Course'); ?></label>
                         <select name="class_type" class="form-select class-type-select" required>
                             <?php if ($sys === 'Masjid'): ?>
                                 <option value="Hifz/Gardan/Husn">حفظ و گردان</option>
@@ -373,12 +387,12 @@ try {
 
                     <div class="mb-3">
                         <label class="form-label fw-bold"><?php echo t('class_name'); ?></label>
-                        <input type="text" name="class_name" class="form-control" placeholder="<?php echo ($sys === 'Masjid') ? 'مثلاً: حفظ، ناظرہ، قاعدہ، حسنِ صوت' : 'مثلاً: درجہ اولیٰ'; ?>" required>
+                        <input type="text" name="class_name" class="form-control" placeholder="<?php echo ($sys === 'Masjid') ? __('مثلاً: حفظ، ناظرہ، قاعدہ', 'e.g. Hifz, Nazira, Qaida') : __('مثلاً: درجہ اولیٰ', 'e.g. First Year (Ula)'); ?>" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">سیکشن (Section)</label>
-                        <input type="text" name="section" class="form-control" placeholder="مثلاً: A, B, Boys وغیرہ">
+                        <label class="form-label fw-bold"><?php echo ($lang=='en') ? 'Section' : 'سیکشن (Section)'; ?></label>
+                        <input type="text" name="section" class="form-control" placeholder="<?php echo __('مثلاً: A, B, Boys وغیرہ', 'e.g. A, B, Boys etc.'); ?>">
                     </div>
 
                     <div class="hifz-section" style="display:none;">
@@ -401,7 +415,7 @@ try {
 
                     <div class="darse-nizami-section">
                         <label class="form-label fw-bold mb-2 periods-header-label">
-                            پیریڈز اور اساتذہ کی تفصیل
+                            <?php echo __('پیریڈز اور اساتذہ کی تفصیل', 'Periods & Teachers Configuration'); ?>
                         </label>
                         <?php 
                         for($i=1; $i<=8; $i++): ?>
@@ -411,7 +425,7 @@ try {
                                 </div>
                                 <div class="row g-2">
                                     <div class="col-12 col-md-5">
-                                        <input type="text" name="period_books[<?= $i ?>]" class="form-control form-control-sm" placeholder="کتاب / سبق / مضمون">
+                                        <input type="text" name="period_books[<?= $i ?>]" class="form-control form-control-sm" placeholder="<?php echo __('کتاب / سبق / مضمون', 'Book / Lesson / Subject'); ?>">
                                     </div>
                                     <div class="col-12 col-md-7">
                                         <div class="border rounded p-1 bg-white" style="max-height: 80px; overflow-y: auto;">
@@ -432,24 +446,24 @@ try {
                     </div>
 
                     <div class="mb-3 mt-3">
-                        <label class="form-label fw-bold">دیگر مضامین اور کل نمبر (اختياری)</label>
-                        <textarea name="subjects_list" class="form-control" rows="2" placeholder="مثلاً: قرآن:100, دینیات:50"></textarea>
+                        <label class="form-label fw-bold"><?php echo __('دیگر مضامین اور کل نمبر (اختیاری)', 'Other Subjects & Total Marks (Optional)'); ?></label>
+                        <textarea name="subjects_list" class="form-control" rows="2" placeholder="<?php echo __('مثلاً: قرآن:100, دینیات:50', 'e.g. Quran:100, Islamiyat:50'); ?>"></textarea>
                     </div>
-                    <button type="submit" name="add_class" class="btn btn-primary w-100 fw-bold">شامل کریں</button>
+                    <button type="submit" name="add_class" class="btn btn-primary w-100 fw-bold"><?php echo ($lang=='en') ? 'Add Class' : 'شامل کریں'; ?></button>
                 </form>
             </div>
         </div>
         <div class="col-md-8">
             <div class="neobox shadow-sm p-0 overflow-hidden">
-                <div class="bg-light py-3 px-4 border-bottom fw-bold">کلاسز کی فہرست</div>
+                <div class="bg-light py-3 px-4 border-bottom fw-bold"><?php echo ($lang=='en') ? 'Classes List' : 'کلاسز کی فہرست'; ?></div>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0 align-middle">
                         <thead class="table-light">
                             <tr>
                                 <th class="px-4">ID</th>
                                 <th><?php echo t('class_name'); ?></th>
-                                <th>قسم / استاذ</th>
-                                <th>سٹیٹس</th>
+                                <th><?php echo ($lang=='en') ? 'Type / Teacher' : 'قسم / استاذ'; ?></th>
+                                <th><?php echo ($lang=='en') ? 'Status' : 'سٹیٹس'; ?></th>
                                 <th class="text-center"><?php echo t('action_col'); ?></th>
                             </tr>
                         </thead>
@@ -499,7 +513,7 @@ try {
                             </tr>
                             <?php endforeach; ?>
                             <?php if (empty($classes)): ?>
-                                <tr><td colspan="5" class="text-center py-4">کوئی ریکارڈ نہیں ملا</td></tr>
+                                <tr><td colspan="5" class="text-center py-4"><?php echo ($lang=='en') ? 'No classes found.' : 'کوئی ریکارڈ نہیں ملا'; ?></td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -528,7 +542,7 @@ try {
                         <input type="text" name="class_name" class="form-control" value="<?= htmlspecialchars($c['name']); ?>" required>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label fw-bold">سیکشن (Section)</label>
+                        <label class="form-label fw-bold"><?php echo ($lang=='en') ? 'Section' : 'سیکشن (Section)'; ?></label>
                         <input type="text" name="section" class="form-control" value="<?= htmlspecialchars($c['section'] ?? ''); ?>">
                     </div>
                     <div class="col-md-4 mb-3">
@@ -591,7 +605,7 @@ try {
 
                 <div class="darse-nizami-section">
                     <label class="form-label fw-bold mb-2 periods-header-label">
-                        پیریڈز اور اساتذہ کی تفصیل
+                        <?php echo __('پیریڈز اور اساتذہ کی تفصیل', 'Periods & Teachers Configuration'); ?>
                     </label>
                     <div class="row g-2">
                     <?php 
@@ -604,7 +618,7 @@ try {
                                 <div class="fw-bold text-secondary mb-1 period-label" style="font-size: 0.85rem;">
                                     Period <?= $i ?>
                                 </div>
-                                <input type="text" name="period_books[<?= $i ?>]" class="form-control form-control-sm mb-2" placeholder="کتاب / سبق / مضمون" value="<?= htmlspecialchars($p_book) ?>">
+                                <input type="text" name="period_books[<?= $i ?>]" class="form-control form-control-sm mb-2" placeholder="<?php echo __('کتاب / سبق / مضمون', 'Book / Lesson / Subject'); ?>" value="<?= htmlspecialchars($p_book) ?>">
                                 <div class="border rounded p-1 bg-white" style="max-height: 80px; overflow-y: auto;">
                                     <div class="d-flex flex-wrap gap-1">
                                         <?php foreach($teachers as $t): 
@@ -626,12 +640,12 @@ try {
                 </div>
 
                 <div class="mb-3 mt-3">
-                    <label class="form-label fw-bold">دیگر مضامین اور کل نمبر (اختياری)</label>
+                    <label class="form-label fw-bold"><?php echo __('دیگر مضامین اور کل نمبر (اختیاری)', 'Other Subjects & Total Marks (Optional)'); ?></label>
                     <textarea name="subjects_list" class="form-control" rows="2"><?= htmlspecialchars($c['subjects_list'] ?? ''); ?></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">کینسل</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
                 <button type="submit" name="update_class" class="btn btn-primary fw-bold">محفوظ کریں</button>
             </div>
         </form>
@@ -738,7 +752,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (isHifz) {
                 periodsHeader.textContent = 'حفظ و گردان پیریڈز / سیشنز کنفیگریشن (4 پیریڈز)';
             } else {
-                periodsHeader.textContent = 'پیریڈز اور اساتذہ کی تفصیل (8 Periods)';
+                periodsHeader.textContent = (typeof isUrdu !== 'undefined' && isUrdu) ? 'پیریڈز اور اساتذہ کی تفصیل (8 پیریڈز)' : 'Periods & Teachers Configuration (8 Periods)';
             }
         }
 
@@ -764,8 +778,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (pNum === 4) labelEl.textContent = 'پیریڈ 4: مغرب / عشاء کا سیشن (Night Shift)';
                     } else {
                         var extraBadge = '';
-                        if (pNum === 7) extraBadge = ' <span class="badge bg-secondary ms-1">مطالعہ</span>';
-                        if (pNum === 8) extraBadge = ' <span class="badge bg-secondary ms-1">تکرار</span>';
+                        if (pNum === 7) extraBadge = ' <span class="badge bg-secondary ms-1">' + ((typeof isUrdu !== 'undefined' && isUrdu) ? 'مطالعہ' : 'Study') + '</span>';
+                        if (pNum === 8) extraBadge = ' <span class="badge bg-secondary ms-1">' + ((typeof isUrdu !== 'undefined' && isUrdu) ? 'تکرار' : 'Revision') + '</span>';
                         labelEl.innerHTML = 'Period ' + pNum + extraBadge;
                     }
                 }

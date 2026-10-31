@@ -158,22 +158,22 @@ if (!function_exists('render_user_wise_finance_cards')) {
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2" style="background: #1e293b !important; color: #ffffff !important; border-top-left-radius: 12px; border-top-right-radius: 12px;">
                 <h5 class="mb-0 fw-bold text-white" style="color: #ffffff !important;">
                     <i class="fas <?php echo $is_income ? 'fa-hand-holding-usd text-success' : 'fa-receipt text-danger'; ?> me-2"></i>
-                    <?php echo $is_income ? 'آمدن انٹریز بلحاظ یوزرز (User-Wise Income Boxes)' : 'خرچ انٹریز بلحاظ یوزرز (User-Wise Expense Boxes)'; ?>
-                    <span class="badge bg-white text-dark ms-2 fw-bold">کل یوزرز: <?php echo $total_users; ?> | کل انٹریز: <?php echo $total_records; ?></span>
+                    <?php echo $is_income ? __('آمدن انٹریز بلحاظ یوزرز (User-Wise Income Boxes)', 'User-Wise Income Boxes') : __('خرچ انٹریز بلحاظ یوزرز (User-Wise Expense Boxes)', 'User-Wise Expense Boxes'); ?>
+                    <span class="badge bg-white text-dark ms-2 fw-bold"><?php echo __('کل یوزرز:', 'Total Users:'); ?> <?php echo $total_users; ?> | <?php echo __('کل انٹریز:', 'Total Entries:'); ?> <?php echo $total_records; ?></span>
                 </h5>
                 <div class="d-flex align-items-center flex-wrap gap-2">
-                    <button type="button" class="btn btn-sm" style="color: #ffffff !important; border: 1px solid rgba(255,255,255,0.4) !important; background: rgba(255,255,255,0.12) !important; font-weight: 600;" onclick="toggleAllUserCards('<?php echo $prefix; ?>', true)" title="تمام کارڈز کھولیں">
-                        <i class="fas fa-expand-arrows-alt me-1"></i> سب کھولیں
+                    <button type="button" class="btn btn-sm" style="color: #ffffff !important; border: 1px solid rgba(255,255,255,0.4) !important; background: rgba(255,255,255,0.12) !important; font-weight: 600;" onclick="toggleAllUserCards('<?php echo $prefix; ?>', true)" title="<?php echo __('تمام کارڈز کھولیں', 'Expand All Cards'); ?>">
+                        <i class="fas fa-expand-arrows-alt me-1"></i> <?php echo __('سب کھولیں', 'Expand All'); ?>
                     </button>
-                    <button type="button" class="btn btn-sm" style="color: #ffffff !important; border: 1px solid rgba(255,255,255,0.4) !important; background: rgba(255,255,255,0.12) !important; font-weight: 600;" onclick="toggleAllUserCards('<?php echo $prefix; ?>', false)" title="تمام کارڈز بند کریں">
-                        <i class="fas fa-compress-arrows-alt me-1"></i> سب بند کریں
+                    <button type="button" class="btn btn-sm" style="color: #ffffff !important; border: 1px solid rgba(255,255,255,0.4) !important; background: rgba(255,255,255,0.12) !important; font-weight: 600;" onclick="toggleAllUserCards('<?php echo $prefix; ?>', false)" title="<?php echo __('تمام کارڈز بند کریں', 'Collapse All Cards'); ?>">
+                        <i class="fas fa-compress-arrows-alt me-1"></i> <?php echo __('سب بند کریں', 'Collapse All'); ?>
                     </button>
-                    <input type="text" id="<?php echo $search_id; ?>" class="form-control form-control-sm" style="width: 190px; background: #ffffff !important; color: #1e293b !important; border: 1px solid rgba(255,255,255,0.5) !important;" placeholder="یوزر یا تفصیل تلاش کریں..." onkeyup="filterUserCards('<?php echo $container_id; ?>', '<?php echo $search_id; ?>')">
+                    <input type="text" id="<?php echo $search_id; ?>" class="form-control form-control-sm" style="width: 190px; background: #ffffff !important; color: #1e293b !important; border: 1px solid rgba(255,255,255,0.5) !important;" placeholder="<?php echo __('یوزر یا تفصیل تلاش کریں...', 'Search user or details...'); ?>" onkeyup="filterUserCards('<?php echo $container_id; ?>', '<?php echo $search_id; ?>')">
                 </div>
             </div>
             <div class="card-body p-3 bg-light" id="<?php echo $container_id; ?>">
                 <?php if (empty($user_groups)): ?>
-                    <div class="text-center p-4 text-muted fw-bold">کوئی ریکارڈ موجود نہیں</div>
+                    <div class="text-center p-4 text-muted fw-bold"><?php echo __('کوئی ریکارڈ موجود نہیں', 'No records found'); ?></div>
                 <?php else: ?>
                     <div class="accordion" id="accordion_<?php echo $prefix; ?>">
                         <?php foreach ($user_groups as $uid => $ug): 
@@ -195,7 +195,7 @@ if (!function_exists('render_user_wise_finance_cards')) {
                                     <div>
                                         <span class="fw-bold fs-6 text-dark"><?php echo htmlspecialchars($ug['name']); ?></span>
                                         <?php if ($is_self): ?>
-                                            <span class="badge bg-primary-subtle text-primary border border-primary ms-1">آپ کا اکاؤنٹ</span>
+                                            <span class="badge bg-primary-subtle text-primary border border-primary ms-1"><?php echo __('آپ کا اکاؤنٹ', 'Your Account'); ?></span>
                                         <?php endif; ?>
                                         <span class="badge bg-secondary-subtle text-secondary border ms-1">ID: <?php echo $uid; ?></span>
                                     </div>
@@ -212,19 +212,19 @@ if (!function_exists('render_user_wise_finance_cards')) {
                                     ?>
                                     <?php if ($op_inc > 0 || !$has_adv): ?>
                                     <span class="badge bg-success-subtle text-success border border-success px-2 py-1">
-                                        <i class="fas fa-arrow-down me-1"></i>خالص آمدن: Rs. <?php echo number_format($op_inc); ?>
+                                        <i class="fas fa-arrow-down me-1"></i><?php echo __('خالص آمدن:', 'Net Income:'); ?> Rs. <?php echo number_format($op_inc); ?>
                                     </span>
                                     <?php endif; ?>
                                     <?php if ($loan_in > 0): ?>
                                     <span class="badge bg-warning-subtle text-dark border border-warning px-2 py-1">
-                                        <i class="fas fa-handshake me-1"></i>قرض آمد: Rs. <?php echo number_format($loan_in); ?>
+                                        <i class="fas fa-handshake me-1"></i><?php echo __('قرض آمد:', 'Loan Inflow:'); ?> Rs. <?php echo number_format($loan_in); ?>
                                     </span>
                                     <?php endif; ?>
                                     <?php 
                                     $display_exp = ($loan_out > 0) ? $tot_exp : $op_exp;
                                     ?>
                                     <span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1">
-                                        <i class="fas fa-arrow-up me-1"></i>کل خرچ: Rs. <?php echo number_format($display_exp); ?>
+                                        <i class="fas fa-arrow-up me-1"></i><?php echo __('کل خرچ:', 'Total Expense:'); ?> Rs. <?php echo number_format($display_exp); ?>
                                     </span>
                                     <?php if ($has_adv): 
                                         $adv_rec = (float)($ug['advance_received'] ?? 0);
@@ -232,38 +232,38 @@ if (!function_exists('render_user_wise_finance_cards')) {
                                         $adv_rem = (float)($ug['advance_balance'] ?? ($adv_rec - $adv_ded));
                                     ?>
                                     <span class="badge bg-info-subtle text-dark border border-info px-2 py-1">
-                                        <i class="fas fa-exchange-alt me-1"></i>موصولہ ایڈوانس: Rs. <?php echo number_format($adv_rec); ?>
+                                        <i class="fas fa-exchange-alt me-1"></i><?php echo __('موصولہ ایڈوانس:', 'Advance Received:'); ?> Rs. <?php echo number_format($adv_rec); ?>
                                     </span>
                                     <span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1">
-                                        <i class="fas fa-minus-circle me-1"></i>ایڈوانس سے منہا: Rs. <?php echo number_format($adv_ded); ?>
+                                        <i class="fas fa-minus-circle me-1"></i><?php echo __('ایڈوانس سے منہا:', 'Deducted from Advance:'); ?> Rs. <?php echo number_format($adv_ded); ?>
                                     </span>
                                     <span class="badge <?php echo $adv_rem >= 0 ? 'bg-success text-white' : 'bg-danger text-white'; ?> px-2 py-1 fw-bold">
-                                        <i class="fas fa-wallet me-1"></i>بقایا ایڈوانس بیلنس: <?php echo ($adv_rem < 0 ? '-' : '+'); ?> Rs. <?php echo number_format(abs($adv_rem)); ?>
+                                        <i class="fas fa-wallet me-1"></i><?php echo __('بقایا ایڈوانس بیلنس:', 'Advance Balance:'); ?> <?php echo ($adv_rem < 0 ? '-' : '+'); ?> Rs. <?php echo number_format(abs($adv_rem)); ?>
                                     </span>
                                     <?php if (!empty($ug['other_expenses']) && $ug['other_expenses'] > 0): ?>
-                                    <span class="badge bg-secondary-subtle text-secondary border px-2 py-1" title="کیش یا دیگر کھاتوں سے ادا شدہ اخراجات">
-                                        کیش / دیگر کھاتوں سے خرچ: Rs. <?php echo number_format($ug['other_expenses']); ?>
+                                    <span class="badge bg-secondary-subtle text-secondary border px-2 py-1" title="<?php echo __('کیش یا دیگر کھاتوں سے ادا شدہ اخراجات', 'Expenses paid via Cash or other accounts'); ?>">
+                                        <?php echo __('کیش / دیگر کھاتوں سے خرچ:', 'Spent from Cash/Other Accounts:'); ?> Rs. <?php echo number_format($ug['other_expenses']); ?>
                                     </span>
                                     <?php endif; ?>
                                     <?php if ($op_inc > 0): 
                                         $cashBal = $op_inc - (float)($ug['other_expenses'] ?? $op_exp);
                                     ?>
-                                    <span class="badge <?php echo $cashBal >= 0 ? 'bg-primary-subtle text-primary border-primary' : 'bg-warning-subtle text-warning border-warning'; ?> border px-2 py-1" title="آمدن اور عام کیش اخراجات کا توازن">
-                                        <i class="fas fa-coins me-1"></i>عام کیش بیلنس: Rs. <?php echo number_format($cashBal); ?>
+                                    <span class="badge <?php echo $cashBal >= 0 ? 'bg-primary-subtle text-primary border-primary' : 'bg-warning-subtle text-warning border-warning'; ?> border px-2 py-1" title="<?php echo __('آمدن اور عام کیش اخراجات کا توازن', 'Balance of income and cash expenses'); ?>">
+                                        <i class="fas fa-coins me-1"></i><?php echo __('عام کیش بیلنس:', 'General Cash Balance:'); ?> Rs. <?php echo number_format($cashBal); ?>
                                     </span>
                                     <?php endif; ?>
                                     <?php else: ?>
                                     <span class="badge <?php echo $uBal >= 0 ? 'bg-primary-subtle text-primary border-primary' : 'bg-warning-subtle text-warning border-warning'; ?> border px-2 py-1">
-                                        <i class="fas fa-wallet me-1"></i>بقایا بیلنس: Rs. <?php echo number_format($uBal); ?>
+                                        <i class="fas fa-wallet me-1"></i><?php echo __('بقایا بیلنس:', 'Remaining Balance:'); ?> Rs. <?php echo number_format($uBal); ?>
                                     </span>
                                     <?php endif; ?>
                                     <?php if ($loan_out > 0): ?>
                                     <span class="badge bg-warning-subtle text-dark border border-warning px-2 py-1">
-                                        <i class="fas fa-handshake me-1"></i>قرض ادائیگی: Rs. <?php echo number_format($loan_out); ?>
+                                        <i class="fas fa-handshake me-1"></i><?php echo __('قرض ادائیگی:', 'Loan Outflow:'); ?> Rs. <?php echo number_format($loan_out); ?>
                                     </span>
                                     <?php endif; ?>
                                     <span class="badge bg-dark text-white px-2 py-1">
-                                        <?php echo $rec_count; ?> انٹریز
+                                        <?php echo $rec_count; ?> <?php echo __('انٹریز', 'Entries'); ?>
                                     </span>
                                     <i class="fas fa-chevron-down text-muted ms-2"></i>
                                 </div>
@@ -272,22 +272,22 @@ if (!function_exists('render_user_wise_finance_cards')) {
                             <div id="<?php echo $collapse_id; ?>" class="collapse <?php echo $should_show; ?> <?php echo $prefix; ?>-collapse">
                                 <div class="card-body p-0">
                                     <?php if ($rec_count === 0): ?>
-                                        <div class="text-center p-4 text-muted">اس صارف کی کوئی <?php echo $is_income ? 'آمدن' : 'خرچ'; ?> انٹری موجود نہیں ہے۔</div>
+                                        <div class="text-center p-4 text-muted"><?php echo $is_income ? __('اس صارف کی کوئی آمدن انٹری موجود نہیں ہے۔', 'No income entries for this user.') : __('اس صارف کی کوئی خرچ انٹری موجود نہیں ہے۔', 'No expense entries for this user.'); ?></div>
                                     <?php else: ?>
                                         <div class="table-responsive">
                                             <table class="table table-hover align-middle mb-0 text-center">
                                                 <thead class="table-light">
                                                     <tr>
-                                                        <th>تاریخ</th>
-                                                        <th>مد</th>
-                                                        <th>رقم</th>
+                                                        <th><?php echo __('تاریخ', 'Date'); ?></th>
+                                                        <th><?php echo __('مد', 'Head / Category'); ?></th>
+                                                        <th><?php echo __('رقم', 'Amount'); ?></th>
                                                         <?php if ($is_income): ?>
-                                                            <th>رسید #</th>
-                                                            <th>تفصیل / نام</th>
+                                                            <th><?php echo __('رسید #', 'Receipt #'); ?></th>
+                                                            <th><?php echo __('تفصیل / نام', 'Details / Name'); ?></th>
                                                         <?php else: ?>
-                                                            <th>تفصیل</th>
+                                                            <th><?php echo __('تفصیل', 'Details'); ?></th>
                                                         <?php endif; ?>
-                                                        <th>ایکشن</th>
+                                                        <th><?php echo __('ایکشن', 'Action'); ?></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -309,7 +309,7 @@ if (!function_exists('render_user_wise_finance_cards')) {
                                                             </td>
                                                             <td class="small text-start">
                                                                 <?php if (!empty($r['is_loan'])): ?>
-                                                                    <span class="badge bg-warning text-dark border border-warning px-2 py-0 me-1"><i class="fas fa-handshake"></i> قرض کیش فلو</span>
+                                                                    <span class="badge bg-warning text-dark border border-warning px-2 py-0 me-1"><i class="fas fa-handshake"></i> <?php echo __('قرض کیش فلو', 'Loan Cash Flow'); ?></span>
                                                                 <?php endif; ?>
                                                                 <?php if(!empty($r['donor_name'])): ?>
                                                                     <span class="text-primary fw-bold"><?php echo htmlspecialchars((string)$r['donor_name']); ?></span><br>
@@ -319,7 +319,7 @@ if (!function_exists('render_user_wise_finance_cards')) {
                                                         <?php else: ?>
                                                             <td class="small text-start text-muted">
                                                                 <?php if (!empty($r['is_loan'])): ?>
-                                                                    <span class="badge bg-warning text-dark border border-warning px-2 py-0 me-1"><i class="fas fa-handshake"></i> قرض کیش فلو</span>
+                                                                    <span class="badge bg-warning text-dark border border-warning px-2 py-0 me-1"><i class="fas fa-handshake"></i> <?php echo __('قرض کیش فلو', 'Loan Cash Flow'); ?></span>
                                                                 <?php endif; ?>
                                                                 <?php if(!empty($r['donor_name'])): ?>
                                                                     <span class="text-danger fw-bold"><?php echo htmlspecialchars((string)$r['donor_name']); ?></span><br>
@@ -330,17 +330,17 @@ if (!function_exists('render_user_wise_finance_cards')) {
                                                         <td>
                                                             <div class="btn-group btn-group-sm">
                                                                 <?php if (!empty($r['bill_image'])): ?>
-                                                                    <a href="<?php echo htmlspecialchars($r['bill_image']); ?>" target="_blank" class="btn btn-outline-info" title="منسلک بل دیکھیں"><i class="fas fa-file-invoice-dollar"></i></a>
+                                                                    <a href="<?php echo htmlspecialchars($r['bill_image']); ?>" target="_blank" class="btn btn-outline-info" title="<?php echo __('منسلک بل دیکھیں', 'View Attached Bill'); ?>"><i class="fas fa-file-invoice-dollar"></i></a>
                                                                 <?php endif; ?>
                                                                 <?php if ($is_income): ?>
-                                                                    <a href="<?php echo $print_file; ?>?id=<?php echo $r['id']; ?>" class="btn btn-outline-primary" target="_blank" title="رسید پرنٹ"><i class="fas fa-print"></i></a>
+                                                                    <a href="<?php echo $print_file; ?>?id=<?php echo $r['id']; ?>" class="btn btn-outline-primary" target="_blank" title="<?php echo __('رسید پرنٹ', 'Print Receipt'); ?>"><i class="fas fa-print"></i></a>
                                                                 <?php endif; ?>
-                                                                <a href="edit_finance.php?id=<?php echo $r['id']; ?>" class="btn btn-outline-warning" title="ترمیم"><i class="fas fa-edit"></i></a>
-                                                                <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟');">
+                                                                <a href="edit_finance.php?id=<?php echo $r['id']; ?>" class="btn btn-outline-warning" title="<?php echo __('ترمیم', 'Edit'); ?>"><i class="fas fa-edit"></i></a>
+                                                                <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('<?php echo __('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟', 'Are you sure you want to delete this record?'); ?>');">
                                                                     <?php echo csrf_field(); ?>
                                                                     <input type="hidden" name="delete_record" value="1">
                                                                     <input type="hidden" name="del_id" value="<?php echo $r['id']; ?>">
-                                                                    <button type="submit" class="btn btn-outline-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                                                    <button type="submit" class="btn btn-outline-danger" title="<?php echo __('ڈیلیٹ', 'Delete'); ?>"><i class="fas fa-trash"></i></button>
                                                                 </form>
                                                             </div>
                                                         </td>
@@ -2366,14 +2366,14 @@ include 'header.php';
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <h3 class="fw-bold text-primary mb-0">
             <i class="fas fa-coins me-2"></i> 
-            <?php echo ($sys === 'Masjid') ? 'سادہ آمدن و اخراجات (مسجد)' : 'سادہ آمدن و اخراجات (مدرسہ)'; ?>
+            <?php echo ($sys === 'Masjid') ? __('سادہ آمدن و اخراجات (مسجد)', 'Simple Finance (Masjid)') : __('سادہ آمدن و اخراجات (مدرسہ)', 'Simple Finance (Madrasa)'); ?>
         </h3>
         <div class="d-flex gap-2 flex-wrap">
             <button type="button" class="btn btn-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#fundTransferModal">
-                <i class="fas fa-exchange-alt me-1"></i> رقم منتقلی (ایڈوانس / ٹرانسفر)
+                <i class="fas fa-exchange-alt me-1"></i> <?php echo __('رقم منتقلی (ایڈوانس / ٹرانسفر)', 'Fund Transfer (Advance / Transfer)'); ?>
             </button>
             <a href="simple_finance.php?sync_heads=1" class="btn btn-outline-success fw-bold">
-                <i class="fas fa-sync me-1"></i> مدات سنک کریں (Sync Heads)
+                <i class="fas fa-sync me-1"></i> <?php echo __('مدات سنک کریں (Sync Heads)', 'Sync Heads'); ?>
             </a>
             <a href="finance_report.php" class="btn btn-outline-primary fw-bold">
                 <i class="fas fa-chart-bar me-1"></i> فنانس رپورٹ
@@ -2408,26 +2408,26 @@ include 'header.php';
     <?php if(isset($_GET['error'])): ?>
         <?php if($_GET['error'] === 'blocked_head'): ?>
         <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0" role="alert">
-            <i class="fas fa-ban me-2 fs-5"></i> <strong>پابندی:</strong> مد (Head) یا تفصیل <b class="text-dark bg-warning px-2 rounded"><?php echo htmlspecialchars($_GET['head_name'] ?? ''); ?></b> میں براہ راست انٹری کی اجازت نہیں ہے تاکہ ڈبل انٹری سے بچا جا سکے۔ 
+            <i class="fas fa-ban me-2 fs-5"></i> <strong><?php echo __('پابندی:', 'Restriction:'); ?></strong> <?php echo __('مد (Head) یا تفصیل', 'Head or description'); ?> <b class="text-dark bg-warning px-2 rounded"><?php echo htmlspecialchars($_GET['head_name'] ?? ''); ?></b> <?php echo __('میں براہ راست انٹری کی اجازت نہیں ہے تاکہ ڈبل انٹری سے بچا جا سکے۔', 'cannot be entered directly to avoid double entry.'); ?> 
             <br><br>
-            براہ کرم وظائف اور تنخواہوں کا اندراج وظائف سیکشن میں کریں: 
-            <a href="acc_payroll.php" class="btn btn-sm btn-success ms-2"><i class="fas fa-money-check-alt me-1"></i> وظائف عملہ</a>
-            <a href="loans_management.php" class="btn btn-sm btn-warning ms-2 text-dark"><i class="fas fa-hand-holding-usd me-1"></i> ایڈوانس و قرض مینیجمنٹ</a>
+            <?php echo __('براہ کرم وظائف اور تنخواہوں کا اندراج وظائف سیکشن میں کریں:', 'Please enter stipends and salaries in payroll section:'); ?> 
+            <a href="acc_payroll.php" class="btn btn-sm btn-success ms-2"><i class="fas fa-money-check-alt me-1"></i> <?php echo __('وظائف عملہ', 'Staff Payroll'); ?></a>
+            <a href="loans_management.php" class="btn btn-sm btn-warning ms-2 text-dark"><i class="fas fa-hand-holding-usd me-1"></i> <?php echo __('ایڈوانس و قرض مینیجمنٹ', 'Advance & Loan Management'); ?></a>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         <?php elseif($_GET['error'] === 'invalid_transfer'): ?>
         <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0" role="alert">
-            <i class="fas fa-exclamation-triangle me-2 fs-5"></i> <strong>غلطی:</strong> رقم منتقلی کے لیے بھیجنے اور وصول کرنے والا کھاتہ الگ الگ منتخب کریں اور رقم درست درج کریں۔
+            <i class="fas fa-exclamation-triangle me-2 fs-5"></i> <strong><?php echo __('غلطی:', 'Error:'); ?></strong> <?php echo __('رقم منتقلی کے لیے بھیجنے اور وصول کرنے والا کھاتہ الگ الگ منتخب کریں اور رقم درست درج کریں۔', 'Select different sender and receiver accounts and enter a valid amount.'); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         <?php elseif($_GET['error'] === 'transfer_failed'): ?>
         <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0" role="alert">
-            <i class="fas fa-exclamation-circle me-2 fs-5"></i> <strong>رقم منتقلی میں خرابی:</strong> <?php echo htmlspecialchars($_GET['err_msg'] ?? 'سسٹم کی خرابی کی وجہ سے رقم منتقل نہیں ہو سکی۔'); ?>
+            <i class="fas fa-exclamation-circle me-2 fs-5"></i> <strong><?php echo __('رقم منتقلی میں خرابی:', 'Transfer Error:'); ?></strong> <?php echo htmlspecialchars($_GET['err_msg'] ?? __('سسٹم کی خرابی کی وجہ سے رقم منتقل نہیں ہو سکی۔', 'Could not transfer funds due to system error.')); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         <?php else: ?>
         <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0" role="alert">
-            <i class="fas fa-exclamation-circle me-2 fs-5"></i> <strong>خرابی:</strong> <?php echo htmlspecialchars($_GET['err_msg'] ?? 'کارروائی میں خرابی پیش آگئی ہے۔'); ?>
+            <i class="fas fa-exclamation-circle me-2 fs-5"></i> <strong><?php echo __('خرابی:', 'Error:'); ?></strong> <?php echo htmlspecialchars($_GET['err_msg'] ?? __('کارروائی میں خرابی پیش آگئی ہے۔', 'An error occurred during operation.')); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         <?php endif; ?>
@@ -2435,7 +2435,7 @@ include 'header.php';
 
     <?php if(isset($_GET['msg'])): ?>
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        ✅ کارروائی کامیابی سے مکمل ہو گئی۔
+        ✅ <?php echo __('کارروائی کامیابی سے مکمل ہو گئی۔', 'Action completed successfully.'); ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
     <?php endif; ?>
@@ -2445,13 +2445,13 @@ include 'header.php';
         <div class="card-body p-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <span class="text-dark fw-bold small me-1">
-                    <i class="fas fa-layer-group text-primary me-1"></i> جائزہ پینلز:
+                    <i class="fas fa-layer-group text-primary me-1"></i> <?php echo __('جائزہ پینلز:', 'Overview Panels:'); ?>
                 </span>
                 
                 <!-- Tab 1: فنانس سمری -->
                 <button type="button" id="tabBtnFinanceSummary" class="btn btn-sm btn-outline-primary fw-bold px-3 py-2 rounded-pill d-flex align-items-center gap-2 shadow-sm" onclick="toggleFinancePanel('summary')">
                     <i class="fas fa-chart-pie text-primary"></i>
-                    <span>فنانس سمری</span>
+                    <span><?php echo __('فنانس سمری', 'Finance Summary'); ?></span>
                     <span class="badge bg-primary text-white ms-1"><?php echo htmlspecialchars($period_label); ?></span>
                     <i class="fas fa-chevron-down ms-1" id="chevronSummary" style="font-size: 0.8rem;"></i>
                 </button>
@@ -2459,9 +2459,9 @@ include 'header.php';
                 <!-- Tab 2: صارف خرچ کھاتہ -->
                 <button type="button" id="tabBtnUserExpense" class="btn btn-sm btn-outline-warning text-dark fw-bold px-3 py-2 rounded-pill d-flex align-items-center gap-2 shadow-sm" onclick="toggleFinancePanel('user')">
                     <i class="fas fa-wallet text-warning"></i>
-                    <span>صارف خرچ کھاتہ</span>
+                    <span><?php echo __('صارف خرچ کھاتہ', 'User Expense Account'); ?></span>
                     <?php if ($is_admin && !empty($user_advance_summaries)): ?>
-                        <span class="badge bg-warning text-dark ms-1"><?php echo count($user_advance_summaries); ?> کھاتے</span>
+                        <span class="badge bg-warning text-dark ms-1"><?php echo count($user_advance_summaries); ?> <?php echo __('کھاتے', 'Accounts'); ?></span>
                     <?php elseif (!$is_admin && $active_adv): ?>
                         <?php $b_tmp = (float)($active_adv['net_balance'] ?? 0); ?>
                         <span class="badge <?php echo $b_tmp >= 0 ? 'bg-success' : 'bg-danger'; ?> text-white ms-1">
@@ -2474,7 +2474,7 @@ include 'header.php';
 
             <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 small fw-bold" onclick="closeAllFinancePanels()" id="btnCollapseAll" style="display: none;">
-                    <i class="fas fa-compress-alt me-1"></i> پینل بند کریں
+                    <i class="fas fa-compress-alt me-1"></i> <?php echo __('پینل بند کریں', 'Close Panel'); ?>
                 </button>
             </div>
         </div>
@@ -2488,29 +2488,29 @@ include 'header.php';
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4 pb-3 border-bottom">
                     <div class="d-flex align-items-center gap-2">
                         <span class="fs-5 fw-bold text-dark">
-                            <i class="fas fa-chart-line text-primary me-2"></i> فنانس سمری:
+                            <i class="fas fa-chart-line text-primary me-2"></i> <?php echo __('فنانس سمری:', 'Finance Summary:'); ?>
                         </span>
                         <span class="badge bg-primary text-white fs-6 px-3 py-1"><?php echo htmlspecialchars($period_label); ?></span>
                     </div>
                     
                     <!-- Period Filter Buttons (High Contrast & Clear) -->
                     <div class="d-flex flex-wrap gap-2 align-items-center">
-                        <span class="small text-dark fw-bold me-1">مدت منتخب کریں:</span>
+                        <span class="small text-dark fw-bold me-1"><?php echo __('مدت منتخب کریں:', 'Select Period:'); ?></span>
                         <a href="simple_finance.php?period=current_month" class="btn btn-sm <?php echo ($selected_period === 'current_month') ? 'btn-primary fw-bold text-white shadow-sm' : 'btn-outline-dark fw-bold'; ?>" style="<?php echo ($selected_period === 'current_month') ? 'background-color: #0284c7 !important; border-color: #0284c7 !important;' : 'border: 1.5px solid #64748b !important; color: #1e293b !important; background: #ffffff !important;'; ?>">
-                            رواں ماہ
+                            <?php echo __('رواں ماہ', 'This Month'); ?>
                         </a>
                         <a href="simple_finance.php?period=last_month" class="btn btn-sm <?php echo ($selected_period === 'last_month') ? 'btn-primary fw-bold text-white shadow-sm' : 'btn-outline-dark fw-bold'; ?>" style="<?php echo ($selected_period === 'last_month') ? 'background-color: #0284c7 !important; border-color: #0284c7 !important;' : 'border: 1.5px solid #64748b !important; color: #1e293b !important; background: #ffffff !important;'; ?>">
-                            پچھلا مہینہ
+                            <?php echo __('پچھلا مہینہ', 'Last Month'); ?>
                         </a>
                         <a href="simple_finance.php?period=current_year" class="btn btn-sm <?php echo ($selected_period === 'current_year') ? 'btn-primary fw-bold text-white shadow-sm' : 'btn-outline-dark fw-bold'; ?>" style="<?php echo ($selected_period === 'current_year') ? 'background-color: #0284c7 !important; border-color: #0284c7 !important;' : 'border: 1.5px solid #64748b !important; color: #1e293b !important; background: #ffffff !important;'; ?>">
-                            رواں سال
+                            <?php echo __('رواں سال', 'This Year'); ?>
                         </a>
                         <button type="button" class="btn btn-sm <?php echo ($selected_period === 'custom') ? 'btn-primary fw-bold text-white shadow-sm' : 'btn-outline-dark fw-bold'; ?>" style="<?php echo ($selected_period === 'custom') ? 'background-color: #0284c7 !important; border-color: #0284c7 !important;' : 'border: 1.5px solid #64748b !important; color: #1e293b !important; background: #ffffff !important;'; ?>" onclick="document.getElementById('customDateFilterRow').classList.toggle('d-none');">
-                            <i class="fas fa-calendar-day me-1"></i> کسٹم تاریخ
+                            <i class="fas fa-calendar-day me-1"></i> <?php echo __('کسٹم تاریخ', 'Custom Date'); ?>
                         </button>
                         <?php if ($selected_period !== 'current_month'): ?>
-                        <a href="simple_finance.php?period=all" class="btn btn-sm btn-outline-secondary fw-bold" title="تمام ریکارڈز">
-                            سب
+                        <a href="simple_finance.php?period=all" class="btn btn-sm btn-outline-secondary fw-bold" title="<?php echo __('تمام ریکارڈز', 'All Records'); ?>">
+                            <?php echo __('سب', 'All'); ?>
                         </a>
                         <?php endif; ?>
                     </div>
@@ -2521,19 +2521,19 @@ include 'header.php';
                     <form method="GET" action="simple_finance.php" class="row g-2 align-items-end">
                         <input type="hidden" name="period" value="custom">
                         <div class="col-md-4 col-sm-6">
-                            <label class="form-label small text-dark fw-bold">شروع تاریخ (From Date):</label>
+                            <label class="form-label small text-dark fw-bold"><?php echo __('شروع تاریخ (From Date):', 'From Date:'); ?></label>
                             <input type="date" name="from_date" class="form-control form-control-sm border-secondary" value="<?php echo htmlspecialchars($filter_start_date ?? date('Y-m-01')); ?>" required>
                         </div>
                         <div class="col-md-4 col-sm-6">
-                            <label class="form-label small text-dark fw-bold">اختتامی تاریخ (To Date):</label>
+                            <label class="form-label small text-dark fw-bold"><?php echo __('اختتامی تاریخ (To Date):', 'To Date:'); ?></label>
                             <input type="date" name="to_date" class="form-control form-control-sm border-secondary" value="<?php echo htmlspecialchars($filter_end_date ?? date('Y-m-t')); ?>" required>
                         </div>
                         <div class="col-md-4 col-sm-12 d-flex gap-2">
                             <button type="submit" class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" style="background-color: #0284c7 !important;">
-                                <i class="fas fa-filter me-1"></i> فلٹر لاگو کریں
+                                <i class="fas fa-filter me-1"></i> <?php echo __('فلٹر لاگو کریں', 'Apply Filter'); ?>
                             </button>
                             <a href="simple_finance.php?period=current_month" class="btn btn-sm btn-outline-secondary">
-                                ری سیٹ
+                                <?php echo __('ری سیٹ', 'Reset'); ?>
                             </a>
                         </div>
                     </form>
@@ -2545,7 +2545,7 @@ include 'header.php';
                     <div class="col-md-4">
                         <div class="p-3 text-white shadow-sm" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important; border-radius: 14px; color: #ffffff !important; border: 1px solid #059669;">
                             <div class="fw-bold mb-1" style="color: #ffffff !important; font-size: 0.95rem;">
-                                <i class="fas fa-arrow-down me-1"></i> منتخب مدت کی کل آمدن
+                                <i class="fas fa-arrow-down me-1"></i> <?php echo __('منتخب مدت کی کل آمدن', 'Total Period Income'); ?>
                             </div>
                             <h3 class="fw-bold mb-0" style="color: #ffffff !important; font-size: 1.85rem; direction: ltr; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.25);">
                                 Rs. <?php echo number_format($period_total_income); ?>
@@ -2556,7 +2556,7 @@ include 'header.php';
                     <div class="col-md-4">
                         <div class="p-3 text-white shadow-sm" style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%) !important; border-radius: 14px; color: #ffffff !important; border: 1px solid #dc2626;">
                             <div class="fw-bold mb-1" style="color: #ffffff !important; font-size: 0.95rem;">
-                                <i class="fas fa-arrow-up me-1"></i> منتخب مدت کے کل اخراجات
+                                <i class="fas fa-arrow-up me-1"></i> <?php echo __('منتخب مدت کے کل اخراجات', 'Total Period Expense'); ?>
                             </div>
                             <h3 class="fw-bold mb-0" style="color: #ffffff !important; font-size: 1.85rem; direction: ltr; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.25);">
                                 Rs. <?php echo number_format($period_total_expense); ?>
@@ -2567,7 +2567,7 @@ include 'header.php';
                     <div class="col-md-4">
                         <div class="p-3 text-white shadow-sm" style="background: <?php echo $period_net_balance >= 0 ? 'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)' : 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)'; ?> !important; border-radius: 14px; color: #ffffff !important; border: 1px solid <?php echo $period_net_balance >= 0 ? '#0284c7' : '#d97706'; ?>;">
                             <div class="fw-bold mb-1" style="color: #ffffff !important; font-size: 0.95rem;">
-                                <i class="fas fa-wallet me-1"></i> خالص بچت / بقایا بیلنس
+                                <i class="fas fa-wallet me-1"></i> <?php echo __('خالص بچت / بقایا بیلنس', 'Net Balance'); ?>
                             </div>
                             <h3 class="fw-bold mb-0" style="color: #ffffff !important; font-size: 1.85rem; direction: ltr; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.25);">
                                 <?php echo ($period_net_balance < 0 ? '-' : '+'); ?> Rs. <?php echo number_format(abs($period_net_balance)); ?>
@@ -2590,12 +2590,12 @@ include 'header.php';
                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                                 <div>
                                     <span class="badge bg-info text-dark fw-bold mb-1">
-                                        <i class="fas fa-wallet me-1"></i> خرچ کھاتہ برائے: <?php echo htmlspecialchars($active_adv['user_label'] ?? $current_username); ?>
+                                        <i class="fas fa-wallet me-1"></i> <?php echo __('خرچ کھاتہ برائے:', 'Expense Account for:'); ?> <?php echo htmlspecialchars($active_adv['user_label'] ?? $current_username); ?>
                                     </span>
-                                    <h5 class="mb-0 fw-bold text-dark">آپ کا بقایا بیلنس:</h5>
+                                    <h5 class="mb-0 fw-bold text-dark"><?php echo __('آپ کا بقایا بیلنس:', 'Your Remaining Balance:'); ?></h5>
                                     <div class="small text-muted mt-1">
-                                        کل موصولہ رقم (ٹرانسفر): <strong class="text-primary">Rs. <?php echo number_format($active_adv['total_received'] ?? 0); ?></strong> | 
-                                        کھاتے سے منہا شدہ خرچ: <strong class="text-danger">Rs. <?php echo number_format($active_adv['total_deducted'] ?? 0); ?></strong>
+                                        <?php echo __('کل موصولہ رقم (ٹرانسفر):', 'Total Funds Received:'); ?> <strong class="text-primary">Rs. <?php echo number_format($active_adv['total_received'] ?? 0); ?></strong> | 
+                                        <?php echo __('کھاتے سے منہا شدہ خرچ:', 'Deducted Expenses:'); ?> <strong class="text-danger">Rs. <?php echo number_format($active_adv['total_deducted'] ?? 0); ?></strong>
                                     </div>
                                 </div>
                                 <div class="text-end">
@@ -2605,7 +2605,7 @@ include 'header.php';
                                     </h2>
                                     <span class="badge <?php echo $bal >= 0 ? 'bg-success-subtle text-success border border-success' : 'bg-danger-subtle text-danger border border-danger'; ?> mt-1">
                                         <i class="fas <?php echo $bal >= 0 ? 'fa-check-circle' : 'fa-exclamation-circle'; ?> me-1"></i>
-                                        <?php echo $bal >= 0 ? 'بقایا رقم موجود ہے' : 'صارف نے جیب سے زیادہ خرچ کیا (ادارہ واجب الادا ہے)'; ?>
+                                        <?php echo $bal >= 0 ? __('بقایا رقم موجود ہے', 'Remaining balance available') : __('صارف نے جیب سے زیادہ خرچ کیا (ادارہ واجب الادا ہے)', 'User overspent (Institute owes user)'); ?>
                                     </span>
                                 </div>
                             </div>
@@ -2618,7 +2618,7 @@ include 'header.php';
                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2 pb-2 border-bottom">
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
                                     <span class="badge bg-warning text-dark fw-bold fs-6">
-                                        <i class="fas fa-exchange-alt me-1"></i> صارف خرچ کھاتہ:
+                                        <i class="fas fa-exchange-alt me-1"></i> <?php echo __('صارف خرچ کھاتہ:', 'User Expense Account:'); ?>
                                     </span>
                                     <?php if (!empty($user_advance_summaries)): ?>
                                     <select class="form-select form-select-sm d-inline-block w-auto fw-bold text-dark border-warning shadow-sm" onchange="window.location.href='simple_finance.php?tab=transfer&adv_user_acc=' + this.value">
@@ -2627,16 +2627,16 @@ include 'header.php';
                                             $bal_text = ($u_bal < 0 ? '-' : '+') . 'Rs. ' . number_format(abs($u_bal));
                                         ?>
                                             <option value="<?php echo $aid; ?>" <?php echo ($aid === $selected_adv_aid) ? 'selected' : ''; ?>>
-                                                <?php echo htmlspecialchars($summ['user_label']); ?> (بقایا: <?php echo $bal_text; ?>)
+                                                <?php echo htmlspecialchars($summ['user_label']); ?> (<?php echo __('بقایا:', 'Balance:'); ?> <?php echo $bal_text; ?>)
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
                                     <?php endif; ?>
                                 </div>
                                 <div class="small text-muted">
-                                    مجموعی جاری کردہ فنڈز: <strong class="text-primary">Rs. <?php echo number_format($total_overall_advance_received); ?></strong> | 
-                                    کل منہا شدہ اخراجات: <strong class="text-danger">Rs. <?php echo number_format($total_overall_advance_deducted); ?></strong> | 
-                                    مجموعی بقایا: <strong class="<?php echo $total_overall_advance_balance >= 0 ? 'text-success' : 'text-danger'; ?>">Rs. <?php echo number_format($total_overall_advance_balance); ?></strong>
+                                    <?php echo __('مجموعی جاری کردہ فنڈز:', 'Total Issued Funds:'); ?> <strong class="text-primary">Rs. <?php echo number_format($total_overall_advance_received); ?></strong> | 
+                                    <?php echo __('کل منہا شدہ اخراجات:', 'Total Deducted Expenses:'); ?> <strong class="text-danger">Rs. <?php echo number_format($total_overall_advance_deducted); ?></strong> | 
+                                    <?php echo __('مجموعی بقایا:', 'Total Balance:'); ?> <strong class="<?php echo $total_overall_advance_balance >= 0 ? 'text-success' : 'text-danger'; ?>">Rs. <?php echo number_format($total_overall_advance_balance); ?></strong>
                                 </div>
                             </div>
 
@@ -2647,13 +2647,13 @@ include 'header.php';
                                 <div>
                                     <h5 class="mb-1 fw-bold text-dark">
                                         <i class="fas fa-user-circle me-1 text-primary"></i> 
-                                        خرچ کھاتہ برائے: <span class="text-primary"><?php echo htmlspecialchars($active_adv['user_label']); ?></span>
+                                        <?php echo __('خرچ کھاتہ برائے:', 'Expense Account for:'); ?> <span class="text-primary"><?php echo htmlspecialchars($active_adv['user_label']); ?></span>
                                     </h5>
                                     <div class="small text-muted">
-                                        کل موصولہ ٹرانسفر: <strong class="text-primary">Rs. <?php echo number_format($active_adv['total_received']); ?></strong> | 
-                                        خرچ کھاتے سے منہا اخراجات: <strong class="text-danger">Rs. <?php echo number_format($active_adv['total_deducted']); ?></strong>
+                                        <?php echo __('کل موصولہ ٹرانسفر:', 'Total Transfer Received:'); ?> <strong class="text-primary">Rs. <?php echo number_format($active_adv['total_received']); ?></strong> | 
+                                        <?php echo __('خرچ کھاتے سے منہا اخراجات:', 'Expenses Deducted:'); ?> <strong class="text-danger">Rs. <?php echo number_format($active_adv['total_deducted']); ?></strong>
                                         <?php if (!empty($active_adv['finance_expenses']) && $active_adv['finance_expenses'] != $active_adv['total_deducted']): ?>
-                                            <span class="badge bg-light text-muted border ms-1">لیجر منہا: Rs. <?php echo number_format($active_adv['total_deducted']); ?></span>
+                                            <span class="badge bg-light text-muted border ms-1"><?php echo __('لیجر منہا:', 'Ledger Deducted:'); ?> Rs. <?php echo number_format($active_adv['total_deducted']); ?></span>
                                         <?php endif; ?>
                                     </div>
                                 </div>
@@ -2663,12 +2663,12 @@ include 'header.php';
                                     </h2>
                                     <span class="badge <?php echo $bal >= 0 ? 'bg-success-subtle text-success border border-success' : 'bg-danger-subtle text-danger border border-danger'; ?> mt-1">
                                         <i class="fas <?php echo $bal >= 0 ? 'fa-check-circle' : 'fa-exclamation-circle'; ?> me-1"></i>
-                                        <?php echo $bal >= 0 ? 'صارف کے پاس بقایا رقم ہے' : 'صارف نے جیب سے زیادہ خرچ کیا (ادارہ واجب الادا ہے)'; ?>
+                                        <?php echo $bal >= 0 ? __('صارف کے پاس بقایا رقم ہے', 'User has remaining funds') : __('صارف نے جیب سے زیادہ خرچ کیا (ادارہ واجب الادا ہے)', 'User overspent (Institute owes user)'); ?>
                                     </span>
                                     <?php if ($is_admin): ?>
                                         <div class="mt-2">
                                             <a href="manage_advance_entries.php?user_id=<?php echo (int)($active_adv['user_id'] ?? 3); ?>" class="btn btn-sm btn-outline-danger py-1 px-2 fw-bold shadow-sm">
-                                                <i class="fas fa-random me-1"></i> بلک انٹریز منتقلی و درستگی ٹول (Bulk Move Tool)
+                                                <i class="fas fa-random me-1"></i> <?php echo __('بلک انٹریز منتقلی و درستگی ٹول (Bulk Move Tool)', 'Bulk Move Tool'); ?>
                                             </a>
                                         </div>
                                     <?php endif; ?>
@@ -2676,7 +2676,7 @@ include 'header.php';
                             </div>
                             <?php else: ?>
                             <div class="text-center py-2 text-muted">
-                                ابھی کسی صارف کو رقم منتقل نہیں کی گئی۔ رقم منتقلی کے لیے اوپر "رقم منتقلی" بٹن استعمال کریں۔
+                                <?php echo __('ابھی کسی صارف کو رقم منتقل نہیں کی گئی۔ رقم منتقلی کے لیے اوپر "رقم منتقلی" بٹن استعمال کریں۔', 'No funds transferred yet. Use "Transfer Funds" button above.'); ?>
                             </div>
                             <?php endif; ?>
                         </div>
@@ -2707,13 +2707,13 @@ include 'header.php';
     </style>
     <ul class="nav nav-tabs mb-4 border-bottom flex-nowrap overflow-x-auto text-nowrap" id="financeTabs" role="tablist" style="overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: thin;">
         <li class="nav-item" role="presentation" style="flex: 0 0 auto;">
-            <button class="nav-link income-tab active fw-bold px-4 py-2" id="income-tab" data-bs-toggle="tab" data-bs-target="#income" type="button" role="tab" aria-controls="income" aria-selected="true" style="white-space: nowrap;"><i class="fas fa-arrow-down me-2"></i> آمدن (Income)</button>
+            <button class="nav-link income-tab active fw-bold px-4 py-2" id="income-tab" data-bs-toggle="tab" data-bs-target="#income" type="button" role="tab" aria-controls="income" aria-selected="true" style="white-space: nowrap;"><i class="fas fa-arrow-down me-2"></i> <?php echo __('آمدن (Income)', 'Income'); ?></button>
         </li>
         <li class="nav-item" role="presentation" style="flex: 0 0 auto;">
-            <button class="nav-link expense-tab fw-bold px-4 py-2" id="expense-tab" data-bs-toggle="tab" data-bs-target="#expense" type="button" role="tab" aria-controls="expense" aria-selected="false" style="white-space: nowrap;"><i class="fas fa-arrow-up me-2"></i> اخراجات (Expense)</button>
+            <button class="nav-link expense-tab fw-bold px-4 py-2" id="expense-tab" data-bs-toggle="tab" data-bs-target="#expense" type="button" role="tab" aria-controls="expense" aria-selected="false" style="white-space: nowrap;"><i class="fas fa-arrow-up me-2"></i> <?php echo __('اخراجات (Expense)', 'Expenses'); ?></button>
         </li>
         <li class="nav-item" role="presentation" style="flex: 0 0 auto;">
-            <button class="nav-link transfer-tab fw-bold px-4 py-2" id="transfer-tab" data-bs-toggle="tab" data-bs-target="#transfer" type="button" role="tab" aria-controls="transfer" aria-selected="false" style="white-space: nowrap;"><i class="fas fa-exchange-alt me-2"></i> فنڈز ٹرانسفر / ایڈوانس</button>
+            <button class="nav-link transfer-tab fw-bold px-4 py-2" id="transfer-tab" data-bs-toggle="tab" data-bs-target="#transfer" type="button" role="tab" aria-controls="transfer" aria-selected="false" style="white-space: nowrap;"><i class="fas fa-exchange-alt me-2"></i> <?php echo __('فنڈز ٹرانسفر / ایڈوانس', 'Funds Transfer / Advance'); ?></button>
         </li>
     </ul>
 
@@ -2730,13 +2730,13 @@ include 'header.php';
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div>
                                 <span class="badge bg-success text-white fw-bold mb-1">
-                                    <i class="fas fa-hand-holding-usd me-1"></i> نقد وصولی کھاتہ (امانت) برائے: <?php echo htmlspecialchars($active_col['user_label'] ?? $current_username); ?>
+                                    <i class="fas fa-hand-holding-usd me-1"></i> <?php echo __('نقد وصولی کھاتہ (امانت) برائے:', 'Cash Collection Account for:'); ?> <?php echo htmlspecialchars($active_col['user_label'] ?? $current_username); ?>
                                 </span>
-                                <h5 class="mb-0 fw-bold text-dark">آپ کی تحویل میں موصولہ رقم (امانت):</h5>
+                                <h5 class="mb-0 fw-bold text-dark"><?php echo __('آپ کی تحویل میں موصولہ رقم (امانت):', 'Cash In-Hand:'); ?></h5>
                                 <div class="small text-muted mt-1">
-                                    کل موصولہ رقم: <strong class="text-success">Rs. <?php echo number_format($active_col['total_collected'] ?? 0); ?></strong> | 
-                                    منہا اخراجات: <strong class="text-danger">Rs. <?php echo number_format($active_col['total_spent'] ?? 0); ?></strong> | 
-                                    ایڈمن کو جمع کروائی گئی: <strong class="text-primary">Rs. <?php echo number_format($active_col['total_transferred'] ?? 0); ?></strong>
+                                    <?php echo __('کل موصولہ رقم:', 'Total Received:'); ?> <strong class="text-success">Rs. <?php echo number_format($active_col['total_collected'] ?? 0); ?></strong> | 
+                                    <?php echo __('منہا اخراجات:', 'Expenses Deducted:'); ?> <strong class="text-danger">Rs. <?php echo number_format($active_col['total_spent'] ?? 0); ?></strong> | 
+                                    <?php echo __('ایڈمن کو جمع کروائی گئی:', 'Handed over to Admin:'); ?> <strong class="text-primary">Rs. <?php echo number_format($active_col['total_transferred'] ?? 0); ?></strong>
                                 </div>
                             </div>
                             <div class="text-end">
@@ -2746,12 +2746,12 @@ include 'header.php';
                                 </h2>
                                 <span class="badge <?php echo $col_bal > 0 ? 'bg-warning text-dark border border-warning' : 'bg-success-subtle text-success border border-success'; ?> mt-1">
                                     <i class="fas <?php echo $col_bal > 0 ? 'fa-clock' : 'fa-check-circle'; ?> me-1"></i>
-                                    <?php echo $col_bal > 0 ? 'ایڈمن کو جمع کروانا باقی ہے' : 'تمام موصول شدہ رقم جمع ہو چکی ہے'; ?>
+                                    <?php echo $col_bal > 0 ? __('ایڈمن کو جمع کروانا باقی ہے', 'Pending handover to Admin') : __('تمام موصول شدہ رقم جمع ہو چکی ہے', 'All received cash handed over'); ?>
                                 </span>
                                 <?php if ($col_bal > 0): ?>
                                     <div class="mt-2">
                                         <button type="button" class="btn btn-sm btn-warning text-dark fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#fundTransferModal" onclick="prepareCollectionHandover(<?php echo (int)($active_col['account_id'] ?? 0); ?>, <?php echo $col_bal; ?>)">
-                                            <i class="fas fa-hand-holding-usd me-1"></i> ایڈمن کو رقم جمع کروائیں
+                                            <i class="fas fa-hand-holding-usd me-1"></i> <?php echo __('ایڈمن کو رقم جمع کروائیں', 'Hand over Cash to Admin'); ?>
                                         </button>
                                     </div>
                                 <?php endif; ?>
@@ -2765,22 +2765,22 @@ include 'header.php';
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2 pb-2 border-bottom">
                             <div class="d-flex align-items-center gap-2 flex-wrap">
                                 <span class="badge bg-success text-white fw-bold fs-6">
-                                    <i class="fas fa-hand-holding-usd me-1"></i> عملہ نقد وصولی کھاتہ (امانت):
+                                    <i class="fas fa-hand-holding-usd me-1"></i> <?php echo __('عملہ نقد وصولی کھاتہ (امانت):', 'Staff Cash Collection Account:'); ?>
                                 </span>
                                 <select class="form-select form-select-sm d-inline-block w-auto fw-bold text-dark border-success shadow-sm" onchange="window.location.href='simple_finance.php?col_user_acc=' + this.value">
                                     <?php foreach ($user_collection_summaries as $aid => $summ): 
                                         $u_col_bal = $summ['net_in_hand'];
                                     ?>
                                         <option value="<?php echo $aid; ?>" <?php echo ($aid === $selected_col_aid) ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($summ['user_label']); ?> (بقایا تحویل: Rs. <?php echo number_format(max(0, $u_col_bal)); ?>)
+                                            <?php echo htmlspecialchars($summ['user_label']); ?> (<?php echo __('بقایا تحویل:', 'In-Hand Balance:'); ?> Rs. <?php echo number_format(max(0, $u_col_bal)); ?>)
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="small text-muted">
-                                مجموعی وصولی: <strong class="text-success">Rs. <?php echo number_format($total_overall_collection_received); ?></strong> | 
-                                منتقل کردہ: <strong class="text-primary">Rs. <?php echo number_format($total_overall_collection_transferred); ?></strong> | 
-                                عملہ کے پاس بقایا امانت: <strong class="text-warning">Rs. <?php echo number_format(max(0, $total_overall_collection_balance)); ?></strong>
+                                <?php echo __('مجموعی وصولی:', 'Total Collection:'); ?> <strong class="text-success">Rs. <?php echo number_format($total_overall_collection_received); ?></strong> | 
+                                <?php echo __('منتقل کردہ:', 'Transferred:'); ?> <strong class="text-primary">Rs. <?php echo number_format($total_overall_collection_transferred); ?></strong> | 
+                                <?php echo __('عملہ کے پاس بقایا امانت:', 'Pending with Staff:'); ?> <strong class="text-warning">Rs. <?php echo number_format(max(0, $total_overall_collection_balance)); ?></strong>
                             </div>
                         </div>
 
@@ -2791,12 +2791,12 @@ include 'header.php';
                             <div>
                                 <h5 class="mb-1 fw-bold text-dark">
                                     <i class="fas fa-user-circle me-1 text-success"></i> 
-                                    نقد وصولی برائے: <span class="text-success"><?php echo htmlspecialchars($active_col['user_label']); ?></span>
+                                    <?php echo __('نقد وصولی برائے:', 'Cash Collection for:'); ?> <span class="text-success"><?php echo htmlspecialchars($active_col['user_label']); ?></span>
                                 </h5>
                                 <div class="small text-muted">
-                                    کل وصول کردہ فنڈز: <strong class="text-success">Rs. <?php echo number_format($active_col['total_collected']); ?></strong> | 
-                                    منہا اخراجات: <strong class="text-danger">Rs. <?php echo number_format($active_col['total_spent'] ?? 0); ?></strong> | 
-                                    مرکزی کیش میں جمع شدہ: <strong class="text-primary">Rs. <?php echo number_format($active_col['total_transferred']); ?></strong>
+                                    <?php echo __('کل وصول کردہ فنڈز:', 'Total Collected:'); ?> <strong class="text-success">Rs. <?php echo number_format($active_col['total_collected']); ?></strong> | 
+                                    <?php echo __('منہا اخراجات:', 'Expenses Deducted:'); ?> <strong class="text-danger">Rs. <?php echo number_format($active_col['total_spent'] ?? 0); ?></strong> | 
+                                    <?php echo __('مرکزی کیش میں جمع شدہ:', 'Deposited to Central Cash:'); ?> <strong class="text-primary">Rs. <?php echo number_format($active_col['total_transferred']); ?></strong>
                                 </div>
                             </div>
                             <div class="text-end">
@@ -2805,7 +2805,7 @@ include 'header.php';
                                 </h2>
                                 <span class="badge <?php echo $col_bal > 0 ? 'bg-warning text-dark border border-warning' : 'bg-success-subtle text-success border border-success'; ?> mt-1">
                                     <i class="fas <?php echo $col_bal > 0 ? 'fa-clock' : 'fa-check-circle'; ?> me-1"></i>
-                                    <?php echo $col_bal > 0 ? 'صارف کی تحویل میں رقم موجود ہے' : 'تمام موصول شدہ رقم جمع ہو چکی ہے'; ?>
+                                    <?php echo $col_bal > 0 ? __('صارف کی تحویل میں رقم موجود ہے', 'User holds cash') : __('تمام موصول شدہ رقم جمع ہو چکی ہے', 'All collected funds deposited'); ?>
                                 </span>
                             </div>
                         </div>
@@ -2817,8 +2817,8 @@ include 'header.php';
             <!-- آمدن اندراج فارم -->
             <div class="card shadow-sm border-0 neobox mb-4">
                 <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold text-white" style="color: #ffffff !important;"><i class="fas fa-arrow-down me-2 text-white"></i> آمدن اندراج (Income Entry)</h5>
-                    <span class="badge bg-light text-success fw-bold">آمدن</span>
+                    <h5 class="mb-0 fw-bold text-white" style="color: #ffffff !important;"><i class="fas fa-arrow-down me-2 text-white"></i> <?php echo __('آمدن اندراج (Income Entry)', 'Income Entry'); ?></h5>
+                    <span class="badge bg-light text-success fw-bold"><?php echo __('آمدن', 'Income'); ?></span>
                 </div>
                 <div class="card-body">
                     <?php 
@@ -2831,7 +2831,7 @@ include 'header.php';
                     <div class="alert alert-success d-flex justify-content-between align-items-center py-2 px-3 mb-3 border-success">
                         <div>
                             <i class="fas fa-receipt me-2 fs-5 text-success"></i>
-                            <strong class="text-dark">کمپیوٹرائزڈ رسید نمبر: </strong>
+                            <strong class="text-dark"><?php echo __('کمپیوٹرائزڈ رسید نمبر:', 'Computerized Receipt No:'); ?> </strong>
                         </div>
                         <span class="badge bg-success fs-6 fw-bold">#<?php echo $preview_comp_receipt; ?></span>
                     </div>
@@ -2843,7 +2843,7 @@ include 'header.php';
                         <div class="row g-3 mb-2">
                             <div class="col-md-12">
                                 <div class="p-2 bg-light border rounded d-flex align-items-center gap-2">
-                                    <label class="fw-bold form-label m-0 text-dark"><i class="fas fa-user-tag text-success me-1"></i> کس صارف کی آمدن ہے؟ (Record Owner):</label>
+                                    <label class="fw-bold form-label m-0 text-dark"><i class="fas fa-user-tag text-success me-1"></i> <?php echo __('کس صارف کی آمدن ہے؟ (Record Owner):', 'Record Owner:'); ?></label>
                                     <select name="form_user_id" class="form-select form-select-sm w-auto fw-bold text-dark border-success">
                                         <?php foreach ($sys_users as $su): ?>
                                             <option value="<?php echo $su['id']; ?>" <?php echo ((int)$su['id'] === (int)$user_id) ? 'selected' : ''; ?>>
@@ -2851,7 +2851,7 @@ include 'header.php';
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <small class="text-muted">(جس صارف کی وصولی میں یہ رسید درج کرنی ہو)</small>
+                                    <small class="text-muted"><?php echo __('(جس صارف کی وصولی میں یہ رسید درج کرنی ہو)', '(Select the user receiving this income)'); ?></small>
                                 </div>
                             </div>
                         </div>
@@ -2859,19 +2859,19 @@ include 'header.php';
 
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">تاریخ</label>
+                                <label class="fw-bold form-label"><?php echo __('تاریخ', 'Date'); ?></label>
                                 <input type="date" name="date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">مد (Income Head)</label>
+                                <label class="fw-bold form-label"><?php echo __('مد (Income Head)', 'Income Category'); ?></label>
                                 <div class="input-group">
                                     <select name="head_id" class="form-select" required style="color: #212529 !important; background-color: #ffffff !important;">
-                                        <option value="" style="color: #6c757d;">آمدن مد منتخب کریں</option>
+                                        <option value="" style="color: #6c757d;"><?php echo __('آمدن مد منتخب کریں', 'Select Income Head'); ?></option>
                                         <?php foreach($income_heads as $h): ?>
                                             <option value="<?php echo $h['id']; ?>" style="color: #212529 !important; background: #ffffff !important;"><?php echo htmlspecialchars(safe_localize_head($h['name'], $lang)); ?></option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#addHeadModal" onclick="setHeadTypeModal('Income')" title="نئی مد">
+                                    <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#addHeadModal" onclick="setHeadTypeModal('Income')" title="<?php echo __('نئی مد', 'New Category'); ?>">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -2880,11 +2880,11 @@ include 'header.php';
 
                         <div class="row g-3 mt-1">
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">رقم (Rs.)</label>
-                                <input type="number" step="0.01" name="amount" class="form-control" placeholder="مثلاً: 5000" required>
+                                <label class="fw-bold form-label"><?php echo __('رقم (Rs.)', 'Amount (Rs.)'); ?></label>
+                                <input type="number" step="0.01" name="amount" class="form-control" placeholder="<?php echo __('مثلاً: 5000', 'e.g. 5000'); ?>" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">کہاں جمع ہوئی؟ (وصولی کھاتہ)</label>
+                                <label class="fw-bold form-label"><?php echo __('کہاں جمع ہوئی؟ (وصولی کھاتہ)', 'Deposit To (Account)'); ?></label>
                                 <select name="account_id" class="form-select" style="color: #212529 !important; background-color: #ffffff !important;">
                                     <?php foreach($income_payment_accounts as $pa): ?>
                                         <option value="<?php echo $pa['id']; ?>" <?php 
@@ -2903,37 +2903,37 @@ include 'header.php';
 
                         <div class="row g-3 mt-1">
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">دینے والے کا نام (Donor)</label>
-                                <input type="text" name="donor_name" class="form-control" placeholder="مثلاً: احمد علی">
+                                <label class="fw-bold form-label"><?php echo __('دینے والے کا نام (Donor)', 'Donor / Payer Name'); ?></label>
+                                <input type="text" name="donor_name" class="form-control" placeholder="<?php echo __('مثلاً: احمد علی', 'e.g. Ahmad Ali'); ?>">
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">طریقہ وصولی (Method)</label>
+                                <label class="fw-bold form-label"><?php echo __('طریقہ وصولی (Method)', 'Payment Method'); ?></label>
                                 <select name="payment_method" class="form-select">
-                                    <option value="Cash">نقد رقم (Cash)</option>
-                                    <option value="Bank Transfer">آن لائن بینک ٹرانسفر (Online Transfer)</option>
-                                    <option value="Cheque">چیک (Cheque)</option>
+                                    <option value="Cash"><?php echo __('نقد رقم (Cash)', 'Cash'); ?></option>
+                                    <option value="Bank Transfer"><?php echo __('آن لائن بینک ٹرانسفر (Online Transfer)', 'Online Bank Transfer'); ?></option>
+                                    <option value="Cheque"><?php echo __('چیک (Cheque)', 'Cheque'); ?></option>
                                 </select>
                             </div>
                         </div>
 
                         <div class="row g-3 mt-1">
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">دستی رسید نمبر (Manual Receipt)</label>
-                                <input type="text" name="manual_receipt_no" class="form-control" placeholder="اختياری">
+                                <label class="fw-bold form-label"><?php echo __('دستی رسید نمبر (Manual Receipt)', 'Manual Receipt No'); ?></label>
+                                <input type="text" name="manual_receipt_no" class="form-control" placeholder="<?php echo __('اختياری', 'Optional'); ?>">
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">پتہ (Address)</label>
-                                <input type="text" name="donor_address" class="form-control" placeholder="اختياری">
+                                <label class="fw-bold form-label"><?php echo __('پتہ (Address)', 'Address'); ?></label>
+                                <input type="text" name="donor_address" class="form-control" placeholder="<?php echo __('اختياری', 'Optional'); ?>">
                             </div>
                         </div>
 
                         <div class="mt-3">
-                            <label class="fw-bold form-label">تفصیل (Description)</label>
-                            <textarea name="description" class="form-control" rows="2" placeholder="تفصیل لکھیے۔۔۔"></textarea>
+                            <label class="fw-bold form-label"><?php echo __('تفصیل (Description)', 'Description'); ?></label>
+                            <textarea name="description" class="form-control" rows="2" placeholder="<?php echo __('تفصیل لکھیے۔۔۔', 'Enter description...'); ?>"></textarea>
                         </div>
 
                         <button type="submit" name="add_record" class="btn btn-success w-100 fw-bold mt-3">
-                            <i class="fas fa-save me-1"></i> آمدن ریکارڈ محفوظ کریں
+                            <i class="fas fa-save me-1"></i> <?php echo __('آمدن ریکارڈ محفوظ کریں', 'Save Income Record'); ?>
                         </button>
                     </form>
                 </div>
@@ -2945,20 +2945,20 @@ include 'header.php';
             <?php else: ?>
             <div class="card shadow-sm border-0 neobox">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold text-white" style="color: #ffffff !important;"><i class="fas fa-list me-2 text-white"></i> آمدن انٹریز ہسٹری (کل: <?php echo count($income_records); ?>)</h5>
-                    <input type="text" id="searchIncome" class="form-control form-control-sm w-auto" placeholder="تلاش..." onkeyup="filterTable('incomeTable', 'searchIncome')">
+                    <h5 class="mb-0 fw-bold text-white" style="color: #ffffff !important;"><i class="fas fa-list me-2 text-white"></i> <?php echo __('آمدن انٹریز ہسٹری', 'Income Entries History'); ?> (<?php echo __('کل:', 'Total:'); ?> <?php echo count($income_records); ?>)</h5>
+                    <input type="text" id="searchIncome" class="form-control form-control-sm w-auto" placeholder="<?php echo __('تلاش...', 'Search...'); ?>" onkeyup="filterTable('incomeTable', 'searchIncome')">
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0 text-center" id="incomeTable">
                             <thead class="table-light">
                                 <tr>
-                                    <th>تاریخ</th>
-                                    <th>مد</th>
-                                    <th>رقم</th>
-                                    <th>رسید #</th>
-                                    <th>تفصیل / نام</th>
-                                    <th>ایکشن</th>
+                                    <th><?php echo __('تاریخ', 'Date'); ?></th>
+                                    <th><?php echo __('مد', 'Head / Category'); ?></th>
+                                    <th><?php echo __('رقم', 'Amount'); ?></th>
+                                    <th><?php echo __('رسید #', 'Receipt #'); ?></th>
+                                    <th><?php echo __('تفصیل / نام', 'Details / Name'); ?></th>
+                                    <th><?php echo __('ایکشن', 'Action'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2986,20 +2986,20 @@ include 'header.php';
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <a href="<?php echo $print_file; ?>?id=<?php echo $r['id']; ?>" class="btn btn-outline-primary" target="_blank" title="رسید پرنٹ"><i class="fas fa-print"></i></a>
-                                            <a href="edit_finance.php?id=<?php echo $r['id']; ?>" class="btn btn-outline-warning" title="ترمیم"><i class="fas fa-edit"></i></a>
-                                            <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟ اس سے رسید نمبر آزاد ہو جائے گا۔');">
+                                            <a href="<?php echo $print_file; ?>?id=<?php echo $r['id']; ?>" class="btn btn-outline-primary" target="_blank" title="<?php echo __('رسید پرنٹ', 'Print Receipt'); ?>"><i class="fas fa-print"></i></a>
+                                            <a href="edit_finance.php?id=<?php echo $r['id']; ?>" class="btn btn-outline-warning" title="<?php echo __('ترمیم', 'Edit'); ?>"><i class="fas fa-edit"></i></a>
+                                            <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('<?php echo __('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟ اس سے رسید نمبر آزاد ہو جائے گا۔', 'Are you sure you want to delete this record? This will release the receipt number.'); ?>');">
                                                 <?php echo csrf_field(); ?>
                                                 <input type="hidden" name="delete_record" value="1">
                                                 <input type="hidden" name="del_id" value="<?php echo $r['id']; ?>">
-                                                <button type="submit" class="btn btn-outline-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                                <button type="submit" class="btn btn-outline-danger" title="<?php echo __('ڈیلیٹ', 'Delete'); ?>"><i class="fas fa-trash"></i></button>
                                             </form>
                                         </div>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
                                 <?php if(count($income_records) == 0): ?>
-                                <tr><td colspan="6" class="text-center p-4 text-muted">کوئی آمدن ریکارڈ موجود نہیں</td></tr>
+                                <tr><td colspan="6" class="text-center p-4 text-muted"><?php echo __('کوئی آمدن ریکارڈ موجود نہیں', 'No income records found'); ?></td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -3018,8 +3018,8 @@ include 'header.php';
             <!-- خرچ اندراج فارم -->
             <div class="card shadow-sm border-0 neobox mb-4">
                 <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold text-white" style="color: #ffffff !important;"><i class="fas fa-arrow-up me-2 text-white"></i> خرچ اندراج (Expense Entry)</h5>
-                    <span class="badge bg-light text-danger fw-bold">اخراجات</span>
+                    <h5 class="mb-0 fw-bold text-white" style="color: #ffffff !important;"><i class="fas fa-arrow-up me-2 text-white"></i> <?php echo __('خرچ اندراج (Expense Entry)', 'Expense Entry'); ?></h5>
+                    <span class="badge bg-light text-danger fw-bold"><?php echo __('اخراجات', 'Expenses'); ?></span>
                 </div>
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data">
@@ -3029,7 +3029,7 @@ include 'header.php';
                         <div class="row g-3 mb-2">
                             <div class="col-md-12">
                                 <div class="p-2 bg-light border rounded d-flex align-items-center gap-2">
-                                    <label class="fw-bold form-label m-0 text-dark"><i class="fas fa-user-tag text-danger me-1"></i> کس صارف کا خرچ ہے؟ (Record Owner):</label>
+                                    <label class="fw-bold form-label m-0 text-dark"><i class="fas fa-user-tag text-danger me-1"></i> <?php echo __('کس صارف کا خرچ ہے؟ (Record Owner):', 'Record Owner:'); ?></label>
                                     <select name="form_user_id" class="form-select form-select-sm w-auto fw-bold text-dark border-danger">
                                         <?php foreach ($sys_users as $su): ?>
                                             <option value="<?php echo $su['id']; ?>" <?php echo ((int)$su['id'] === (int)$user_id) ? 'selected' : ''; ?>>
@@ -3037,7 +3037,7 @@ include 'header.php';
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <small class="text-muted">(جس صارف کے کھاتے سے یہ خرچ کاٹا جانا ہو)</small>
+                                    <small class="text-muted"><?php echo __('(جس صارف کے کھاتے سے یہ خرچ کاٹا جانا ہو)', '(Select the user whose account will be debited)'); ?></small>
                                 </div>
                             </div>
                         </div>
@@ -3045,19 +3045,19 @@ include 'header.php';
 
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">تاریخ</label>
+                                <label class="fw-bold form-label"><?php echo __('تاریخ', 'Date'); ?></label>
                                 <input type="date" name="date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">مد (Expense Head)</label>
+                                <label class="fw-bold form-label"><?php echo __('مد (Expense Head)', 'Expense Category'); ?></label>
                                 <div class="input-group">
                                     <select name="head_id" class="form-select" required onchange="checkSalaryExpenseHead(this)" style="color: #212529 !important; background-color: #ffffff !important;">
-                                        <option value="" style="color: #6c757d;">اخراجات مد منتخب کریں</option>
+                                        <option value="" style="color: #6c757d;"><?php echo __('اخراجات مد منتخب کریں', 'Select Expense Head'); ?></option>
                                         <?php foreach($expense_heads as $h): ?>
                                             <option value="<?php echo $h['id']; ?>" style="color: #212529 !important; background: #ffffff !important;"><?php echo htmlspecialchars(safe_localize_head($h['name'], $lang)); ?></option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#addHeadModal" onclick="setHeadTypeModal('Expense')" title="نئی مد">
+                                    <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#addHeadModal" onclick="setHeadTypeModal('Expense')" title="<?php echo __('نئی مد', 'New Category'); ?>">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -3066,11 +3066,11 @@ include 'header.php';
 
                         <div class="row g-3 mt-1">
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">رقم (Rs.)</label>
-                                <input type="number" step="0.01" name="amount" class="form-control" placeholder="مثلاً: 2500" required>
+                                <label class="fw-bold form-label"><?php echo __('رقم (Rs.)', 'Amount (Rs.)'); ?></label>
+                                <input type="number" step="0.01" name="amount" class="form-control" placeholder="<?php echo __('مثلاً: 2500', 'e.g. 2500'); ?>" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">کہاں سے ادا ہوئی؟ (ادائیگی کھاتہ)</label>
+                                <label class="fw-bold form-label"><?php echo __('کہاں سے ادا ہوئی؟ (ادائیگی کھاتہ)', 'Paid From (Account)'); ?></label>
                                 <select name="account_id" class="form-select" style="color: #212529 !important; background-color: #ffffff !important;">
                                     <?php foreach($expense_payment_accounts as $pa): 
                                         $pa_id = (int)$pa['id'];
@@ -3079,10 +3079,10 @@ include 'header.php';
                                         $extra_label = '';
                                         if ($adv_info) {
                                             $b = (float)$adv_info['net_balance'];
-                                            $extra_label = ' [بقایا: ' . ($b < 0 ? '-' : '+') . 'Rs. ' . number_format(abs($b)) . ']';
+                                            $extra_label = ' [' . __('بقایا:', 'Balance:') . ' ' . ($b < 0 ? '-' : '+') . 'Rs. ' . number_format(abs($b)) . ']';
                                         } elseif ($col_info) {
                                             $cb = (float)$col_info['net_in_hand'];
-                                            $extra_label = ' [بقایا امانت: Rs. ' . number_format(max(0, $cb)) . ']';
+                                            $extra_label = ' [' . __('بقایا امانت:', 'In-Hand:') . ' Rs. ' . number_format(max(0, $cb)) . ']';
                                         }
                                         $is_sel = false;
                                         if ($is_admin) {
@@ -3109,34 +3109,34 @@ include 'header.php';
 
                         <div class="row g-3 mt-1">
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">خرچ کرنے والے کا نام (Spender / Payee)</label>
-                                <input type="text" name="donor_name" class="form-control" placeholder="مثلاً: قاری صاحب / دکاندار">
+                                <label class="fw-bold form-label"><?php echo __('خرچ کرنے والے کا نام (Spender / Payee)', 'Spender / Payee Name'); ?></label>
+                                <input type="text" name="donor_name" class="form-control" placeholder="<?php echo __('مثلاً: قاری صاحب / دکاندار', 'e.g. Teacher / Vendor'); ?>">
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold form-label">طریقہ ادائیگی (Method)</label>
+                                <label class="fw-bold form-label"><?php echo __('طریقہ ادائیگی (Method)', 'Payment Method'); ?></label>
                                 <select name="payment_method" class="form-select">
-                                    <option value="Cash">نقد رقم (Cash)</option>
-                                    <option value="Bank Transfer">آن لائن بینک ٹرانسفر (Online Transfer)</option>
-                                    <option value="Cheque">چیک (Cheque)</option>
+                                    <option value="Cash"><?php echo __('نقد رقم (Cash)', 'Cash'); ?></option>
+                                    <option value="Bank Transfer"><?php echo __('آن لائن بینک ٹرانسفر (Online Transfer)', 'Online Bank Transfer'); ?></option>
+                                    <option value="Cheque"><?php echo __('چیک (Cheque)', 'Cheque'); ?></option>
                                 </select>
                             </div>
                         </div>
 
                         <div class="row g-3 mt-1">
                             <div class="col-md-12">
-                                <label class="fw-bold form-label text-dark"><i class="fas fa-file-invoice text-danger me-1"></i> خرچ کا بل / رسید (تصویر یا PDF اپلوڈ کریں)</label>
+                                <label class="fw-bold form-label text-dark"><i class="fas fa-file-invoice text-danger me-1"></i> <?php echo __('خرچ کا بل / رسید (تصویر یا PDF اپلوڈ کریں)', 'Upload Bill / Receipt (Image or PDF)'); ?></label>
                                 <input type="file" name="bill_file" class="form-control" accept="image/*,application/pdf">
-                                <small class="text-muted"><i class="fas fa-info-circle me-1"></i> آپ خرچ کے ثبوت کے طور پر بل یا رسید کی تصویر یا دستاویز یہاں منسلک کر کے سرور پر محفوظ کر سکتے ہیں۔</small>
+                                <small class="text-muted"><i class="fas fa-info-circle me-1"></i> <?php echo __('آپ خرچ کے ثبوت کے طور پر بل یا رسید کی تصویر یا دستاویز یہاں منسلک کر کے سرور پر محفوظ کر سکتے ہیں۔', 'Attach bill or receipt image/PDF as expense proof.'); ?></small>
                             </div>
                         </div>
 
                         <div class="mt-3">
-                            <label class="fw-bold form-label">تفصیل (Description)</label>
-                            <textarea name="description" class="form-control" rows="4" placeholder="اخراجات کی تفصیل لکھیے۔۔۔"></textarea>
+                            <label class="fw-bold form-label"><?php echo __('تفصیل (Description)', 'Description'); ?></label>
+                            <textarea name="description" class="form-control" rows="4" placeholder="<?php echo __('اخراجات کی تفصیل لکھیے۔۔۔', 'Enter expense details...'); ?>"></textarea>
                         </div>
 
                         <button type="submit" name="add_record" class="btn btn-danger w-100 fw-bold mt-3">
-                            <i class="fas fa-save me-1"></i> خرچ ریکارڈ محفوظ کریں
+                            <i class="fas fa-save me-1"></i> <?php echo __('خرچ ریکارڈ محفوظ کریں', 'Save Expense Record'); ?>
                         </button>
                     </form>
                 </div>
@@ -3148,19 +3148,19 @@ include 'header.php';
             <?php else: ?>
             <div class="card shadow-sm border-0 neobox">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold text-white" style="color: #ffffff !important;"><i class="fas fa-list me-2 text-white"></i> خرچ انٹریز ہسٹری (کل: <?php echo count($expense_records); ?>)</h5>
-                    <input type="text" id="searchExpense" class="form-control form-control-sm w-auto" placeholder="تلاش..." onkeyup="filterTable('expenseTable', 'searchExpense')">
+                    <h5 class="mb-0 fw-bold text-white" style="color: #ffffff !important;"><i class="fas fa-list me-2 text-white"></i> <?php echo __('خرچ انٹریز ہسٹری', 'Expense Entries History'); ?> (<?php echo __('کل:', 'Total:'); ?> <?php echo count($expense_records); ?>)</h5>
+                    <input type="text" id="searchExpense" class="form-control form-control-sm w-auto" placeholder="<?php echo __('تلاش...', 'Search...'); ?>" onkeyup="filterTable('expenseTable', 'searchExpense')">
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0 text-center" id="expenseTable">
                             <thead class="table-light">
                                 <tr>
-                                    <th>تاریخ</th>
-                                    <th>مد</th>
-                                    <th>رقم</th>
-                                    <th>تفصیل</th>
-                                    <th>ایکشن</th>
+                                    <th><?php echo __('تاریخ', 'Date'); ?></th>
+                                    <th><?php echo __('مد', 'Head / Category'); ?></th>
+                                    <th><?php echo __('رقم', 'Amount'); ?></th>
+                                    <th><?php echo __('تفصیل', 'Details'); ?></th>
+                                    <th><?php echo __('ایکشن', 'Action'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -3178,21 +3178,21 @@ include 'header.php';
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <?php if (!empty($r['bill_image'])): ?>
-                                                <a href="<?php echo htmlspecialchars($r['bill_image']); ?>" target="_blank" class="btn btn-outline-info" title="منسلک بل دیکھیں"><i class="fas fa-file-invoice-dollar"></i></a>
+                                                <a href="<?php echo htmlspecialchars($r['bill_image']); ?>" target="_blank" class="btn btn-outline-info" title="<?php echo __('منسلک بل دیکھیں', 'View Attached Bill'); ?>"><i class="fas fa-file-invoice-dollar"></i></a>
                                             <?php endif; ?>
-                                            <a href="edit_finance.php?id=<?php echo $r['id']; ?>" class="btn btn-outline-warning" title="ترمیم"><i class="fas fa-edit"></i></a>
-                                            <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟');">
+                                            <a href="edit_finance.php?id=<?php echo $r['id']; ?>" class="btn btn-outline-warning" title="<?php echo __('ترمیم', 'Edit'); ?>"><i class="fas fa-edit"></i></a>
+                                            <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('<?php echo __('کیا واقعی یہ ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟', 'Are you sure you want to delete this record?'); ?>');">
                                                 <?php echo csrf_field(); ?>
                                                 <input type="hidden" name="delete_record" value="1">
                                                 <input type="hidden" name="del_id" value="<?php echo $r['id']; ?>">
-                                                <button type="submit" class="btn btn-outline-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                                <button type="submit" class="btn btn-outline-danger" title="<?php echo __('ڈیلیٹ', 'Delete'); ?>"><i class="fas fa-trash"></i></button>
                                             </form>
                                         </div>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
                                 <?php if(count($expense_records) == 0): ?>
-                                <tr><td colspan="5" class="text-center p-4 text-muted">کوئی خرچ ریکارڈ موجود نہیں</td></tr>
+                                <tr><td colspan="5" class="text-center p-4 text-muted"><?php echo __('کوئی خرچ ریکارڈ موجود نہیں', 'No expense records found'); ?></td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -3210,21 +3210,21 @@ include 'header.php';
         <div class="col-lg-12">
                     <div class="card shadow-sm border-0 neobox">
                 <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold"><i class="fas fa-exchange-alt me-2"></i> حالیہ رقم منتقلی / ایڈوانس ہسٹری (Recent Transfers)</h5>
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-exchange-alt me-2"></i> <?php echo __('حالیہ رقم منتقلی / ایڈوانس ہسٹری (Recent Transfers)', 'Recent Transfers / Advance History'); ?></h5>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0 text-center">
                             <thead class="table-light">
                                 <tr>
-                                    <th>تاریخ</th>
-                                    <th>کہاں سے رقم نکلی (From)</th>
-                                    <th>کس کو ملی (To)</th>
-                                    <th>رقم</th>
-                                    <th>تفصیل</th>
-                                    <th>واؤچر نمبر</th>
+                                    <th><?php echo __('تاریخ', 'Date'); ?></th>
+                                    <th><?php echo __('کہاں سے رقم نکلی (From)', 'Transfer From'); ?></th>
+                                    <th><?php echo __('کس کو ملی (To)', 'Transfer To'); ?></th>
+                                    <th><?php echo __('رقم', 'Amount'); ?></th>
+                                    <th><?php echo __('تفصیل', 'Description'); ?></th>
+                                    <th><?php echo __('واؤچر نمبر', 'Voucher No'); ?></th>
                                     <?php if($is_admin): ?>
-                                    <th>ایکشن</th>
+                                    <th><?php echo __('ایکشن', 'Action'); ?></th>
                                     <?php endif; ?>
                                 </tr>
                             </thead>
@@ -3240,14 +3240,14 @@ include 'header.php';
                                     <?php if($is_admin): ?>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-warning" title="ترمیم" onclick="openEditTransferModal(<?php echo $tr['id']; ?>, '<?php echo $tr['date']; ?>', <?php echo $tr['amount']; ?>, '<?php echo htmlspecialchars(addslashes($tr['description'])); ?>')">
+                                            <button type="button" class="btn btn-outline-warning" title="<?php echo __('ترمیم', 'Edit'); ?>" onclick="openEditTransferModal(<?php echo $tr['id']; ?>, '<?php echo $tr['date']; ?>', <?php echo $tr['amount']; ?>, '<?php echo htmlspecialchars(addslashes($tr['description'])); ?>')">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('کیا واقعی یہ ٹرانسفر ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟');">
+                                            <form method="POST" action="simple_finance.php" style="display:inline-block;" onsubmit="return confirm('<?php echo __('کیا واقعی یہ ٹرانسفر ریکارڈ ڈیلیٹ کرنا چاہتے ہیں؟', 'Are you sure you want to delete this transfer record?'); ?>');">
                                                 <?php echo csrf_field(); ?>
                                                 <input type="hidden" name="delete_transfer" value="1">
                                                 <input type="hidden" name="del_transfer_id" value="<?php echo $tr['id']; ?>">
-                                                <button type="submit" class="btn btn-outline-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
+                                                <button type="submit" class="btn btn-outline-danger" title="<?php echo __('ڈیلیٹ', 'Delete'); ?>"><i class="fas fa-trash"></i></button>
                                             </form>
                                         </div>
                                     </td>
@@ -3255,7 +3255,7 @@ include 'header.php';
                                 </tr>
                                 <?php endforeach; ?>
                                 <?php if(empty($transfer_records)): ?>
-                                <tr><td colspan="<?php echo $is_admin ? '7' : '6'; ?>" class="text-center p-4 text-muted">کوئی حالیہ رقم منتقلی ریکارڈ موجود نہیں</td></tr>
+                                <tr><td colspan="<?php echo $is_admin ? '7' : '6'; ?>" class="text-center p-4 text-muted"><?php echo __('کوئی حالیہ رقم منتقلی ریکارڈ موجود نہیں', 'No recent transfer records found'); ?></td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -3274,25 +3274,25 @@ include 'header.php';
             <form method="POST">
                 <?php echo csrf_field(); ?>
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">نئی مد (Head) شامل کریں</h5>
+                    <h5 class="modal-title"><?php echo __('نئی مد (Head) شامل کریں', 'Add New Head / Category'); ?></h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="fw-bold form-label">مد کا نام</label>
-                        <input type="text" name="head_name" class="form-control" placeholder="مثلاً: بجلی کا بل، عطیات، راشن" required>
+                        <label class="fw-bold form-label"><?php echo __('مد کا نام', 'Category Name'); ?></label>
+                        <input type="text" name="head_name" class="form-control" placeholder="<?php echo __('مثلاً: بجلی کا بل، عطیات، راشن', 'e.g. Utility Bills, Donations, Food'); ?>" required>
                     </div>
                     <div class="mb-3">
-                        <label class="fw-bold form-label">قسم (Type)</label>
+                        <label class="fw-bold form-label"><?php echo __('قسم (Type)', 'Type'); ?></label>
                         <select name="head_type" class="form-select" id="modal_head_type" required>
-                            <option value="Income">آمدن (Income)</option>
-                            <option value="Expense">اخراجات (Expense)</option>
+                            <option value="Income"><?php echo __('آمدن (Income)', 'Income'); ?></option>
+                            <option value="Expense"><?php echo __('اخراجات (Expense)', 'Expense'); ?></option>
                         </select>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                    <button type="submit" name="add_head" class="btn btn-primary fw-bold">محفوظ کریں</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                    <button type="submit" name="add_head" class="btn btn-primary fw-bold"><?php echo __('محفوظ کریں', 'Save'); ?></button>
                 </div>
             </form>
         </div>
@@ -3306,19 +3306,19 @@ include 'header.php';
             <form method="POST">
                 <?php echo csrf_field(); ?>
                 <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title fw-bold" id="fundTransferModalLabel"><i class="fas fa-exchange-alt me-2"></i> رقم منتقلی (ایڈوانس / ٹرانسفر)</h5>
+                    <h5 class="modal-title fw-bold" id="fundTransferModalLabel"><i class="fas fa-exchange-alt me-2"></i> <?php echo __('رقم منتقلی (ایڈوانس / ٹرانسفر)', 'Fund Transfer / Advance'); ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label fw-bold">تاریخ منتقلی</label>
+                        <label class="form-label fw-bold"><?php echo __('تاریخ منتقلی', 'Transfer Date'); ?></label>
                         <input type="date" name="transfer_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">کہاں سے رقم نکلی؟ (Sender / From)</label>
+                        <label class="form-label fw-bold"><?php echo __('کہاں سے رقم نکلی؟ (Sender / From)', 'Transfer From (Sender)'); ?></label>
                         <select name="from_account_id" id="transfer_from_account_id" class="form-select" required>
-                            <option value="">منتخب کریں</option>
-                            <optgroup label="اکاؤنٹس (Accounts)">
+                            <option value=""><?php echo __('منتخب کریں', 'Select Account'); ?></option>
+                            <optgroup label="<?php echo __('اکاؤنٹس (Accounts)', 'Accounts'); ?>">
                             <?php foreach($all_payment_accounts as $pa): 
                                 if (!$is_admin && ($is_other_advance_account($pa['name'] ?? '') || $is_other_collection_account($pa['name'] ?? ''))) continue;
                             ?>
@@ -3327,31 +3327,31 @@ include 'header.php';
                                 </option>
                             <?php endforeach; ?>
                             </optgroup>
-                            <optgroup label="نقد وصولی امانت برائے عملہ (Collection In-Hand)">
+                            <optgroup label="<?php echo __('نقد وصولی امانت برائے عملہ (Collection In-Hand)', 'Staff Collection In-Hand'); ?>">
                             <?php foreach($sys_users as $su): 
                                 if (!$is_admin && (int)$su['id'] !== (int)$user_id) continue;
                             ?>
                                 <option value="col_<?php echo $su['id']; ?>">
-                                    نقد وصولی - <?php echo htmlspecialchars(!empty($su['name']) ? $su['name'] : $su['username']); ?>
+                                    <?php echo __('نقد وصولی - ', 'Collection - ') . htmlspecialchars(!empty($su['name']) ? $su['name'] : $su['username']); ?>
                                 </option>
                             <?php endforeach; ?>
                             </optgroup>
-                            <optgroup label="یوزرز ایڈوانس (User Advance)">
+                            <optgroup label="<?php echo __('یوزرز ایڈوانس (User Advance)', 'User Advance'); ?>">
                             <?php foreach($sys_users as $su): 
                                 if (!$is_admin && (int)$su['id'] !== (int)$user_id) continue;
                             ?>
                                 <option value="user_<?php echo $su['id']; ?>">
-                                    ایڈوانس - <?php echo htmlspecialchars(!empty($su['name']) ? $su['name'] : $su['username']); ?>
+                                    <?php echo __('ایڈوانس - ', 'Advance - ') . htmlspecialchars(!empty($su['name']) ? $su['name'] : $su['username']); ?>
                                 </option>
                             <?php endforeach; ?>
                             </optgroup>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">کہاں رقم جمع ہوئی؟ (Receiver / To)</label>
+                        <label class="form-label fw-bold"><?php echo __('کہاں رقم جمع ہوئی؟ (Receiver / To)', 'Transfer To (Receiver)'); ?></label>
                         <select name="to_account_id" id="transfer_to_account_id" class="form-select" required>
-                            <option value="">منتخب کریں</option>
-                            <optgroup label="اکاؤنٹس (Accounts)">
+                            <option value=""><?php echo __('منتخب کریں', 'Select Account'); ?></option>
+                            <optgroup label="<?php echo __('اکاؤنٹس (Accounts)', 'Accounts'); ?>">
                             <?php foreach($all_payment_accounts as $pa): 
                                 if (!$is_admin && ($is_other_advance_account($pa['name'] ?? '') || $is_other_collection_account($pa['name'] ?? ''))) continue;
                             ?>
@@ -3360,41 +3360,41 @@ include 'header.php';
                                 </option>
                             <?php endforeach; ?>
                             </optgroup>
-                            <optgroup label="نقد وصولی امانت برائے عملہ (Collection In-Hand)">
+                            <optgroup label="<?php echo __('نقد وصولی امانت برائے عملہ (Collection In-Hand)', 'Staff Collection In-Hand'); ?>">
                             <?php foreach($sys_users as $su): 
                                 if (!$is_admin && (int)$su['id'] !== (int)$user_id) continue;
                             ?>
                                 <option value="col_<?php echo $su['id']; ?>">
-                                    نقد وصولی - <?php echo htmlspecialchars(!empty($su['name']) ? $su['name'] : $su['username']); ?>
+                                    <?php echo __('نقد وصولی - ', 'Collection - ') . htmlspecialchars(!empty($su['name']) ? $su['name'] : $su['username']); ?>
                                 </option>
                             <?php endforeach; ?>
                             </optgroup>
-                            <optgroup label="یوزرز ایڈوانس (User Advance)">
+                            <optgroup label="<?php echo __('یوزرز ایڈوانس (User Advance)', 'User Advance'); ?>">
                             <?php foreach($sys_users as $su): 
                                 if (!$is_admin && (int)$su['id'] !== (int)$user_id) continue;
                             ?>
                                 <option value="user_<?php echo $su['id']; ?>">
-                                    ایڈوانس - <?php echo htmlspecialchars(!empty($su['name']) ? $su['name'] : $su['username']); ?>
+                                    <?php echo __('ایڈوانس - ', 'Advance - ') . htmlspecialchars(!empty($su['name']) ? $su['name'] : $su['username']); ?>
                                 </option>
                             <?php endforeach; ?>
                             </optgroup>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">منتقل کردہ رقم (Rs.)</label>
-                        <input type="number" step="0.01" min="1" name="transfer_amount" class="form-control" placeholder="مثلاً: 25000" required>
+                        <label class="form-label fw-bold"><?php echo __('منتقل کردہ رقم (Rs.)', 'Transfer Amount (Rs.)'); ?></label>
+                        <input type="number" step="0.01" min="1" name="transfer_amount" class="form-control" placeholder="<?php echo __('مثلاً: 25000', 'e.g. 25000'); ?>" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">تفصیل / وجہ منتقلی (Description)</label>
-                        <textarea name="transfer_description" class="form-control" rows="2" placeholder="مثلاً: کیش بکس سے بینک اکاؤنٹ میں رقم جمع کرائی گئی۔۔۔"></textarea>
+                        <label class="form-label fw-bold"><?php echo __('تفصیل / وجہ منتقلی (Description)', 'Description'); ?></label>
+                        <textarea name="transfer_description" class="form-control" rows="2" placeholder="<?php echo __('مثلاً: کیش بکس سے بینک اکاؤنٹ میں رقم جمع کرائی گئی۔۔۔', 'e.g. Transferred from Cash box to Bank account...'); ?>"></textarea>
                     </div>
                     <div class="alert alert-info py-2 small mb-0">
-                        <i class="fas fa-info-circle me-1"></i> یہ اندراج کیش اور بینک دونوں کھاتوں کو خودکار متوازن رکھے گا اور آمدن یا خرچ پر غلط اثر نہیں ڈالے گا۔
+                        <i class="fas fa-info-circle me-1"></i> <?php echo __('یہ اندراج کیش اور بینک دونوں کھاتوں کو خودکار متوازن رکھے گا اور آمدن یا خرچ پر غلط اثر نہیں ڈالے گا۔', 'This entry balances both Cash and Bank accounts automatically.'); ?>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                    <button type="submit" name="transfer_funds" class="btn btn-warning fw-bold text-dark"><i class="fas fa-check me-1"></i> رقم منتقل کریں</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                    <button type="submit" name="transfer_funds" class="btn btn-warning fw-bold text-dark"><i class="fas fa-check me-1"></i> <?php echo __('رقم منتقل کریں', 'Transfer Funds'); ?></button>
                 </div>
             </form>
         </div>
@@ -3408,27 +3408,27 @@ include 'header.php';
             <form method="POST">
                 <?php echo csrf_field(); ?>
                 <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title fw-bold" id="editTransferModalLabel"><i class="fas fa-edit me-2"></i> ترمیم رقم منتقلی (ایڈوانس / ٹرانسفر)</h5>
+                    <h5 class="modal-title fw-bold" id="editTransferModalLabel"><i class="fas fa-edit me-2"></i> <?php echo __('ترمیم رقم منتقلی (ایڈوانس / ٹرانسفر)', 'Edit Transfer'); ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="edit_transfer_id" id="edit_transfer_id">
                     <div class="mb-3">
-                        <label class="form-label fw-bold">تاریخ منتقلی</label>
+                        <label class="form-label fw-bold"><?php echo __('تاریخ منتقلی', 'Transfer Date'); ?></label>
                         <input type="date" name="edit_transfer_date" id="edit_transfer_date" class="form-control" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">منتقل کردہ رقم (Rs.)</label>
+                        <label class="form-label fw-bold"><?php echo __('منتقل کردہ رقم (Rs.)', 'Transfer Amount (Rs.)'); ?></label>
                         <input type="number" step="0.01" min="1" name="edit_transfer_amount" id="edit_transfer_amount" class="form-control" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">تفصیل / وجہ منتقلی (Description)</label>
+                        <label class="form-label fw-bold"><?php echo __('تفصیل / وجہ منتقلی (Description)', 'Description'); ?></label>
                         <textarea name="edit_transfer_description" id="edit_transfer_description" class="form-control" rows="2"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                    <button type="submit" name="edit_transfer" class="btn btn-warning fw-bold text-dark"><i class="fas fa-save me-1"></i> محفوظ کریں</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                    <button type="submit" name="edit_transfer" class="btn btn-warning fw-bold text-dark"><i class="fas fa-save me-1"></i> <?php echo __('محفوظ کریں', 'Save'); ?></button>
                 </div>
             </form>
         </div>
@@ -3441,7 +3441,7 @@ include 'header.php';
         <div class="modal-content border-0 shadow-lg">
             <div class="modal-header bg-warning text-dark border-0">
                 <h5 class="modal-title fw-bold" id="salaryRestrictionModalLabel">
-                    <i class="fas fa-exclamation-triangle me-2 text-danger"></i> اہم تنبیہ: وظائف و تنخواہ
+                    <i class="fas fa-exclamation-triangle me-2 text-danger"></i> <?php echo __('اہم تنبیہ: وظائف و تنخواہ', 'Important Notice: Staff Payroll'); ?>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -3449,15 +3449,15 @@ include 'header.php';
                 <div class="mb-3 text-warning">
                     <i class="fas fa-hand-holding-usd fa-3x"></i>
                 </div>
-                <h6 class="fw-bold mb-3 text-danger">وظیفہ، تنخواہ وغیرہ کی ادائیگی کا اندراج عام خرچ میں نہیں ہو سکتا!</h6>
+                <h6 class="fw-bold mb-3 text-danger"><?php echo __('وظیفہ، تنخواہ وغیرہ کی ادائیگی کا اندراج عام خرچ میں نہیں ہو سکتا!', 'Payroll/salary payment cannot be recorded as regular expense!'); ?></h6>
                 <p class="text-secondary mb-0" style="font-size: 15px; line-height: 1.6;">
-                    وظیفہ یا تنخواہ کی ادائیگی کا باقاعدہ اندراج <strong>"وظائف عملہ"</strong> والے صفحے پر ہی کیا جا سکتا ہے تاکہ تمام حسابات، غیر حاضری اور حاضری کٹوتیاں بالکل درست رہیں۔ لہذا آپ اس پیج پر جا کر انٹری فرمائیں۔
+                    <?php echo __('وظیفہ یا تنخواہ کی ادائیگی کا باقاعدہ اندراج <strong>"وظائف عملہ"</strong> والے صفحے پر ہی کیا جا سکتا ہے تاکہ تمام حسابات، غیر حاضری اور حاضری کٹوتیاں بالکل درست رہیں۔ لہذا آپ اس پیج پر جا کر انٹری فرمائیں۔', 'Stipends/salaries must be recorded in <strong>"Staff Payroll"</strong> page for correct calculations and deductions.'); ?>
                 </p>
             </div>
             <div class="modal-footer border-0 justify-content-center bg-light">
-                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">بند کریں</button>
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal"><?php echo __('بند کریں', 'Close'); ?></button>
                 <a href="acc_payroll.php" class="btn btn-primary fw-bold px-4">
-                    <i class="fas fa-money-check-alt me-1"></i> وظائف عملہ پیج پر جائیں
+                    <i class="fas fa-money-check-alt me-1"></i> <?php echo __('وظائف عملہ پیج پر جائیں', 'Go to Staff Payroll'); ?>
                 </a>
             </div>
         </div>
@@ -3470,7 +3470,7 @@ include 'header.php';
         <div class="modal-content border-0 shadow-lg" style="border-radius: 12px; overflow: hidden;">
             <div class="modal-header text-white border-0" style="background: #1e293b;">
                 <h5 class="modal-title fw-bold" id="adminOtpsModalLabel">
-                    <i class="fas fa-shield-alt text-warning me-2"></i> فنانس انٹری ترمیم کی اجازت / OTP درخواستیں
+                    <i class="fas fa-shield-alt text-warning me-2"></i> <?php echo __('فنانس انٹری ترمیم کی اجازت / OTP درخواستیں', 'Finance Edit OTP Requests'); ?>
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -3478,7 +3478,7 @@ include 'header.php';
                 <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mb-3">
                     <i class="fas fa-info-circle fa-2x me-3 text-primary"></i>
                     <div>
-                        <strong>ایڈمن کی سیکیورٹی معلومات:</strong> جب کوئی استاذ یا ناظم اپنی سابقہ آمدن یا خرچ کی انٹری میں تبدیلی کرنا چاہتا ہے، تو سسٹم یہاں ایک 6 ہندسوں کا ون ٹائم پاسورڈ (OTP) بھیجتا ہے۔ یہ OTP متعلقہ استاذ کو فراہم کریں تاکہ وہ انٹری ایڈٹ کر سکیں۔ یہ کوڈ 24 گھنٹے تک کارآمد رہتا ہے۔
+                        <strong><?php echo __('ایڈمن کی سیکیورٹی معلومات:', 'Admin Security Notice:'); ?></strong> <?php echo __('جب کوئی استاذ یا ناظم اپنی سابقہ آمدن یا خرچ کی انٹری میں تبدیلی کرنا چاہتا ہے، تو سسٹم یہاں ایک 6 ہندسوں کا ون ٹائم پاسورڈ (OTP) بھیجتا ہے۔ یہ OTP متعلقہ استاذ کو فراہم کریں تاکہ وہ انٹری ایڈٹ کر سکیں۔ یہ کوڈ 24 گھنٹے تک کارآمد رہتا ہے۔', 'When a staff member requests to edit an entry, a 6-digit OTP appears here. Share this OTP with them to authorize edits. Valid for 24 hours.'); ?>
                     </div>
                 </div>
 
@@ -3488,19 +3488,19 @@ include 'header.php';
                 ?>
                     <div class="text-center py-5 bg-white rounded shadow-sm">
                         <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                        <h5 class="fw-bold text-dark">اس وقت کوئی زیر التواء OTP درخواست موجود نہیں ہے۔</h5>
-                        <p class="text-muted mb-0">جب بھی کوئی صارف انٹری ایڈٹ کرنے کی درخواست کرے گا، وہ کوڈ فوری طور پر یہاں دکھائی دے گا۔</p>
+                        <h5 class="fw-bold text-dark"><?php echo __('اس وقت کوئی زیر التواء OTP درخواست موجود نہیں ہے۔', 'No pending OTP requests at this time.'); ?></h5>
+                        <p class="text-muted mb-0"><?php echo __('جب بھی کوئی صارف انٹری ایڈٹ کرنے کی درخواست کرے گا، وہ کوڈ فوری طور پر یہاں دکھائی دے گا۔', 'When a user requests to edit an entry, the OTP code will appear here.'); ?></p>
                     </div>
                 <?php else: ?>
                     <div class="table-responsive bg-white rounded shadow-sm p-3">
                         <table class="table table-hover align-middle text-center mb-0">
                             <thead class="table-dark">
                                 <tr>
-                                    <th>درخواست گزار</th>
-                                    <th>انٹری تفصیل</th>
-                                    <th>رقم و تاریخ</th>
-                                    <th>OTP کوڈ</th>
-                                    <th>باقی وقت</th>
+                                    <th><?php echo __('درخواست گزار', 'Requester'); ?></th>
+                                    <th><?php echo __('انٹری تفصیل', 'Entry Details'); ?></th>
+                                    <th><?php echo __('رقم و تاریخ', 'Amount & Date'); ?></th>
+                                    <th><?php echo __('OTP کوڈ', 'OTP Code'); ?></th>
+                                    <th><?php echo __('باقی وقت', 'Remaining Time'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -3513,7 +3513,7 @@ include 'header.php';
                                     </td>
                                     <td class="text-start">
                                         <span class="badge <?php echo ($otp['finance_type'] === 'Income') ? 'bg-success' : 'bg-danger'; ?> mb-1">
-                                            <?php echo ($otp['finance_type'] === 'Income') ? 'آمدن' : 'خرچ'; ?> #<?php echo $otp['finance_id']; ?>
+                                            <?php echo ($otp['finance_type'] === 'Income') ? __('آمدن', 'Income') : __('خرچ', 'Expense'); ?> #<?php echo $otp['finance_id']; ?>
                                         </span>
                                         <div class="small fw-bold text-dark"><?php echo htmlspecialchars($otp['finance_head'] ?? '---'); ?></div>
                                         <div class="small text-muted text-truncate" style="max-width: 180px;"><?php echo htmlspecialchars($otp['finance_description'] ?? ''); ?></div>
@@ -3532,7 +3532,7 @@ include 'header.php';
                                     </td>
                                     <td>
                                         <span class="badge bg-secondary text-white">
-                                            <i class="fas fa-hourglass-half me-1"></i> <?php echo $otp['remaining_minutes']; ?> منٹ
+                                            <i class="fas fa-hourglass-half me-1"></i> <?php echo $otp['remaining_minutes']; ?> <?php echo __('منٹ', 'mins'); ?>
                                         </span>
                                     </td>
                                 </tr>
@@ -3543,7 +3543,7 @@ include 'header.php';
                 <?php endif; ?>
             </div>
             <div class="modal-footer border-0 bg-light">
-                <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal">بند کریں</button>
+                <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal"><?php echo __('بند کریں', 'Close'); ?></button>
             </div>
         </div>
     </div>

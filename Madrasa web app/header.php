@@ -1,4 +1,4 @@
-<?php 
+﻿<?php 
 require_once __DIR__ . '/session_init.php';
 if (session_status() === PHP_SESSION_NONE) { madrasa_safe_session_start(); }
 try {
@@ -704,6 +704,8 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                     <?php if($is_admin): ?>
                     <a href="manage_users.php" class="list-group-item"><i class="fas fa-users-cog me-2"></i> <?php echo t('manage_users'); ?></a>
                     <a href="settings.php" class="list-group-item"><i class="fas fa-cog me-2"></i> <?php echo t('settings'); ?></a>
+                    <a href="data_backup.php" class="list-group-item"><i class="fas fa-database me-2 text-info"></i> <?php echo ($lang=='ur') ? 'ڈیٹا بیک اپ و ایکسپورٹ' : 'Data Backup & Export'; ?></a>
+                    <a href="cleanup_tenant_data.php" class="list-group-item"><i class="fas fa-broom me-2 text-danger"></i> <?php echo ($lang=='ur') ? 'ٹیسٹ ڈیٹا صفائی' : 'Cleanup Test Data'; ?></a>
                     <a href="subscription_status.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='subscription_status.php'?'active-link':''; ?>"><i class="fas fa-gem me-2 text-warning"></i> <?php echo ($lang=='ur') ? 'سبسکرپشن و فیس کیفیت' : 'Subscription & Status'; ?></a>
                     <?php endif; ?>
                 

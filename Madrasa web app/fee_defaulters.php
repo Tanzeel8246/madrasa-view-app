@@ -88,29 +88,29 @@ $bulk_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
 $bulk_msg .= "_منجانب: ادارہ اشرف المدارس فروکہ_";
 ?>
 
-<div class="container-fluid py-3" dir="rtl">
+<div class="container-fluid py-3" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
 
     <div class="card p-3 mb-4 bg-light shadow-sm border-0 rounded-3 d-print-none">
         <form method="GET" class="row g-2 align-items-end">
             <div class="col-md-3">
-                <label class="fw-bold small mb-1">ماہ (Month):</label>
+                <label class="fw-bold small mb-1"><?php echo __('ماہ (Month):', 'Month:'); ?></label>
                 <input type="month" name="month" class="form-control fw-bold" value="<?php echo htmlspecialchars($selected_month); ?>" onchange="this.form.submit()" required>
             </div>
             <div class="col-md-3">
-                <label class="fw-bold small mb-1">درجہ (Class):</label>
+                <label class="fw-bold small mb-1"><?php echo __('درجہ (Class):', 'Class:'); ?></label>
                 <select name="class" class="form-select" onchange="this.form.submit()">
-                    <option value="">تمام درجات (All Classes)</option>
+                    <option value=""><?php echo __('تمام درجات (All Classes)', 'All Classes'); ?></option>
                     <?php foreach($classes as $c): ?>
                     <option value="<?php echo htmlspecialchars($c); ?>" <?php echo ($selected_class == $c) ? 'selected' : ''; ?>><?php echo htmlspecialchars($c); ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="fw-bold small mb-1">تلاش (Search):</label>
-                <input type="text" name="search" class="form-control" placeholder="نام یا ولدیت لکھیں..." value="<?php echo htmlspecialchars($search); ?>">
+                <label class="fw-bold small mb-1"><?php echo __('تلاش (Search):', 'Search:'); ?></label>
+                <input type="text" name="search" class="form-control" placeholder="<?php echo __('نام یا ولدیت لکھیں...', 'Search name or father...'); ?>" value="<?php echo htmlspecialchars($search); ?>">
             </div>
             <div class="col-md-3 d-flex gap-2">
-                <button type="submit" class="btn btn-primary fw-bold w-100"><i class="fas fa-search me-1"></i> تلاش کریں</button>
+                <button type="submit" class="btn btn-primary fw-bold w-100"><i class="fas fa-search me-1"></i> <?php echo __('تلاش کریں', 'Search'); ?></button>
                 <button type="button" onclick="window.print()" class="btn btn-dark fw-bold"><i class="fas fa-print"></i></button>
             </div>
         </form>
@@ -119,13 +119,13 @@ $bulk_msg .= "_منجانب: ادارہ اشرف المدارس فروکہ_";
     <div class="card shadow-sm border-0 rounded-3">
         <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center py-3">
             <div class="fw-bold fs-5">
-                <i class="fas fa-exclamation-circle me-2"></i> واجب الادا فیس کی فہرست (بابت ماہ: <?php echo $month_title; ?>)
+                <i class="fas fa-exclamation-circle me-2"></i> <?php echo __('واجب الادا فیس کی فہرست', 'Fee Defaulters List'); ?> (<?php echo __('بابت ماہ:', 'For Month:'); ?> <?php echo $month_title; ?>)
             </div>
             <div class="d-flex gap-2 d-print-none">
                 <button type="button" class="btn btn-success fw-bold btn-sm" data-bs-toggle="modal" data-bs-target="#bulkWAModal">
-                    <i class="fab fa-whatsapp me-1"></i> تمام لسٹ WhatsApp متن
+                    <i class="fab fa-whatsapp me-1"></i> <?php echo __('تمام لسٹ WhatsApp متن', 'Bulk WhatsApp Text'); ?>
                 </button>
-                <span class="badge bg-white text-danger fs-6 align-self-center">کل تعداد: <?php echo count($defaulters); ?></span>
+                <span class="badge bg-white text-danger fs-6 align-self-center"><?php echo __('کل تعداد:', 'Total:'); ?> <?php echo count($defaulters); ?></span>
             </div>
         </div>
 
@@ -133,20 +133,20 @@ $bulk_msg .= "_منجانب: ادارہ اشرف المدارس فروکہ_";
             <table class="table table-hover table-bordered align-middle text-center mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <th style="width: 50px;">شمار</th>
-                        <th>نام طالب علم</th>
-                        <th>ولدیت</th>
-                        <th>درجہ / کلاس</th>
-                        <th>فون نمبر</th>
-                        <th>ماہانہ فیس</th>
-                        <th class="d-print-none">ایکشن (WhatsApp یاددہانی)</th>
+                        <th style="width: 50px;">#</th>
+                        <th><?php echo __('نام طالب علم', 'Student Name'); ?></th>
+                        <th><?php echo __('ولدیت', 'Father Name'); ?></th>
+                        <th><?php echo __('درجہ / کلاس', 'Class'); ?></th>
+                        <th><?php echo __('فون نمبر', 'Phone'); ?></th>
+                        <th><?php echo __('ماہانہ فیس', 'Monthly Fee'); ?></th>
+                        <th class="d-print-none"><?php echo __('ایکشن (WhatsApp یاددہانی)', 'Action (WhatsApp)'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if(empty($defaulters)): ?>
                     <tr>
                         <td colspan="7" class="py-4 text-success fw-bold fs-5">
-                            <i class="fas fa-check-circle me-2"></i> تمام طلبہ کی فیس ادا شدہ ہے! ماشاء اللہ
+                            <i class="fas fa-check-circle me-2"></i> <?php echo __('تمام طلبہ کی فیس ادا شدہ ہے! ماشاء اللہ', 'All student fees are fully paid! Alhamdulillah'); ?>
                         </td>
                     </tr>
                     <?php else: ?>
@@ -172,10 +172,10 @@ $bulk_msg .= "_منجانب: ادارہ اشرف المدارس فروکہ_";
                         <td class="d-print-none">
                             <?php if(!empty($rawPhone)): ?>
                             <a href="<?php echo $wa_link; ?>" target="_blank" class="btn btn-sm btn-success fw-bold">
-                                <i class="fab fa-whatsapp me-1"></i> یاددہانی بھیجیں
+                                <i class="fab fa-whatsapp me-1"></i> <?php echo __('یاددہانی بھیجیں', 'Send Reminder'); ?>
                             </a>
                             <?php else: ?>
-                            <span class="text-muted small">نمبر موجود نہیں</span>
+                            <span class="text-muted small"><?php echo __('نمبر موجود نہیں', 'No Phone'); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -189,20 +189,20 @@ $bulk_msg .= "_منجانب: ادارہ اشرف المدارس فروکہ_";
 </div>
 
 <!-- Bulk WhatsApp Modal -->
-<div class="modal fade" id="bulkWAModal" tabindex="-1" aria-hidden="true" dir="rtl">
+<div class="modal fade" id="bulkWAModal" tabindex="-1" aria-hidden="true" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title fw-bold"><i class="fab fa-whatsapp me-2"></i> تمام واجب الادا فیس لسٹ کا WhatsApp متن</h5>
+                <h5 class="modal-title fw-bold"><i class="fab fa-whatsapp me-2"></i> <?php echo __('تمام واجب الادا فیس لسٹ کا WhatsApp متن', 'Bulk Defaulters WhatsApp Text'); ?></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small mb-2">آپ اس متن کو کاپی کر کے اپنے WhatsApp گروپ یا ایڈمنز کو بھیج سکتے ہیں:</p>
+                <p class="text-muted small mb-2"><?php echo __('آپ اس متن کو کاپی کر کے اپنے WhatsApp گروپ یا ایڈمنز کو بھیج سکتے ہیں:', 'You can copy this text to send to your WhatsApp groups:'); ?></p>
                 <textarea id="bulkWAText" class="form-control fw-bold" rows="12" readonly style="font-family: monospace; font-size: 13px;"><?php echo htmlspecialchars($bulk_msg); ?></textarea>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary fw-bold" onclick="copyBulkText()"><i class="fas fa-copy me-1"></i> متن کاپی کریں</button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">بند کریں</button>
+                <button type="button" class="btn btn-primary fw-bold" onclick="copyBulkText()"><i class="fas fa-copy me-1"></i> <?php echo __('متن کاپی کریں', 'Copy Text'); ?></button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('بند کریں', 'Close'); ?></button>
             </div>
         </div>
     </div>

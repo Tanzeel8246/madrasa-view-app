@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../db_helper.dart';
 import '../utils/globals.dart';
+import '../utils/system_type_global.dart';
 import '../utils/network_service.dart';
 import '../widgets/neo_box.dart';
 
@@ -26,12 +27,12 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
   int _usedClasses = 0;
   int _usedTeachers = 0;
 
-  int _maxStudents = 50;
-  int _maxClasses = 3;
-  int _maxTeachers = 4;
+  int _maxStudents = 20;
+  int _maxClasses = 1;
+  int _maxTeachers = 2;
 
-  double _priceMonthly = 1500;
-  double _priceYearly = 15000;
+  double _priceMonthly = 1000;
+  double _priceYearly = 10000;
 
   @override
   void initState() {
@@ -45,12 +46,15 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
       final db = DBHelper();
       final database = await db.database;
 
+      final sysCond = SystemTypeGlobal.currentSystemType.value == 'Masjid'
+          ? "system_type = 'Masjid'"
+          : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
       final sRes = await database.rawQuery(
-          "SELECT COUNT(*) as count FROM students WHERE (is_deleted = 0 OR is_deleted IS NULL)");
+          "SELECT COUNT(*) as count FROM students WHERE (is_deleted = 0 OR is_deleted IS NULL) AND (status = 'Active' OR status = '' OR status IS NULL OR status = 'حاضر') AND $sysCond");
       final cRes = await database.rawQuery(
-          "SELECT COUNT(*) as count FROM classes WHERE (status = 'Active' OR status = '' OR status IS NULL)");
+          "SELECT COUNT(*) as count FROM classes WHERE (status = 'Active' OR status = '' OR status IS NULL) AND $sysCond");
       final tRes = await database.rawQuery(
-          "SELECT COUNT(*) as count FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL)");
+          "SELECT COUNT(*) as count FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND (status = 'Active' OR status = '' OR status IS NULL) AND $sysCond");
 
       if (mounted) {
         setState(() {
@@ -99,22 +103,22 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
               }
 
               _maxStudents =
-                  int.tryParse(data['max_students']?.toString() ?? '50') ?? 50;
+                  int.tryParse(data['max_students']?.toString() ?? '20') ?? 20;
               _maxClasses =
-                  int.tryParse(data['max_classes']?.toString() ?? '3') ?? 3;
+                  int.tryParse(data['max_classes']?.toString() ?? '1') ?? 1;
               _maxTeachers =
-                  int.tryParse(data['max_teachers']?.toString() ?? '4') ?? 4;
+                  int.tryParse(data['max_teachers']?.toString() ?? '2') ?? 2;
 
               currentTenantMaxStudents.value = _maxStudents;
               currentTenantMaxClasses.value = _maxClasses;
               currentTenantMaxTeachers.value = _maxTeachers;
 
               _priceMonthly = double.tryParse(
-                      data['price_monthly']?.toString() ?? '1500') ??
-                  1500;
+                      data['price_monthly']?.toString() ?? '1000') ??
+                  1000;
               _priceYearly = double.tryParse(
-                      data['price_yearly']?.toString() ?? '15000') ??
-                  15000;
+                      data['price_yearly']?.toString() ?? '10000') ??
+                  10000;
 
               if (data['used_students'] != null) {
                 _usedStudents =
@@ -273,7 +277,7 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
                                 const SizedBox(width: 4),
                                 Text(
                                   isTrial
-                                      ? (isUrdu ? '14 روزہ ٹرائل' : 'Trial Mode')
+                                      ? (isUrdu ? '30 روزہ ٹرائل' : '30-Day Trial')
                                       : (isUrdu ? 'فعال پیکیج' : 'Active Plan'),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,

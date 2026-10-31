@@ -445,21 +445,38 @@ if ($edit_data && !empty($classes_list)) {
 <div class="container-fluid">
     <div class="row mb-3 align-items-center">
         <div class="col-md-6">
-            <h3 class="text-primary fw-bold"><i class="fas fa-chalkboard-teacher me-2"></i> <?php echo t('teachers_record'); ?></h3>
+            <h3 class="text-primary fw-bold"><i class="fas fa-chalkboard-teacher me-2"></i> <?php echo __('اساتذہ کا ریکارڈ', 'Teachers Record'); ?></h3>
         </div>
         <div class="col-md-6 text-md-end">
-            <button type="button" class="btn btn-primary fw-bold px-3 py-2 shadow-sm" data-bs-toggle="collapse" data-bs-target="#teacherFormCollapse" aria-expanded="<?php echo $edit_data ? 'true' : 'false'; ?>">
-                <i class="fas fa-user-plus me-1"></i> نیا استاذ ایڈ کریں
+            <?php $teacherQuota = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'teachers', $cur_tenant_id) : ['allowed' => true]; ?>
+        <?php if (!$teacherQuota['allowed'] && !$edit_data): ?>
+            <button type="button" class="btn btn-secondary fw-bold px-3 py-2 shadow-sm disabled" disabled title="<?php echo htmlspecialchars($teacherQuota['message']); ?>">
+                <i class="fas fa-lock me-1"></i> <?php echo ($lang === 'en') ? 'Teacher Quota Full (Locked)' : 'اساتذہ کی حد مکمل (لاک ہے)'; ?>
             </button>
+        <?php else: ?>
+            <button type="button" class="btn btn-primary fw-bold px-3 py-2 shadow-sm" data-bs-toggle="collapse" data-bs-target="#teacherFormCollapse" aria-expanded="<?php echo $edit_data ? 'true' : 'false'; ?>">
+                <i class="fas fa-user-plus me-1"></i> <?php echo __('نیا استاذ شامل کریں', 'Add New Teacher'); ?>
+            </button>
+            <?php endif; ?>
         </div>
     </div>
     
     <?php echo $msg; ?>
+    <?php if (!$teacherQuota['allowed'] && !$edit_data): ?>
+        <div class="alert alert-danger fw-bold shadow-sm p-3 mb-3 border-2 border-danger d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-lock me-2 fs-5"></i> <strong><?php echo ($lang === 'en') ? 'Limit Reached:' : 'حد مکمل (Quota Reached):'; ?></strong> <?php echo ($lang === 'en') ? 'You have reached the teacher limit for your subscription plan. Please upgrade your plan to register new teachers.' : htmlspecialchars($teacherQuota['message']); ?>
+            </div>
+            <a href="subscription_status.php" class="btn btn-sm btn-danger px-3 py-1 fw-bold text-white shadow-sm">
+                <i class="fas fa-arrow-up me-1"></i> <?php echo ($lang === 'en') ? 'Upgrade Plan' : 'سبسکرپشن اپ گریڈ کریں'; ?>
+            </a>
+        </div>
+    <?php endif; ?>
 
     <div class="collapse <?php echo $edit_data ? 'show' : ''; ?>" id="teacherFormCollapse">
         <div class="card shadow-sm mb-4 border-top border-5 border-primary">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h5 class="m-0 fw-bold text-primary"><?php echo $edit_data ? 'ریکارڈ تبدیل کریں' : 'نیا استاد شامل کریں'; ?></h5>
+                <h5 class="m-0 fw-bold text-primary"><?php echo $edit_data ? __('ریکارڈ تبدیل کریں', 'Edit Record') : __('نیا استاد شامل کریں', 'Add New Teacher'); ?></h5>
                 <?php if(!$edit_data): ?>
                     <button type="button" class="btn-close" data-bs-toggle="collapse" data-bs-target="#teacherFormCollapse" aria-label="Close"></button>
                 <?php endif; ?>
@@ -470,36 +487,36 @@ if ($edit_data && !empty($classes_list)) {
                     <input type="hidden" name="edit_id" value="<?php echo $edit_data['id'] ?? ''; ?>">
                 <div class="row g-3">
                     <div class="col-md-3">
-                        <label class="fw-bold">نام استاد <span class="text-danger">*</span></label>
+                        <label class="fw-bold"><?php echo __('نام استاد', 'Teacher Name'); ?> <span class="text-danger">*</span></label>
                         <input type="text" name="name" class="form-control" required value="<?php echo $edit_data['name'] ?? ''; ?>">
                     </div>
                     <div class="col-md-3">
-                        <label class="fw-bold"><?php echo t('father_name'); ?></label>
+                        <label class="fw-bold"><?php echo __('ولدیت', 'Father Name'); ?></label>
                         <input type="text" name="father_name" class="form-control" value="<?php echo $edit_data['father_name'] ?? ''; ?>">
                     </div>
                     <div class="col-md-3">
-                        <label class="fw-bold">موبائل نمبر</label>
+                        <label class="fw-bold"><?php echo __('موبائل نمبر', 'Mobile Number'); ?></label>
                         <input type="text" name="phone" class="form-control" value="<?php echo $edit_data['phone'] ?? ''; ?>">
                     </div>
                     <div class="col-md-3">
-                        <label class="fw-bold">شناختی کارڈ (CNIC)</label>
+                        <label class="fw-bold"><?php echo __('شناختی کارڈ (CNIC)', 'CNIC'); ?></label>
                         <input type="text" name="cnic" class="form-control" value="<?php echo $edit_data['cnic'] ?? ''; ?>">
                     </div>
                     
                     <div class="col-md-3">
-                        <label class="fw-bold">تعلیم (Qualification)</label>
+                        <label class="fw-bold"><?php echo __('تعلیم (Qualification)', 'Qualification'); ?></label>
                         <input type="text" name="qualification" class="form-control" value="<?php echo $edit_data['qualification'] ?? ''; ?>">
                     </div>
                     <div class="col-md-3">
-                        <label class="fw-bold text-success">بنیادی تنخواہ (Basic Salary)</label>
+                        <label class="fw-bold text-success"><?php echo __('بنیادی تنخواہ (Basic Salary)', 'Basic Salary'); ?></label>
                         <input type="number" name="salary" class="form-control border-success" value="<?php echo $edit_data['salary'] ?? ''; ?>">
                     </div>
                     <div class="col-md-3">
-                        <label class="fw-bold text-primary">ہاؤس رینٹ (House Rent)</label>
+                        <label class="fw-bold text-primary"><?php echo __('ہاؤس رینٹ (House Rent)', 'House Rent'); ?></label>
                         <input type="number" name="house_rent" class="form-control" value="<?php echo $edit_data['house_rent'] ?? ''; ?>">
                     </div>
                     <div class="col-md-3">
-                        <label class="fw-bold text-primary">میڈیکل الاؤنس</label>
+                        <label class="fw-bold text-primary"><?php echo __('میڈیکل الاؤنس', 'Medical Allowance'); ?></label>
                         <input type="number" name="medical_allowance" class="form-control" value="<?php echo $edit_data['medical_allowance'] ?? ''; ?>">
                     </div>
                     <div class="col-md-3">
@@ -560,10 +577,10 @@ if ($edit_data && !empty($classes_list)) {
                     
                     <div class="col-12 text-end">
                         <?php if($edit_data): ?>
-                            <a href="teachers.php" class="btn btn-secondary me-2">کینسل</a>
+                            <a href="teachers.php" class="btn btn-secondary me-2"><?php echo __('کینسل', 'Cancel'); ?></a>
                         <?php endif; ?>
                         <button type="submit" name="save_teacher" class="btn btn-success fw-bold px-4">
-                            <i class="fas fa-save me-2"></i> محفوظ کریں
+                            <i class="fas fa-save me-2"></i> <?php echo __('محفوظ کریں', 'Save'); ?>
                         </button>
                     </div>
                 </div>
@@ -575,29 +592,29 @@ if ($edit_data && !empty($classes_list)) {
     <!-- Filter Tabs -->
     <ul class="nav nav-pills mb-3" id="teacherStatusTabs">
         <li class="nav-item">
-            <a class="nav-link <?php echo $status_filter === 'all' ? 'active bg-primary' : 'text-dark bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=all">تمام اساتذہ</a>
+            <a class="nav-link <?php echo $status_filter === 'all' ? 'active bg-primary' : 'text-dark bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=all"><?php echo __('تمام اساتذہ', 'All Teachers'); ?></a>
         </li>
         <li class="nav-item">
-            <a class="nav-link <?php echo $status_filter === 'active' ? 'active bg-success' : 'text-success bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=active">فعال / حاضر</a>
+            <a class="nav-link <?php echo $status_filter === 'active' ? 'active bg-success' : 'text-success bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=active"><?php echo __('فعال / حاضر', 'Active'); ?></a>
         </li>
         <li class="nav-item">
-            <a class="nav-link <?php echo $status_filter === 'on_leave' ? 'active bg-warning text-dark' : 'text-warning text-dark bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=on_leave">رخصت پر</a>
+            <a class="nav-link <?php echo $status_filter === 'on_leave' ? 'active bg-warning text-dark' : 'text-warning text-dark bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=on_leave"><?php echo __('رخصت پر', 'On Leave'); ?></a>
         </li>
         <li class="nav-item">
-            <a class="nav-link <?php echo $status_filter === 'resigned' ? 'active bg-secondary text-white' : 'text-secondary bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=resigned">مستعفی / علیحدہ شدہ</a>
+            <a class="nav-link <?php echo $status_filter === 'resigned' ? 'active bg-secondary text-white' : 'text-secondary bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=resigned"><?php echo __('مستعفی / علیحدہ شدہ', 'Resigned / Relieved'); ?></a>
         </li>
         <li class="nav-item">
-            <a class="nav-link <?php echo $status_filter === 'terminated' ? 'active bg-danger' : 'text-danger bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=terminated">برطرف / فارغ</a>
+            <a class="nav-link <?php echo $status_filter === 'terminated' ? 'active bg-danger' : 'text-danger bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=terminated"><?php echo __('برطرف / فارغ', 'Terminated'); ?></a>
         </li>
         <li class="nav-item">
-            <a class="nav-link <?php echo $status_filter === 'inactive' ? 'active bg-dark text-white' : 'text-dark bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=inactive">غیر فعال</a>
+            <a class="nav-link <?php echo $status_filter === 'inactive' ? 'active bg-dark text-white' : 'text-dark bg-white border'; ?> fw-bold me-2 shadow-sm" href="teachers.php?status_filter=inactive"><?php echo __('غیر فعال', 'Inactive'); ?></a>
         </li>
     </ul>
 
     <div class="card shadow-sm border-0">
         <div class="card-header bg-white d-flex align-items-center justify-content-between">
-            <h5 class="mb-0 fw-bold text-primary"><i class="fas fa-list me-2"></i> اساتذہ کی فہرست</h5>
-            <span class="badge bg-primary"><?php echo count($teachers); ?> اساتذہ</span>
+            <h5 class="mb-0 fw-bold text-primary"><i class="fas fa-list me-2"></i> <?php echo __('اساتذہ کی فہرست', 'Teachers List'); ?></h5>
+            <span class="badge bg-primary"><?php echo count($teachers); ?> <?php echo __('اساتذہ', 'Teachers'); ?></span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -605,13 +622,13 @@ if ($edit_data && !empty($classes_list)) {
                     <thead class="table-dark">
                         <tr>
                             <th style="width: 40px;">#</th>
-                            <th style="white-space: nowrap;">نام استاد</th>
-                            <th style="white-space: nowrap;">موبائل / رابطہ</th>
-                            <th style="white-space: nowrap;">تعلیم</th>
-                            <th style="min-width: 160px; max-width: 280px;">تقرری</th>
-                            <th style="white-space: nowrap;">وظیفہ</th>
-                            <th style="white-space: nowrap;">اسٹیٹس</th>
-                            <th style="white-space: nowrap;"><?php echo t('action_col'); ?></th>
+                            <th style="white-space: nowrap;"><?php echo __('نام استاد', 'Teacher Name'); ?></th>
+                            <th style="white-space: nowrap;"><?php echo __('موبائل / رابطہ', 'Contact'); ?></th>
+                            <th style="white-space: nowrap;"><?php echo __('تعلیم', 'Qualification'); ?></th>
+                            <th style="min-width: 160px; max-width: 280px;"><?php echo __('تقرری', 'Assignment'); ?></th>
+                            <th style="white-space: nowrap;"><?php echo __('وظیفہ / تنخواہ', 'Salary'); ?></th>
+                            <th style="white-space: nowrap;"><?php echo __('اسٹیٹس', 'Status'); ?></th>
+                            <th style="white-space: nowrap;"><?php echo __('ایکشن', 'Action'); ?></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -658,7 +675,7 @@ if ($edit_data && !empty($classes_list)) {
                             ?>
                             <tr class="table-warning">
                                 <td colspan="8" class="text-center fw-bold text-secondary py-2" style="border-top: 3px dashed #adb5bd;">
-                                    <i class="fas fa-user-times me-2"></i> فارغ / مستعفی / برطرف اساتذہ (سابقہ عملہ)
+                                    <i class="fas fa-user-times me-2"></i> <?php echo __('فارغ / مستعفی / برطرف اساتذہ (سابقہ عملہ)', 'Former / Relieved / Terminated Teachers (Ex-Staff)'); ?>
                                 </td>
                             </tr>
                             <?php endif; ?>
@@ -735,15 +752,15 @@ if ($edit_data && !empty($classes_list)) {
                                     <?php 
                                     $st = $t['status'] ?? 'Active';
                                     if($st === 'Active' || $st === 'حاضر' || $st === 'فعال'): ?>
-                                        <span class="badge bg-success">فعال / حاضر</span>
+                                        <span class="badge bg-success"><?php echo __('فعال / حاضر', 'Active / Present'); ?></span>
                                     <?php elseif($st === 'On Leave' || $st === 'رخصت پر'): ?>
-                                        <span class="badge bg-warning text-dark">رخصت پر</span>
+                                        <span class="badge bg-warning text-dark"><?php echo __('رخصت پر', 'On Leave'); ?></span>
                                     <?php elseif($st === 'Resigned' || strpos($st, 'مستعفی') !== false || strpos($st, 'علیحدہ') !== false): ?>
-                                        <span class="badge bg-secondary">مستعفی / علیحدہ شدہ</span>
+                                        <span class="badge bg-secondary"><?php echo __('مستعفی / علیحدہ شدہ', 'Resigned / Relieved'); ?></span>
                                     <?php elseif($st === 'Terminated' || strpos($st, 'برطرف') !== false || strpos($st, 'فارغ') !== false): ?>
-                                        <span class="badge bg-danger">برطرف / فارغ</span>
+                                        <span class="badge bg-danger"><?php echo __('برطرف / فارغ', 'Terminated / Dismissed'); ?></span>
                                     <?php else: ?>
-                                        <span class="badge bg-dark">غیر فعال (<?php echo htmlspecialchars($st); ?>)</span>
+                                        <span class="badge bg-dark"><?php echo __('غیر فعال', 'Inactive'); ?> (<?php echo htmlspecialchars($st); ?>)</span>
                                     <?php endif; ?>
                                     <?php if(!empty($t['status_change_date'])): ?>
                                         <br><span class="badge bg-light text-primary border border-primary mt-1" style="font-size:11px;" title="تاریخ تبدیلی اسٹیٹس"><i class="fas fa-calendar-alt me-1"></i><?php echo htmlspecialchars($t['status_change_date']); ?></span>

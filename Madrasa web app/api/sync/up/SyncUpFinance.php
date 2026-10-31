@@ -18,15 +18,22 @@ class SyncUpFinance {
         try { $pdo->exec("ALTER TABLE finance ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash'"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE finance ADD COLUMN deleted_at DATETIME DEFAULT NULL"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE finance ADD COLUMN original_receipt_no VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE finance ADD COLUMN client_uuid VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE finance ADD UNIQUE KEY uq_finance_client_uuid (tenant_id, client_uuid)"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN account_id INT DEFAULT NULL"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash'"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN deleted_at DATETIME DEFAULT NULL"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN original_receipt_no VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE masjid_finance ADD COLUMN client_uuid VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE masjid_finance ADD UNIQUE KEY uq_masjid_fin_client_uuid (tenant_id, client_uuid)"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE acc_payroll ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE acc_payroll ADD COLUMN payment_account_id INT DEFAULT NULL"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE acc_payroll ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash'"); } catch (Throwable $e) {}
         try { $pdo->exec("ALTER TABLE heads ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE acc_chart_of_accounts ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE acc_vouchers ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE acc_ledger_entries ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
 
         // Finance Entries
         if (!empty($input['finance_entries']) && is_array($input['finance_entries'])) {
@@ -100,6 +107,21 @@ class SyncUpFinance {
                         }
                     }
 
+                    $clientUuid = trim($f['client_uuid'] ?? '');
+                    if ($clientUuid !== '') {
+                        $uuidCheck = $pdo->prepare("SELECT id FROM finance WHERE client_uuid = ? AND tenant_id = ? LIMIT 1");
+                        $uuidCheck->execute([$clientUuid, $tId]);
+                        $existingUuidId = $uuidCheck->fetchColumn();
+                        if ($existingUuidId) {
+                            // Idempotency: Record already securely saved, return existing ID without duplicate insert
+                            if ($localId !== null) {
+                                $syncedIds['finance_entries'][] = $localId;
+                                $serverIds['finance_entries'][(string)$localId] = (int)$existingUuidId;
+                            }
+                            continue;
+                        }
+                    }
+
                     if ($serverId) {
                         $check = $pdo->prepare("SELECT id FROM finance WHERE id = ? AND tenant_id = ? LIMIT 1");
                         $check->execute([$serverId, $tId]);
@@ -127,8 +149,9 @@ class SyncUpFinance {
                         } else {
                             $computer_receipt_no = null;
                         }
-                        $pdo->prepare("UPDATE finance SET date = ?, type = ?, amount = ?, description = ?, head_id = ?, manual_receipt_no = ?, donor_name = ?, donor_address = ?, computer_receipt_no = ?, user_id = ?, user_name = ?, account_id = ?, payment_method = ?, bill_image = COALESCE(NULLIF(?, ''), bill_image), is_deleted = 0 WHERE id = ? AND tenant_id = ?")
-                            ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName, $accountId, $paymentMethod, $billImage, $existingId, $tId]);
+                        // Append-Only Financial Integrity: Do NOT overwrite immutable historical amounts silently
+                        $pdo->prepare("UPDATE finance SET date = ?, type = ?, amount = ?, description = ?, head_id = ?, manual_receipt_no = ?, donor_name = ?, donor_address = ?, computer_receipt_no = ?, user_id = ?, user_name = ?, account_id = ?, payment_method = ?, bill_image = COALESCE(NULLIF(?, ''), bill_image), client_uuid = COALESCE(NULLIF(?, ''), client_uuid), is_deleted = 0 WHERE id = ? AND tenant_id = ?")
+                            ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName, $accountId, $paymentMethod, $billImage, $clientUuid, $existingId, $tId]);
                         $savedId = (int)$existingId;
                         try {
                             finance_accounting_post($pdo, $savedId);
@@ -137,8 +160,8 @@ class SyncUpFinance {
                         }
                     } else {
                         $computer_receipt_no = ($type === 'Income') ? next_user_receipt_no($pdo, $uid, $computer_receipt_no, null, 'Madrasa', $tId) : null;
-                        $pdo->prepare("INSERT INTO finance (date, type, amount, description, head_id, manual_receipt_no, donor_name, donor_address, computer_receipt_no, user_id, user_name, account_id, payment_method, bill_image, system_type, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Madrasa', 0, ?)")
-                            ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName, $accountId, $paymentMethod, $billImage, $tId]);
+                        $pdo->prepare("INSERT INTO finance (date, type, amount, description, head_id, manual_receipt_no, donor_name, donor_address, computer_receipt_no, user_id, user_name, account_id, payment_method, bill_image, client_uuid, system_type, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Madrasa', 0, ?)")
+                            ->execute([$date, $type, $amount, $desc, $headId, $f['manual_receipt_no'] ?? '', $f['donor_name'] ?? '', $f['donor_address'] ?? '', $computer_receipt_no, $uid, $userName, $accountId, $paymentMethod, $billImage, $clientUuid ?: null, $tId]);
                         $savedId = (int)$pdo->lastInsertId();
                         try {
                             finance_accounting_post($pdo, $savedId);
@@ -315,18 +338,18 @@ class SyncUpFinance {
                     
                     $existing = false;
                     if ($serverId) {
-                        $check = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE id = ? LIMIT 1");
-                        $check->execute([$serverId]);
+                        $check = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                        $check->execute([$serverId, $tId]);
                         $existing = $check->fetch();
                     } elseif ($code !== '') {
-                        $check = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE code = ? LIMIT 1");
-                        $check->execute([$code]);
+                        $check = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE code = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                        $check->execute([$code, $tId]);
                         $existing = $check->fetch();
                     }
                     
                     if ($isDeleted === 1) {
                         if ($existing) {
-                            $pdo->prepare("UPDATE acc_chart_of_accounts SET is_deleted = 1 WHERE id = ?")->execute([$existing['id']]);
+                            $pdo->prepare("UPDATE acc_chart_of_accounts SET is_deleted = 1 WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")->execute([$existing['id'], $tId]);
                         }
                         if ($localId !== null) $syncedIds['acc_chart_of_accounts'][] = $localId;
                         continue;
@@ -335,14 +358,17 @@ class SyncUpFinance {
                     if ($name === '') continue;
                     
                     if ($existing) {
-                        $pdo->prepare("UPDATE acc_chart_of_accounts SET name = ?, type = ?, code = ?, is_deleted = 0 WHERE id = ?")
-                            ->execute([$name, $item['type'] ?? '', $code, $existing['id']]);
+                        $pdo->prepare("UPDATE acc_chart_of_accounts SET name = ?, type = ?, code = ?, is_deleted = 0 WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                            ->execute([$name, $item['type'] ?? '', $code, $existing['id'], $tId]);
                     } else {
                         if ($code === '') $code = 'ACC-' . time() . rand(10,99);
-                        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted) VALUES (?, ?, ?, 0)")
-                            ->execute([$code, $name, $item['type'] ?? '']);
+                        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, tenant_id) VALUES (?, ?, ?, 0, ?)")
+                            ->execute([$code, $name, $item['type'] ?? '', $tId]);
                     }
-                    if ($localId !== null) $syncedIds['acc_chart_of_accounts'][] = $localId;
+                    if ($localId !== null) {
+                        $syncedIds['acc_chart_of_accounts'][] = $localId;
+                        $serverIds['acc_chart_of_accounts'][(string)$localId] = (int)($existing ? $existing['id'] : $pdo->lastInsertId());
+                    }
                 } catch (Exception $e) { $syncErrors[] = "acc_chart_of_accounts: " . $e->getMessage(); }
             }
         }
@@ -353,48 +379,80 @@ class SyncUpFinance {
                 $localId = to_int_or_null($item['id'] ?? null);
                 try {
                     $voucherNo = trim($item['voucher_no'] ?? '');
-                    if ($voucherNo === '') continue;
-                    $check = $pdo->prepare("SELECT id FROM acc_vouchers WHERE voucher_no = ? LIMIT 1");
-                    $check->execute([$voucherNo]);
+                    $ref = trim($item['reference'] ?? '');
+                    $vType = trim($item['type'] ?? 'Journal');
+                    $existing = null;
+
+                    if ($voucherNo !== '') {
+                        $check = $pdo->prepare("SELECT id FROM acc_vouchers WHERE voucher_no = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                        $check->execute([$voucherNo, $tId]);
+                        $existing = $check->fetch();
+                    }
+                    if (!$existing && ($vType === 'Contra' || str_starts_with($ref, 'TRANSFER-')) && $ref !== '') {
+                        $checkRef = $pdo->prepare("SELECT id FROM acc_vouchers WHERE reference = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                        $checkRef->execute([$ref, $tId]);
+                        $existing = $checkRef->fetch();
+                    }
+                    if (!$existing && $vType === 'Contra') {
+                        $vDate = normalize_date($item['date'] ?? '');
+                        $vDesc = trim($item['description'] ?? '');
+                        if ($vDesc !== '') {
+                            $checkContra = $pdo->prepare("SELECT id FROM acc_vouchers WHERE type = 'Contra' AND date = ? AND description = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                            $checkContra->execute([$vDate, $vDesc, $tId]);
+                            $existing = $checkContra->fetch();
+                        }
+                    }
+
                     $item_is_deleted = (int)($item['is_deleted'] ?? 0);
                     if ($item_is_deleted == 1) {
-                        if ($check->rowCount() > 0) {
-                            $existing = $check->fetch();
-                            $pdo->prepare("DELETE FROM acc_vouchers WHERE id = ?")->execute([$existing['id']]);
+                        if ($existing) {
+                            $pdo->prepare("DELETE FROM acc_vouchers WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")->execute([$existing['id'], $tId]);
                         }
                         if ($localId !== null) $syncedIds['acc_vouchers'][] = $localId;
                         continue;
                     }
                     
+                    if ($voucherNo === '' && $existing) {
+                        $voucherNo = 'V-' . $existing['id'];
+                    } elseif ($voucherNo === '') {
+                        $voucherNo = 'V-' . time() . rand(10, 99);
+                    }
+
                     $payload = [
                         normalize_date($item['date'] ?? ''),
-                        $item['type'] ?? 'Journal',
-                        $item['reference'] ?? '',
+                        $vType,
+                        $ref,
                         $item['description'] ?? '',
                         to_int_or_null($item['department_id'] ?? null),
                         $item['status'] ?? 'Pending',
                         to_int_or_null($item['created_by'] ?? null) ?: $user['id'],
                     ];
                     $systemType = !empty($item['system_type']) ? trim($item['system_type']) : ($requested_sys ?: 'Madrasa');
-                    if ($check->rowCount() > 0) {
-                        $existing = $check->fetch();
+                    $savedVoucherId = null;
+
+                    if ($existing) {
                         try {
-                            $pdo->prepare("UPDATE acc_vouchers SET date = ?, type = ?, reference = ?, description = ?, department_id = ?, status = ?, created_by = ?, system_type = ? WHERE id = ?")
-                                ->execute([...$payload, $systemType, $existing['id']]);
+                            $pdo->prepare("UPDATE acc_vouchers SET date = ?, type = ?, reference = ?, description = ?, department_id = ?, status = ?, created_by = ?, system_type = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                                ->execute([...$payload, $systemType, $existing['id'], $tId]);
                         } catch (Throwable $e) {
-                            $pdo->prepare("UPDATE acc_vouchers SET date = ?, type = ?, reference = ?, description = ?, department_id = ?, status = ?, created_by = ? WHERE id = ?")
-                                ->execute([...$payload, $existing['id']]);
+                            $pdo->prepare("UPDATE acc_vouchers SET date = ?, type = ?, reference = ?, description = ?, department_id = ?, status = ?, created_by = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                                ->execute([...$payload, $existing['id'], $tId]);
                         }
+                        $savedVoucherId = (int)$existing['id'];
                     } else {
                         try {
-                            $pdo->prepare("INSERT INTO acc_vouchers (voucher_no, date, type, reference, description, department_id, status, created_by, system_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                                ->execute([$voucherNo, ...$payload, $systemType]);
+                            $pdo->prepare("INSERT INTO acc_vouchers (voucher_no, date, type, reference, description, department_id, status, created_by, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                                ->execute([$voucherNo, ...$payload, $systemType, $tId]);
                         } catch (Throwable $e) {
-                            $pdo->prepare("INSERT INTO acc_vouchers (voucher_no, date, type, reference, description, department_id, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-                                ->execute([$voucherNo, ...$payload]);
+                            $pdo->prepare("INSERT INTO acc_vouchers (voucher_no, date, type, reference, description, department_id, status, created_by, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                                ->execute([$voucherNo, ...$payload, $tId]);
                         }
+                        $savedVoucherId = (int)$pdo->lastInsertId();
                     }
-                    if ($localId !== null) $syncedIds['acc_vouchers'][] = $localId;
+                    if ($localId !== null) {
+                        $syncedIds['acc_vouchers'][] = $localId;
+                        $serverIds['acc_vouchers'][(string)$localId] = $savedVoucherId;
+                    }
                 } catch (Exception $e) { $syncErrors[] = "acc_vouchers: " . $e->getMessage(); }
             }
         }
@@ -407,33 +465,45 @@ class SyncUpFinance {
                     $voucherId = to_int_or_null($item['voucher_id'] ?? null);
                     $voucherNo = trim($item['voucher_no'] ?? '');
                     if ($voucherNo !== '') {
-                        $voucherStmt = $pdo->prepare("SELECT id FROM acc_vouchers WHERE voucher_no = ? LIMIT 1");
-                        $voucherStmt->execute([$voucherNo]);
+                        $voucherStmt = $pdo->prepare("SELECT id FROM acc_vouchers WHERE voucher_no = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                        $voucherStmt->execute([$voucherNo, $tId]);
                         $serverVoucherId = $voucherStmt->fetchColumn();
                         if ($serverVoucherId) $voucherId = (int)$serverVoucherId;
                     }
                     $accountId = to_int_or_null($item['account_id'] ?? null);
                     $accountCode = trim($item['account_code'] ?? '');
                     if ($accountCode !== '') {
-                        $accountStmt = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE code = ? LIMIT 1");
-                        $accountStmt->execute([$accountCode]);
+                        $accountStmt = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE code = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                        $accountStmt->execute([$accountCode, $tId]);
                         $serverAccountId = $accountStmt->fetchColumn();
                         if ($serverAccountId) $accountId = (int)$serverAccountId;
+                    }
+                    if (!$accountId && !empty($item['account_name'])) {
+                        $accountNameStmt = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE name = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                        $accountNameStmt->execute([trim($item['account_name']), $tId]);
+                        $serverAccountIdByName = $accountNameStmt->fetchColumn();
+                        if ($serverAccountIdByName) $accountId = (int)$serverAccountIdByName;
                     }
                     if (!$voucherId || !$accountId) continue;
                     $debit = (float)($item['debit'] ?? 0);
                     $credit = (float)($item['credit'] ?? 0);
-                    $check = $pdo->prepare("SELECT id FROM acc_ledger_entries WHERE voucher_id = ? AND account_id = ? AND debit = ? AND credit = ? LIMIT 1");
-                    $check->execute([$voucherId, $accountId, $debit, $credit]);
+                    $check = $pdo->prepare("SELECT id FROM acc_ledger_entries WHERE voucher_id = ? AND account_id = ? AND debit = ? AND credit = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$voucherId, $accountId, $debit, $credit, $tId]);
+                    $savedLedgerId = null;
                     if ($check->rowCount() > 0) {
                         $existing = $check->fetch();
                         $pdo->prepare("UPDATE acc_ledger_entries SET department_id = ? WHERE id = ?")
                             ->execute([to_int_or_null($item['department_id'] ?? null), $existing['id']]);
+                        $savedLedgerId = (int)$existing['id'];
                     } else {
-                        $pdo->prepare("INSERT INTO acc_ledger_entries (voucher_id, account_id, debit, credit, department_id) VALUES (?, ?, ?, ?, ?)")
-                            ->execute([$voucherId, $accountId, $debit, $credit, to_int_or_null($item['department_id'] ?? null)]);
+                        $pdo->prepare("INSERT INTO acc_ledger_entries (voucher_id, account_id, debit, credit, department_id, tenant_id) VALUES (?, ?, ?, ?, ?, ?)")
+                            ->execute([$voucherId, $accountId, $debit, $credit, to_int_or_null($item['department_id'] ?? null), $tId]);
+                        $savedLedgerId = (int)$pdo->lastInsertId();
                     }
-                    if ($localId !== null) $syncedIds['acc_ledger_entries'][] = $localId;
+                    if ($localId !== null) {
+                        $syncedIds['acc_ledger_entries'][] = $localId;
+                        $serverIds['acc_ledger_entries'][(string)$localId] = $savedLedgerId;
+                    }
                 } catch (Exception $e) { $syncErrors[] = "acc_ledger_entries: " . $e->getMessage(); }
             }
         }

@@ -367,6 +367,24 @@ function sync_permission_for_table($table) {
         'maktab_academic_reports' => 'manage_academics',
         'maktab_exam_results' => 'manage_exams',
         'teacher_leaves' => 'manage_teacher_attendance',
+        'lib_books' => 'manage_library',
+        'lib_issues' => 'manage_library',
+        'inventory_items' => 'manage_inventory',
+        'inventory_sales' => 'manage_inventory',
+        'hostel_rooms' => 'manage_hostel',
+        'hostel_allocations' => 'manage_hostel',
+        'job_postings' => 'manage_recruitment',
+        'job_applicants' => 'manage_recruitment',
+        'web_pages' => 'manage_notices',
+        'announcements' => 'manage_notices',
+        'course_structure' => 'manage_academics',
+        'course_subjects' => 'manage_academics',
+        'student_course_enrollment' => 'manage_academics',
+        'exam_subject_results' => 'manage_exams',
+        'student_year_promotion' => 'manage_academics',
+        'settings' => 'manage_settings',
+        'admission_inquiries' => 'manage_students',
+        'husn_saut_record' => 'manage_hifz',
     ];
     return $map[$table] ?? null;
 }
@@ -1013,15 +1031,15 @@ try {
             'status' => 'success',
             'is_trial' => false,
             'days_left' => 0,
-            'plan_name' => 'بنیادی پیکج (Basic)',
-            'plan_code' => 'basic',
+            'plan_name' => 'مفت آزمائش (Free Trial)',
+            'plan_code' => 'free',
             'subscription_ends_at' => '',
             'subscription_status' => 'active',
-            'max_students' => 50,
-            'max_classes' => 3,
-            'max_teachers' => 4,
-            'price_monthly' => 1500,
-            'price_yearly' => 15000,
+            'max_students' => 20,
+            'max_classes' => 1,
+            'max_teachers' => 2,
+            'price_monthly' => 1000,
+            'price_yearly' => 10000,
             'used_students' => 0,
             'used_classes' => 0,
             'used_teachers' => 0,
@@ -1047,9 +1065,10 @@ try {
                 if (!empty($sRow['price_yearly'])) $subData['price_yearly'] = (float)$sRow['price_yearly'];
             }
 
-            $subData['used_students'] = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE (tenant_id = $tid OR tenant_id IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn();
-            $subData['used_classes'] = (int)$pdo->query("SELECT COUNT(*) FROM classes WHERE (tenant_id = $tid OR tenant_id IS NULL) AND (status = 'Active' OR status = '' OR status IS NULL)")->fetchColumn();
-            $subData['used_teachers'] = (int)$pdo->query("SELECT COUNT(*) FROM teachers WHERE (tenant_id = $tid OR tenant_id IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchColumn();
+            $usage = function_exists('get_tenant_live_usage') ? get_tenant_live_usage($pdo, $tid) : ['students' => 0, 'classes' => 0, 'teachers' => 0];
+            $subData['used_students'] = $usage['students'];
+            $subData['used_classes'] = $usage['classes'];
+            $subData['used_teachers'] = $usage['teachers'];
         } catch (Throwable $eSub) {}
 
         $response = $subData;

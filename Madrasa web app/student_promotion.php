@@ -107,33 +107,33 @@ $hist_stmt->execute([$tenant_id]);
 $recent_promotions = $hist_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $darse_nizami_year_names = [
-    1 => 'سال اول (درجہ اولیٰ)',
-    2 => 'سال دوم (درجہ ثانیہ)',
-    3 => 'سال سوم (درجہ ثالثہ)',
-    4 => 'سال چہارم (درجہ رابعہ)',
-    5 => 'سال پنجم (درجہ خامسہ)',
-    6 => 'سال ششم (درجہ سادسہ)',
-    7 => 'سال ہفتم (درجہ عالیہ)',
-    8 => 'سال ہشتم (درجہ عالمیہ / دورۂ حدیث)'
+    1 => __('سال اول (درجہ اولیٰ)', 'Year 1 (Ula)'),
+    2 => __('سال دوم (درجہ ثانیہ)', 'Year 2 (Sania)'),
+    3 => __('سال سوم (درجہ ثالثہ)', 'Year 3 (Salisa)'),
+    4 => __('سال چہارم (درجہ رابعہ)', 'Year 4 (Rabia)'),
+    5 => __('سال پنجم (درجہ خامسہ)', 'Year 5 (Khamisa)'),
+    6 => __('سال ششم (درجہ سادسہ)', 'Year 6 (Sadisa)'),
+    7 => __('سال ہفتم (درجہ عالیہ)', 'Year 7 (Aliya)'),
+    8 => __('سال ہشتم (درجہ عالمیہ / دورۂ حدیث)', 'Year 8 (Almiya / Hadith)')
 ];
 
 include 'header.php';
 ?>
 
-<div class="container-fluid py-4" dir="rtl">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <!-- Top Header -->
     <div class="card border-0 shadow-sm rounded-4 mb-4 text-white p-4" style="background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-                <h2 class="fw-bold mb-1"><i class="fas fa-level-up-alt me-2"></i> سالانہ ترقی و پروموشن مینیجر (Annual Promotion)</h2>
-                <p class="mb-0 text-white-50">سال کے اختتام پر طلبہ کو اگلے درجات میں ترقی دینے اور تعلیمی ریکارڈ محفوظ کرنے کا نظام</p>
+                <h2 class="fw-bold mb-1"><i class="fas fa-level-up-alt me-2"></i> <?php echo __('سالانہ ترقی و پروموشن مینیجر (Annual Promotion)', 'Annual Promotion Manager'); ?></h2>
+                <p class="mb-0 text-white-50"><?php echo __('سال کے اختتام پر طلبہ کو اگلے درجات میں ترقی دینے اور تعلیمی ریکارڈ محفوظ کرنے کا نظام', 'System to promote students to next grades and preserve academic history'); ?></p>
             </div>
             <div class="d-flex gap-2">
                 <a href="academic_results_entry.php" class="btn btn-warning text-dark fw-bold rounded-pill px-3 shadow-sm">
-                    <i class="fas fa-clipboard-check me-1"></i> امتحانی رزلٹ انٹری
+                    <i class="fas fa-clipboard-check me-1"></i> <?php echo __('امتحانی رزلٹ انٹری', 'Exam Results Entry'); ?>
                 </a>
                 <a href="course_manager.php" class="btn btn-outline-light rounded-pill px-3">
-                    <i class="fas fa-cogs me-1"></i> کورس سیٹ اپ
+                    <i class="fas fa-cogs me-1"></i> <?php echo __('کورس سیٹ اپ', 'Course Setup'); ?>
                 </a>
             </div>
         </div>
@@ -157,7 +157,7 @@ include 'header.php';
     <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
         <form method="GET" class="row g-3 align-items-end">
             <div class="col-md-5">
-                <label class="form-label fw-bold">کورس منتخب کریں</label>
+                <label class="form-label fw-bold"><?php echo __('کورس منتخب کریں', 'Select Course'); ?></label>
                 <select name="course_id" class="form-select rounded-3" onchange="this.form.submit()">
                     <?php foreach ($courses as $c): ?>
                         <option value="<?php echo $c['id']; ?>" <?php echo ($selected_course_id == $c['id']) ? 'selected' : ''; ?>>
@@ -167,7 +167,7 @@ include 'header.php';
                 </select>
             </div>
             <div class="col-md-5">
-                <label class="form-label fw-bold">موجودہ سال / درجہ (جس کو پروموٹ کرنا ہے)</label>
+                <label class="form-label fw-bold"><?php echo __('موجودہ سال / درجہ (جس کو پروموٹ کرنا ہے)', 'Current Year / Grade (To Promote)'); ?></label>
                 <select name="year_no" class="form-select rounded-3" onchange="this.form.submit()">
                     <?php 
                     $max_y = $curr_course ? (int)$curr_course['total_years'] : 8;
@@ -179,7 +179,7 @@ include 'header.php';
                 </select>
             </div>
             <div class="col-md-2">
-                <button type="submit" class="btn btn-success w-100 rounded-3"><i class="fas fa-filter me-1"></i> طلبہ لوڈ کریں</button>
+                <button type="submit" class="btn btn-success w-100 rounded-3"><i class="fas fa-filter me-1"></i> <?php echo __('طلبہ لوڈ کریں', 'Load Students'); ?></button>
             </div>
         </form>
     </div>
@@ -188,8 +188,8 @@ include 'header.php';
     <?php if (empty($students)): ?>
         <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-white mb-4">
             <i class="fas fa-user-check fa-3x text-muted mb-3"></i>
-            <h4 class="fw-bold">اس سال میں کوئی متحرک طالب علم موجود نہیں ہے</h4>
-            <p class="text-muted">تمام طلبہ یا تو پہلے ہی ترقی پا چکے ہیں یا اس سال میں کوئی داخلہ نہیں ہے۔</p>
+            <h4 class="fw-bold"><?php echo __('اس سال میں کوئی متحرک طالب علم موجود نہیں ہے', 'No active students found in this year'); ?></h4>
+            <p class="text-muted"><?php echo __('تمام طلبہ یا تو پہلے ہی ترقی پا چکے ہیں یا اس سال میں کوئی داخلہ نہیں ہے۔', 'All students are already promoted or no enrollments exist in this year.'); ?></p>
         </div>
     <?php else: ?>
         <form method="POST">
@@ -208,7 +208,7 @@ include 'header.php';
                             <small class="text-muted">مجموعی طلبہ: <?php echo count($students); ?></small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-bold small mb-1">اگلا سال / درجہ (Target Year):</label>
+                            <label class="form-label fw-bold small mb-1"><?php echo __('اگلا سال / درجہ (Target Year):', 'Target Year / Grade:'); ?></label>
                             <select name="to_year" class="form-select form-select-sm rounded-3">
                                 <?php for ($y = 1; $y <= $max_y; $y++): ?>
                                     <option value="<?php echo $y; ?>" <?php echo ($default_to_year == $y) ? 'selected' : ''; ?>>
@@ -218,7 +218,7 @@ include 'header.php';
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-bold small mb-1">نیا تعلیمی سیشن (Session):</label>
+                            <label class="form-label fw-bold small mb-1"><?php echo __('نیا تعلیمی سیشن (Session):', 'New Academic Session:'); ?></label>
                             <input type="text" name="new_session" class="form-control form-control-sm rounded-3" value="<?php echo (date('Y') + 1) . '-' . (date('Y') + 2); ?>" required>
                         </div>
                     </div>
@@ -228,19 +228,19 @@ include 'header.php';
                 <div class="bg-light p-2 border-top border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-sm btn-outline-success rounded-pill" onclick="setAllActions('Promoted')">
-                            <i class="fas fa-check-double me-1"></i> سب کو ترقی دیں (Promote All)
+                            <i class="fas fa-check-double me-1"></i> <?php echo __('سب کو ترقی دیں (Promote All)', 'Promote All'); ?>
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-warning rounded-pill text-dark" onclick="setAllActions('Detained')">
-                            <i class="fas fa-pause-circle me-1"></i> سب کو اسی سال رکھیں (Detain All)
+                            <i class="fas fa-pause-circle me-1"></i> <?php echo __('سب کو اسی سال رکھیں (Detain All)', 'Detain All'); ?>
                         </button>
                         <?php if ($selected_year_no >= $max_y): ?>
                             <button type="button" class="btn btn-sm btn-outline-info rounded-pill" onclick="setAllActions('Graduated')">
-                                <i class="fas fa-award me-1"></i> سب کو فارغ التحصیل قرار دیں
+                                <i class="fas fa-award me-1"></i> <?php echo __('سب کو فارغ التحصیل قرار دیں', 'Graduate All'); ?>
                             </button>
                         <?php endif; ?>
                     </div>
                     <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" onclick="return confirm('کیا آپ واقعی منتخب کردہ پروموشن نافذ کرنا چاہتے ہیں؟');">
-                        <i class="fas fa-save me-1"></i> سالانہ ترقی لاگو کریں
+                        <i class="fas fa-save me-1"></i> <?php echo __('سالانہ ترقی لاگو کریں', 'Apply Annual Promotion'); ?>
                     </button>
                 </div>
 
@@ -248,11 +248,11 @@ include 'header.php';
                     <table class="table table-hover align-middle mb-0 text-center">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 70px;">رول نمبر</th>
-                                <th class="text-end" style="min-width: 180px;">طالب علم کا نام</th>
-                                <th class="text-end" style="min-width: 160px;">ولدیت</th>
-                                <th style="width: 170px;">پروموشن ایکشن</th>
-                                <th style="min-width: 200px;">ملاحظات / کیفیت (اختیاری)</th>
+                                <th style="width: 70px;"><?php echo __('رول نمبر', 'Roll No'); ?></th>
+                                <th class="text-end" style="min-width: 180px;"><?php echo __('طالب علم کا نام', 'Student Name'); ?></th>
+                                <th class="text-end" style="min-width: 160px;"><?php echo __('ولدیت', 'Father Name'); ?></th>
+                                <th style="width: 170px;"><?php echo __('پروموشن ایکشن', 'Promotion Action'); ?></th>
+                                <th style="min-width: 200px;"><?php echo __('ملاحظات / کیفیت (اختیاری)', 'Remarks / Status (Optional)'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -282,7 +282,7 @@ include 'header.php';
                 <div class="card-footer bg-white py-3 d-flex justify-content-between align-items-center">
                     <small class="text-muted">ترقی لاگو کرنے سے طالب علم کا اگلا سال فعال ہو جائے گا اور پرانا تعلیمی ریکارڈ محفوظ رہے گا۔</small>
                     <button type="submit" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" onclick="return confirm('کیا آپ واقعی منتخب کردہ پروموشن نافذ کرنا چاہتے ہیں؟');">
-                        <i class="fas fa-save me-1"></i> سالانہ ترقی لاگو کریں
+                        <i class="fas fa-save me-1"></i> <?php echo __('سالانہ ترقی لاگو کریں', 'Apply Annual Promotion'); ?>
                     </button>
                 </div>
             </div>

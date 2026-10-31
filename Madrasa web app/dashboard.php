@@ -229,7 +229,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
             <div class="neobox p-3 bg-gradient-green text-white mb-0">
                 <div class="d-flex align-items-center mb-1">
                     <i class="fas fa-university me-2 text-warning"></i>
-                    <small class="fw-bold text-uppercase" style="letter-spacing: 1px;">مشورہ</small>
+                    <small class="fw-bold text-uppercase" style="letter-spacing: 1px;"><?php echo ($lang=='en') ? 'Management Tip' : 'مشورہ'; ?></small>
                 </div>
                 <p class="m-0 small" style="line-height: 1.6;" id="ai-insight-text"><?php echo htmlspecialchars($management_insight ?? 'انتظامی تجاویز حاصل کی جا رہی ہیں...'); ?></p>
             </div>
@@ -246,7 +246,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                 <div class="stat-card bg-gradient-green h-100">
                     <div class="stat-icon"><i class="fas fa-school"></i></div>
                     <div class="stat-value"><?php echo $total_students; ?></div>
-                    <div class="stat-label">زیرِ تعلیم طلبہ</div>
+                    <div class="stat-label"><?php echo ($lang=='en') ? 'Enrolled Students' : 'زیرِ تعلیم طلبہ'; ?></div>
                 </div>
             </a>
         </div>
@@ -279,10 +279,10 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                 <div class="stat-card bg-gradient-info h-100">
                     <div class="stat-icon"><i class="fas fa-clipboard-check"></i></div>
                     <div class="stat-value" style="font-size: 1.05rem; line-height: 1.7;">
-                        حاضر <?php echo $present_today_pct; ?>% | غیر حاضر <?php echo $absent_today_pct; ?>%<br>
-                        رخصت <?php echo $leave_today_pct; ?>% | تاخیر <?php echo $late_today_pct; ?>%
+                        <?php if ($lang === 'en'): ?>Present <?php echo $present_today_pct; ?>% | Absent <?php echo $absent_today_pct; ?>%<br><?php else: ?>حاضر <?php echo $present_today_pct; ?>% | غیر حاضر <?php echo $absent_today_pct; ?>%<br><?php endif; ?>
+                        <?php if ($lang === 'en'): ?>Leave <?php echo $leave_today_pct; ?>% | Late <?php echo $late_today_pct; ?>%<?php else: ?>رخصت <?php echo $leave_today_pct; ?>% | تاخیر <?php echo $late_today_pct; ?>%<?php endif; ?>
                     </div>
-                    <div class="stat-label"><?php echo t('today_attendance_perc'); ?></div>
+                    <div class="stat-label"><?php echo ($lang === 'en') ? "Today's Attendance %" : (t('today_attendance_perc') ?: 'آج کی حاضری فیصد'); ?></div>
                 </div>
             </a>
         </div>
@@ -342,16 +342,16 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                         <i class="fas fa-tasks fa-lg"></i>
                     </div>
                     <div>
-                        <h5 class="fw-bold mb-0 text-dark">آج کی مجموعی حاضری صورتحال (Today's Situation)</h5>
-                        <small class="text-muted"><?php echo translateDate($today); ?> کے لیے حاضری اندراج کی لائیو صورتحال</small>
+                        <h5 class="fw-bold mb-0 text-dark"><?php echo ($lang=='en') ? "Today's Overall Attendance Situation" : "آج کی مجموعی حاضری صورتحال (Today's Situation)"; ?></h5>
+                        <small class="text-muted"><?php echo ($lang=='en') ? ("Live attendance progress for " . translateDate($today)) : (translateDate($today) . " کے لیے حاضری اندراج کی لائیو صورتحال"); ?></small>
                     </div>
                 </div>
                 <div class="d-flex gap-2">
                     <a href="attendance.php" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold">
-                        <i class="fas fa-clipboard-check me-1"></i> حاضری رجسٹر
+                        <i class="fas fa-clipboard-check me-1"></i> <?php echo ($lang=='en') ? 'Attendance Register' : 'حاضری رجسٹر'; ?>
                     </a>
                     <a href="teachers_attendance.php" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold">
-                        <i class="fas fa-user-clock me-1"></i> اساتذہ حاضری
+                        <i class="fas fa-user-clock me-1"></i> <?php echo ($lang=='en') ? 'Teachers Attendance' : 'اساتذہ حاضری'; ?>
                     </a>
                 </div>
             </div>
@@ -361,9 +361,9 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                 <div class="col-lg-7 col-12">
                     <div class="p-3 bg-light rounded-3 h-100 border">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="fw-bold text-dark small"><i class="fas fa-chalkboard text-info me-1"></i> قرآنی و درسی کلاسز کی حاضری:</span>
+                            <span class="fw-bold text-dark small"><i class="fas fa-chalkboard text-info me-1"></i> <?php echo ($lang=='en') ? 'Classes Attendance Progress:' : 'قرآنی و درسی کلاسز کی حاضری:'; ?></span>
                             <span class="badge <?php echo empty($remaining_classes) ? 'bg-success' : 'bg-warning text-dark'; ?> rounded-pill">
-                                <?php echo count($done_classes); ?> / <?php echo count($classes_all); ?> کلاسز مکمل
+                                <?php echo count($done_classes); ?> / <?php echo count($classes_all); ?> <?php echo ($lang=='en') ? 'Classes Marked' : 'کلاسز مکمل'; ?>
                             </span>
                         </div>
                         <?php 
@@ -377,7 +377,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
 
                         <?php if (!empty($remaining_classes)): ?>
                             <div class="mt-2">
-                                <span class="text-danger small fw-bold"><i class="fas fa-exclamation-circle me-1"></i> غیر درج شدہ کلاسز (ایکشن مطلوب):</span>
+                                <span class="text-danger small fw-bold"><i class="fas fa-exclamation-circle me-1"></i> <?php echo ($lang=='en') ? 'Unmarked Classes (Action Required):' : 'غیر درج شدہ کلاسز (ایکشن مطلوب):'; ?></span>
                                 <div class="d-flex flex-wrap gap-1 mt-1">
                                     <?php foreach ($remaining_classes as $rc): ?>
                                         <a href="attendance.php?class=<?php echo urlencode($rc['name']); ?>" class="badge bg-danger-subtle text-danger border border-danger text-decoration-none py-1 px-2 rounded-pill small">
@@ -388,7 +388,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                             </div>
                         <?php else: ?>
                             <div class="text-success small fw-bold mt-2">
-                                <i class="fas fa-check-circle me-1"></i> ماشاءاللہ! آج تمام کلاسز کی حاضری مکمل ہو چکی ہے۔
+                                <i class="fas fa-check-circle me-1"></i> <?php echo ($lang=='en') ? 'Alhamdulillah! All classes attendance marked today.' : 'ماشاءاللہ! آج تمام کلاسز کی حاضری مکمل ہو چکی ہے۔'; ?>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -398,26 +398,26 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                 <div class="col-lg-5 col-12">
                     <div class="p-3 bg-light rounded-3 h-100 border d-flex flex-column justify-content-between">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="fw-bold text-dark small"><i class="fas fa-chalkboard-teacher text-primary me-1"></i> اساتذہ کرام کی حاضری:</span>
-                            <a href="teacher_leaves.php" class="small text-decoration-none fw-bold text-primary">چھٹیوں کا ریکارڈ &larr;</a>
+                            <span class="fw-bold text-dark small"><i class="fas fa-chalkboard-teacher text-primary me-1"></i> <?php echo ($lang=='en') ? 'Teachers Attendance:' : 'اساتذہ کرام کی حاضری:'; ?></span>
+                            <a href="teacher_leaves.php" class="small text-decoration-none fw-bold text-primary"><?php echo ($lang=='en') ? 'Leaves Record &rarr;' : 'چھٹیوں کا ریکارڈ &larr;'; ?></a>
                         </div>
                         <div class="row g-2 text-center my-auto">
                             <div class="col-4">
                                 <div class="bg-white p-2 rounded-3 border">
                                     <span class="text-success fw-bold d-block h5 mb-0"><?php echo $t_today_present; ?></span>
-                                    <small class="text-muted" style="font-size: 11px;">حاضر</small>
+                                    <small class="text-muted" style="font-size: 11px;"><?php echo ($lang=='en') ? 'Present' : 'حاضر'; ?></small>
                                 </div>
                             </div>
                             <div class="col-4">
                                 <div class="bg-white p-2 rounded-3 border">
                                     <span class="text-warning fw-bold d-block h5 mb-0"><?php echo $t_today_leave; ?></span>
-                                    <small class="text-muted" style="font-size: 11px;">رخصت</small>
+                                    <small class="text-muted" style="font-size: 11px;"><?php echo ($lang=='en') ? 'Leave' : 'رخصت'; ?></small>
                                 </div>
                             </div>
                             <div class="col-4">
                                 <div class="bg-white p-2 rounded-3 border">
                                     <span class="text-danger fw-bold d-block h5 mb-0"><?php echo $t_today_absent; ?></span>
-                                    <small class="text-muted" style="font-size: 11px;">غیر حاضر</small>
+                                    <small class="text-muted" style="font-size: 11px;"><?php echo ($lang=='en') ? 'Absent' : 'غیر حاضر'; ?></small>
                                 </div>
                             </div>
                         </div>
@@ -433,7 +433,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
             <div class="neobox p-0 overflow-hidden">
                 <div class="bg-light fw-bold py-3 px-4 border-bottom d-flex justify-content-between align-items-center">
                     <span><i class="fas fa-clock me-2 text-primary"></i> <?php echo t('recent_admissions'); ?></span>
-                    <a href="students.php" class="btn btn-sm btn-outline-primary rounded-pill">تمام دیکھیں</a>
+                    <a href="students.php" class="btn btn-sm btn-outline-primary rounded-pill"><?php echo ($lang=='en') ? 'View All' : 'تمام دیکھیں'; ?></a>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0 align-middle">
@@ -471,7 +471,8 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                                     echo "<tr><td class='px-4 text-muted'>#" . htmlspecialchars($row['id'] ?? '') . "</td><td class='fw-bold text-primary'>" . htmlspecialchars($row['name'] ?? '') . "</td><td>" . htmlspecialchars($row['father_name'] ?? '') . "</td><td>" . $adm_date_str . "</td></tr>";
                                 }
                             } else {
-                                echo "<tr><td colspan='4' class='text-center text-muted py-3'>کوئی حالیہ داخلہ موجود نہیں۔</td></tr>";
+                                    $no_adm_msg = ($lang=='en') ? 'No recent admissions found.' : 'کوئی حالیہ داخلہ موجود نہیں۔';
+                                    echo "<tr><td colspan='4' class='text-center text-muted py-3'>" . $no_adm_msg . "</td></tr>";
                             }
                             ?>
                         </tbody>
@@ -487,13 +488,13 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                 <div class="list-group list-group-flush">
                     <?php if(has_perm('manage_hifz')): ?>
                     <a href="hifz.php" class="list-group-item list-group-item-action py-3 border-0 border-bottom d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-quran me-2 text-success"></i> حفظ (روزانہ اندراج)</span>
+                        <span><i class="fas fa-quran me-2 text-success"></i> <?php echo ($lang=='en') ? 'Hifz (Daily Progress)' : 'حفظ (روزانہ اندراج)'; ?></span>
                         <i class="fas fa-chevron-left small opacity-50"></i>
                     </a>
                     <?php endif; ?>
                     <?php if(has_perm('manage_academics')): ?>
                     <a href="academic_entry_dashboard.php" class="list-group-item list-group-item-action py-3 border-0 border-bottom d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-book-open me-2 text-primary"></i> تعلیمی رپورٹ (اندراج)</span>
+                        <span><i class="fas fa-book-open me-2 text-primary"></i> <?php echo ($lang=='en') ? 'Academic Report (Entry)' : 'تعلیمی رپورٹ (اندراج)'; ?></span>
                         <i class="fas fa-chevron-left small opacity-50"></i>
                     </a>
                     <?php endif; ?>
@@ -511,19 +512,19 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                     <?php endif; ?>
                     <?php if(has_perm('manage_students')): ?>
                     <a href="students.php" class="list-group-item list-group-item-action py-3 border-0 border-bottom d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-user-graduate me-2 text-info"></i> طلباء کی فہرست</span>
+                        <span><i class="fas fa-user-graduate me-2 text-info"></i> <?php echo ($lang=='en') ? 'Students List' : 'طلباء کی فہرست'; ?></span>
                         <i class="fas fa-chevron-left small opacity-50"></i>
                     </a>
                     <?php endif; ?>
                     <?php if(has_perm('manage_teachers') || has_perm('manage_attendance')): ?>
                     <a href="teacher_leaves.php" class="list-group-item list-group-item-action py-3 border-0 border-bottom d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-calendar-minus me-2 text-primary"></i> اساتذہ رخصت مینیجمنٹ</span>
+                        <span><i class="fas fa-calendar-minus me-2 text-primary"></i> <?php echo ($lang=='en') ? 'Teacher Leaves' : 'اساتذہ رخصت مینیجمنٹ'; ?></span>
                         <i class="fas fa-chevron-left small opacity-50"></i>
                     </a>
                     <?php endif; ?>
                     <?php if(has_perm('manage_notices')): ?>
                     <a href="manage_notices.php" class="list-group-item list-group-item-action py-3 border-0 d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-bullhorn me-2 text-danger"></i> <?php echo t('notices'); ?> بورڈ</span>
+                        <span><i class="fas fa-bullhorn me-2 text-danger"></i> <?php echo ($lang=='en') ? 'Notice Board' : (t('notices') . ' بورڈ'); ?></span>
                         <i class="fas fa-chevron-left small opacity-50"></i>
                     </a>
                     <?php endif; ?>
@@ -538,14 +539,14 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
         <div class="col-lg-6 mb-4">
             <div class="neobox p-0 overflow-hidden h-100">
                 <div class="bg-light fw-bold py-3 px-4 border-bottom d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-stream me-2 text-primary"></i> حالیہ سرگرمیاں (Recent Activities)</span>
-                    <span class="badge bg-primary-subtle text-primary rounded-pill small">لائیو لاگ</span>
+                    <span><i class="fas fa-stream me-2 text-primary"></i> <?php echo ($lang=='en') ? 'Recent Activities' : 'حالیہ سرگرمیاں (Recent Activities)'; ?></span>
+                    <span class="badge bg-primary-subtle text-primary rounded-pill small"><?php echo ($lang=='en') ? 'Live Log' : 'لائیو لاگ'; ?></span>
                 </div>
                 <div class="p-3">
                     <?php if (empty($recent_activities)): ?>
                         <div class="text-center py-4 text-muted">
                             <i class="fas fa-history fa-2x mb-2 opacity-50"></i>
-                            <p class="mb-0 small fw-bold">فی الوقت کوئی نئی سرگرمی درج نہیں ہے۔</p>
+                            <p class="mb-0 small fw-bold"><?php echo ($lang=='en') ? 'No recent activities recorded currently.' : 'فی الوقت کوئی نئی سرگرمی درج نہیں ہے۔'; ?></p>
                         </div>
                     <?php else: ?>
                         <div class="timeline-list">
@@ -580,14 +581,14 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
         <div class="col-lg-6 mb-4">
             <div class="neobox p-0 overflow-hidden h-100">
                 <div class="bg-light fw-bold py-3 px-4 border-bottom d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-award me-2 text-warning"></i> نمایاں طلبہ (Top 5 Students)</span>
-                    <a href="students.php" class="btn btn-sm btn-outline-primary rounded-pill">تمام طلبہ</a>
+                    <span><i class="fas fa-award me-2 text-warning"></i> <?php echo ($lang=='en') ? 'Top 5 Students' : 'نمایاں طلبہ (Top 5 Students)'; ?></span>
+                    <a href="students.php" class="btn btn-sm btn-outline-primary rounded-pill"><?php echo ($lang=='en') ? 'All Students' : 'تمام طلبہ'; ?></a>
                 </div>
                 <div class="p-3">
                     <?php if (empty($top_students)): ?>
                         <div class="text-center py-4 text-muted">
                             <i class="fas fa-user-graduate fa-2x mb-2 opacity-50"></i>
-                            <p class="mb-0 small fw-bold">طلبہ کا ڈیٹا دستیاب نہیں ہے۔</p>
+                            <p class="mb-0 small fw-bold"><?php echo ($lang=='en') ? 'Student data not available.' : 'طلبہ کا ڈیٹا دستیاب نہیں ہے۔'; ?></p>
                         </div>
                     <?php else: ?>
                         <div class="list-group list-group-flush">
@@ -601,17 +602,17 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                                         </span>
                                         <div>
                                             <span class="fw-bold text-dark d-block"><?php echo htmlspecialchars($std['name']); ?></span>
-                                            <small class="text-muted">ولدیت: <?php echo htmlspecialchars($std['father_name'] ?: '—'); ?> | کلاس: <?php echo htmlspecialchars($std['class'] ?: '—'); ?></small>
+                                            <small class="text-muted"><?php echo ($lang=='en') ? 'Father: ' : 'ولدیت: '; ?><?php echo htmlspecialchars($std['father_name'] ?: '—'); ?> | <?php echo ($lang=='en') ? 'Class: ' : 'کلاس: '; ?><?php echo htmlspecialchars($std['class'] ?: '—'); ?></small>
                                         </div>
                                     </div>
                                     <div class="text-end">
                                         <?php if (!empty($std['avg_marks'])): ?>
                                             <span class="badge bg-success-subtle text-success border border-success px-2 py-1 rounded-pill fw-bold">
-                                                <?php echo $std['avg_marks']; ?> نمبر
+                                                <?php echo $std['avg_marks'] . ' ' . (($lang=='en') ? 'Marks' : 'نمبر'); ?>
                                             </span>
                                         <?php else: ?>
                                             <span class="badge bg-info-subtle text-info border border-info px-2 py-1 rounded-pill small">
-                                                فعال طالب علم
+                                                <?php echo ($lang=='en') ? 'Active Student' : 'فعال طالب علم'; ?>
                                             </span>
                                         <?php endif; ?>
                                     </div>
@@ -670,17 +671,19 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
 <?php if($role == 'admin'): ?>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    fetch('ajax_insight.php')
+    const isEn = '<?php echo $lang; ?>' === 'en';
+    const fallbackErrMsg = isEn ? "Could not connect to AI advisor." : "اے آئی سے رابطہ نہ ہو سکا۔";
+    fetch('ajax_insight.php?lang=<?php echo $lang; ?>')
         .then(response => response.text())
         .then(data => {
             if(data.trim() !== "") {
                 document.getElementById('ai-insight-text').innerText = data;
             } else {
-                document.getElementById('ai-insight-text').innerText = "اے آئی سے رابطہ نہ ہو سکا۔";
+                document.getElementById('ai-insight-text').innerText = fallbackErrMsg;
             }
         })
         .catch(err => {
-            document.getElementById('ai-insight-text').innerText = "اے آئی سے رابطہ نہ ہو سکا۔";
+            document.getElementById('ai-insight-text').innerText = fallbackErrMsg;
         });
 });
 </script>

@@ -1,6 +1,7 @@
 // ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously, deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'sync_status_badge.dart';
 import '../screens/dashboard.dart';
 import '../utils/globals.dart';
 
@@ -99,13 +100,11 @@ class MadrasaScaffold extends StatelessWidget {
             ),
           ),
           iconTheme: IconThemeData(color: textColor),
-          // Sync بٹن بائیں طرف (leading میں)
+          // Sync بٹن بائیں طرف (leading میں) بذریعہ SyncStatusBadge
           leading: showSyncButton && onSync != null
-              ? IconButton(
-                  icon: Icon(Icons.sync, color: textColor),
-                  tooltip:
-                      isUrduGlobal.value ? 'ڈیٹا ہم آہنگ کریں' : 'Sync Data',
-                  onPressed: onSync,
+              ? SyncStatusBadge(
+                  color: textColor,
+                  onTap: onSync,
                 )
               : null,
           // دائیں طرف Menu ہمیشہ رہے گا (drawer کا)

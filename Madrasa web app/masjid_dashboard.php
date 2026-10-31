@@ -272,7 +272,9 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
         // 10. Phase 1: Recent Activity Logs
         try {
             if (function_exists('ensure_phase1_tables')) ensure_phase1_tables($pdo);
-            $recent_activities = $pdo->query("SELECT * FROM activity_logs WHERE system_type='Masjid' ORDER BY id DESC LIMIT 8")->fetchAll(PDO::FETCH_ASSOC);
+            $stmt_act = $pdo->prepare("SELECT * FROM activity_logs WHERE system_type='Masjid' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) ORDER BY id DESC LIMIT 8");
+            $stmt_act->execute([$masjid_tenant_id]);
+            $recent_activities = $stmt_act->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $e) {}
 
     } catch (Throwable $e) {
@@ -367,10 +369,10 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
         <div class="col-xl-2 col-lg-4 col-sm-6">
             <a href="attendance.php" class="text-decoration-none">
                 <div class="stat-card shadow-sm h-100 p-3" style="background: linear-gradient(135deg, #00695c 0%, #00897b 100%); border-radius: 14px; color: white;">
-                    <div class="small text-white-50 mb-1">آج کی حاضری</div>
+                    <div class="small text-white-50 mb-1"><?php echo ($lang === 'en') ? "Today's Attendance" : 'آج کی حاضری'; ?></div>
                     <div class="fw-bold" style="font-size: 0.95rem; line-height: 1.5;">
-                        حاضر: <?php echo $present_today_pct; ?>% | غیر: <?php echo $absent_today_pct; ?>%<br>
-                        رخصت: <?php echo $leave_today_pct; ?>% | تاخیر: <?php echo $late_today_pct; ?>%
+                        <?php if ($lang === 'en'): ?>Present: <?php echo $present_today_pct; ?>% | Absent: <?php echo $absent_today_pct; ?>%<br><?php else: ?>حاضر: <?php echo $present_today_pct; ?>% | غیر: <?php echo $absent_today_pct; ?>%<br><?php endif; ?>
+                        <?php if ($lang === 'en'): ?>Leave: <?php echo $leave_today_pct; ?>% | Late: <?php echo $late_today_pct; ?>%<?php else: ?>رخصت: <?php echo $leave_today_pct; ?>% | تاخیر: <?php echo $late_today_pct; ?>%<?php endif; ?>
                     </div>
                 </div>
             </a>

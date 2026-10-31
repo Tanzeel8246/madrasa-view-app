@@ -123,13 +123,13 @@ $today = date('Y-m-d');
     <div class="row mb-4 align-items-center">
         <div class="col-md-7">
             <h3 class="fw-bold text-primary mb-1">
-                <i class="fas fa-qrcode text-success me-2"></i> اسمارٹ کیو آر و بارکوڈ حاضری اسکینر
+                <i class="fas fa-qrcode text-success me-2"></i> <?php echo __('اسمارٹ کیو آر و بارکوڈ حاضری اسکینر', 'Smart QR & Barcode Attendance Scanner'); ?>
             </h3>
-            <p class="text-muted small mb-0">کیمرہ اسکینر یا بارکوڈ گن سے فوری خودکار حاضری مارک کریں۔</p>
+            <p class="text-muted small mb-0"><?php echo __('کیمرہ اسکینر یا بارکوڈ گن سے فوری خودکار حاضری مارک کریں۔', 'Mark instant auto attendance via camera scanner or barcode gun.'); ?></p>
         </div>
         <div class="col-md-5 text-md-end mt-3 mt-md-0">
             <span class="badge bg-primary fs-6 px-3 py-2 rounded-pill shadow-sm">
-                <i class="fas fa-calendar-alt me-1"></i> آج: <?php echo date('d-M-Y'); ?>
+                <i class="fas fa-calendar-alt me-1"></i> <?php echo __('آج:', 'Today:'); ?> <?php echo date('d-M-Y'); ?>
             </span>
         </div>
     </div>
@@ -141,19 +141,19 @@ $today = date('Y-m-d');
                 <div class="card-header bg-white border-0 pt-4 px-4 pb-0">
                     <div class="row g-2">
                         <div class="col-6">
-                            <label class="form-label small fw-bold text-dark">حاضری کی قسم:</label>
+                            <label class="form-label small fw-bold text-dark"><?php echo __('حاضری کی قسم:', 'Attendance Type:'); ?></label>
                             <select id="attType" class="form-select border-primary shadow-none fw-bold">
-                                <option value="student" selected>🎓 طلباء کرام</option>
-                                <option value="teacher">👨‍🏫 اساتذہ کرام</option>
+                                <option value="student" selected>🎓 <?php echo __('طلباء کرام', 'Students'); ?></option>
+                                <option value="teacher">👨‍🏫 <?php echo __('اساتذہ کرام', 'Teachers'); ?></option>
                             </select>
                         </div>
                         <div class="col-6" id="slotContainer">
-                            <label class="form-label small fw-bold text-dark">نوبت / وقت:</label>
+                            <label class="form-label small fw-bold text-dark"><?php echo __('نوبت / وقت:', 'Shift / Slot:'); ?></label>
                             <select id="attSlot" class="form-select border-primary shadow-none fw-bold">
-                                <option value="1" selected>صبح (حاضری 1)</option>
-                                <option value="2">ظہر (حاضری 2)</option>
-                                <option value="3">عصر (حاضری 3)</option>
-                                <option value="4">مغرب / عشاء (حاضری 4)</option>
+                                <option value="1" selected><?php echo __('صبح (حاضری 1)', 'Morning (Slot 1)'); ?></option>
+                                <option value="2"><?php echo __('ظہر (حاضری 2)', 'Noon (Slot 2)'); ?></option>
+                                <option value="3"><?php echo __('عصر (حاضری 3)', 'Afternoon (Slot 3)'); ?></option>
+                                <option value="4"><?php echo __('مغرب / عشاء (حاضری 4)', 'Evening (Slot 4)'); ?></option>
                             </select>
                         </div>
                     </div>
@@ -166,9 +166,9 @@ $today = date('Y-m-d');
                         <div id="scannerPlaceholder" class="p-5 d-flex flex-column align-items-center justify-content-center" style="min-height: 280px;">
                             <i class="fas fa-camera fa-3x text-white-50 mb-3 animate__animated animate__pulse animate__infinite"></i>
                             <button id="startScanBtn" class="btn btn-success btn-lg px-4 rounded-pill shadow fw-bold">
-                                <i class="fas fa-video me-2"></i> کیمرہ آن کریں
+                                <i class="fas fa-video me-2"></i> <?php echo __('کیمرہ آن کریں', 'Turn Camera On'); ?>
                             </button>
-                            <small class="text-white-50 mt-2">یا نیچے بارکوڈ گن سے اسکین کریں</small>
+                            <small class="text-white-50 mt-2"><?php echo __('یا نیچے بارکوڈ گن سے اسکین کریں', 'Or scan via barcode gun below'); ?></small>
                         </div>
                     </div>
 
@@ -177,13 +177,13 @@ $today = date('Y-m-d');
                         <span class="input-group-text bg-light border-0 ps-3">
                             <i class="fas fa-barcode fa-lg text-primary"></i>
                         </span>
-                        <input type="text" id="barcodeInput" class="form-control border-0 px-3 fs-5 text-center fw-bold" placeholder="بارکوڈ گن یا داخلہ نمبر یہاں اسکین کریں..." autofocus autocomplete="off">
+                        <input type="text" id="barcodeInput" class="form-control border-0 px-3 fs-5 text-center fw-bold" placeholder="<?php echo __('بارکوڈ گن یا داخلہ نمبر یہاں اسکین کریں...', 'Scan barcode gun or admission no here...'); ?>" autofocus autocomplete="off">
                         <button id="manualSubmitBtn" class="btn btn-primary px-4 fw-bold">
-                            <i class="fas fa-check-circle me-1"></i> اندراج
+                            <i class="fas fa-check-circle me-1"></i> <?php echo __('اندراج', 'Submit'); ?>
                         </button>
                     </div>
                     <small class="text-muted d-block text-center mt-2">
-                        <i class="fas fa-info-circle me-1"></i> بارکوڈ گن براہ راست ان پٹ کر کے خودکار Enter دباتی ہے۔
+                        <i class="fas fa-info-circle me-1"></i> <?php echo __('بارکوڈ گن براہ راست ان پٹ کر کے خودکار Enter دباتی ہے۔', 'Barcode gun inputs directly and presses Enter automatically.'); ?>
                     </small>
                 </div>
             </div>
@@ -194,10 +194,10 @@ $today = date('Y-m-d');
             <div class="card border-0 shadow-sm rounded-4 h-100">
                 <div class="card-header bg-white border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
                     <h5 class="fw-bold mb-0 text-dark">
-                        <i class="fas fa-user-check text-success me-2"></i> تازہ ترین اسکین شدہ تفصیل
+                        <i class="fas fa-user-check text-success me-2"></i> <?php echo __('تازہ ترین اسکین شدہ تفصیل', 'Latest Scanned Details'); ?>
                     </h5>
                     <span class="badge bg-success-subtle text-success border border-success px-3 py-1 rounded-pill fw-bold">
-                        آج کے اسکینز: <span id="scanCount">0</span>
+                        <?php echo __('آج کے اسکینز:', "Today's Scans:"); ?> <span id="scanCount">0</span>
                     </span>
                 </div>
 
@@ -207,8 +207,8 @@ $today = date('Y-m-d');
                         <div class="rounded-circle bg-light p-4 d-inline-block mb-3 border">
                             <i class="fas fa-id-card fa-4x text-muted"></i>
                         </div>
-                        <h5 class="text-muted fw-bold">اسکیننگ کے لیے تیار...</h5>
-                        <p class="text-muted small">طالب علم یا استاد کا کیو آر کوڈ یا بارکوڈ اسکین کیجیے۔</p>
+                        <h5 class="text-muted fw-bold"><?php echo __('اسکیننگ کے لیے تیار...', 'Ready for scanning...'); ?></h5>
+                        <p class="text-muted small"><?php echo __('طالب علم یا استاد کا کیو آر کوڈ یا بارکوڈ اسکین کیجیے۔', 'Scan student or teacher QR / barcode.'); ?></p>
                     </div>
 
                     <!-- Success Scanned State -->
@@ -223,7 +223,7 @@ $today = date('Y-m-d');
                             <span class="badge bg-info text-dark fs-6 px-3 py-2 rounded-pill" id="resTime">-</span>
                         </div>
                         <div class="alert alert-success fw-bold rounded-3 py-2 px-4 shadow-sm d-inline-block">
-                            <i class="fas fa-check-double me-1"></i> <span id="resMsg">حاضری کامیابی سے درج ہو گئی</span>
+                            <i class="fas fa-check-double me-1"></i> <span id="resMsg"><?php echo __('حاضری کامیابی سے درج ہو گئی', 'Attendance marked successfully'); ?></span>
                         </div>
                     </div>
 
@@ -232,9 +232,9 @@ $today = date('Y-m-d');
                         <div class="rounded-circle bg-danger bg-opacity-10 text-danger p-3 d-inline-block mb-3 border border-danger">
                             <i class="fas fa-exclamation-triangle fa-4x"></i>
                         </div>
-                        <h4 class="fw-bold text-danger mb-2" id="errMsg">ریکارڈ نہیں ملا</h4>
+                        <h4 class="fw-bold text-danger mb-2" id="errMsg"><?php echo __('ریکارڈ نہیں ملا', 'Record not found'); ?></h4>
                         <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 mt-2" onclick="resetCard()">
-                            دوبارہ کوشش کریں
+                            <?php echo __('دوبارہ کوشش کریں', 'Try Again'); ?>
                         </button>
                     </div>
                 </div>

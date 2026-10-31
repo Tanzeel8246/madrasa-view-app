@@ -13,6 +13,11 @@ try {
     die("<div style='font-family:sans-serif;padding:40px;text-align:center;direction:rtl;'><h2>ڈیٹابیس رابطہ کی خرابی</h2><p style='color:#c00;font-size:16px;'>" . htmlspecialchars($e->getMessage()) . "</p></div>");
 }
 
+// Language initialization and persistence
+if (isset($_GET['lang'])) { $_SESSION['lang'] = $_GET['lang']; }
+if (isset($_GET['lang'])) { @setcookie('app_language', $_GET['lang'], time() + (86400 * 365), '/'); }
+$lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : ($_COOKIE['app_language'] ?? 'ur');
+
 // 1. Fetch Global Live Stats for Hero Metrics
 $stat_tenants = 50;
 $stat_students = 15000;
@@ -35,9 +40,9 @@ try {
 
 // 2. Self-heal and synchronize official subscription plan prices in database
 try {
-    $pdo->exec("UPDATE subscription_plans SET price = 1500, price_monthly = 1500, price_yearly = 15000, max_students = 50, max_classes = 3, max_teachers = 4, is_free_trial = 0 WHERE LOWER(code) = 'basic'");
-    $pdo->exec("UPDATE subscription_plans SET price = 2500, price_monthly = 2500, price_yearly = 25000, max_students = 100, max_classes = 6, max_teachers = 8, is_free_trial = 0 WHERE LOWER(code) = 'standard'");
-    $pdo->exec("UPDATE subscription_plans SET price = 4000, price_monthly = 4000, price_yearly = 40000, max_students = 200, max_classes = 12, max_teachers = 16, is_free_trial = 0 WHERE LOWER(code) IN ('premium_200', 'advanced', 'premium')");
+    $pdo->exec("UPDATE subscription_plans SET price = 1000, price_monthly = 1000, price_yearly = 10000, max_students = 50, max_classes = 3, max_teachers = 4, is_free_trial = 0 WHERE LOWER(code) = 'basic'");
+    $pdo->exec("UPDATE subscription_plans SET price = 2000, price_monthly = 2000, price_yearly = 20000, max_students = 100, max_classes = 6, max_teachers = 8, is_free_trial = 0 WHERE LOWER(code) = 'standard'");
+    $pdo->exec("UPDATE subscription_plans SET price = 3000, price_monthly = 3000, price_yearly = 30000, max_students = 200, max_classes = 12, max_teachers = 16, is_free_trial = 0 WHERE LOWER(code) IN ('premium_200', 'advanced', 'premium')");
     $pdo->exec("UPDATE subscription_plans SET price = 0, price_monthly = 0, price_yearly = 0, max_students = 20, max_classes = 1, max_teachers = 2, is_free_trial = 1 WHERE LOWER(code) = 'free'");
     $pdo->exec("UPDATE subscription_plans SET price = 0, price_monthly = 0, price_yearly = 0, max_students = 99999, max_classes = 99999, max_teachers = 99999, is_free_trial = 0 WHERE LOWER(code) = 'enterprise'");
 } catch (Throwable $eSyncPlans) {}
@@ -91,9 +96,9 @@ if (empty($plans)) {
             'code' => 'basic',
             'name' => 'بنیادی پیکج (Basic)',
             'description' => '50 طلبہ، 3 کلاسز، 4 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)',
-            'price' => 1500,
-            'price_monthly' => 1500,
-            'price_yearly' => 15000,
+            'price' => 1000,
+            'price_monthly' => 1000,
+            'price_yearly' => 10000,
             'max_students' => 50,
             'max_classes' => 3,
             'max_teachers' => 4,
@@ -106,9 +111,9 @@ if (empty($plans)) {
             'code' => 'standard',
             'name' => 'معیاری پیکج (Standard)',
             'description' => '100 طلبہ، 6 کلاسز، 8 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)',
-            'price' => 2500,
-            'price_monthly' => 2500,
-            'price_yearly' => 25000,
+            'price' => 2000,
+            'price_monthly' => 2000,
+            'price_yearly' => 20000,
             'max_students' => 100,
             'max_classes' => 6,
             'max_teachers' => 8,
@@ -121,9 +126,9 @@ if (empty($plans)) {
             'code' => 'premium_200',
             'name' => 'ایڈوانس پیکج (Advanced)',
             'description' => '200 طلبہ، 12 کلاسز، 16 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)',
-            'price' => 4000,
-            'price_monthly' => 4000,
-            'price_yearly' => 40000,
+            'price' => 3000,
+            'price_monthly' => 3000,
+            'price_yearly' => 30000,
             'max_students' => 200,
             'max_classes' => 12,
             'max_teachers' => 16,
@@ -151,14 +156,14 @@ if (empty($plans)) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="ur" dir="rtl">
+<html lang="<?php echo $lang; ?>" dir="<?php echo ($lang == 'ur') ? 'rtl' : 'ltr'; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <!-- Primary SEO Meta Tags -->
-    <title>MC-MMS — مائنڈکرافٹ کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم | جدید دینی تعلیمی ERP سافٹ ویئر</title>
-    <meta name="title" content="MC-MMS — مائنڈکرافٹ کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم | جدید دینی تعلیمی ERP سافٹ ویئر">
+    <title><?php echo ($lang == 'ur') ? 'MC-MMS — مائنڈکرافٹ کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم | جدید دینی تعلیمی ERP سافٹ ویئر' : 'MC-MMS — MindCrafts Cloud Madrasa & Masjid Management System | Islamic ERP'; ?></title>
+    <meta name="title" content="<?php echo ($lang == 'ur') ? 'MC-MMS — مائنڈکرافٹ کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم | جدید دینی تعلیمی ERP سافٹ ویئر' : 'MC-MMS — MindCrafts Cloud Madrasa & Masjid Management System | Islamic ERP'; ?>">
     <meta name="description" content="پاکستان کا جدید ترین کلاؤڈ مدرسہ و مسجد مینیجمنٹ سسٹم (MC-MMS)۔ طلبہ داخلہ، روزانہ حاضری، آن لائن حفظ و ناظرہ ٹریکر، شرعی ڈبل انٹری اکاؤنٹنگ، فیس وصولی، دارالاقامہ، کتب خانہ، امتحانات اور AI خودکار رپورٹنگ۔ ویب، اینڈرائڈ اور ونڈوز ہم آہنگ۔ مفت ٹرائل حاصل کریں۔">
     <meta name="keywords" content="مدرسہ سافٹ ویئر, مسجد مینیجمنٹ سسٹم, حفظ قرآن ٹریکر, مدرسہ اکاؤنٹنگ سافٹ ویئر, مدرسہ ERP پاکستان, کلاؤڈ مدرسہ سافٹ ویئر, جامعہ مینیجمنٹ سسٹم, دارالعلوم سافٹ ویئر, دینی مدارس ریکارڈ سسٹم, Islamic School Management Software, Madrasa ERP, Masjid Management System, Maktab App, Hifz Quran Tracker, Urdu Madrasa Software, MC-MMS">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
@@ -300,7 +305,11 @@ if (empty($plans)) {
     </script>
     
     <!-- CSS & Fonts -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <?php if ($lang == 'ur'): ?>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <?php else: ?>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <?php endif; ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -669,8 +678,8 @@ if (empty($plans)) {
             <a class="navbar-brand d-flex align-items-center gap-2" href="#">
                 <img src="logo_mindcrafts.svg" alt="Mindcrafts AI" style="width: 44px; height: 44px; border-radius: 12px; object-fit: contain; background: #061814; border: 1px solid rgba(16, 185, 129, 0.4); padding: 2px;">
                 <div>
-                    <span class="fw-bold fs-5 tracking-tight" style="color: #fff;">مدرسہ مینیجمنٹ <span style="color: var(--sa-primary);">سسٹم</span></span>
-                    <small class="d-block text-muted" style="font-size: 11px; margin-top: -4px;">بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI) — <span class="badge bg-success bg-opacity-25 text-success font-monospace" style="font-size: 10px;">v5.7.123 (SaaS Edition)</span></small>
+                    <span class="fw-bold fs-5 tracking-tight" style="color: #fff;"><?php echo ($lang=='ur') ? 'مدرسہ مینیجمنٹ <span style="color: var(--sa-primary);">سسٹم</span>' : 'Madrasa Management <span style="color: var(--sa-primary);">System</span>'; ?></span>
+                    <small class="d-block text-muted" style="font-size: 11px; margin-top: -4px;"><?php echo ($lang=='ur') ? 'بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)' : 'By MindCrafts AI'; ?> — <span class="badge bg-success bg-opacity-25 text-success font-monospace" style="font-size: 10px;">v5.7.134 (SaaS Edition)</span></small>
                 </div>
             </a>
 
@@ -680,22 +689,25 @@ if (empty($plans)) {
 
             <div class="collapse navbar-collapse" id="navMenu">
                 <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
-                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#home">ہوم</a></li>
-                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#platforms">پلیٹ فارمز</a></li>
-                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#ai-features"><i class="fas fa-sparkles text-warning me-1"></i> AI فیچرز</a></li>
-                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#features">خصوصیات</a></li>
-                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#how-it-works">طریقہ کار</a></li>
-                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#pricing">پیکجز و قیمتیں</a></li>
-                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#rules">قواعد و ضوابط</a></li>
-                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#faq">سوالات</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#home"><?php echo __('ہوم', 'Home'); ?></a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#platforms"><?php echo __('پلیٹ فارمز', 'Platforms'); ?></a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#ai-features"><i class="fas fa-sparkles text-warning me-1"></i> <?php echo __('AI فیچرز', 'AI Features'); ?></a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#features"><?php echo __('خصوصیات', 'Features'); ?></a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#how-it-works"><?php echo __('طریقہ کار', 'How It Works'); ?></a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#pricing"><?php echo __('پیکجز و قیمتیں', 'Pricing'); ?></a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#rules"><?php echo __('قواعد و ضوابط', 'Terms'); ?></a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="#faq"><?php echo __('سوالات', 'FAQs'); ?></a></li>
                 </ul>
 
                 <div class="d-flex align-items-center gap-2">
+                    <a href="?lang=<?php echo ($lang=='ur')?'en':'ur'; ?>" class="btn btn-sa-outline py-2 px-3 fs-6" title="<?php echo ($lang=='ur')?'Switch to English':'اردو میں دیکھیں'; ?>">
+                        <i class="fas fa-globe"></i> <?php echo ($lang=='ur') ? 'English' : 'اردو'; ?>
+                    </a>
                     <a href="login.php" class="btn btn-sa-outline py-2 px-3 fs-6">
-                        <i class="fas fa-sign-in-alt"></i> لاگ ان
+                        <i class="fas fa-sign-in-alt"></i> <?php echo __('لاگ ان', 'Login'); ?>
                     </a>
                     <a href="register.php" class="btn btn-sa-primary py-2 px-3 fs-6">
-                        <i class="fas fa-rocket"></i> مفت رجسٹریشن
+                        <i class="fas fa-rocket"></i> <?php echo __('مفت رجسٹریشن', 'Free Register'); ?>
                     </a>
                 </div>
             </div>
@@ -707,27 +719,27 @@ if (empty($plans)) {
         <div class="container py-4 text-center">
             <div class="mb-3">
                 <span class="badge-pill-glow">
-                    <i class="fas fa-shield-halved"></i> محفوظ، تیز رفتار، ملٹی ٹیننٹ کلاؤڈ سسٹم (SaaS)
+                    <i class="fas fa-shield-halved"></i> <?php echo __('محفوظ، تیز رفتار، ملٹی ٹیننٹ کلاؤڈ سسٹم (SaaS)', 'Secure, High-Speed, Multi-Tenant Cloud SaaS System'); ?>
                 </span>
             </div>
 
-            <h1 class="hero-title urdu-font mb-4" style="max-width: 950px; margin: 0 auto;">
-                مدارس، جامعات اور مساجد کا مکمل ڈیجیٹل انتظام — ایک ہی مرکزی پلیٹ فارم پر
+            <h1 class="hero-title <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-4" style="max-width: 950px; margin: 0 auto;">
+                <?php echo __('مدارس، جامعات اور مساجد کا مکمل ڈیجیٹل انتظام — ایک ہی مرکزی پلیٹ فارم پر', 'Complete Digital Management for Islamic Schools, Seminaries & Masjids — On a Unified Cloud Platform'); ?>
             </h1>
 
-            <p class="fs-5 mb-5 mx-auto urdu-font" style="max-width: 800px; color: var(--sa-text-sub);">
-                ویب ایڈمن پورٹل، اینڈرائڈ ایپ اور ونڈوز ڈیسک ٹاپ سافٹ ویئر کے ذریعے حفظ، ناظرہ، کتب، طلبہ و اساتذہ بائیو میٹرک حاضری، مکمل ڈبل انٹری فنانس اور فیسوں کا 100% محفوظ و خودکار نظام۔
+            <p class="fs-5 mb-5 mx-auto <?php echo ($lang=='ur')?'urdu-font':''; ?>" style="max-width: 800px; color: var(--sa-text-sub);">
+                <?php echo __('ویب ایڈمن پورٹل، اینڈرائڈ ایپ اور ونڈوز ڈیسک ٹاپ سافٹ ویئر کے ذریعے حفظ، ناظرہ، کتب، طلبہ و اساتذہ بائیو میٹرک حاضری، مکمل ڈبل انٹری فنانس اور فیسوں کا 100% محفوظ و خودکار نظام۔', 'Web Admin Portal, Android App, and Windows Desktop Software for Hifz, Nazra, Academics, Biometric Attendance, Double-Entry Accounting, and 100% Automated Fee Management.'); ?>
             </p>
 
             <div class="d-flex flex-wrap justify-content-center gap-3 mb-5">
                 <a href="register.php" class="btn btn-sa-primary fs-5 px-4 py-3">
-                    <i class="fas fa-sparkles"></i> مفت رجسٹریشن شروع کریں (20 طلبہ فری)
+                    <i class="fas fa-sparkles"></i> <?php echo __('مفت رجسٹریشن شروع کریں (20 طلبہ فری)', 'Start Free Registration (20 Students Free)'); ?>
                 </a>
                 <a href="login.php" class="btn btn-sa-outline fs-5 px-4 py-3">
-                    <i class="fas fa-building"></i> ادارہ لاگ ان پورٹل
+                    <i class="fas fa-building"></i> <?php echo __('ادارہ لاگ ان پورٹل', 'Institute Login Portal'); ?>
                 </a>
                 <a href="#download-apps" class="btn btn-sa-outline fs-5 px-4 py-3">
-                    <i class="fas fa-download"></i> ایپس ڈاؤن لوڈ کریں
+                    <i class="fas fa-download"></i> <?php echo __('ایپس ڈاؤن لوڈ کریں', 'Download Applications'); ?>
                 </a>
             </div>
 
@@ -736,25 +748,25 @@ if (empty($plans)) {
                 <div class="col-6 col-md-3">
                     <div class="stat-box glass-panel">
                         <div class="stat-number"><?php echo number_format($stat_tenants); ?>+</div>
-                        <div class="text-muted small fw-semibold">رجسٹرڈ ادارے و جامعات</div>
+                        <div class="text-muted small fw-semibold"><?php echo __('رجسٹرڈ ادارے و جامعات', 'Registered Institutes'); ?></div>
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
                     <div class="stat-box glass-panel">
                         <div class="stat-number"><?php echo number_format($stat_students); ?>+</div>
-                        <div class="text-muted small fw-semibold">زیرِ تعلیم فعال طلبہ</div>
+                        <div class="text-muted small fw-semibold"><?php echo __('زیرِ تعلیم فعال طلبہ', 'Active Students Enrolled'); ?></div>
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
                     <div class="stat-box glass-panel">
                         <div class="stat-number">100%</div>
-                        <div class="text-muted small fw-semibold">ڈیٹا پرائیویسی و آئسولیشن</div>
+                        <div class="text-muted small fw-semibold"><?php echo __('ڈیٹا پرائیویسی و آئسولیشن', 'Data Privacy & Isolation'); ?></div>
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
                     <div class="stat-box glass-panel">
                         <div class="stat-number">99.9%</div>
-                        <div class="text-muted small fw-semibold">کلاؤڈ سرور اپ ٹائم</div>
+                        <div class="text-muted small fw-semibold"><?php echo __('کلاؤڈ سرور اپ ٹائم', 'Cloud Server Uptime'); ?></div>
                     </div>
                 </div>
             </div>
@@ -765,9 +777,9 @@ if (empty($plans)) {
     <section id="platforms" class="py-5">
         <div class="container py-4">
             <div class="text-center mb-5">
-                <span class="badge-pill-glow mb-2"><i class="fas fa-cubes"></i> 3 پلیٹ فارمز ایک ساتھ</span>
-                <h2 class="fw-bold urdu-font fs-1">تینوں پلیٹ فارمز پر بیک وقت یکساں ہم آہنگی</h2>
-                <p class="text-muted urdu-font">چاہے آپ دفتر میں ہوں، کلاس روم میں یا سفر میں — آپ کا ادارہ ہمیشہ آپ کے ساتھ ہے</p>
+                <span class="badge-pill-glow mb-2"><i class="fas fa-cubes"></i> <?php echo __('3 پلیٹ فارمز ایک ساتھ', '3 Platforms Simultaneously'); ?></span>
+                <h2 class="fw-bold <?php echo ($lang=='ur')?'urdu-font':''; ?> fs-1"><?php echo __('تینوں پلیٹ فارمز پر بیک وقت یکساں ہم آہنگی', 'Seamless Synchronization Across All 3 Platforms'); ?></h2>
+                <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('چاہے آپ دفتر میں ہوں، کلاس روم میں یا سفر میں — آپ کا ادارہ ہمیشہ آپ کے ساتھ ہے', 'Whether in the office, classroom, or on the go — your institute stays synchronized'); ?></p>
             </div>
 
             <div class="row g-4">
@@ -777,14 +789,14 @@ if (empty($plans)) {
                         <div class="platform-icon-circle" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
                             <i class="fas fa-globe"></i>
                         </div>
-                        <h4 class="fw-bold mb-3">1. پی ایچ پی ویب ایڈمن پینل</h4>
-                        <p class="text-muted urdu-font mb-4">
-                            ہر قسم کے براؤزر اور لیپ ٹاپ پر بغیر کسی انسٹالیشن کے فوری دستیاب۔ پرنسپل، مہتمم اور اکاونٹنٹ کے لیے وسیع ترین ڈیش بورڈ، رپورٹس، اور رسیدیں پرنٹنگ۔
+                        <h4 class="fw-bold mb-3"><?php echo __('1. پی ایچ پی ویب ایڈمن پینل', '1. PHP Web Admin Panel'); ?></h4>
+                        <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-4">
+                            <?php echo __('ہر قسم کے براؤزر اور لیپ ٹاپ پر بغیر کسی انسٹالیشن کے فوری دستیاب۔ پرنسپل، مہتمم اور اکاونٹنٹ کے لیے وسیع ترین ڈیش بورڈ، رپورٹس، اور رسیدیں پرنٹنگ۔', 'Instantly accessible on all modern browsers and laptops without installation. Comprehensive dashboards, reporting, and receipt printing for principals and accountants.'); ?>
                         </p>
                         <ul class="list-unstyled small text-sub">
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i> مکمل اکاؤنٹنگ و واؤچرز</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i> ایکسل/CSV بلک ڈیٹا امپورٹ</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i> خوبصورت کشف الدرجات و اسناد</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i> <?php echo __('مکمل اکاؤنٹنگ و واؤچرز', 'Complete Accounting & Vouchers'); ?></li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i> <?php echo __('ایکسل/CSV بلک ڈیٹا امپورٹ', 'Excel / CSV Bulk Data Import'); ?></li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i> <?php echo __('خوبصورت کشف الدرجات و اسناد', 'Exam Result Cards & Certificates'); ?></li>
                         </ul>
                     </div>
                 </div>
@@ -795,14 +807,14 @@ if (empty($plans)) {
                         <div class="platform-icon-circle" style="background: rgba(6, 182, 212, 0.15); color: #06b6d4;">
                             <i class="fas fa-mobile-screen"></i>
                         </div>
-                        <h4 class="fw-bold mb-3">2. اینڈرائڈ موبائل ایپلیکیشن</h4>
-                        <p class="text-muted urdu-font mb-4">
-                            اساتذہ اور ناظمین کی جیب میں۔ کلاس میں کھڑے ہو کر روزانہ سبق، سبقی، منزل اور حاضری لگائیں۔ آف لائن موڈ اور پش نوٹیفیکیشنز کی مکمل سہولت۔
+                        <h4 class="fw-bold mb-3"><?php echo __('2. اینڈرائڈ موبائل ایپلیکیشن', '2. Android Mobile App'); ?></h4>
+                        <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-4">
+                            <?php echo __('اساتذہ اور ناظمین کی جیب میں۔ کلاس میں کھڑے ہو کر روزانہ سبق، سبقی، منزل اور حاضری لگائیں۔ آف لائن موڈ اور پش نوٹیفیکیشنز کی مکمل سہولت۔', 'Right in teachers\' pockets. Record daily Sabaq, Sabqi, Manzil, and attendance on the spot. Full offline capability with push notifications.'); ?>
                         </p>
                         <ul class="list-unstyled small text-sub">
-                            <li class="mb-2"><i class="fas fa-check text-info me-2"></i> آف لائن فرسٹ (بغیر نیٹ بھی کام جاری)</li>
-                            <li class="mb-2"><i class="fas fa-check text-info me-2"></i> روزانہ سبق و حفظ پروگریس ٹریکر</li>
-                            <li class="mb-2"><i class="fas fa-check text-info me-2"></i> فوری رخصت و شکایات نوٹیفیکیشن</li>
+                            <li class="mb-2"><i class="fas fa-check text-info me-2"></i> <?php echo __('آف لائن فرسٹ (بغیر نیٹ بھی کام جاری)', 'Offline-First (Continues without Internet)'); ?></li>
+                            <li class="mb-2"><i class="fas fa-check text-info me-2"></i> <?php echo __('روزانہ سبق و حفظ پروگریس ٹریکر', 'Daily Lesson & Hifz Progress Tracker'); ?></li>
+                            <li class="mb-2"><i class="fas fa-check text-info me-2"></i> <?php echo __('فوری رخصت و شکایات نوٹیفیکیشن', 'Instant Leave & Complaint Alerts'); ?></li>
                         </ul>
                     </div>
                 </div>
@@ -813,14 +825,14 @@ if (empty($plans)) {
                         <div class="platform-icon-circle" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
                             <i class="fas fa-desktop"></i>
                         </div>
-                        <h4 class="fw-bold mb-3">3. ونڈوز ڈیسک ٹاپ سافٹ ویئر</h4>
-                        <p class="text-muted urdu-font mb-4">
-                            کمپیوٹر پر مقامی FFI SQLite سپیڈ کے ساتھ تیز ترین ڈیٹا انٹری۔ انٹرنیٹ منقطع ہونے پر بھی فیس کٹنگ اور رسیدوں کی خودکار تھرمل و لیزر پرنٹنگ۔
+                        <h4 class="fw-bold mb-3"><?php echo __('3. ونڈوز ڈیسک ٹاپ سافٹ ویئر', '3. Windows Desktop Software'); ?></h4>
+                        <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-4">
+                            <?php echo __('کمپیوٹر پر مقامی FFI SQLite سپیڈ کے ساتھ تیز ترین ڈیٹا انٹری۔ انٹرنیٹ منقطع ہونے پر بھی فیس کٹنگ اور رسیدوں کی خودکار تھرمل و لیزر پرنٹنگ۔', 'Blazing-fast local FFI SQLite speed on desktop PCs. Seamless fee collection, thermal roll, and laser printer receipt generation offline.'); ?>
                         </p>
                         <ul class="list-unstyled small text-sub">
-                            <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> انتہائی تیز رفتار کی بورڈ شارٹ کٹس</li>
-                            <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> تھرمل رول اور A4 رسید پرنٹنگ</li>
-                            <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> کلاؤڈ کے ساتھ بیک گراؤنڈ خودکار سنک</li>
+                            <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> <?php echo __('انتہائی تیز رفتار کی بورڈ شارٹ کٹس', 'High-Speed Keyboard Shortcuts'); ?></li>
+                            <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> <?php echo __('تھرمل رول اور A4 رسید پرنٹنگ', 'Thermal Roll & A4 Receipt Printing'); ?></li>
+                            <li class="mb-2"><i class="fas fa-check text-warning me-2"></i> <?php echo __('کلاؤڈ کے ساتھ بیک گراؤنڈ خودکار سنک', 'Background Cloud Auto-Sync'); ?></li>
                         </ul>
                     </div>
                 </div>
@@ -835,21 +847,21 @@ if (empty($plans)) {
                 <div class="row align-items-center mb-4">
                     <div class="col-12 col-lg-8">
                         <span class="badge-pill-glow mb-2" style="background: rgba(212, 172, 13, 0.15); border-color: rgba(212, 172, 13, 0.4); color: #facc15;">
-                            <i class="fas fa-wand-magic-sparkles"></i> جدید مصنوعی ذہانت (AI) انضمام — MC-MMS 2026
+                            <i class="fas fa-wand-magic-sparkles"></i> <?php echo __('جدید مصنوعی ذہانت (AI) انضمام — MC-MMS 2026', 'Modern Artificial Intelligence (AI) Integration — MC-MMS 2026'); ?>
                         </span>
-                        <h2 class="fw-bold urdu-font fs-1 text-white mt-2">
-                            مصنوعی ذہانت (AI) سے لیس پاکستان کا پہلا جامع مدرسہ ERP
+                        <h2 class="fw-bold <?php echo ($lang=='ur')?'urdu-font':''; ?> fs-1 text-white mt-2">
+                            <?php echo __('مصنوعی ذہانت (AI) سے لیس پاکستان کا پہلا جامع مدرسہ ERP', 'Pakistan\'s First Comprehensive Madrasa ERP Powered by Artificial Intelligence (AI)'); ?>
                         </h2>
-                        <p class="text-muted urdu-font fs-6 mb-0">
-                            تعلیمی رفتار کے سمارٹ تجزیے، آواز سے اردو ٹائپنگ اور خودکار واٹس ایپ الرٹس کے ساتھ اپنے ادارے کا 70% قیمتی وقت اور افرادی قوت بچائیں۔
+                        <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?> fs-6 mb-0">
+                            <?php echo __('تعلیمی رفتار کے سمارٹ تجزیے، آواز سے اردو ٹائپنگ اور خودکار واٹس ایپ الرٹس کے ساتھ اپنے ادارے کا 70% قیمتی وقت اور افرادی قوت بچائیں۔', 'Save 70% of staff time with smart academic progress analytics, voice typing in Urdu & English, and automated WhatsApp alerts.'); ?>
                         </p>
                     </div>
                     <div class="col-12 col-lg-4 text-lg-start mt-3 mt-lg-0">
                         <div class="d-inline-flex align-items-center gap-2 p-2 px-3 rounded-pill" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
                             <i class="fas fa-microchip text-warning fs-4"></i>
                             <div class="text-end">
-                                <div class="text-white small fw-bold">100% کلاؤڈ سمارٹ اے آئی</div>
-                                <div class="text-muted" style="font-size: 11px;">خودکار ڈیٹا پروسیسنگ</div>
+                                <div class="text-white small fw-bold"><?php echo __('100% کلاؤڈ سمارٹ اے آئی', '100% Cloud Smart AI'); ?></div>
+                                <div class="text-muted" style="font-size: 11px;"><?php echo __('خودکار ڈیٹا پروسیسنگ', 'Automated Processing'); ?></div>
                             </div>
                         </div>
                     </div>
@@ -862,10 +874,10 @@ if (empty($plans)) {
                                 <div class="rounded-circle p-2 text-center" style="width: 42px; height: 42px; background: rgba(13, 148, 136, 0.2); color: #2dd4bf;">
                                     <i class="fas fa-microphone-lines"></i>
                                 </div>
-                                <h6 class="fw-bold text-white mb-0 urdu-font">AI وائس ٹائپنگ</h6>
+                                <h6 class="fw-bold text-white mb-0 <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('AI وائس ٹائپنگ', 'AI Voice Typing'); ?></h6>
                             </div>
-                            <p class="text-muted small urdu-font mb-0">
-                                بغیر کی بورڈ کے بول کر اسباق، حاضری، نوٹسز اور طلباء کے کوائف کا فوری اردو و انگریزی اندراج۔
+                            <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-0">
+                                <?php echo __('بغیر کی بورڈ کے بول کر اسباق، حاضری، نوٹسز اور طلباء کے کوائف کا فوری اردو و انگریزی اندراج۔', 'Record lessons, attendance, and student notes effortlessly using speech-to-text voice input.'); ?>
                             </p>
                         </div>
                     </div>
@@ -876,10 +888,10 @@ if (empty($plans)) {
                                 <div class="rounded-circle p-2 text-center" style="width: 42px; height: 42px; background: rgba(124, 58, 237, 0.2); color: #a78bfa;">
                                     <i class="fas fa-brain"></i>
                                 </div>
-                                <h6 class="fw-bold text-white mb-0 urdu-font">AI تعلیمی پیشین گوئی</h6>
+                                <h6 class="fw-bold text-white mb-0 <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('AI تعلیمی پیشین گوئی', 'AI Academic Forecasting'); ?></h6>
                             </div>
-                            <p class="text-muted small urdu-font mb-0">
-                                طلباء کے حفظ و ناظرہ کی رفتار کا سمارٹ تجزیہ، غلطیوں کی نشاندہی اور حفظ کی تکمیل کا تخمینہ۔
+                            <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-0">
+                                <?php echo __('طلباء کے حفظ و ناظرہ کی رفتار کا سمارٹ تجزیہ، غلطیوں کی نشاندہی اور حفظ کی تکمیل کا تخمینہ۔', 'Smart analysis of Hifz velocity, weakness identification, and projected completion timelines.'); ?>
                             </p>
                         </div>
                     </div>
@@ -890,10 +902,10 @@ if (empty($plans)) {
                                 <div class="rounded-circle p-2 text-center" style="width: 42px; height: 42px; background: rgba(37, 99, 235, 0.2); color: #60a5fa;">
                                     <i class="fas fa-bell"></i>
                                 </div>
-                                <h6 class="fw-bold text-white mb-0 urdu-font">AI سمارٹ الرٹس</h6>
+                                <h6 class="fw-bold text-white mb-0 <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('AI سمارٹ الرٹس', 'AI Smart Alerts'); ?></h6>
                             </div>
-                            <p class="text-muted small urdu-font mb-0">
-                                غیر حاضری، فیس کے بقایا جات اور اسباق کی کمی پر والدین اور اساتذہ کو فوری خودکار واٹس ایپ پیغامات۔
+                            <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-0">
+                                <?php echo __('غیر حاضری، فیس کے بقایا جات اور اسباق کی کمی پر والدین اور اساتذہ کو فوری خودکار واٹس ایپ پیغامات۔', 'Instant WhatsApp notifications for continuous absences, fee dues, and lesson deficiencies.'); ?>
                             </p>
                         </div>
                     </div>
@@ -904,8 +916,14 @@ if (empty($plans)) {
                                 <div class="rounded-circle p-2 text-center" style="width: 42px; height: 42px; background: rgba(217, 119, 6, 0.2); color: #fbbf24;">
                                     <i class="fas fa-chart-line"></i>
                                 </div>
-                                <h6 class="fw-bold text-white mb-0 urdu-font">AI مالیاتی اینالیٹکس</h6>
+                                <h6 class="fw-bold text-white mb-0 <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('AI مالیاتی اینالیٹکس', 'AI Financial Analytics'); ?></h6>
                             </div>
+                            <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-0">
+                                <?php echo __('اخراجات اور آمدن کا خودکار تقابلی جائزہ، مالیاتی خسارے کی پیشگی تنبیہ اور سمارٹ بجٹ پلاننگ۔', 'Automated revenue vs. expense forecasting, budget variance tracking, and deficit warnings.'); ?>
+                            </p>
+                        </div>
+                    </div>
+                </div>
                             <p class="text-muted small urdu-font mb-0">
                                 اخراجات اور آمدن کا خودکار تقابلی جائزہ، مالیاتی خسارے کی پیشگی تنبیہ اور سمارٹ بجٹ پلاننگ۔
                             </p>
@@ -920,67 +938,67 @@ if (empty($plans)) {
     <section id="features" class="py-5 bg-opacity-25" style="background: rgba(18, 26, 43, 0.4);">
         <div class="container py-4">
             <div class="text-center mb-5">
-                <span class="badge-pill-glow mb-2"><i class="fas fa-layer-group"></i> جامع ماڈیولز</span>
-                <h2 class="fw-bold urdu-font fs-1">ایک مدرسے کی تمام تر ضروریات کا احاطہ</h2>
-                <p class="text-muted urdu-font">دینی اداروں کی خصوصی شرعی و انتظامی نزاکتوں کو مدنظر رکھ کر تیار کیا گیا نظام</p>
+                <span class="badge-pill-glow mb-2"><i class="fas fa-layer-group"></i> <?php echo __('جامع ماڈیولز', 'Comprehensive Modules'); ?></span>
+                <h2 class="fw-bold <?php echo ($lang=='ur')?'urdu-font':''; ?> fs-1"><?php echo __('ایک مدرسے کی تمام تر ضروریات کا احاطہ', 'Covering Every Need of an Islamic Institute'); ?></h2>
+                <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('دینی اداروں کی خصوصی شرعی و انتظامی نزاکتوں کو مدنظر رکھ کر تیار کیا گیا نظام', 'Designed specifically keeping Islamic jurisprudence and administrative subtleties in mind'); ?></p>
             </div>
 
             <div class="row g-4">
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 h-100">
                         <div class="text-success fs-3 mb-3"><i class="fas fa-quran"></i></div>
-                        <h5 class="fw-bold mb-2">شعبہ حفظ و ناظرہ</h5>
-                        <p class="text-muted small urdu-font">روزانہ سبق، سبقی، منزل، پارہ اور غلطیوں کی نشاندہی مع ماہانہ تعلیمی گراف۔</p>
+                        <h5 class="fw-bold mb-2"><?php echo __('شعبہ حفظ و ناظرہ', 'Hifz & Nazra Section'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('روزانہ سبق، سبقی، منزل، پارہ اور غلطیوں کی نشاندہی مع ماہانہ تعلیمی گراف۔', 'Daily Sabaq, Sabqi, Manzil tracking, error counts, and visual progress charts.'); ?></p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 h-100">
                         <div class="text-info fs-3 mb-3"><i class="fas fa-clipboard-user"></i></div>
-                        <h5 class="fw-bold mb-2">حاضری و بائیو میٹرک</h5>
-                        <p class="text-muted small urdu-font">کیو آر کوڈ کارڈز، فنگر پرنٹ اور پیریڈ وائز حاضری مع غیر حاضری پر خودکار SMS۔</p>
+                        <h5 class="fw-bold mb-2"><?php echo __('حاضری و بائیو میٹرک', 'Attendance & Biometrics'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('کیو آر کوڈ کارڈز، فنگر پرنٹ اور پیریڈ وائز حاضری مع غیر حاضری پر خودکار SMS۔', 'QR code student cards, fingerprint/period attendance, and automated absence alerts.'); ?></p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 h-100">
                         <div class="text-warning fs-3 mb-3"><i class="fas fa-scale-balanced"></i></div>
-                        <h5 class="fw-bold mb-2">ڈبل انٹری اکاؤنٹنگ</h5>
-                        <p class="text-muted small urdu-font">مکمل چارٹ آف اکاؤنٹس، انکم و ایکسپینس واؤچرز، زرِ پیشگی (ایڈوانس) اور کیش بک۔</p>
+                        <h5 class="fw-bold mb-2"><?php echo __('ڈبل انٹری اکاؤنٹنگ', 'Double-Entry Accounting'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('مکمل چارٹ آف اکاؤنٹس، انکم و ایکسپینس واؤچرز، زرِ پیشگی (ایڈوانس) اور کیش بک۔', 'Standard Chart of Accounts, Income/Expense vouchers, staff advances, and cash book.'); ?></p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 h-100">
                         <div class="text-danger fs-3 mb-3"><i class="fas fa-receipt"></i></div>
-                        <h5 class="fw-bold mb-2">فیس و عطیات</h5>
-                        <p class="text-muted small urdu-font">ماہانہ فیس چالان، بقایا جات لسٹ، کمپیوٹرائزڈ رسیدیں اور جنسی عطیات (راشن) ریکارڈ۔</p>
+                        <h5 class="fw-bold mb-2"><?php echo __('فیس و عطیات', 'Fee & Donations'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('ماہانہ فیس چالان، بقایا جات لسٹ، کمپیوٹرائزڈ رسیدیں اور جنسی عطیات (راشن) ریکارڈ۔', 'Monthly challans, dues ledger, thermal receipt printing, and in-kind donation logs.'); ?></p>
                     </div>
                 </div>
 
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 h-100">
                         <div class="text-primary fs-3 mb-3"><i class="fas fa-bed"></i></div>
-                        <h5 class="fw-bold mb-2">دارالاقامہ و ہاسٹل</h5>
-                        <p class="text-muted small urdu-font">کمروں اور بیڈز کی الاٹمنٹ، ہاسٹل میس، رہائشی طلبہ حاضری اور نائٹ چیکنگ۔</p>
+                        <h5 class="fw-bold mb-2"><?php echo __('دارالاقامہ و ہاسٹل', 'Boarding & Hostel'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('کمروں اور بیڈز کی الاٹمنٹ، ہاسٹل میس، رہائشی طلبہ حاضری اور نائٹ چیکنگ۔', 'Room & bed allocations, hostel mess management, resident attendance, and night checks.'); ?></p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 h-100">
                         <div class="text-success fs-3 mb-3"><i class="fas fa-book-bookmark"></i></div>
-                        <h5 class="fw-bold mb-2">کتب خانہ و لائبریری</h5>
-                        <p class="text-muted small urdu-font">کتب کا بارکوڈ ریکارڈ، طلبہ و اساتذہ کو کتب کا اجراء، واپسی اور تاخیر پر جرمانہ۔</p>
+                        <h5 class="fw-bold mb-2"><?php echo __('کتب خانہ و لائبریری', 'Library Management'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('کتب کا بارکوڈ ریکارڈ، طلبہ و اساتذہ کو کتب کا اجراء، واپسی اور تاخیر پر جرمانہ۔', 'Barcode book cataloging, book issuance/returns, and late return fine management.'); ?></p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 h-100">
                         <div class="text-info fs-3 mb-3"><i class="fas fa-money-check-dollar"></i></div>
-                        <h5 class="fw-bold mb-2">اساتذہ تنخواہیں و وظائف</h5>
-                        <p class="text-muted small urdu-font">ماہانہ پے رول، کٹوتی و الاؤنسز، عملہ قرضہ جات، اقساط اور خودکار سیلری سلپس۔</p>
+                        <h5 class="fw-bold mb-2"><?php echo __('اساتذہ تنخواہیں و وظائف', 'Staff Payroll & Stipends'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('ماہانہ پے رول، کٹوتی و الاؤنسز، عملہ قرضہ جات، اقساط اور خودکار سیلری سلپس۔', 'Monthly payroll, deductions, staff loans/installments, and automated salary payslips.'); ?></p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 h-100">
                         <div class="text-warning fs-3 mb-3"><i class="fas fa-mosque"></i></div>
-                        <h5 class="fw-bold mb-2">مدرسہ و مسجد موڈ</h5>
-                        <p class="text-muted small urdu-font">ایک کلک پر مدرسہ سے جامع مسجد موڈ میں منتقلی، چندہ بکس اور مصلیان کا حساب کتاب۔</p>
+                        <h5 class="fw-bold mb-2"><?php echo __('مدرسہ و مسجد موڈ', 'Madrasa & Masjid Dual Mode'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('ایک کلک پر مدرسہ سے جامع مسجد موڈ میں منتقلی، چندہ بکس اور مصلیان کا حساب کتاب۔', 'Switch between Madrasa and Masjid modes in one click with isolated ledgers and reports.'); ?></p>
                     </div>
                 </div>
             </div>
@@ -991,45 +1009,45 @@ if (empty($plans)) {
     <section id="how-it-works" class="py-5">
         <div class="container py-4">
             <div class="text-center mb-5">
-                <span class="badge-pill-glow mb-2"><i class="fas fa-shoe-prints"></i> آسان ترین آغاز</span>
-                <h2 class="fw-bold urdu-font fs-1">نظام کو کیسے استعمال کریں؟ صرف 4 مراحل</h2>
-                <p class="text-muted urdu-font">کسی پیچیدہ تربیت کی ضرورت نہیں، پہلے ہی دن سے مکمل روانی کے ساتھ کام شروع کریں</p>
+                <span class="badge-pill-glow mb-2"><i class="fas fa-shoe-prints"></i> <?php echo __('آسان ترین آغاز', 'Simple Onboarding'); ?></span>
+                <h2 class="fw-bold <?php echo ($lang=='ur')?'urdu-font':''; ?> fs-1"><?php echo __('نظام کو کیسے استعمال کریں؟ صرف 4 مراحل', 'How It Works: Just 4 Simple Steps'); ?></h2>
+                <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('کسی پیچیدہ تربیت کی ضرورت نہیں، پہلے ہی دن سے مکمل روانی کے ساتھ کام شروع کریں', 'No complex training required; get up and running smoothly on day one'); ?></p>
             </div>
 
             <div class="row g-4">
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 text-center h-100">
                         <div class="step-num-badge mx-auto">1</div>
-                        <h5 class="fw-bold mb-3">آن لائن رجسٹریشن</h5>
-                        <p class="text-muted small urdu-font">
-                            رجسٹریشن فارم میں ادارے کا نام، شہر اور پاسورڈ درج کریں۔ سسٹم آپ کو فوری طور پر ایک منفرد <strong>ادارہ کوڈ (جیسے MAIN01)</strong> جاری کرے گا۔
+                        <h5 class="fw-bold mb-3"><?php echo __('آن لائن رجسٹریشن', 'Online Registration'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('رجسٹریشن فارم میں ادارے کا نام، شہر اور پاسورڈ درج کریں۔ سسٹم آپ کو فوری طور پر ایک منفرد <strong>ادارہ کوڈ (جیسے MAIN01)</strong> جاری کرے گا۔', 'Fill in your institute name, city, and password. You will instantly receive a unique <strong>Institute Code (e.g. M-26-001)</strong>.'); ?>
                         </p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 text-center h-100">
                         <div class="step-num-badge mx-auto">2</div>
-                        <h5 class="fw-bold mb-3">شعبہ جات و اساتذہ</h5>
-                        <p class="text-muted small urdu-font">
-                            ویب ایڈمن پینل میں لاگ ان ہوں اور اپنے درجات (حفظ، ناظرہ، کتب) اور اساتذہ و عملہ کے نام مع اختیارات درج کریں۔
+                        <h5 class="fw-bold mb-3"><?php echo __('شعبہ جات و اساتذہ', 'Departments & Teachers'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('ویب ایڈمن پینل میں لاگ ان ہوں اور اپنے درجات (حفظ، ناظرہ، کتب) اور اساتذہ و عملہ کے نام مع اختیارات درج کریں۔', 'Sign in to the web panel, add your classes (Hifz, Nazra, Books), and register teachers with custom permissions.'); ?>
                         </p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 text-center h-100">
                         <div class="step-num-badge mx-auto">3</div>
-                        <h5 class="fw-bold mb-3">طلبہ اندراج و سبق</h5>
-                        <p class="text-muted small urdu-font">
-                            طلبہ کے کوائف درج کریں (یا ایکسل سے امپورٹ کریں)۔ اساتذہ کو موبائل ایپ دیں تاکہ وہ روزانہ حاضری اور سبق درج کر سکیں۔
+                        <h5 class="fw-bold mb-3"><?php echo __('طلبہ اندراج و سبق', 'Student Enrollment'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('طلبہ کے کوائف درج کریں (یا ایکسل سے امپورٹ کریں)۔ اساتذہ کو موبائل ایپ دیں تاکہ وہ روزانہ حاضری اور سبق درج کر سکیں۔', 'Enroll students or import from Excel. Hand the mobile app to teachers for daily attendance and lesson logging.'); ?>
                         </p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <div class="glass-panel p-4 text-center h-100">
                         <div class="step-num-badge mx-auto">4</div>
-                        <h5 class="fw-bold mb-3">رپورٹس و فنانس</h5>
-                        <p class="text-muted small urdu-font">
-                            ایک کلک سے ماہانہ فیس وصولی، اساتذہ تنخواہیں، طلبہ کے نتائج رجسٹر اور تعلیمی کارکردگی رپورٹس پرنٹ کریں۔
+                        <h5 class="fw-bold mb-3"><?php echo __('رپورٹس و فنانس', 'Reports & Finance'); ?></h5>
+                        <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('ایک کلک سے ماہانہ فیس وصولی، اساتذہ تنخواہیں، طلبہ کے نتائج رجسٹر اور تعلیمی کارکردگی رپورٹس پرنٹ کریں۔', 'Collect fees with one click, disburse staff stipends, and generate performance report cards.'); ?>
                         </p>
                     </div>
                 </div>
@@ -1041,9 +1059,9 @@ if (empty($plans)) {
     <section id="pricing" class="py-5" style="background: rgba(18, 26, 43, 0.6);">
         <div class="container py-4">
             <div class="text-center mb-5">
-                <span class="badge-pill-glow mb-2"><i class="fas fa-tags"></i> شفاف و منصفانہ قیمتیں</span>
-                <h2 class="fw-bold urdu-font fs-1">تمام سائز کے مدارس کے لیے موزوں سبسکرپشن پیکجز</h2>
-                <p class="text-muted urdu-font">کوئی پوشیدہ فیس نہیں، ادارے کے حجم کے مطابق مناسب ترین انتخاب کریں</p>
+                <span class="badge-pill-glow mb-2"><i class="fas fa-tags"></i> <?php echo __('شفاف و منصفانہ قیمتیں', 'Transparent & Fair Pricing'); ?></span>
+                <h2 class="fw-bold <?php echo ($lang=='ur')?'urdu-font':''; ?> fs-1"><?php echo __('تمام سائز کے مدارس کے لیے موزوں سبسکرپشن پیکجز', 'Flexible Subscription Packages for All Institutes'); ?></h2>
+                <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('کوئی پوشیدہ فیس نہیں، ادارے کے حجم کے مطابق مناسب ترین انتخاب کریں', 'Zero hidden fees; choose the best plan that fits your institute size'); ?></p>
             </div>
 
             <?php
@@ -1052,20 +1070,21 @@ if (empty($plans)) {
 
             if (!function_exists('renderPricingPlanCard')) {
                 function renderPricingPlanCard($p) {
+                    global $lang;
                     $code = strtolower($p['code'] ?? '');
                     $isPopular = ($code === 'standard');
                     $isFree = (!empty($p['is_free_trial']) || $code === 'free');
                     $isEnterprise = ($code === 'enterprise');
                     
                     if ($code === 'basic') {
-                        $priceMonthly = !empty($p['price_monthly']) ? (float)$p['price_monthly'] : (!empty($p['price']) ? (float)$p['price'] : 1500);
-                        $priceYearly = !empty($p['price_yearly']) ? (float)$p['price_yearly'] : 15000;
+                        $priceMonthly = !empty($p['price_monthly']) ? (float)$p['price_monthly'] : (!empty($p['price']) ? (float)$p['price'] : 1000);
+                        $priceYearly = !empty($p['price_yearly']) ? (float)$p['price_yearly'] : 10000;
                     } elseif ($code === 'standard') {
-                        $priceMonthly = !empty($p['price_monthly']) ? (float)$p['price_monthly'] : (!empty($p['price']) ? (float)$p['price'] : 2500);
-                        $priceYearly = !empty($p['price_yearly']) ? (float)$p['price_yearly'] : 25000;
+                        $priceMonthly = !empty($p['price_monthly']) ? (float)$p['price_monthly'] : (!empty($p['price']) ? (float)$p['price'] : 2000);
+                        $priceYearly = !empty($p['price_yearly']) ? (float)$p['price_yearly'] : 20000;
                     } elseif (in_array($code, ['premium_200', 'advanced', 'premium'])) {
-                        $priceMonthly = !empty($p['price_monthly']) ? (float)$p['price_monthly'] : (!empty($p['price']) ? (float)$p['price'] : 4000);
-                        $priceYearly = !empty($p['price_yearly']) ? (float)$p['price_yearly'] : 40000;
+                        $priceMonthly = !empty($p['price_monthly']) ? (float)$p['price_monthly'] : (!empty($p['price']) ? (float)$p['price'] : 3000);
+                        $priceYearly = !empty($p['price_yearly']) ? (float)$p['price_yearly'] : 30000;
                     } elseif ($isFree) {
                         $priceMonthly = 0;
                         $priceYearly = 0;
@@ -1079,33 +1098,50 @@ if (empty($plans)) {
                     $maxTea = (int)($p['max_teachers'] ?? 10);
                     $hasMobile = !empty($p['has_mobile_app']);
                     $hasDesktop = !empty($p['has_desktop_app']);
+
+                    $planTitles = [
+                        'free' => ['ur' => 'مفت ٹرائل (Free Trial)', 'en' => 'Free Trial (30 Days)'],
+                        'basic' => ['ur' => 'بنیادی پیکج (Basic)', 'en' => 'Basic Package'],
+                        'standard' => ['ur' => 'معیاری پیکج (Standard)', 'en' => 'Standard Package'],
+                        'premium_200' => ['ur' => 'ایڈوانس پیکج (Advanced)', 'en' => 'Advanced Package'],
+                        'enterprise' => ['ur' => 'لامحدود انٹرپرائز (Unlimited)', 'en' => 'Unlimited Enterprise'],
+                    ];
+                    $planDescs = [
+                        'free' => ['ur' => '20 طلبہ، 1 کلاس، 2 اساتذہ و عملہ — صرف ویب پینل رسائی', 'en' => '20 Students, 1 Class, 2 Staff — Web Panel Access Only'],
+                        'basic' => ['ur' => '50 طلبہ، 3 کلاسز، 4 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)', 'en' => '50 Students, 3 Classes, 4 Staff — Tri-Platform (Web + Mobile + Windows)'],
+                        'standard' => ['ur' => '100 طلبہ، 6 کلاسز، 8 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)', 'en' => '100 Students, 6 Classes, 8 Staff — Tri-Platform (Web + Mobile + Windows)'],
+                        'premium_200' => ['ur' => '200 طلبہ، 12 کلاسز، 16 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)', 'en' => '200 Students, 12 Classes, 16 Staff — Tri-Platform (Web + Mobile + Windows)'],
+                        'enterprise' => ['ur' => 'لامحدود طلبہ، کلاسز، اساتذہ و عملہ — تمام ماڈیولز مع کسٹم ڈیڈیکیٹڈ سپورٹ', 'en' => 'Unlimited Students, Classes & Staff — Dedicated Custom Support'],
+                    ];
+                    $pName = $planTitles[$code][$lang] ?? $p['name'];
+                    $pDesc = $planDescs[$code][$lang] ?? ($p['description'] ?? '');
                     ?>
                     <div class="col-12 col-md-6 col-lg-4 d-flex">
                         <div class="pricing-card <?php echo $isPopular ? 'popular' : ''; ?> w-100">
                             <?php if ($isPopular): ?>
-                                <div class="popular-badge"><i class="fas fa-crown me-1"></i> سب سے مقبول انتخاب</div>
+                                <div class="popular-badge"><i class="fas fa-crown me-1"></i> <?php echo __('سب سے مقبول انتخاب', 'Most Popular'); ?></div>
                             <?php endif; ?>
 
                             <div>
-                                <h4 class="fw-bold mb-2"><?php echo htmlspecialchars($p['name']); ?></h4>
-                                <p class="text-muted small urdu-font mb-3"><?php echo htmlspecialchars($p['description'] ?? ''); ?></p>
+                                <h4 class="fw-bold mb-2"><?php echo htmlspecialchars($pName); ?></h4>
+                                <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-3"><?php echo htmlspecialchars($pDesc); ?></p>
 
                                 <div class="mb-4">
                                     <?php if ($isEnterprise): ?>
-                                        <div class="price-tag text-info fs-3">قیمت رابطہ پر</div>
-                                        <small class="text-muted">کسٹم ضروریات کے مطابق</small>
-                                        <div class="mt-2"><span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-50 px-2 py-1"><i class="fas fa-headset me-1"></i> کسٹم ڈیمو دستیاب</span></div>
+                                        <div class="price-tag text-info fs-3"><?php echo __('قیمت رابطہ پر', 'Custom Quote'); ?></div>
+                                        <small class="text-muted"><?php echo __('کسٹم ضروریات کے مطابق', 'Tailored to your scale'); ?></small>
+                                        <div class="mt-2"><span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-50 px-2 py-1"><i class="fas fa-headset me-1"></i> <?php echo __('کسٹم ڈیمو دستیاب', 'Live Demo Available'); ?></span></div>
                                     <?php elseif ($isFree): ?>
-                                        <div class="price-tag text-success">مفت <small class="fs-6 text-muted">/ 14 دن</small></div>
-                                        <small class="text-muted">آزمائشی بنیادوں پر</small>
-                                        <div class="mt-2"><span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fas fa-bolt me-1"></i> بغیر کریڈٹ کارڈ</span></div>
+                                        <div class="price-tag text-success"><?php echo __('مفت', 'Free'); ?> <small class="fs-6 text-muted"><?php echo __('/ 30 دن', '/ 30 Days'); ?></small></div>
+                                        <small class="text-muted"><?php echo __('آزمائشی بنیادوں پر', 'Trial Evaluation'); ?></small>
+                                        <div class="mt-2"><span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fas fa-bolt me-1"></i> <?php echo __('بغیر کریڈٹ کارڈ', 'No Credit Card Needed'); ?></span></div>
                                     <?php else: ?>
                                         <div class="price-tag">
-                                            <small class="fs-6 fw-normal text-muted">روپے</small> <?php echo number_format($priceMonthly); ?>
-                                            <small class="fs-6 fw-normal text-muted">/ ماہ</small>
+                                            <small class="fs-6 fw-normal text-muted"><?php echo __('روپے', 'PKR'); ?></small> <?php echo number_format($priceMonthly); ?>
+                                            <small class="fs-6 fw-normal text-muted"><?php echo __('/ ماہ', '/ mo'); ?></small>
                                         </div>
-                                        <div class="small text-light mt-1"><i class="fas fa-tag text-warning me-1"></i> سالانہ: <strong class="text-warning">روپے <?php echo number_format($priceYearly); ?></strong></div>
-                                        <div class="mt-2"><span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fas fa-gift me-1"></i> 14 دن کا مفت ٹرائل شامل ہے</span></div>
+                                        <div class="small text-light mt-1"><i class="fas fa-tag text-warning me-1"></i> <?php echo __('سالانہ:', 'Yearly:'); ?> <strong class="text-warning"><?php echo __('روپے', 'PKR') . ' ' . number_format($priceYearly); ?></strong></div>
+                                        <div class="mt-2"><span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fas fa-gift me-1"></i> <?php echo __('30 دن کا مفت ٹرائل شامل ہے', '30-Day Free Trial Included'); ?></span></div>
                                     <?php endif; ?>
                                 </div>
 
@@ -1114,53 +1150,53 @@ if (empty($plans)) {
                                 <div class="features-list mb-4">
                                     <div class="feature-item">
                                         <i class="fas fa-check check"></i>
-                                        <span>طلبہ کی حد: <strong><?php echo $maxStd > 9000 ? 'لامحدود' : $maxStd . ' طلبہ'; ?></strong></span>
+                                        <span><?php echo __('طلبہ کی حد:', 'Student Limit:'); ?> <strong><?php echo $maxStd > 9000 ? __('لامحدود', 'Unlimited') : ($maxStd . ' ' . __('طلبہ', 'Students')); ?></strong></span>
                                     </div>
                                     <div class="feature-item">
                                         <i class="fas fa-check check"></i>
-                                        <span>کلاسز کی حد: <strong><?php echo $maxCls > 9000 ? 'لامحدود' : $maxCls . ' کلاسز'; ?></strong></span>
+                                        <span><?php echo __('کلاسز کی حد:', 'Class Limit:'); ?> <strong><?php echo $maxCls > 9000 ? __('لامحدود', 'Unlimited') : ($maxCls . ' ' . __('کلاسز', 'Classes')); ?></strong></span>
                                     </div>
                                     <div class="feature-item">
                                         <i class="fas fa-check check"></i>
-                                        <span>اساتذہ و عملہ: <strong><?php echo $maxTea > 9000 ? 'لامحدود' : $maxTea . ' اساتذہ'; ?></strong></span>
+                                        <span><?php echo __('اساتذہ و عملہ:', 'Teachers & Staff:'); ?> <strong><?php echo $maxTea > 9000 ? __('لامحدود', 'Unlimited') : ($maxTea . ' ' . __('اساتذہ', 'Staff')); ?></strong></span>
                                     </div>
                                     <div class="feature-item">
                                         <i class="fas fa-check check"></i>
-                                        <span>پی ایچ پی ویب پینل: <strong>مکمل رسائی</strong></span>
+                                        <span><?php echo __('پی ایچ پی ویب پینل:', 'PHP Web Panel:'); ?> <strong><?php echo __('مکمل رسائی', 'Full Access'); ?></strong></span>
                                     </div>
                                     <div class="feature-item">
                                         <?php if ($hasMobile): ?>
                                             <i class="fas fa-check check"></i>
-                                            <span>اینڈرائڈ ایپ: <strong>شامل ہے</strong></span>
+                                            <span><?php echo __('اینڈرائڈ ایپ:', 'Android App:'); ?> <strong><?php echo __('شامل ہے', 'Included'); ?></strong></span>
                                         <?php else: ?>
                                             <i class="fas fa-times cross"></i>
-                                            <span class="text-muted text-decoration-line-through">اینڈرائڈ ایپ (مفت میں بند)</span>
+                                            <span class="text-muted text-decoration-line-through"><?php echo __('اینڈرائڈ ایپ (مفت میں بند)', 'Android App (Disabled in Free)'); ?></span>
                                         <?php endif; ?>
                                     </div>
                                     <div class="feature-item">
                                         <?php if ($hasDesktop): ?>
                                             <i class="fas fa-check check"></i>
-                                            <span>ونڈوز ایپ: <strong>شامل ہے</strong></span>
+                                            <span><?php echo __('ونڈوز ایپ:', 'Windows App:'); ?> <strong><?php echo __('شامل ہے', 'Included'); ?></strong></span>
                                         <?php else: ?>
                                             <i class="fas fa-times cross"></i>
-                                            <span class="text-muted text-decoration-line-through">ونڈوز ایپ (مفت میں بند)</span>
+                                            <span class="text-muted text-decoration-line-through"><?php echo __('ونڈوز ایپ (مفت میں بند)', 'Windows App (Disabled in Free)'); ?></span>
                                         <?php endif; ?>
                                     </div>
                                     <div class="feature-item">
                                         <i class="fas fa-check check"></i>
-                                        <span>ڈیٹا سیکیورٹی: <strong>100% انفرادی بیک اپ</strong></span>
+                                        <span><?php echo __('ڈیٹا سیکیورٹی:', 'Data Security:'); ?> <strong><?php echo __('100% انفرادی بیک اپ', '100% Isolated Backup'); ?></strong></span>
                                     </div>
                                 </div>
                             </div>
 
                             <div>
                                 <?php if ($isEnterprise): ?>
-                                    <a href="https://wa.me/923012454595?text=السلام علیکم! ہم انٹرپرائز لامحدود پیکج کے بارے میں معلومات چاہتے ہیں۔" target="_blank" class="btn btn-sa-outline w-100 fw-bold">
-                                        <i class="fab fa-whatsapp me-1"></i> رابطہ کریں
+                                    <a href="https://wa.me/923012454595?text=<?php echo urlencode(__('السلام علیکم! ہم انٹرپرائز لامحدود پیکج کے بارے میں معلومات چاہتے ہیں۔', 'Hello! We would like more details about the Enterprise Unlimited Plan.')); ?>" target="_blank" class="btn btn-sa-outline w-100 fw-bold">
+                                        <i class="fab fa-whatsapp me-1"></i> <?php echo __('رابطہ کریں', 'Contact Us'); ?>
                                     </a>
                                 <?php else: ?>
                                     <a href="register.php?plan=<?php echo urlencode($code); ?>" class="btn <?php echo $isPopular ? 'btn-sa-primary' : 'btn-sa-outline'; ?> w-100 fw-bold">
-                                        <i class="fas fa-rocket me-1"></i> 14 روزہ ٹرائل شروع کریں
+                                        <i class="fas fa-rocket me-1"></i> <?php echo __('30 روزہ ٹرائل شروع کریں', 'Start 30-Day Free Trial'); ?>
                                     </a>
                                 <?php endif; ?>
                             </div>
@@ -1187,9 +1223,9 @@ if (empty($plans)) {
     <section id="rules" class="py-5">
         <div class="container py-4">
             <div class="text-center mb-5">
-                <span class="badge-pill-glow mb-2"><i class="fas fa-scale-unbalanced-flip"></i> قواعد و ضوابط و سیکیورٹی</span>
-                <h2 class="fw-bold urdu-font fs-1">ڈیٹا پرائیویسی اور استعمال کے لازمی اصول</h2>
-                <p class="text-muted urdu-font">ہماری اولین ترجیح دینی اداروں کے کوائف کی مکمل رازداری اور شرعی امانت داری ہے</p>
+                <span class="badge-pill-glow mb-2"><i class="fas fa-scale-unbalanced-flip"></i> <?php echo __('قواعد و ضوابط و سیکیورٹی', 'Terms & Security'); ?></span>
+                <h2 class="fw-bold <?php echo ($lang=='ur')?'urdu-font':''; ?> fs-1"><?php echo __('ڈیٹا پرائیویسی اور استعمال کے لازمی اصول', 'Data Privacy & Essential Terms of Use'); ?></h2>
+                <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('ہماری اولین ترجیح دینی اداروں کے کوائف کی مکمل رازداری اور شرعی امانت داری ہے', 'Our foremost priority is complete confidentiality and trust for religious institutions'); ?></p>
             </div>
 
             <div class="row g-4">
@@ -1199,10 +1235,10 @@ if (empty($plans)) {
                             <div style="width: 44px; height: 44px; background: rgba(16, 185, 129, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #10b981; font-size: 20px;">
                                 <i class="fas fa-user-shield"></i>
                             </div>
-                            <h5 class="fw-bold mb-0">1. ڈیٹا کی مکمل ملکیت اور رازداری</h5>
+                            <h5 class="fw-bold mb-0"><?php echo __('1. ڈیٹا کی مکمل ملکیت اور رازداری', '1. Complete Data Ownership & Privacy'); ?></h5>
                         </div>
-                        <p class="text-muted urdu-font">
-                            آپ کے ادارے کا تمام ڈیٹا صرف اور صرف آپ کی ملکیت ہے۔ سرور پر ہر ادارے کا ریکارڈ سخت <strong>Tenant Isolation</strong> اور انکرپٹڈ سیکیورٹی کے تحت رکھا جاتا ہے۔ کوئی بھی دوسرا مدرسہ یا غیر متعلقہ شخص آپ کے کوائف، مالیات یا طلبہ کے ریکارڈ کو نہیں دیکھ سکتا۔
+                        <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('آپ کے ادارے کا تمام ڈیٹا صرف اور صرف آپ کی ملکیت ہے۔ سرور پر ہر ادارے کا ریکارڈ سخت <strong>Tenant Isolation</strong> اور انکرپٹڈ سیکیورٹی کے تحت رکھا جاتا ہے۔ کوئی بھی دوسرا مدرسہ یا غیر متعلقہ شخص آپ کے کوائف، مالیات یا طلبہ کے ریکارڈ کو نہیں دیکھ سکتا۔', 'All your institute data belongs solely to you. Stored under strict <strong>Tenant Isolation</strong> and end-to-end encryption. No third party or other institute can ever access your data.'); ?>
                         </p>
                     </div>
                 </div>
@@ -1213,10 +1249,10 @@ if (empty($plans)) {
                             <div style="width: 44px; height: 44px; background: rgba(6, 182, 212, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #06b6d4; font-size: 20px;">
                                 <i class="fas fa-cloud-arrow-up"></i>
                             </div>
-                            <h5 class="fw-bold mb-0">2. روزانہ خودکار کلاؤڈ بیک اپ</h5>
+                            <h5 class="fw-bold mb-0"><?php echo __('2. روزانہ خودکار کلاؤڈ بیک اپ', '2. Daily Automated Cloud Backups'); ?></h5>
                         </div>
-                        <p class="text-muted urdu-font">
-                            سسٹم ڈیٹابیس کا روزانہ کی بنیاد پر خودکار انکرپٹڈ بیک اپ تیار ہوتا ہے۔ اگر آپ کا کمپیوٹر یا موبائل گم یا خراب ہو جائے تو نیا فون یا پی سی لے کر لاگ ان کریں، آپ کا سارا ڈیٹا ایک سیکنڈ میں بحال ہو جائے گا۔
+                        <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('سسٹم ڈیٹابیس کا روزانہ کی بنیاد پر خودکار انکرپٹڈ بیک اپ تیار ہوتا ہے۔ اگر آپ کا کمپیوٹر یا موبائل گم یا خراب ہو جائے تو نیا فون یا پی سی لے کر لاگ ان کریں، آپ کا سارا ڈیٹا ایک سیکنڈ میں بحال ہو جائے گا۔', 'Automated encrypted daily backups safeguard your records. Even if devices are lost or damaged, simply log in from any new device to restore immediately.'); ?>
                         </p>
                     </div>
                 </div>
@@ -1227,10 +1263,10 @@ if (empty($plans)) {
                             <div style="width: 44px; height: 44px; background: rgba(245, 158, 11, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 20px;">
                                 <i class="fas fa-hand-holding-hand"></i>
                             </div>
-                            <h5 class="fw-bold mb-0">3. شرعی و اخلاقی ضوابط کی پاسداری</h5>
+                            <h5 class="fw-bold mb-0"><?php echo __('3. شرعی و اخلاقی ضوابط کی پاسداری', '3. Strict Shariah & Ethical Compliance'); ?></h5>
                         </div>
-                        <p class="text-muted urdu-font">
-                            نظام خالص دینی مقاصد کے لیے بنایا گیا ہے۔ اس میں کوئی تجارتی اشتہارات یا فحش الگورتھم شامل نہیں۔ نظام میں موجود چندہ، فیس، زکوٰۃ اور صدقات کے کھاتے شرعی اصولوں کے عین مطابق الگ الگ رکھے جاتے ہیں۔
+                        <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('نظام خالص دینی مقاصد کے لیے بنایا گیا ہے۔ اس میں کوئی تجارتی اشتہارات یا غیر اخلاقی الگورتھم شامل نہیں۔ نظام میں موجود چندہ، فیس، زکوٰۃ اور صدقات کے کھاتے شرعی اصولوں کے عین مطابق الگ الگ رکھے جاتے ہیں۔', 'Engineered purely for Islamic education and masjids without intrusive commercial ads. Sadaqat, Zakat, and donation ledgers are kept strictly isolated per Shariah rules.'); ?>
                         </p>
                     </div>
                 </div>
@@ -1241,10 +1277,10 @@ if (empty($plans)) {
                             <div style="width: 44px; height: 44px; background: rgba(239, 68, 68, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 20px;">
                                 <i class="fas fa-ban"></i>
                             </div>
-                            <h5 class="fw-bold mb-0">4. فری پلان اور پلیٹ فارم رسائی کی حدود</h5>
+                            <h5 class="fw-bold mb-0"><?php echo __('4. فری پلان اور پلیٹ فارم رسائی کی حدود', '4. Free Plan & Platform Access Limits'); ?></h5>
                         </div>
-                        <p class="text-muted urdu-font">
-                            مفت ٹرائل پلان صرف اور صرف ویب پینل کے ذریعے آزمائش کے لیے ہے۔ فری ٹرائل صارفین کو اینڈرائڈ اور ونڈوز ایپ کی اجازت نہیں ہوگی۔ موبائل ایپ اور ونڈوز سافٹ ویئر کی مکمل صلاحیت حاصل کرنے کے لیے بیسک یا سٹینڈرڈ پلان منتخب کرنا لازمی ہے۔
+                        <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('مفت ٹرائل پلان صرف اور صرف ویب پینل کے ذریعے آزمائش کے لیے ہے۔ فری ٹرائل صارفین کو اینڈرائڈ اور ونڈوز ایپ کی اجازت نہیں ہوگی۔ موبائل ایپ اور ونڈوز سافٹ ویئر کی مکمل صلاحیت حاصل کرنے کے لیے بیسک یا سٹینڈرڈ پلان منتخب کرنا لازمی ہے۔', 'The free evaluation tier is available via the Web Panel. Mobile and Windows native apps are bundled with paid subscription tiers (Basic, Standard, Advanced).'); ?>
                         </p>
                     </div>
                 </div>
@@ -1256,60 +1292,60 @@ if (empty($plans)) {
     <section id="faq" class="py-5" style="background: rgba(18, 26, 43, 0.4);">
         <div class="container py-4" style="max-width: 900px;">
             <div class="text-center mb-5">
-                <span class="badge-pill-glow mb-2"><i class="fas fa-circle-question"></i> سوالات و جوابات</span>
-                <h2 class="fw-bold urdu-font fs-1">اکثر پوچھے گئے ضروری سوالات</h2>
-                <p class="text-muted urdu-font">اگر آپ کا سوال یہاں موجود نہ ہو تو واٹس ایپ پر ہماری ٹیم سے فوری رابطہ کر سکتے ہیں</p>
+                <span class="badge-pill-glow mb-2"><i class="fas fa-circle-question"></i> <?php echo __('سوالات و جوابات', 'FAQs'); ?></span>
+                <h2 class="fw-bold <?php echo ($lang=='ur')?'urdu-font':''; ?> fs-1"><?php echo __('اکثر پوچھے گئے ضروری سوالات', 'Frequently Asked Questions'); ?></h2>
+                <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?>"><?php echo __('اگر آپ کا سوال یہاں موجود نہ ہو تو واٹس ایپ پر ہماری ٹیم سے فوری رابطہ کر سکتے ہیں', 'Have additional questions? Contact our dedicated support team via WhatsApp'); ?></p>
             </div>
 
             <div class="accordion" id="faqAccordion">
                 <div class="accordion-item">
                     <h2 class="accordion-header">
-                        <button class="accordion-button urdu-font" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
-                            کیا ہمارا پرانا ڈیٹا ایکسل یا رجسٹر سے اس سافٹ ویئر میں منتقل ہو سکتا ہے؟
+                        <button class="accordion-button <?php echo ($lang=='ur')?'urdu-font':''; ?>" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                            <?php echo __('کیا ہمارا پرانا ڈیٹا ایکسل یا رجسٹر سے اس سافٹ ویئر میں منتقل ہو سکتا ہے؟', 'Can we migrate existing student records from Excel or paper registers?'); ?>
                         </button>
                     </h2>
                     <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body urdu-font">
-                            جی ہاں! سسٹم کے ویب ایڈمن پینل میں <strong>Excel اور CSV امپورٹ</strong> کی زبردست سہولت موجود ہے۔ آپ چند منٹوں میں سینکڑوں طلبہ کا ڈیٹا داخل کر سکتے ہیں، یا ہماری ٹیکنیکل سپورٹ ٹیم سے مفت مدد لے سکتے ہیں۔
+                        <div class="accordion-body <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('جی ہاں! سسٹم کے ویب ایڈمن پینل میں <strong>Excel اور CSV امپورٹ</strong> کی زبردست سہولت موجود ہے۔ آپ چند منٹوں میں سینکڑوں طلبہ کا ڈیٹا داخل کر سکتے ہیں، یا ہماری ٹیکنیکل سپورٹ ٹیم سے مفت مدد لے سکتے ہیں۔', 'Yes! The web admin panel includes full <strong>Excel and CSV import</strong> tools. You can import hundreds of student records in minutes, or contact our support team for free assistance.'); ?>
                         </div>
                     </div>
                 </div>
 
                 <div class="accordion-item">
                     <h2 class="accordion-header">
-                        <button class="accordion-button collapsed urdu-font" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-                            اگر مدرسے میں انٹرنیٹ بند ہو جائے تو کیا موبائل یا ونڈوز ایپ چلے گی؟
+                        <button class="accordion-button collapsed <?php echo ($lang=='ur')?'urdu-font':''; ?>" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                            <?php echo __('اگر مدرسے میں انٹرنیٹ بند ہو جائے تو کیا موبائل یا ونڈوز ایپ چلے گی؟', 'Will mobile and desktop apps work if the internet goes down?'); ?>
                         </button>
                     </h2>
                     <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body urdu-font">
-                            بالکل! ہماری اینڈرائڈ ایپ اور ونڈوز سافٹ ویئر <strong>Offline-First</strong> بنیادوں پر تیار کیے گئے ہیں۔ آپ انٹرنیٹ کے بغیر بھی معمول کے مطابق سبق، حاضری اور فیس کی انٹری کر سکتے ہیں۔ جیسے ہی انٹرنیٹ منسلک ہوگا، تمام ریکارڈ خودکار طور پر کلاؤڈ سے سنک ہو جائے گا۔
+                        <div class="accordion-body <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('بالکل! ہماری اینڈرائڈ ایپ اور ونڈوز سافٹ ویئر <strong>Offline-First</strong> بنیادوں پر تیار کیے گئے ہیں۔ آپ انٹرنیٹ کے بغیر بھی معمول کے مطابق سبق، حاضری اور فیس کی انٹری کر سکتے ہیں۔ جیسے ہی انٹرنیٹ منسلک ہوگا، تمام ریکارڈ خودکار طور پر کلاؤڈ سے سنک ہو جائے گا۔', 'Absolutely! Both Android and Windows apps are built on an <strong>Offline-First</strong> architecture. You can take attendance, log lessons, and record fees without an active connection; everything syncs automatically upon reconnection.'); ?>
                         </div>
                     </div>
                 </div>
 
                 <div class="accordion-item">
                     <h2 class="accordion-header">
-                        <button class="accordion-button collapsed urdu-font" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
-                            مفت ٹرائل ختم ہونے کے بعد ہمارے طلبہ کے ریکارڈ کا کیا ہوگا؟
+                        <button class="accordion-button collapsed <?php echo ($lang=='ur')?'urdu-font':''; ?>" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                            <?php echo __('مفت ٹرائل ختم ہونے کے بعد ہمارے طلبہ کے ریکارڈ کا کیا ہوگا؟', 'What happens to our data after the 30-day free trial?'); ?>
                         </button>
                     </h2>
                     <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body urdu-font">
-                            آپ کا تمام ریکارڈ کلاؤڈ سرور پر 100% محفوظ رہے گا اور کوئی چیز ضائع نہیں ہوگی۔ آپ جب بھی مناسب سبسکرپشن پلان کا انتخاب کریں گے، وہیں سے آگے بغیر کسی پریشانی کے جاری رکھ سکیں گے۔
+                        <div class="accordion-body <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('آپ کا تمام ریکارڈ کلاؤڈ سرور پر 100% محفوظ رہے گا اور کوئی چیز ضائع نہیں ہوگی۔ آپ جب بھی مناسب سبسکرپشن پلان کا انتخاب کریں گے، وہیں سے آگے بغیر کسی پریشانی کے جاری رکھ سکیں گے۔', 'All your data remains 100% safe and secure in the cloud. You can activate any subscription package whenever you wish and resume immediately without data loss.'); ?>
                         </div>
                     </div>
                 </div>
 
                 <div class="accordion-item">
                     <h2 class="accordion-header">
-                        <button class="accordion-button collapsed urdu-font" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
-                            کیا ہم ایک ہی سسٹم میں جامع مسجد اور مکتب کا انتظام بھی چلا سکتے ہیں؟
+                        <button class="accordion-button collapsed <?php echo ($lang=='ur')?'urdu-font':''; ?>" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                            <?php echo __('کیا ہم ایک ہی سسٹم میں جامع مسجد اور مکتب کا انتظام بھی چلا سکتے ہیں؟', 'Can we manage both a Madrasa and a Central Masjid on the same account?'); ?>
                         </button>
                     </h2>
                     <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body urdu-font">
-                            جی ہاں! سسٹم میں <strong>مدرسہ و مسجد ڈوئل موڈ</strong> کا مکمل فیچر شامل ہے۔ اوپر دیے گئے بٹن سے آپ ایک سیکنڈ میں مدرسہ سے جامع مسجد کے کھاتوں، مصلیان اور مکتب اکیڈمکس میں سوئچ کر سکتے ہیں۔
+                        <div class="accordion-body <?php echo ($lang=='ur')?'urdu-font':''; ?>">
+                            <?php echo __('جی ہاں! سسٹم میں <strong>مدرسہ و مسجد ڈوئل موڈ</strong> کا مکمل فیچر شامل ہے۔ اوپر دیے گئے بٹن سے آپ ایک سیکنڈ میں مدرسہ سے جامع مسجد کے کھاتوں، مصلیان اور مکتب اکیڈمکس میں سوئچ کر سکتے ہیں۔', 'Yes! The system includes full <strong>Madrasa & Masjid Dual-Mode</strong> support, allowing instant switching between madrasa academics and masjid ledgers.'); ?>
                         </div>
                     </div>
                 </div>
@@ -1321,21 +1357,21 @@ if (empty($plans)) {
     <section id="download-apps" class="py-5 text-center">
         <div class="container py-4">
             <div class="glass-panel p-5 mx-auto" style="max-width: 900px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%);">
-                <span class="badge-pill-glow mb-3"><i class="fas fa-download"></i> باضابطہ ایپلیکیشنز</span>
-                <h2 class="fw-bold urdu-font fs-1 mb-3">موبائل اور ونڈوز ڈیسک ٹاپ سافٹ ویئر ڈاؤن لوڈ کریں</h2>
-                <p class="text-muted urdu-font mb-4">
-                    اپنے اساتذہ کو موبائل ایپ دیں اور اپنے کمپیوٹر پر تیز ترین ونڈوز ورژن انسٹال کریں
+                <span class="badge-pill-glow mb-3"><i class="fas fa-download"></i> <?php echo __('باضابطہ ایپلیکیشنز', 'Official Applications'); ?></span>
+                <h2 class="fw-bold <?php echo ($lang=='ur')?'urdu-font':''; ?> fs-1 mb-3"><?php echo __('موبائل اور ونڈوز ڈیسک ٹاپ سافٹ ویئر ڈاؤن لوڈ کریں', 'Download Mobile & Windows Desktop Apps'); ?></h2>
+                <p class="text-muted <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-4">
+                    <?php echo __('اپنے اساتذہ کو موبائل ایپ دیں اور اپنے کمپیوٹر پر تیز ترین ونڈوز ورژن انسٹال کریں', 'Equip teachers with the mobile app and install high-speed native software on office PCs'); ?>
                 </p>
 
                 <div class="d-flex flex-wrap justify-content-center gap-3">
                     <a href="https://madrasa.mamfss.com/downloads/MAMFSS_App.apk" class="btn btn-sa-primary py-3 px-4 fs-5">
-                        <i class="fab fa-android fs-4"></i> اینڈرائڈ ایپ ڈاؤن لوڈ (APK)
+                        <i class="fab fa-android fs-4"></i> <?php echo __('اینڈرائڈ ایپ ڈاؤن لوڈ (APK)', 'Download Android App (APK)'); ?>
                     </a>
                     <a href="https://madrasa.mamfss.com/downloads/MAMFSS_Setup.exe" class="btn btn-sa-outline py-3 px-4 fs-5">
-                        <i class="fab fa-windows fs-4"></i> ونڈوز انسٹالر ڈاؤن لوڈ (EXE)
+                        <i class="fab fa-windows fs-4"></i> <?php echo __('ونڈوز انسٹالر ڈاؤن لوڈ (EXE)', 'Download Windows Setup (EXE)'); ?>
                     </a>
                     <a href="login.php" class="btn btn-sa-outline py-3 px-4 fs-5">
-                        <i class="fas fa-desktop fs-4"></i> ویب ایڈمن میں داخل ہوں
+                        <i class="fas fa-desktop fs-4"></i> <?php echo __('ویب ایڈمن میں داخل ہوں', 'Open Web Admin Panel'); ?>
                     </a>
                 </div>
             </div>
@@ -1350,66 +1386,66 @@ if (empty($plans)) {
                     <div class="d-flex align-items-center gap-2 mb-3">
                         <img src="logo_mindcrafts.svg" alt="Mindcrafts AI" style="width: 42px; height: 42px; border-radius: 12px; object-fit: contain; background: #061814; border: 1px solid rgba(16, 185, 129, 0.4); padding: 2px;">
                         <div>
-                            <span class="fw-bold fs-5 text-white">مدرسہ مینیجمنٹ <span style="color: var(--sa-primary);">سسٹم</span></span>
-                            <small class="d-block text-muted" style="font-size: 11px;">بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)</small>
+                            <span class="fw-bold fs-5 text-white"><?php echo ($lang=='ur') ? 'مدرسہ مینیجمنٹ <span style="color: var(--sa-primary);">سسٹم</span>' : 'Madrasa Management <span style="color: var(--sa-primary);">System</span>'; ?></span>
+                            <small class="d-block text-muted" style="font-size: 11px;"><?php echo ($lang=='ur') ? 'بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)' : 'By MindCrafts AI'; ?></small>
                         </div>
                     </div>
-                    <p class="text-muted small urdu-font mb-3">
-                        پاکستان کا سب سے جدید اور قابلِ اعتماد کلاؤڈ مدرسہ و مسجد ERP مینیجمنٹ پلیٹ فارم۔ دینی اداروں کو جدید ترین ٹیکنالوجی سے لیس کر کے شفافیت اور روانی لانا ہمارا مشن ہے۔
+                    <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-3">
+                        <?php echo __('پاکستان کا سب سے جدید اور قابلِ اعتماد کلاؤڈ مدرسہ و مسجد ERP مینیجمنٹ پلیٹ فارم۔ دینی اداروں کو جدید ترین ٹیکنالوجی سے لیس کر کے شفافیت اور روانی لانا ہمارا مشن ہے۔', 'Pakistan\'s premier and most reliable cloud madrasa & masjid ERP platform, modernizing educational institutes with transparency and ease.'); ?>
                     </p>
                     <div class="text-muted small">
-                        <i class="fas fa-location-dot me-1 text-primary"></i> سرگودھا، پنجاب، پاکستان
+                        <i class="fas fa-location-dot me-1 text-primary"></i> <?php echo __('سرگودھا، پنجاب، پاکستان', 'Sargodha, Punjab, Pakistan'); ?>
                     </div>
                 </div>
 
                 <div class="col-6 col-md-2">
-                    <h6 class="fw-bold text-white mb-3">اہم لنکس</h6>
+                    <h6 class="fw-bold text-white mb-3"><?php echo __('اہم لنکس', 'Quick Links'); ?></h6>
                     <ul class="list-unstyled small">
-                        <li class="mb-2"><a href="#home" class="text-muted text-decoration-none">ہوم پیج</a></li>
-                        <li class="mb-2"><a href="#features" class="text-muted text-decoration-none">خصوصیات</a></li>
-                        <li class="mb-2"><a href="#pricing" class="text-muted text-decoration-none">پیکجز و قیمتیں</a></li>
-                        <li class="mb-2"><a href="#rules" class="text-muted text-decoration-none">قواعد و ضوابط</a></li>
-                        <li class="mb-2"><a href="#download-apps" class="text-muted text-decoration-none">ایپس ڈاؤن لوڈ</a></li>
+                        <li class="mb-2"><a href="#home" class="text-muted text-decoration-none"><?php echo __('ہوم پیج', 'Home Page'); ?></a></li>
+                        <li class="mb-2"><a href="#features" class="text-muted text-decoration-none"><?php echo __('خصوصیات', 'Features'); ?></a></li>
+                        <li class="mb-2"><a href="#pricing" class="text-muted text-decoration-none"><?php echo __('پیکجز و قیمتیں', 'Pricing'); ?></a></li>
+                        <li class="mb-2"><a href="#rules" class="text-muted text-decoration-none"><?php echo __('قواعد و ضوابط', 'Terms & Rules'); ?></a></li>
+                        <li class="mb-2"><a href="#download-apps" class="text-muted text-decoration-none"><?php echo __('ایپس ڈاؤن لوڈ', 'Download Apps'); ?></a></li>
                     </ul>
                 </div>
 
                 <div class="col-6 col-md-3">
-                    <h6 class="fw-bold text-white mb-3">پورٹلز و لاگ ان</h6>
+                    <h6 class="fw-bold text-white mb-3"><?php echo __('پورٹلز و لاگ ان', 'Portals & Login'); ?></h6>
                     <ul class="list-unstyled small">
-                        <li class="mb-2"><a href="login.php" class="text-muted text-decoration-none"><i class="fas fa-key me-1 text-primary"></i> ادارہ لاگ ان پورٹل</a></li>
-                        <li class="mb-2"><a href="register.php" class="text-muted text-decoration-none"><i class="fas fa-user-plus me-1 text-primary"></i> نیا ادارہ مفت رجسٹریشن</a></li>
-                        <li class="mb-2"><a href="super_admin/login.php" class="text-muted text-decoration-none"><i class="fas fa-shield-halved me-1 text-warning"></i> سپر ایڈمن ماسٹر پورٹل</a></li>
+                        <li class="mb-2"><a href="login.php" class="text-muted text-decoration-none"><i class="fas fa-key me-1 text-primary"></i> <?php echo __('ادارہ لاگ ان پورٹل', 'Institute Login'); ?></a></li>
+                        <li class="mb-2"><a href="register.php" class="text-muted text-decoration-none"><i class="fas fa-user-plus me-1 text-primary"></i> <?php echo __('نیا ادارہ مفت رجسٹریشن', 'New Institute Register'); ?></a></li>
+                        <li class="mb-2"><a href="super_admin/login.php" class="text-muted text-decoration-none"><i class="fas fa-shield-halved me-1 text-warning"></i> <?php echo __('سپر ایڈمن ماسٹر پورٹل', 'Super Admin Master'); ?></a></li>
                     </ul>
                 </div>
 
                 <div class="col-12 col-md-3">
-                    <h6 class="fw-bold text-white mb-3">براہِ راست سپورٹ و رابطہ</h6>
-                    <p class="text-muted small urdu-font mb-2">ہیلپ ڈیسک اور سسٹم ڈیمو کے لیے ہم سے رابطہ کریں:</p>
+                    <h6 class="fw-bold text-white mb-3"><?php echo __('براہِ راست سپورٹ و رابطہ', 'Support & Contact'); ?></h6>
+                    <p class="text-muted small <?php echo ($lang=='ur')?'urdu-font':''; ?> mb-2"><?php echo __('ہیلپ ڈیسک اور سسٹم ڈیمو کے لیے ہم سے رابطہ کریں:', 'Reach out for helpdesk assistance or live software demo:'); ?></p>
                     <div class="text-muted small mb-2"><i class="fas fa-phone me-1 text-success"></i> 0301-2454595</div>
                     <div class="text-muted small mb-3"><i class="fas fa-envelope me-1 text-info"></i> info@mamfss.com</div>
                     <a href="https://wa.me/923012454595" target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-3 py-1">
-                        <i class="fab fa-whatsapp me-1"></i> واٹس ایپ سپورٹ
+                        <i class="fab fa-whatsapp me-1"></i> <?php echo __('واٹس ایپ سپورٹ', 'WhatsApp Support'); ?>
                     </a>
                 </div>
             </div>
 
             <div class="border-top pt-4 d-flex flex-wrap justify-content-between align-items-center text-muted small" style="border-color: rgba(255,255,255,0.06) !important;">
                 <div>
-                    &copy; <?php echo date('Y'); ?> MAMFSS Cloud Madrasa Management System. تمام جملہ حقوق محفوظ ہیں۔
+                    &copy; <?php echo date('Y'); ?> MAMFSS Cloud Madrasa Management System. <?php echo __('تمام جملہ حقوق محفوظ ہیں۔', 'All rights reserved.'); ?>
                 </div>
                 <div class="d-flex gap-3 align-items-center">
-                    <span class="badge bg-secondary bg-opacity-25 text-white border border-secondary font-monospace" style="font-size: 11px;">ورژن: 5.7.123 (SaaS Edition)</span>
+                    <span class="badge bg-secondary bg-opacity-25 text-white border border-secondary font-monospace" style="font-size: 11px;">v5.7.134 (SaaS Edition)</span>
                     <span>|</span>
-                    <a href="#rules" class="text-muted text-decoration-none">پرائیویسی پالیسی</a>
+                    <a href="#rules" class="text-muted text-decoration-none"><?php echo __('پرائیویسی پالیسی', 'Privacy Policy'); ?></a>
                 </div>
             </div>
         </div>
     </footer>
 
     <!-- 🌟 Floating WhatsApp Support Button -->
-    <a href="https://wa.me/923012454595?text=السلام علیکم! مجھے MAMFSS کلاؤڈ مدرسہ سسٹم کے متعلق معلومات چاہیے ہیں۔" class="float-whatsapp" target="_blank">
+    <a href="https://wa.me/923012454595?text=<?php echo urlencode(__('السلام علیکم! مجھے MAMFSS کلاؤڈ مدرسہ سسٹم کے متعلق معلومات چاہیے ہیں۔', 'Hello! I need information regarding MAMFSS Cloud Madrasa Management System.')); ?>" class="float-whatsapp" target="_blank">
         <i class="fab fa-whatsapp fs-4"></i>
-        <span>واٹس ایپ رابطہ</span>
+        <span><?php echo __('واٹس ایپ رابطہ', 'WhatsApp Chat'); ?></span>
     </a>
 
     <!-- Bootstrap Bundle JS -->

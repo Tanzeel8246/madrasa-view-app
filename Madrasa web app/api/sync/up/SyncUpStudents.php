@@ -262,12 +262,20 @@ class SyncUpStudents {
             foreach ($input['complaints'] as $item) {
                 $localId = to_int_or_null($item['id'] ?? null);
                 try {
-                    $check = $pdo->prepare("SELECT id FROM complaints WHERE student_id = ? AND date = ? AND complaint = ?");
-                    $check->execute([$item['student_id'], normalize_date($item['date']), $item['complaint']]);
-                    if ($check->rowCount() == 0) {
+                    $check = $pdo->prepare("SELECT id FROM complaints WHERE student_id = ? AND date = ? AND complaint = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$item['student_id'], normalize_date($item['date']), $item['complaint'], $tId]);
+                    $existingId = $check->fetchColumn();
+                    $savedCompId = null;
+                    if (!$existingId) {
                         $pdo->prepare("INSERT INTO complaints (student_id, date, complaint, tenant_id) VALUES (?, ?, ?, ?)")->execute([$item['student_id'], normalize_date($item['date']), $item['complaint'], $tId]);
+                        $savedCompId = (int)$pdo->lastInsertId();
+                    } else {
+                        $savedCompId = (int)$existingId;
                     }
-                    if ($localId !== null) $syncedIds['complaints'][] = $localId;
+                    if ($localId !== null) {
+                        $syncedIds['complaints'][] = $localId;
+                        $serverIds['complaints'][(string)$localId] = $savedCompId;
+                    }
                 } catch (Exception $e) { $syncErrors[] = "complaints: " . $e->getMessage(); }
             }
         }
@@ -286,15 +294,21 @@ class SyncUpStudents {
                         if ($localId !== null) $syncedIds['parent_complaints'][] = $localId;
                         continue;
                     }
-                    $check = $pdo->prepare("SELECT id FROM parent_complaints WHERE student_id = ? AND date = ? AND description = ?");
-                    $check->execute([$item['student_id'], normalize_date($item['date']), $item['description']]);
+                    $check = $pdo->prepare("SELECT id FROM parent_complaints WHERE student_id = ? AND date = ? AND description = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$item['student_id'], normalize_date($item['date']), $item['description'], $tId]);
                     $existing = $check->fetch();
+                    $savedPCompId = null;
                     if (!$existing) {
                         $pdo->prepare("INSERT INTO parent_complaints (student_id, date, category, description, evidence, status, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)")->execute([$item['student_id'], normalize_date($item['date']), $item['category'] ?? '', $item['description'], $ev, $item['status'] ?? 'Pending', $tId]);
+                        $savedPCompId = (int)$pdo->lastInsertId();
                     } else {
                         $pdo->prepare("UPDATE parent_complaints SET status = ? WHERE id = ?")->execute([$item['status'] ?? 'Pending', $existing['id']]);
+                        $savedPCompId = (int)$existing['id'];
                     }
-                    if ($localId !== null) $syncedIds['parent_complaints'][] = $localId;
+                    if ($localId !== null) {
+                        $syncedIds['parent_complaints'][] = $localId;
+                        $serverIds['parent_complaints'][(string)$localId] = $savedPCompId;
+                    }
                 } catch (Exception $e) { $syncErrors[] = "parent_complaints: " . $e->getMessage(); }
             }
         }
@@ -414,17 +428,23 @@ class SyncUpStudents {
                 $localId = to_int_or_null($item['id'] ?? null);
                 try {
                     $sys = $item['system_type'] ?? 'Madrasa';
-                    $check = $pdo->prepare("SELECT id FROM exams WHERE exam_name = ? AND exam_date = ? AND (system_type = ? OR (system_type IS NULL AND ? = 'Madrasa'))");
-                    $check->execute([$item['exam_name'], normalize_date($item['exam_date']), $sys, $sys]);
-                    if ($check->rowCount() > 0) {
-                        $existingId = $check->fetchColumn();
+                    $check = $pdo->prepare("SELECT id FROM exams WHERE exam_name = ? AND exam_date = ? AND (system_type = ? OR (system_type IS NULL AND ? = 'Madrasa')) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$item['exam_name'], normalize_date($item['exam_date']), $sys, $sys, $tId]);
+                    $existingId = $check->fetchColumn();
+                    $savedExamId = null;
+                    if ($existingId) {
                         $pdo->prepare("UPDATE exams SET total_marks = ?, passing_marks = ?, system_type = ? WHERE id = ?")
                             ->execute([(int)($item['total_marks'] ?? 100), (int)($item['passing_marks'] ?? 33), $sys, $existingId]);
+                        $savedExamId = (int)$existingId;
                     } else {
                         $pdo->prepare("INSERT INTO exams (exam_name, exam_date, total_marks, passing_marks, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?)")
                             ->execute([$item['exam_name'], normalize_date($item['exam_date']), (int)($item['total_marks'] ?? 100), (int)($item['passing_marks'] ?? 33), $sys, $tId]);
+                        $savedExamId = (int)$pdo->lastInsertId();
                     }
-                    if ($localId !== null) $syncedIds['exams'][] = $localId;
+                    if ($localId !== null) {
+                        $syncedIds['exams'][] = $localId;
+                        $serverIds['exams'][(string)$localId] = $savedExamId;
+                    }
                 } catch (Exception $e) { $syncErrors[] = "exams: " . $e->getMessage(); }
             }
         }
@@ -558,6 +578,275 @@ class SyncUpStudents {
                     }
                     if ($localId !== null) $syncedIds['husn_saut_record'][] = $localId;
                 } catch (Exception $e) { $syncErrors[] = "husn_saut_record: " . $e->getMessage(); }
+            }
+        }
+
+        // Complaints (Official / Internal)
+        if (!empty($input['complaints']) && is_array($input['complaints'])) {
+            foreach ($input['complaints'] as $item) {
+                $localId = to_int_or_null($item['id'] ?? null);
+                try {
+                    $studentId = to_int_or_null($item['student_id'] ?? null);
+                    $complaintText = trim($item['complaint'] ?? '');
+                    $cDate = normalize_date($item['date'] ?? date('Y-m-d'));
+                    $cSys = $item['system_type'] ?? 'Madrasa';
+                    $isDel = (int)($item['is_deleted'] ?? 0);
+                    if (!$studentId || $complaintText === '') continue;
+
+                    $check = $pdo->prepare("SELECT id FROM complaints WHERE student_id = ? AND date = ? AND complaint = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$studentId, $cDate, $complaintText, $tId]);
+                    $existingId = $check->fetchColumn();
+
+                    if ($isDel === 1) {
+                        if ($existingId) {
+                            $pdo->prepare("UPDATE complaints SET is_deleted = 1 WHERE id = ?")->execute([$existingId]);
+                        }
+                    } else {
+                        if ($existingId) {
+                            $pdo->prepare("UPDATE complaints SET complaint = ?, system_type = ?, is_deleted = 0 WHERE id = ?")
+                                ->execute([$complaintText, $cSys, $existingId]);
+                        } else {
+                            $pdo->prepare("INSERT INTO complaints (student_id, complaint, date, system_type, is_deleted, tenant_id) VALUES (?, ?, ?, ?, 0, ?)")
+                                ->execute([$studentId, $complaintText, $cDate, $cSys, $tId]);
+                        }
+                    }
+                    if ($localId !== null) $syncedIds['complaints'][] = $localId;
+                } catch (Exception $e) { $syncErrors[] = "complaints: " . $e->getMessage(); }
+            }
+        }
+
+        // Parent Complaints
+        if (!empty($input['parent_complaints']) && is_array($input['parent_complaints'])) {
+            foreach ($input['parent_complaints'] as $item) {
+                $localId = to_int_or_null($item['id'] ?? null);
+                try {
+                    $studentId = to_int_or_null($item['student_id'] ?? null);
+                    $category = trim($item['category'] ?? 'General');
+                    $description = trim($item['description'] ?? '');
+                    $cDate = normalize_date($item['date'] ?? date('Y-m-d'));
+                    $status = trim($item['status'] ?? 'Pending');
+                    $cSys = $item['system_type'] ?? 'Madrasa';
+                    $isDel = (int)($item['is_deleted'] ?? 0);
+                    if (!$studentId || $description === '') continue;
+
+                    $check = $pdo->prepare("SELECT id FROM parent_complaints WHERE student_id = ? AND date = ? AND description = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$studentId, $cDate, $description, $tId]);
+                    $existingId = $check->fetchColumn();
+
+                    if ($isDel === 1) {
+                        if ($existingId) {
+                            $pdo->prepare("UPDATE parent_complaints SET is_deleted = 1 WHERE id = ?")->execute([$existingId]);
+                        }
+                    } else {
+                        if ($existingId) {
+                            $pdo->prepare("UPDATE parent_complaints SET category = ?, description = ?, status = ?, system_type = ?, is_deleted = 0 WHERE id = ?")
+                                ->execute([$category, $description, $status, $cSys, $existingId]);
+                        } else {
+                            $pdo->prepare("INSERT INTO parent_complaints (student_id, date, category, description, status, system_type, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?)")
+                                ->execute([$studentId, $cDate, $category, $description, $status, $cSys, $tId]);
+                        }
+                    }
+                    if ($localId !== null) $syncedIds['parent_complaints'][] = $localId;
+                } catch (Exception $e) { $syncErrors[] = "parent_complaints: " . $e->getMessage(); }
+            }
+        }
+
+        // Course Structure (درس نظامی و عصری علوم)
+        if (!empty($input['course_structure']) && is_array($input['course_structure'])) {
+            foreach ($input['course_structure'] as $item) {
+                $localId = to_int_or_null($item['id'] ?? null);
+                try {
+                    $name = trim($item['name'] ?? '');
+                    if ($name === '') continue;
+                    $courseType = trim($item['course_type'] ?? 'Darse_Nizami');
+                    $totalYears = max(1, (int)($item['total_years'] ?? 8));
+                    $gender = trim($item['gender'] ?? 'بنین');
+                    $desc = trim($item['description'] ?? '');
+                    $isActive = (int)($item['is_active'] ?? 1);
+
+                    $check = $pdo->prepare("SELECT id FROM course_structure WHERE name = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$name, $tId]);
+                    $existingId = $check->fetchColumn();
+                    $savedCourseId = null;
+
+                    if ($existingId) {
+                        $pdo->prepare("UPDATE course_structure SET course_type = ?, total_years = ?, gender = ?, description = ?, is_active = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                            ->execute([$courseType, $totalYears, $gender, $desc, $isActive, $existingId, $tId]);
+                        $savedCourseId = (int)$existingId;
+                    } else {
+                        $pdo->prepare("INSERT INTO course_structure (name, course_type, total_years, gender, description, is_active, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                            ->execute([$name, $courseType, $totalYears, $gender, $desc, $isActive, $tId]);
+                        $savedCourseId = (int)$pdo->lastInsertId();
+                    }
+                    if ($localId !== null) {
+                        $syncedIds['course_structure'][] = $localId;
+                        $serverIds['course_structure'][(string)$localId] = $savedCourseId;
+                    }
+                } catch (Exception $e) { $syncErrors[] = "course_structure: " . $e->getMessage(); }
+            }
+        }
+
+        // Course Subjects
+        if (!empty($input['course_subjects']) && is_array($input['course_subjects'])) {
+            foreach ($input['course_subjects'] as $item) {
+                $localId = to_int_or_null($item['id'] ?? null);
+                try {
+                    $courseId = (int)($item['course_id'] ?? 0);
+                    $subjectName = trim($item['subject_name'] ?? '');
+                    if ($subjectName === '') continue;
+
+                    // Resolve course_id from serverIds if locally uploaded or by name
+                    if (isset($serverIds['course_structure'][(string)$courseId])) {
+                        $courseId = (int)$serverIds['course_structure'][(string)$courseId];
+                    } elseif (!empty($item['course_name'])) {
+                        $cLookup = $pdo->prepare("SELECT id FROM course_structure WHERE name = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                        $cLookup->execute([trim($item['course_name']), $tId]);
+                        $matchedCId = $cLookup->fetchColumn();
+                        if ($matchedCId) $courseId = (int)$matchedCId;
+                    }
+                    if ($courseId <= 0) continue;
+
+                    $yearNo = max(1, (int)($item['year_no'] ?? 1));
+                    $yearTitle = trim($item['year_title'] ?? '');
+                    $bookName = trim($item['book_name'] ?? '');
+                    $maxMarks = (float)($item['max_marks'] ?? 100);
+                    $passMarks = (float)($item['pass_marks'] ?? 40);
+                    $subjectOrder = (int)($item['subject_order'] ?? 0);
+                    $isOptional = (int)($item['is_optional'] ?? 0);
+
+                    $check = $pdo->prepare("SELECT id FROM course_subjects WHERE course_id = ? AND year_no = ? AND subject_name = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$courseId, $yearNo, $subjectName, $tId]);
+                    $existingId = $check->fetchColumn();
+                    $savedSubjectId = null;
+
+                    if ($existingId) {
+                        $pdo->prepare("UPDATE course_subjects SET year_title = ?, book_name = ?, max_marks = ?, pass_marks = ?, subject_order = ?, is_optional = ? WHERE id = ?")
+                            ->execute([$yearTitle, $bookName, $maxMarks, $passMarks, $subjectOrder, $isOptional, $existingId]);
+                        $savedSubjectId = (int)$existingId;
+                    } else {
+                        $pdo->prepare("INSERT INTO course_subjects (course_id, year_no, year_title, subject_name, book_name, max_marks, pass_marks, subject_order, is_optional, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                            ->execute([$courseId, $yearNo, $yearTitle, $subjectName, $bookName, $maxMarks, $passMarks, $subjectOrder, $isOptional, $tId]);
+                        $savedSubjectId = (int)$pdo->lastInsertId();
+                    }
+                    if ($localId !== null) {
+                        $syncedIds['course_subjects'][] = $localId;
+                        $serverIds['course_subjects'][(string)$localId] = $savedSubjectId;
+                    }
+                } catch (Exception $e) { $syncErrors[] = "course_subjects: " . $e->getMessage(); }
+            }
+        }
+
+        // Student Course Enrollment
+        if (!empty($input['student_course_enrollment']) && is_array($input['student_course_enrollment'])) {
+            foreach ($input['student_course_enrollment'] as $item) {
+                $localId = to_int_or_null($item['id'] ?? null);
+                try {
+                    $studentId = (int)($item['student_id'] ?? 0);
+                    $courseId = (int)($item['course_id'] ?? 0);
+                    if (isset($serverIds['course_structure'][(string)$courseId])) {
+                        $courseId = (int)$serverIds['course_structure'][(string)$courseId];
+                    }
+                    if ($studentId <= 0 || $courseId <= 0) continue;
+                    $currentYear = max(1, (int)($item['current_year'] ?? 1));
+                    $session = trim($item['academic_session'] ?? '');
+                    $enrollDate = normalize_date($item['enrollment_date'] ?? date('Y-m-d'));
+                    $status = trim($item['status'] ?? 'active');
+
+                    $check = $pdo->prepare("SELECT id FROM student_course_enrollment WHERE student_id = ? AND course_id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$studentId, $courseId, $tId]);
+                    $existingId = $check->fetchColumn();
+                    $savedEnrollId = null;
+
+                    if ($existingId) {
+                        $pdo->prepare("UPDATE student_course_enrollment SET current_year = ?, academic_session = ?, enrollment_date = ?, status = ? WHERE id = ?")
+                            ->execute([$currentYear, $session, $enrollDate, $status, $existingId]);
+                        $savedEnrollId = (int)$existingId;
+                    } else {
+                        $pdo->prepare("INSERT INTO student_course_enrollment (student_id, course_id, current_year, academic_session, enrollment_date, status, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                            ->execute([$studentId, $courseId, $currentYear, $session, $enrollDate, $status, $tId]);
+                        $savedEnrollId = (int)$pdo->lastInsertId();
+                    }
+                    if ($localId !== null) {
+                        $syncedIds['student_course_enrollment'][] = $localId;
+                        $serverIds['student_course_enrollment'][(string)$localId] = $savedEnrollId;
+                    }
+                } catch (Exception $e) { $syncErrors[] = "student_course_enrollment: " . $e->getMessage(); }
+            }
+        }
+
+        // Exam Subject Results
+        if (!empty($input['exam_subject_results']) && is_array($input['exam_subject_results'])) {
+            foreach ($input['exam_subject_results'] as $item) {
+                $localId = to_int_or_null($item['id'] ?? null);
+                try {
+                    $examId = (int)($item['exam_id'] ?? 0);
+                    if (isset($serverIds['exams'][(string)$examId])) {
+                        $examId = (int)$serverIds['exams'][(string)$examId];
+                    }
+                    $studentId = (int)($item['student_id'] ?? 0);
+                    $subjectId = (int)($item['subject_id'] ?? 0);
+                    $subjectName = trim($item['subject_name'] ?? '');
+                    if ($examId <= 0 || $studentId <= 0) continue;
+                    $courseId = (int)($item['course_id'] ?? 0);
+                    if (isset($serverIds['course_structure'][(string)$courseId])) {
+                        $courseId = (int)$serverIds['course_structure'][(string)$courseId];
+                    }
+                    $yearNo = max(1, (int)($item['year_no'] ?? 1));
+                    $obtained = (float)($item['marks_obtained'] ?? 0);
+                    $maxMarks = (float)($item['max_marks'] ?? 100);
+                    $isAbsent = (int)($item['is_absent'] ?? 0);
+                    $grade = trim($item['grade'] ?? 'مقبول');
+                    $remarks = trim($item['remarks'] ?? '');
+
+                    $check = $pdo->prepare("SELECT id FROM exam_subject_results WHERE exam_id = ? AND student_id = ? AND (subject_id = ? OR subject_name = ?) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$examId, $studentId, $subjectId, $subjectName, $tId]);
+                    $existingId = $check->fetchColumn();
+                    $savedResId = null;
+
+                    if ($existingId) {
+                        $pdo->prepare("UPDATE exam_subject_results SET course_id = ?, year_no = ?, marks_obtained = ?, max_marks = ?, is_absent = ?, grade = ?, remarks = ? WHERE id = ?")
+                            ->execute([$courseId, $yearNo, $obtained, $maxMarks, $isAbsent, $grade, $remarks, $existingId]);
+                        $savedResId = (int)$existingId;
+                    } else {
+                        $pdo->prepare("INSERT INTO exam_subject_results (tenant_id, exam_id, student_id, course_id, year_no, subject_id, subject_name, marks_obtained, max_marks, is_absent, grade, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                            ->execute([$tId, $examId, $studentId, $courseId, $yearNo, $subjectId, $subjectName, $obtained, $maxMarks, $isAbsent, $grade, $remarks]);
+                        $savedResId = (int)$pdo->lastInsertId();
+                    }
+                    if ($localId !== null) {
+                        $syncedIds['exam_subject_results'][] = $localId;
+                        $serverIds['exam_subject_results'][(string)$localId] = $savedResId;
+                    }
+                } catch (Exception $e) { $syncErrors[] = "exam_subject_results: " . $e->getMessage(); }
+            }
+        }
+
+        // Student Year Promotion
+        if (!empty($input['student_year_promotion']) && is_array($input['student_year_promotion'])) {
+            foreach ($input['student_year_promotion'] as $item) {
+                $localId = to_int_or_null($item['id'] ?? null);
+                try {
+                    $studentId = (int)($item['student_id'] ?? 0);
+                    $courseId = (int)($item['course_id'] ?? 0);
+                    if (isset($serverIds['course_structure'][(string)$courseId])) {
+                        $courseId = (int)$serverIds['course_structure'][(string)$courseId];
+                    }
+                    if ($studentId <= 0 || $courseId <= 0) continue;
+                    $fromYear = (int)($item['from_year'] ?? 1);
+                    $toYear = (int)($item['to_year'] ?? 2);
+                    $session = trim($item['academic_session'] ?? '');
+                    $status = trim($item['status'] ?? 'Promoted');
+                    $promotedBy = to_int_or_null($item['promoted_by'] ?? null);
+                    $remarks = trim($item['remarks'] ?? '');
+
+                    $pdo->prepare("INSERT INTO student_year_promotion (tenant_id, student_id, course_id, from_year, to_year, academic_session, status, promoted_by, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                        ->execute([$tId, $studentId, $courseId, $fromYear, $toYear, $session, $status, $promotedBy, $remarks]);
+                    $savedPromoId = (int)$pdo->lastInsertId();
+
+                    if ($localId !== null) {
+                        $syncedIds['student_year_promotion'][] = $localId;
+                        $serverIds['student_year_promotion'][(string)$localId] = $savedPromoId;
+                    }
+                } catch (Exception $e) { $syncErrors[] = "student_year_promotion: " . $e->getMessage(); }
             }
         }
     }

@@ -262,19 +262,19 @@ $categories = ['قرآن و تفاسیر', 'کتبِ احادیث', 'فقہ و �
         <div>
             <h2 class="fw-bold text-dark m-0 d-flex align-items-center">
                 <i class="fas fa-book-reader text-primary me-2"></i>
-                لائبریری مینیجمنٹ سسٹم (Library Management)
+                <?php echo __('لائبریری مینیجمنٹ سسٹم (Library Management)', 'Library Management System'); ?>
                 <span class="badge bg-<?php echo $is_masjid ? 'info' : 'success'; ?> ms-3 fs-6">
-                    <?php echo $is_masjid ? 'مسجد / مکتب موڈ' : 'مدرسہ موڈ'; ?>
+                    <?php echo $is_masjid ? __('مسجد / مکتب موڈ', 'Masjid / Maktab Mode') : __('مدرسہ موڈ', 'Madrasa Mode'); ?>
                 </span>
             </h2>
-            <p class="text-muted m-0 small mt-1">کتب کی کیٹلاگ، اجراء و واپسی رجسٹر، الماری نمبر اور خودکار ڈیو ڈیٹ الرٹس</p>
+            <p class="text-muted m-0 small mt-1"><?php echo __('کتب کی کیٹلاگ، اجراء و واپسی رجسٹر، الماری نمبر اور خودکار ڈیو ڈیٹ الرٹس', 'Book catalog, issuance & return register, shelf numbers and automated due date alerts'); ?></p>
         </div>
         <div class="d-flex gap-2 mt-2 mt-md-0">
             <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#newBookModal">
-                <i class="fas fa-plus-circle me-1"></i> نئی کتاب شامل کریں
+                <i class="fas fa-plus-circle me-1"></i> <?php echo __('نئی کتاب شامل کریں', 'Add New Book'); ?>
             </button>
             <button class="btn btn-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#issueBookModal">
-                <i class="fas fa-hand-holding me-1"></i> کتاب جاری کریں
+                <i class="fas fa-hand-holding me-1"></i> <?php echo __('کتاب جاری کریں', 'Issue Book'); ?>
             </button>
         </div>
     </div>
@@ -299,7 +299,7 @@ $categories = ['قرآن و تفاسیر', 'کتبِ احادیث', 'فقہ و �
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-primary">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small fw-bold">کل کتب (Titles)</div>
+                        <div class="text-muted small fw-bold"><?php echo __('کل کتب (Titles)', 'Total Titles'); ?></div>
                         <div class="fs-4 fw-bold text-dark"><?php echo $stat_total_titles; ?></div>
                     </div>
                     <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
@@ -312,7 +312,7 @@ $categories = ['قرآن و تفاسیر', 'کتبِ احادیث', 'فقہ و �
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-info">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small fw-bold">کل نسخے (Copies)</div>
+                        <div class="text-muted small fw-bold"><?php echo __('کل نسخے (Copies)', 'Total Copies'); ?></div>
                         <div class="fs-4 fw-bold text-dark"><?php echo $stat_total_copies; ?></div>
                     </div>
                     <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info">
@@ -325,7 +325,7 @@ $categories = ['قرآن و تفاسیر', 'کتبِ احادیث', 'فقہ و �
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-success">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small fw-bold">دستیاب کتب (Available)</div>
+                        <div class="text-muted small fw-bold"><?php echo __('دستیاب کتب (Available)', 'Available Copies'); ?></div>
                         <div class="fs-4 fw-bold text-success"><?php echo $stat_avail_copies; ?></div>
                     </div>
                     <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
@@ -338,7 +338,7 @@ $categories = ['قرآن و تفاسیر', 'کتبِ احادیث', 'فقہ و �
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-warning">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small fw-bold">جاری شدہ (Issued)</div>
+                        <div class="text-muted small fw-bold"><?php echo __('جاری شدہ (Issued)', 'Issued Books'); ?></div>
                         <div class="fs-4 fw-bold text-warning"><?php echo $stat_issued_books; ?></div>
                     </div>
                     <div class="bg-warning bg-opacity-10 p-3 rounded-circle text-warning">
@@ -351,7 +351,7 @@ $categories = ['قرآن و تفاسیر', 'کتبِ احادیث', 'فقہ و �
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-danger">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small fw-bold">تاخیر شدہ کتب (Overdue)</div>
+                        <div class="text-muted small fw-bold"><?php echo __('تاخیر شدہ کتب (Overdue)', 'Overdue Books'); ?></div>
                         <div class="fs-4 fw-bold text-danger"><?php echo $stat_overdue_books; ?></div>
                     </div>
                     <div class="bg-danger bg-opacity-10 p-3 rounded-circle text-danger">
@@ -366,14 +366,14 @@ $categories = ['قرآن و تفاسیر', 'کتبِ احادیث', 'فقہ و �
     <ul class="nav nav-pills mb-4 border-bottom pb-3 gap-2" id="libTabs" role="tablist">
         <li class="nav-item">
             <button class="nav-link active fw-bold px-4 rounded-pill shadow-sm" id="catalog-tab" data-bs-toggle="pill" data-bs-target="#catalog-pane" type="button">
-                <i class="fas fa-list me-1"></i> کتب کی کیٹلاگ و انتظام (Books Catalog)
+                <i class="fas fa-list me-1"></i> <?php echo __('کتب کی کیٹلاگ و انتظام (Books Catalog)', 'Books Catalog & Management'); ?>
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link fw-bold px-4 rounded-pill shadow-sm position-relative" id="issues-tab" data-bs-toggle="pill" data-bs-target="#issues-pane" type="button">
-                <i class="fas fa-history me-1"></i> جاری شدہ کتب و واپسی رجسٹر (Issued Registry)
+                <i class="fas fa-history me-1"></i> <?php echo __('جاری شدہ کتب و واپسی رجسٹر (Issued Registry)', 'Issued Books Registry'); ?>
                 <?php if ($stat_overdue_books > 0): ?>
-                    <span class="badge bg-danger ms-2 rounded-pill"><?php echo $stat_overdue_books; ?> تاخیر</span>
+                    <span class="badge bg-danger ms-2 rounded-pill"><?php echo $stat_overdue_books . ' ' . __('تاخیر', 'Overdue'); ?></span>
                 <?php endif; ?>
             </button>
         </li>
@@ -389,12 +389,12 @@ $categories = ['قرآن و تفاسیر', 'کتبِ احادیث', 'فقہ و �
                         <div class="col-md-4">
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                                <input type="text" name="book_search" class="form-control border-start-0" placeholder="کتاب کا نام، مصنف، یا الماری نمبر تلاش کریں..." value="<?php echo htmlspecialchars($book_search); ?>">
+                                <input type="text" name="book_search" class="form-control border-start-0" placeholder="<?php echo __('کتاب کا نام، مصنف، یا الماری نمبر تلاش کریں...', 'Search book title, author, or shelf no...'); ?>" value="<?php echo htmlspecialchars($book_search); ?>">
                             </div>
                         </div>
                         <div class="col-md-3">
                             <select name="cat_filter" class="form-select">
-                                <option value="">-- تمام کیٹیگریز --</option>
+                                <option value=""><?php echo __('-- تمام کیٹیگریز --', '-- All Categories --'); ?></option>
                                 <?php foreach ($categories as $cat): ?>
                                     <option value="<?php echo htmlspecialchars($cat); ?>" <?php if ($cat_filter === $cat) echo 'selected'; ?>>
                                         <?php echo htmlspecialchars($cat); ?>
@@ -404,17 +404,17 @@ $categories = ['قرآن و تفاسیر', 'کتبِ احادیث', 'فقہ و �
                         </div>
                         <div class="col-md-3">
                             <select name="scope" class="form-select">
-                                <option value="mode" <?php if ($scope === 'mode') echo 'selected'; ?>>موجودہ موڈ + مشترکہ کتب</option>
-                                <option value="all" <?php if ($scope === 'all') echo 'selected'; ?>>تمام کتب (مشترکہ سمیت)</option>
-                                <option value="shared" <?php if ($scope === 'shared') echo 'selected'; ?>>صرف مشترکہ کتب</option>
-                                <option value="madrasa" <?php if ($scope === 'madrasa') echo 'selected'; ?>>صرف مدرسہ کتب</option>
-                                <option value="masjid" <?php if ($scope === 'masjid') echo 'selected'; ?>>صرف مسجد و مکتب کتب</option>
+                                <option value="mode" <?php if ($scope === 'mode') echo 'selected'; ?>><?php echo __('موجودہ موڈ + مشترکہ کتب', 'Current Mode + Shared'); ?></option>
+                                <option value="all" <?php if ($scope === 'all') echo 'selected'; ?>><?php echo __('تمام کتب (مشترکہ سمیت)', 'All Books (Inc. Shared)'); ?></option>
+                                <option value="shared" <?php if ($scope === 'shared') echo 'selected'; ?>><?php echo __('صرف مشترکہ کتب', 'Shared Books Only'); ?></option>
+                                <option value="madrasa" <?php if ($scope === 'madrasa') echo 'selected'; ?>><?php echo __('صرف مدرسہ کتب', 'Madrasa Books Only'); ?></option>
+                                <option value="masjid" <?php if ($scope === 'masjid') echo 'selected'; ?>><?php echo __('صرف مسجد و مکتب کتب', 'Masjid & Maktab Books Only'); ?></option>
                             </select>
                         </div>
                         <div class="col-md-2 d-flex gap-2">
-                            <button type="submit" class="btn btn-dark w-100 fw-bold">فلٹر کریں</button>
+                            <button type="submit" class="btn btn-dark w-100 fw-bold"><?php echo __('فلٹر کریں', 'Filter'); ?></button>
                             <?php if ($book_search !== '' || $cat_filter !== '' || $scope !== 'mode'): ?>
-                                <a href="library.php" class="btn btn-outline-secondary">ری سیٹ</a>
+                                <a href="library.php" class="btn btn-outline-secondary"><?php echo __('ری سیٹ', 'Reset'); ?></a>
                             <?php endif; ?>
                         </div>
                     </form>

@@ -5,7 +5,7 @@
             $footer_org_name = !empty($header_current_name) ? $header_current_name : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : 'نظامِ مدارس و مساجد');
             ?>
             <span class="text-muted">© <?php echo date('Y'); ?> <?php echo htmlspecialchars($footer_org_name); ?>. <?php echo (isset($lang) && $lang === 'en') ? 'All rights reserved.' : 'جملہ حقوق محفوظ ہیں۔'; ?></span>
-            <span class="text-muted ms-2 badge bg-secondary bg-opacity-10 text-secondary border font-monospace">v5.7.123 (SaaS Edition)</span>
+            <span class="text-muted ms-2 badge bg-secondary bg-opacity-10 text-secondary border font-monospace">v5.7.134 (SaaS Edition)</span>
             <div class="mt-2">
                 <a href="privacy.php" class="text-decoration-none text-secondary mx-2"><?php echo (isset($lang) && $lang === 'en') ? 'Privacy Policy' : 'پرائیویسی پالیسی'; ?></a> |
                 <a href="terms.php" class="text-decoration-none text-secondary mx-2"><?php echo (isset($lang) && $lang === 'en') ? 'Terms & Conditions' : 'شرائط و ضوابط'; ?></a> |

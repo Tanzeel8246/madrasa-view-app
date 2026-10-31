@@ -65,10 +65,10 @@ $title = ($system_type === 'Masjid') ? "اثاثہ جات (مسجد)" : "اثا�
 include 'header.php';
 ?>
 
-<div class="container py-4" dir="rtl">
+<div class="container py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold text-danger"><i class="fas fa-boxes me-2"></i> <?php echo (isset($lang) && $lang=='en') ? 'Assets Management' : 'اثاثہ جات (Assets)'; ?></h3>
-        <button class="btn btn-danger fw-bold" onclick="openAddModal()"><i class="fas fa-plus me-1"></i> <?php echo (isset($lang) && $lang=='en') ? 'Add Asset' : 'نیا اثاثہ شامل کریں'; ?></button>
+        <h3 class="fw-bold text-danger"><i class="fas fa-boxes me-2"></i> <?php echo __('اثاثہ جات (Assets)', 'Assets Management'); ?></h3>
+        <button class="btn btn-danger fw-bold" onclick="openAddModal()"><i class="fas fa-plus me-1"></i> <?php echo __('نیا اثاثہ شامل کریں', 'Add Asset'); ?></button>
     </div>
 
     <div class="card shadow-sm border-0 neobox">
@@ -76,12 +76,12 @@ include 'header.php';
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th><?php echo (isset($lang) && $lang=='en') ? 'Asset Name' : 'اثاثہ کا نام'; ?></th>
-                        <th><?php echo (isset($lang) && $lang=='en') ? 'Category' : 'شعبہ / کیٹیگری'; ?></th>
-                        <th><?php echo (isset($lang) && $lang=='en') ? 'Quantity / Condition' : 'تعداد / حالت'; ?></th>
-                        <th><?php echo (isset($lang) && $lang=='en') ? 'Asset Type' : 'قسم (Type)'; ?></th>
-                        <th><?php echo (isset($lang) && $lang=='en') ? 'Donor / Source' : 'واقف / ذریعہ'; ?></th>
-                        <th class="text-center"><?php echo (isset($lang) && $lang=='en') ? 'Actions' : 'کارروائی'; ?></th>
+                        <th><?php echo __('اثاثہ کا نام', 'Asset Name'); ?></th>
+                        <th><?php echo __('شعبہ / کیٹیگری', 'Category'); ?></th>
+                        <th><?php echo __('تعداد / حالت', 'Quantity / Condition'); ?></th>
+                        <th><?php echo __('قسم (Type)', 'Asset Type'); ?></th>
+                        <th><?php echo __('واقف / ذریعہ', 'Donor / Source'); ?></th>
+                        <th class="text-center"><?php echo __('کارروائی', 'Actions'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -95,9 +95,9 @@ include 'header.php';
                         </td>
                         <td>
                             <?php if($row['asset_type'] == 'Waqf'): ?>
-                                <span class="badge bg-success"> (Waqf)</span>
+                                <span class="badge bg-success"><?php echo __('وقف (Waqf)', 'Waqf'); ?></span>
                             <?php else: ?>
-                                <span class="badge bg-primary">  (Purchased)</span>
+                                <span class="badge bg-primary"><?php echo __('خریداری (Purchased)', 'Purchased'); ?></span>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -114,7 +114,7 @@ include 'header.php';
                         </td>
                         <td class="text-center">
                             <button type="button" class="btn btn-sm btn-outline-primary" onclick='editRecord(<?php echo json_encode($row, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'><i class="fas fa-edit"></i></button>
-                            <form method="POST" class="d-inline" onsubmit="return confirm('       ');">
+                            <form method="POST" class="d-inline" onsubmit="return confirm('<?php echo __('کیا آپ واقعی یہ اثاثہ حذف کرنا چاہتے ہیں؟', 'Are you sure you want to delete this asset?'); ?>');">
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
                                 <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
@@ -123,7 +123,7 @@ include 'header.php';
                     </tr>
                     <?php endforeach; ?>
                     <?php if(empty($records)): ?>
-                    <tr><td colspan="6" class="text-center text-muted py-4">   </td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-4"><?php echo __('کوئی اثاثہ درج نہیں ہے۔', 'No assets recorded.'); ?></td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -137,28 +137,28 @@ include 'header.php';
       <form method="POST" id="assetForm">
         <input type="hidden" name="id" id="asset_id">
         <div class="modal-header bg-danger text-white">
-          <h5 class="modal-title" id="modalTitle">  </h5>
+          <h5 class="modal-title" id="modalTitle"><?php echo __('نیا اثاثہ شامل کریں', 'Add Asset'); ?></h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
             <div class="row mb-3">
                 <div class="col-md-6">
-                    <label class="form-label fw-bold"> </label>
+                    <label class="form-label fw-bold"><?php echo __('اثاثہ کا نام', 'Asset Name'); ?></label>
                     <input type="text" name="name" id="asset_name" class="form-control" required>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold"> (  )</label>
+                    <label class="form-label fw-bold"><?php echo __('کیٹیگری / شعبہ', 'Category / Department'); ?></label>
                     <input type="text" name="category" id="asset_category" class="form-control" required>
                 </div>
             </div>
             
             <div class="row mb-3">
                 <div class="col-md-6">
-                    <label class="form-label fw-bold"></label>
+                    <label class="form-label fw-bold"><?php echo __('تعداد', 'Quantity'); ?></label>
                     <input type="number" name="quantity" id="asset_qty" class="form-control" required min="1" value="1">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold"> (Condition)</label>
+                    <label class="form-label fw-bold"><?php echo __('حالت (Condition)', 'Condition'); ?></label>
                     <select name="condition_status" id="asset_condition" class="form-select" required>
                         <option value=" (New)"> (New)</option>
                         <option value="  (Used - Good)">  (Used - Good)</option>
@@ -169,21 +169,21 @@ include 'header.php';
             </div>
 
             <div class="mb-3">
-                <label class="form-label fw-bold"> (Asset Type)</label>
+                <label class="form-label fw-bold"><?php echo __('اثاثہ کی قسم', 'Asset Type'); ?></label>
                 <div class="d-flex gap-4">
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="asset_type" id="typePurchased" value="Purchased" checked onchange="toggleWaqfFields()">
-                        <label class="form-check-label" for="typePurchased">  (Purchased)</label>
+                        <label class="form-check-label" for="typePurchased"><?php echo __('خریداری (Purchased)', 'Purchased'); ?></label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="asset_type" id="typeWaqf" value="Waqf" onchange="toggleWaqfFields()">
-                        <label class="form-check-label" for="typeWaqf"> (Waqf)</label>
+                        <label class="form-check-label" for="typeWaqf"><?php echo __('وقف (Waqf)', 'Waqf'); ?></label>
                     </div>
                 </div>
             </div>
 
             <div id="waqfFields" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
-                <h6 class="fw-bold text-success mb-3"><i class="fas fa-hand-holding-heart me-2"></i>    </h6>
+                <h6 class="fw-bold text-success mb-3"><i class="fas fa-hand-holding-heart me-2"></i> <?php echo __('واقف / عطیہ دہندہ کی تفصیلات', 'Waqf / Donor Details'); ?></h6>
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label"></label>
@@ -208,8 +208,8 @@ include 'header.php';
 
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"> </button>
-          <button type="submit" class="btn btn-danger"> </button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+          <button type="submit" class="btn btn-danger"><?php echo __('محفوظ کریں', 'Save Asset'); ?></button>
         </div>
       </form>
     </div>
@@ -230,9 +230,9 @@ function toggleWaqfFields() {
 function openAddModal() {
     document.getElementById('assetForm').reset();
     document.getElementById('asset_id').value = '';
-    document.getElementById('modalTitle').innerText = '  ';
+    document.getElementById('modalTitle').innerText = '<?php echo __('نیا اثاثہ شامل کریں', 'Add Asset'); ?>';
     document.getElementById('typePurchased').checked = true;
-    toggleWaqfFields();
+    toggleWaqfFields(); // edit_modal
     new bootstrap.Modal(document.getElementById('assetModal')).show();
 }
 
@@ -262,8 +262,8 @@ function editRecord(row) {
         document.getElementById('typePurchased').checked = true;
     }
     
-    toggleWaqfFields();
-    document.getElementById('modalTitle').innerText = '  ';
+    toggleWaqfFields(); // edit_modal
+    document.getElementById('modalTitle').innerText = '<?php echo __('نیا اثاثہ شامل کریں', 'Add Asset'); ?>';
     new bootstrap.Modal(document.getElementById('assetModal')).show();
 }
 </script>

@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="madrasaBg" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#0e3a2b" />
+      <stop offset="65%" stop-color="#062219" />
+      <stop offset="100%" stop-color="#02100b" />
+    </radialGradient>
+
+    <!-- Royal Islamic Gold -->
+    <linearGradient id="madrasaGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="35%" stop-color="#f59e0b" />
+      <stop offset="75%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#92400e" />
+    </linearGradient>
+
+    <linearGradient id="emeraldLeaf" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+
+    <filter id="mGlow">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Outer Double Circle Emblem -->
+  <circle cx="256" cy="256" r="240" fill="url(#madrasaBg)" stroke="url(#madrasaGold)" stroke-width="8" />
+  <circle cx="256" cy="256" r="224" fill="none" stroke="rgba(245, 158, 11, 0.45)" stroke-width="2.5" stroke-dasharray="6,5" />
+  <circle cx="256" cy="256" r="214" fill="none" stroke="url(#madrasaGold)" stroke-width="1.5" />
+
+  <!-- Radiating Rays of Knowledge (نورِ علم کی کرنیں) -->
+  <g opacity="0.18" stroke="url(#madrasaGold)" stroke-width="1.5">
+    <line x1="256" y1="256" x2="256" y2="45" />
+    <line x1="256" y1="256" x2="330" y2="55" />
+    <line x1="256" y1="256" x2="405" y2="105" />
+    <line x1="256" y1="256" x2="455" y2="180" />
+    <line x1="256" y1="256" x2="467" y2="256" />
+    <line x1="256" y1="256" x2="182" y2="55" />
+    <line x1="256" y1="256" x2="107" y2="105" />
+    <line x1="256" y1="256" x2="57" y2="180" />
+    <line x1="256" y1="256" x2="45" y2="256" />
+  </g>
+
+  <!-- Islamic Mihrab Architectural Outline -->
+  <path d="M 170 310 L 170 195 Q 170 110 256 75 Q 342 110 342 195 L 342 310 Z" 
+        fill="rgba(16, 185, 129, 0.1)" 
+        stroke="url(#madrasaGold)" 
+        stroke-width="3" />
+  <path d="M 184 310 L 184 205 Q 184 130 256 100 Q 328 130 328 205 L 328 310" 
+        fill="none" 
+        stroke="rgba(254, 240, 138, 0.6)" 
+        stroke-width="1.5" />
+
+  <!-- Laurel Wreath of Wisdom (علم و وقار کی سنہری شاخیں) -->
+  <!-- Left Wreath -->
+  <g fill="url(#madrasaGold)" opacity="0.9">
+    <path d="M 85 240 Q 95 210 115 190 Q 110 215 95 240 Z" />
+    <path d="M 80 270 Q 85 240 108 225 Q 100 250 88 272 Z" />
+    <path d="M 85 305 Q 85 275 110 265 Q 100 288 92 310 Z" />
+    <path d="M 100 340 Q 95 310 120 305 Q 110 325 108 345 Z" />
+    <path d="M 125 370 Q 115 345 142 340 Q 130 360 130 375 Z" />
+  </g>
+  <!-- Right Wreath -->
+  <g fill="url(#madrasaGold)" opacity="0.9" transform="translate(512, 0) scale(-1, 1)">
+    <path d="M 85 240 Q 95 210 115 190 Q 110 215 95 240 Z" />
+    <path d="M 80 270 Q 85 240 108 225 Q 100 250 88 272 Z" />
+    <path d="M 85 305 Q 85 275 110 265 Q 100 288 92 310 Z" />
+    <path d="M 100 340 Q 95 310 120 305 Q 110 325 108 345 Z" />
+    <path d="M 125 370 Q 115 345 142 340 Q 130 360 130 375 Z" />
+  </g>
+
+  <!-- Top Arabic Calligraphy Arc Ribbon: رَّبِّ زِدْنِي عِلْمًا -->
+  <g transform="translate(0, 15)">
+    <rect x="156" y="42" width="200" height="34" rx="17" fill="rgba(6, 78, 59, 0.85)" stroke="url(#madrasaGold)" stroke-width="1.5" />
+    <text x="256" y="65" text-anchor="middle" font-family="'Noto Nastaliq Urdu', 'Traditional Arabic', serif" font-size="18" font-weight="bold" fill="#fef08a" filter="url(#mGlow)">
+      رَّبِّ زِدْنِي عِلْمًا
+    </text>
+  </g>
+
+  <!-- Open Holy Quran on Rihal (مرکزی قرآنِ حکیم) -->
+  <g id="madrasa-quran" transform="translate(0, 5)">
+    <!-- Quran Pages Spread Out -->
+    <path d="M 256 195 C 220 168 155 174 115 190 C 110 230 115 260 115 265 C 160 248 215 240 256 268 Z" 
+          fill="#ffffff" stroke="#c7b17c" stroke-width="2.5" />
+    <path d="M 256 195 C 292 168 357 174 397 190 C 402 230 397 260 397 265 C 352 248 297 240 256 268 Z" 
+          fill="#f8fafc" stroke="#c7b17c" stroke-width="2.5" />
+
+    <!-- Gold Border on Book Edge -->
+    <path d="M 115 265 C 160 248 215 240 256 268 C 297 240 352 248 397 265" fill="none" stroke="url(#madrasaGold)" stroke-width="3" />
+
+    <!-- Quranic Verses Inscribed (سطورِ ہدایت) -->
+    <path d="M 140 208 Q 190 196 238 215" stroke="url(#madrasaGold)" stroke-width="3" stroke-linecap="round" />
+    <path d="M 140 222 Q 190 210 238 229" stroke="#059669" stroke-width="2" stroke-linecap="round" />
+    <path d="M 140 236 Q 190 224 238 243" stroke="url(#madrasaGold)" stroke-width="2.5" stroke-linecap="round" />
+
+    <path d="M 274 215 Q 322 196 372 208" stroke="url(#madrasaGold)" stroke-width="3" stroke-linecap="round" />
+    <path d="M 274 229 Q 322 210 372 222" stroke="#059669" stroke-width="2" stroke-linecap="round" />
+    <path d="M 274 243 Q 322 224 372 236" stroke="url(#madrasaGold)" stroke-width="2.5" stroke-linecap="round" />
+
+    <!-- Carved Wooden Rihal Stand -->
+    <path d="M 215 262 L 155 320 L 185 326 L 240 274 Z" fill="#92400e" stroke="#78350f" stroke-width="2" />
+    <path d="M 297 262 L 357 320 L 327 326 L 272 274 Z" fill="#b45309" stroke="#78350f" stroke-width="2" />
+    <circle cx="256" cy="272" r="6" fill="#f59e0b" stroke="#92400e" stroke-width="2" />
+  </g>
+
+  <!-- Emblem Base Banner & Titles -->
+  <g transform="translate(0, 340)">
+    <!-- Golden Scroll Banner -->
+    <path d="M 80 20 Q 256 -5 432 20 L 415 65 Q 256 45 97 65 Z" fill="url(#madrasaGold)" filter="url(#mGlow)" />
+    <!-- Updated Title: مدرسہ دارالقرآن -->
+    <text x="256" y="47" text-anchor="middle" font-family="'Noto Nastaliq Urdu', 'Urdu Typesetting', serif" font-size="26" font-weight="bold" fill="#042f20">
+      مدرسہ دارالقرآن
+    </text>
+
+    <!-- Subtitle: Islamic Education System -->
+    <text x="256" y="88" text-anchor="middle" font-family="'Plus Jakarta Sans', 'Noto Nastaliq Urdu', sans-serif" font-size="12" font-weight="700" letter-spacing="2" fill="#fef08a">
+      MADRASA DAR-UL-QURAN
+    </text>
+    <text x="256" y="108" text-anchor="middle" font-family="'Noto Nastaliq Urdu', Tahoma, sans-serif" font-size="11" font-weight="500" fill="#a7f3d0">
+      قرآن، تجوید، حفظ و دینی تعلیم
+    </text>
+  </g>
+</svg>

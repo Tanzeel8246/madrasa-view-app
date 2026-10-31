@@ -148,8 +148,8 @@ $complaints = $pdo->query("SELECT pc.*, s.name as student_name, s.father_name, s
 
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold text-primary mb-0"><i class="fas fa-tasks me-2"></i> درخواستیں و شکایات پورٹل</h3>
-        <span class="badge bg-primary fs-6">والدین و طلبہ کی ریکوئسٹس</span>
+        <h3 class="fw-bold text-primary mb-0"><i class="fas fa-tasks me-2"></i> <?php echo __('درخواستیں و شکایات پورٹل', 'Requests & Complaints Portal'); ?></h3>
+        <span class="badge bg-primary fs-6"><?php echo __('والدین و طلبہ کی ریکوئسٹس', 'Parent & Student Requests'); ?></span>
     </div>
 
     <?php if (!empty($msg)): ?>
@@ -163,7 +163,7 @@ $complaints = $pdo->query("SELECT pc.*, s.name as student_name, s.father_name, s
     <ul class="nav nav-pills mb-4 gap-2" id="requestTabs" role="tablist">
         <li class="nav-item">
             <button class="nav-link active fw-bold px-4 py-2" id="fees-tab" data-bs-toggle="tab" data-bs-target="#fees" type="button">
-                <i class="fas fa-hand-holding-usd me-2"></i> آن لائن تعاون / فیس
+                <i class="fas fa-hand-holding-usd me-2"></i> <?php echo __('آن لائن تعاون / فیس', 'Online Fee Submissions'); ?>
                 <?php 
                 $pendingFeeCount = count(array_filter($fees, fn($x) => $x['status'] === 'Pending'));
                 if ($pendingFeeCount > 0): 
@@ -174,7 +174,7 @@ $complaints = $pdo->query("SELECT pc.*, s.name as student_name, s.father_name, s
         </li>
         <li class="nav-item">
             <button class="nav-link fw-bold px-4 py-2" id="leaves-tab" data-bs-toggle="tab" data-bs-target="#leaves" type="button">
-                <i class="fas fa-envelope-open-text me-2"></i> چھٹی کی درخواستیں
+                <i class="fas fa-envelope-open-text me-2"></i> <?php echo __('چھٹی کی درخواستیں', 'Leave Applications'); ?>
                 <?php 
                 $pendingLeaveCount = count(array_filter($leaves, fn($x) => $x['status'] === 'Pending'));
                 if ($pendingLeaveCount > 0): 
@@ -185,7 +185,7 @@ $complaints = $pdo->query("SELECT pc.*, s.name as student_name, s.father_name, s
         </li>
         <li class="nav-item">
             <button class="nav-link fw-bold px-4 py-2" id="complaints-tab" data-bs-toggle="tab" data-bs-target="#complaints" type="button">
-                <i class="fas fa-exclamation-triangle me-2"></i> والدین کی شکایات
+                <i class="fas fa-exclamation-triangle me-2"></i> <?php echo __('والدین کی شکایات', 'Parent Complaints'); ?>
                 <?php 
                 $pendingCompCount = count(array_filter($complaints, fn($x) => $x['status'] === 'Pending'));
                 if ($pendingCompCount > 0): 
@@ -201,27 +201,27 @@ $complaints = $pdo->query("SELECT pc.*, s.name as student_name, s.father_name, s
         <div class="tab-pane fade show active" id="fees" role="tabpanel">
             <div class="card shadow-sm border-0 neobox">
                 <div class="card-header bg-white py-3">
-                    <h5 class="card-title fw-bold mb-0 text-primary"><i class="fas fa-money-check-alt me-2"></i> موصول شدہ آن لائن تعاون / فیس کی فہرست</h5>
+                    <h5 class="card-title fw-bold mb-0 text-primary"><i class="fas fa-money-check-alt me-2"></i> <?php echo __('موصول شدہ آن لائن تعاون / فیس کی فہرست', 'List of Received Online Fees & Contributions'); ?></h5>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>#</th>
-                                <th>طالب علم</th>
-                                <th>کلاس</th>
-                                <th>تاریخ</th>
-                                <th>رقم</th>
-                                <th>مد (حساب)</th>
-                                <th>تفصیل</th>
-                                <th>رسید (ثبوت)</th>
-                                <th>سٹیٹس</th>
-                                <th class="text-center">کارروائی</th>
+                                <th><?php echo __('طالب علم', 'Student'); ?></th>
+                                <th><?php echo __('کلاس', 'Class'); ?></th>
+                                <th><?php echo __('تاریخ', 'Date'); ?></th>
+                                <th><?php echo __('رقم', 'Amount'); ?></th>
+                                <th><?php echo __('مد (حساب)', 'Head / Account'); ?></th>
+                                <th><?php echo __('تفصیل', 'Description'); ?></th>
+                                <th><?php echo __('رسید (ثبوت)', 'Receipt Proof'); ?></th>
+                                <th><?php echo __('سٹیٹس', 'Status'); ?></th>
+                                <th class="text-center"><?php echo __('کارروائی', 'Action'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($fees)): ?>
-                                <tr><td colspan="10" class="text-center py-4 text-muted">کوئی فیس انٹری موصول نہیں ہوئی۔</td></tr>
+                                <tr><td colspan="10" class="text-center py-4 text-muted"><?php echo __('کوئی فیس انٹری موصول نہیں ہوئی۔', 'No fee submissions received.'); ?></td></tr>
                             <?php else: ?>
                                 <?php foreach($fees as $f): ?>
                                 <tr>
@@ -281,25 +281,25 @@ $complaints = $pdo->query("SELECT pc.*, s.name as student_name, s.father_name, s
         <div class="tab-pane fade" id="leaves" role="tabpanel">
             <div class="card shadow-sm border-0 neobox">
                 <div class="card-header bg-white py-3">
-                    <h5 class="card-title fw-bold mb-0 text-primary"><i class="fas fa-user-clock me-2"></i> موصول شدہ چھٹی کی درخواستیں</h5>
+                    <h5 class="card-title fw-bold mb-0 text-primary"><i class="fas fa-user-clock me-2"></i> <?php echo __('موصول شدہ چھٹی کی درخواستیں', 'Received Leave Applications'); ?></h5>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>#</th>
-                                <th>طالب علم</th>
-                                <th>کلاس</th>
-                                <th>تاریخ (مدت)</th>
-                                <th>وجہ</th>
-                                <th>درخواست (فائل)</th>
-                                <th>سٹیٹس</th>
-                                <th class="text-center">کارروائی</th>
+                                <th><?php echo __('طالب علم', 'Student'); ?></th>
+                                <th><?php echo __('کلاس', 'Class'); ?></th>
+                                <th><?php echo __('تاریخ (مدت)', 'Duration / Dates'); ?></th>
+                                <th><?php echo __('وجہ', 'Reason'); ?></th>
+                                <th><?php echo __('درخواست (فائل)', 'Attachment'); ?></th>
+                                <th><?php echo __('سٹیٹس', 'Status'); ?></th>
+                                <th class="text-center"><?php echo __('کارروائی', 'Action'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($leaves)): ?>
-                                <tr><td colspan="8" class="text-center py-4 text-muted">کوئی چھٹی کی درخواست موصول نہیں ہوئی۔</td></tr>
+                                <tr><td colspan="8" class="text-center py-4 text-muted"><?php echo __('کوئی چھٹی کی درخواست موصول نہیں ہوئی۔', 'No leave applications received.'); ?></td></tr>
                             <?php else: ?>
                                 <?php foreach($leaves as $l): ?>
                                 <tr>
@@ -356,26 +356,26 @@ $complaints = $pdo->query("SELECT pc.*, s.name as student_name, s.father_name, s
         <div class="tab-pane fade" id="complaints" role="tabpanel">
             <div class="card shadow-sm border-0 neobox">
                 <div class="card-header bg-white py-3">
-                    <h5 class="card-title fw-bold mb-0 text-primary"><i class="fas fa-exclamation-circle me-2"></i> موصول شدہ شکایات</h5>
+                    <h5 class="card-title fw-bold mb-0 text-primary"><i class="fas fa-exclamation-circle me-2"></i> <?php echo __('موصول شدہ شکایات', 'Received Complaints'); ?></h5>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>#</th>
-                                <th>تاریخ</th>
-                                <th>طالب علم</th>
-                                <th>کلاس</th>
-                                <th>نوعیت</th>
-                                <th>تفصیل</th>
-                                <th>ثبوت (فائل)</th>
-                                <th>سٹیٹس</th>
-                                <th class="text-center">کارروائی</th>
+                                <th><?php echo __('تاریخ', 'Date'); ?></th>
+                                <th><?php echo __('طالب علم', 'Student'); ?></th>
+                                <th><?php echo __('کلاس', 'Class'); ?></th>
+                                <th><?php echo __('نوعیت', 'Category'); ?></th>
+                                <th><?php echo __('تفصیل', 'Description'); ?></th>
+                                <th><?php echo __('ثبوت (فائل)', 'Evidence / File'); ?></th>
+                                <th><?php echo __('سٹیٹس', 'Status'); ?></th>
+                                <th class="text-center"><?php echo __('کارروائی', 'Action'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($complaints)): ?>
-                                <tr><td colspan="9" class="text-center py-4 text-muted">کوئی شکایت موصول نہیں ہوئی۔</td></tr>
+                                <tr><td colspan="9" class="text-center py-4 text-muted"><?php echo __('کوئی شکایت موصول نہیں ہوئی۔', 'No complaints received.'); ?></td></tr>
                             <?php else: ?>
                                 <?php foreach($complaints as $pc): ?>
                                 <tr>

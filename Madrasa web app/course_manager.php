@@ -171,35 +171,35 @@ if ($current_course) {
 
 // Default traditional names for Darse Nizami years
 $darse_nizami_year_names = [
-    1 => 'سال اول (درجہ اولیٰ)',
-    2 => 'سال دوم (درجہ ثانیہ)',
-    3 => 'سال سوم (درجہ ثالثہ)',
-    4 => 'سال چہارم (درجہ رابعہ)',
-    5 => 'سال پنجم (درجہ خامسہ)',
-    6 => 'سال ششم (درجہ سادسہ)',
-    7 => 'سال ہفتم (درجہ عالیہ)',
-    8 => 'سال ہشتم (درجہ عالمیہ / دورۂ حدیث)',
-    9 => 'سال نہم (تخصص فی الفقہ / الافتاء)',
-    10 => 'سال دہم (تخصص فی الحدیث)'
+    1 => __('سال اول (درجہ اولیٰ)', 'Year 1 (Ula)'),
+    2 => __('سال دوم (درجہ ثانیہ)', 'Year 2 (Sania)'),
+    3 => __('سال سوم (درجہ ثالثہ)', 'Year 3 (Salisa)'),
+    4 => __('سال چہارم (درجہ رابعہ)', 'Year 4 (Rabia)'),
+    5 => __('سال پنجم (درجہ خامسہ)', 'Year 5 (Khamisa)'),
+    6 => __('سال ششم (درجہ سادسہ)', 'Year 6 (Sadisa)'),
+    7 => __('سال ہفتم (درجہ عالیہ)', 'Year 7 (Aliya)'),
+    8 => __('سال ہشتم (درجہ عالمیہ / دورۂ حدیث)', 'Year 8 (Almiya / Hadith)'),
+    9 => __('سال نہم (تخصص فی الفقہ / الافتاء)', 'Year 9 (Takhassus Fiqh)'),
+    10 => __('سال دہم (تخصص فی الحدیث)', 'Year 10 (Takhassus Hadith)')
 ];
 
 include 'header.php';
 ?>
 
-<div class="container-fluid py-4" dir="rtl">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <!-- Header Card -->
     <div class="card border-0 shadow-sm rounded-4 mb-4 bg-gradient-primary text-white p-4" style="background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-                <h2 class="fw-bold mb-1"><i class="fas fa-book-reader me-2"></i> درس نظامی و عصری علوم — کورس و نصاب مینیجر</h2>
-                <p class="mb-0 text-white-50">ادارے کے تمام تعلیمی کورسز، سالانہ درجات، کتب اور مضامین کا باضابطہ انتظام</p>
+                <h2 class="fw-bold mb-1"><i class="fas fa-book-reader me-2"></i> <?php echo __('درس نظامی و عصری علوم — کورس و نصاب مینیجر', 'Dars-e-Nizami & Contemporary Studies — Course Manager'); ?></h2>
+                <p class="mb-0 text-white-50"><?php echo __('ادارے کے تمام تعلیمی کورسز، سالانہ درجات، کتب اور مضامین کا باضابطہ انتظام', 'Formal management of all educational courses, grades, books and subjects'); ?></p>
             </div>
             <div class="d-flex gap-2">
                 <button type="button" class="btn btn-warning text-dark fw-bold px-4 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#newCourseModal">
-                    <i class="fas fa-plus-circle me-1"></i> نیا کورس شامل کریں
+                    <i class="fas fa-plus-circle me-1"></i> <?php echo __('نیا کورس شامل کریں', 'Add New Course'); ?>
                 </button>
                 <a href="academic_results_entry.php" class="btn btn-outline-light rounded-pill px-3">
-                    <i class="fas fa-clipboard-check me-1"></i> نتائج انٹری
+                    <i class="fas fa-clipboard-check me-1"></i> <?php echo __('نتائج انٹری', 'Results Entry'); ?>
                 </a>
             </div>
         </div>
@@ -224,14 +224,14 @@ include 'header.php';
         <div class="col-lg-3 col-md-4">
             <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
                 <div class="card-header bg-dark text-white fw-bold py-3 d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-layer-group me-2"></i> تعلیمی شعبہ جات / کورسز</span>
+                    <span><i class="fas fa-layer-group me-2"></i> <?php echo __('تعلیمی شعبہ جات / کورسز', 'Educational Departments / Courses'); ?></span>
                     <span class="badge bg-primary rounded-pill"><?php echo count($courses); ?></span>
                 </div>
                 <div class="list-group list-group-flush">
                     <?php if (empty($courses)): ?>
                         <div class="p-4 text-center text-muted">
                             <i class="fas fa-graduation-cap fa-3x mb-3 text-secondary"></i>
-                            <p class="mb-0">کوئی کورس موجود نہیں۔ اوپر دیے گئے بٹن سے نیا کورس شامل کریں۔</p>
+                            <p class="mb-0"><?php echo __('کوئی کورس موجود نہیں۔ اوپر دیے گئے بٹن سے نیا کورس شامل کریں۔', 'No course found. Add a new course using the button above.'); ?></p>
                         </div>
                     <?php else: ?>
                         <?php foreach ($courses as $c): ?>
@@ -253,23 +253,23 @@ include 'header.php';
             <?php if ($current_course): ?>
                 <!-- Current Course Details & Action Box -->
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-light">
-                    <h6 class="fw-bold text-dark border-bottom pb-2"><i class="fas fa-info-circle me-1"></i> منتخب کورس کی تفصیلات</h6>
-                    <p class="mb-1"><strong>کورس:</strong> <?php echo htmlspecialchars($current_course['name']); ?></p>
-                    <p class="mb-1"><strong>نوعیت:</strong> <?php echo htmlspecialchars($current_course['course_type']); ?></p>
-                    <p class="mb-1"><strong>کل درجات/سال:</strong> <?php echo (int)$current_course['total_years']; ?> سال</p>
-                    <p class="mb-2"><strong>صنف:</strong> <?php echo htmlspecialchars($current_course['gender']); ?></p>
+                    <h6 class="fw-bold text-dark border-bottom pb-2"><i class="fas fa-info-circle me-1"></i> <?php echo __('منتخب کورس کی تفصیلات', 'Selected Course Details'); ?></h6>
+                    <p class="mb-1"><strong><?php echo __('کورس:', 'Course:'); ?></strong> <?php echo htmlspecialchars($current_course['name']); ?></p>
+                    <p class="mb-1"><strong><?php echo __('نوعیت:', 'Type:'); ?></strong> <?php echo htmlspecialchars($current_course['course_type']); ?></p>
+                    <p class="mb-1"><strong><?php echo __('کل درجات/سال:', 'Total Years:'); ?></strong> <?php echo (int)$current_course['total_years']; ?> <?php echo __('سال', 'Years'); ?></p>
+                    <p class="mb-2"><strong><?php echo __('صنف:', 'Gender:'); ?></strong> <?php echo htmlspecialchars($current_course['gender']); ?></p>
                     <?php if (!empty($current_course['description'])): ?>
                         <p class="small text-muted mb-3"><?php echo nl2br(htmlspecialchars($current_course['description'])); ?></p>
                     <?php endif; ?>
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-sm btn-outline-primary flex-fill rounded-pill" data-bs-toggle="modal" data-bs-target="#editCourseModal">
-                            <i class="fas fa-edit me-1"></i> ترمیم
+                            <i class="fas fa-edit me-1"></i> <?php echo __('ترمیم', 'Edit'); ?>
                         </button>
                         <form method="POST" onsubmit="return confirm('کیا آپ واقعی یہ کورس اور اس کے تمام مضامین حذف کرنا چاہتے ہیں؟');" class="flex-fill">
                             <input type="hidden" name="action" value="delete_course">
                             <input type="hidden" name="course_id" value="<?php echo $current_course['id']; ?>">
                             <button type="submit" class="btn btn-sm btn-outline-danger w-100 rounded-pill">
-                                <i class="fas fa-trash me-1"></i> حذف
+                                <i class="fas fa-trash me-1"></i> <?php echo __('حذف', 'Delete'); ?>
                             </button>
                         </form>
                     </div>
@@ -282,18 +282,18 @@ include 'header.php';
             <?php if (!$current_course): ?>
                 <div class="card border-0 shadow-sm rounded-4 p-5 text-center">
                     <i class="fas fa-book fa-4x text-muted mb-3"></i>
-                    <h4 class="fw-bold">کوئی کورس منتخب نہیں ہے</h4>
-                    <p class="text-muted">براہ کرم سائیڈ بار سے کوئی کورس منتخب کریں یا نیا کورس بنا کر سیٹ اپ شروع کریں۔</p>
+                    <h4 class="fw-bold"><?php echo __('کوئی کورس منتخب نہیں ہے', 'No Course Selected'); ?></h4>
+                    <p class="text-muted"><?php echo __('براہ کرم سائیڈ بار سے کوئی کورس منتخب کریں یا نیا کورس بنا کر سیٹ اپ شروع کریں۔', 'Please select a course from the sidebar or create a new course to start setup.'); ?></p>
                 </div>
             <?php else: ?>
                 <!-- Years Navigation Tabs -->
                 <div class="card border-0 shadow-sm rounded-4 p-3 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                         <h5 class="fw-bold text-success mb-0">
-                            <i class="fas fa-calendar-alt me-2"></i> درجات و سالانہ تقسیم (سال 1 تا <?php echo (int)$current_course['total_years']; ?>)
+                            <i class="fas fa-calendar-alt me-2"></i> <?php echo __('درجات و سالانہ تقسیم', 'Grades & Annual Distribution'); ?> (<?php echo __('سال 1 تا', 'Year 1 to'); ?> <?php echo (int)$current_course['total_years']; ?>)
                         </h5>
                         <button type="button" class="btn btn-success btn-sm rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#newSubjectModal">
-                            <i class="fas fa-plus me-1"></i> اس سال میں نیا مضمون شامل کریں
+                            <i class="fas fa-plus me-1"></i> <?php echo __('اس سال میں نیا مضمون شامل کریں', 'Add New Subject in This Year'); ?>
                         </button>
                     </div>
                     <div class="d-flex flex-wrap gap-2 pt-2 border-top">
@@ -316,24 +316,24 @@ include 'header.php';
                         <div>
                             <h5 class="fw-bold mb-0 text-dark">
                                 <i class="fas fa-books me-2 text-warning"></i> 
-                                مضامین و کتب برائے: <span class="text-success"><?php echo $darse_nizami_year_names[$selected_year_no] ?? "سال {$selected_year_no}"; ?></span>
+                                <?php echo __('مضامین و کتب برائے:', 'Subjects & Books for:'); ?> <span class="text-success"><?php echo $darse_nizami_year_names[$selected_year_no] ?? "Year {$selected_year_no}"; ?></span>
                             </h5>
-                            <small class="text-muted">اس سال کے تمام مضامین امتحانات، رزلٹ انٹری اور نتیجہ نامہ کارڈ میں خودکار طور پر ظاہر ہوں گے۔</small>
+                            <small class="text-muted"><?php echo __('اس سال کے تمام مضامین امتحانات، رزلٹ انٹری اور نتیجہ نامہ کارڈ میں خودکار طور پر ظاہر ہوں گے۔', 'All subjects for this year will appear automatically in exams, result entry and report cards.'); ?></small>
                         </div>
-                        <span class="badge bg-secondary rounded-pill px-3 py-2 fs-6">کل مضامین: <?php echo count($subjects); ?></span>
+                        <span class="badge bg-secondary rounded-pill px-3 py-2 fs-6"><?php echo __('کل مضامین:', 'Total Subjects:'); ?> <?php echo count($subjects); ?></span>
                     </div>
 
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0 text-center">
                             <thead class="table-light">
                                 <tr>
-                                    <th style="width: 60px;">ترتیب</th>
-                                    <th class="text-end">مضمون کا نام</th>
-                                    <th class="text-end">کتاب کا نام</th>
-                                    <th>کل نمبر (Max)</th>
-                                    <th>پاسنگ نمبر</th>
-                                    <th>نوعیت</th>
-                                    <th>ایکشنز</th>
+                                    <th style="width: 60px;"><?php echo __('ترتیب', 'Order'); ?></th>
+                                    <th class="text-end"><?php echo __('مضمون کا نام', 'Subject Name'); ?></th>
+                                    <th class="text-end"><?php echo __('کتاب کا نام', 'Book Name'); ?></th>
+                                    <th><?php echo __('کل نمبر (Max)', 'Total Marks (Max)'); ?></th>
+                                    <th><?php echo __('پاسنگ نمبر', 'Passing Marks'); ?></th>
+                                    <th><?php echo __('نوعیت', 'Type'); ?></th>
+                                    <th><?php echo __('ایکشنز', 'Actions'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>

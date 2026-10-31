@@ -100,8 +100,8 @@ include 'header.php';
 
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold text-danger"><i class="fas fa-exclamation-triangle me-2"></i> شکایات کا ریکارڈ</h3>
-        <a href="add_complaint.php" class="btn btn-danger fw-bold shadow"><i class="fas fa-plus me-1"></i> نئی شکایت درج کریں</a>
+        <h3 class="fw-bold text-danger"><i class="fas fa-exclamation-triangle me-2"></i> <?php echo __('شکایات کا ریکارڈ', 'Complaints Record'); ?></h3>
+        <a href="add_complaint.php" class="btn btn-danger fw-bold shadow"><i class="fas fa-plus me-1"></i> <?php echo __('نئی شکایت درج کریں', 'Enter New Complaint'); ?></a>
     </div>
 
     <?php if(isset($_GET['msg'])): ?>
@@ -134,7 +134,7 @@ include 'header.php';
             <div class="accordion-item mb-3 border border-danger rounded shadow-sm">
                 <h2 class="accordion-header" id="heading<?php echo $d_idx; ?>">
                     <button class="accordion-button <?php echo $d_idx > 1 ? 'collapsed' : ''; ?> bg-danger text-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse<?php echo $d_idx; ?>">
-                        <i class="fas fa-calendar-day me-2"></i> &#1578;&#1575;&#1585;&#1740;&#1582;: <?php echo date('d-m-Y', strtotime($date)); ?>
+                        <i class="fas fa-calendar-day me-2"></i> <?php echo __('تاریخ:', 'Date:'); ?> <?php echo date('d-m-Y', strtotime($date)); ?>
                     </button>
                 </h2>
                 <div id="collapse<?php echo $d_idx; ?>" class="accordion-collapse collapse <?php echo $d_idx == 1 ? 'show' : ''; ?>" data-bs-parent="#complaintsAccordion">
@@ -147,10 +147,10 @@ include 'header.php';
                                 <table class="table table-hover table-bordered align-middle text-center bg-white">
                                     <thead class="table-dark">
                                         <tr>
-                                            <th>&#1591;&#1575;&#1604;&#1576; &#1593;&#1604;&#1605;</th>
-                                            <th>&#1578;&#1601;&#1589;&#1740;&#1604;</th>
-                                            <th>&#1602;&#1587;&#1605;</th>
-                                            <th>&#1575;&#1740;&#1705;&#1588;&#1606;</th>
+                                            <th><?php echo __('طالب علم', 'Student'); ?></th>
+                                            <th><?php echo __('تفصیل', 'Description'); ?></th>
+                                            <th><?php echo __('قسم', 'Type'); ?></th>
+                                            <th><?php echo __('ایکشن', 'Action'); ?></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -160,9 +160,9 @@ include 'header.php';
                                             <td class="text-start"><?php echo htmlspecialchars($c['description']); ?></td>
                                             <td>
                                                 <?php if($c['type']=='parent'): ?>
-                                                    <span class="badge bg-info text-dark"><i class="fas fa-user-tie"></i> &#1608;&#1575;&#1604;&#1583;&#1740;&#1606;</span>
+                                                    <span class="badge bg-info text-dark"><i class="fas fa-user-tie"></i> <?php echo __('والدین', 'Parent'); ?></span>
                                                 <?php else: ?>
-                                                    <span class="badge bg-secondary"><i class="fas fa-user-shield"></i> &#1575;&#1740;&#1672;&#1605;&#1606;</span>
+                                                    <span class="badge bg-secondary"><i class="fas fa-user-shield"></i> <?php echo __('ایڈمن', 'Admin'); ?></span>
                                                 <?php endif; ?>
                                             </td>
                                             <td>

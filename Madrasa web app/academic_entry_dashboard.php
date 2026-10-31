@@ -12,7 +12,7 @@ $p_alt2 = ($sys_type === 'Masjid') ? 'manage_masjid_academics' : 'manage_academi
 $p_alt3 = ($sys_type === 'Masjid') ? 'manage_masjid_hifz' : 'manage_hifz';
 if (!$is_admin && !app_has_perm($p_needed) && !app_has_perm($p_alt1) && !app_has_perm($p_alt2) && !app_has_perm($p_alt3)) {
     include 'header.php';
-    echo "<div class='alert alert-danger m-4 text-center fw-bold'>آپ کو تعلیمی کارکردگی ڈیش بورڈ تک رسائی کی اجازت نہیں ہے۔</div>";
+    echo "<div class='alert alert-danger m-4 text-center fw-bold'>" . __('آپ کو تعلیمی کارکردگی ڈیش بورڈ تک رسائی کی اجازت نہیں ہے۔', 'You do not have permission to access the academic performance dashboard.') . "</div>";
     include 'footer.php';
     exit;
 }
@@ -92,7 +92,7 @@ require_once 'header.php';
 
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-layer-group text-primary me-2"></i> <?php echo t('manage_academic_dashboard'); ?></h2>
+        <h2><i class="fas fa-layer-group text-primary me-2"></i> <?php echo __('تعلیمی کارکردگی (اندراج)', 'Academic Performance (Entry)'); ?></h2>
     </div>
 
     <?php 
@@ -101,18 +101,18 @@ require_once 'header.php';
     ?>
         <div class="alert alert-info text-center my-4 py-4 rounded-3 shadow-sm">
             <i class="fas fa-info-circle fa-2x mb-2 text-primary"></i>
-            <h5>فی الوقت کوئی کلاس موجود نہیں ہے۔</h5>
-            <p class="text-muted mb-0">کلاسز مینجمنٹ میں جا کر نئی کلاسز شامل کریں یا تصدیق کریں کہ کلاسز ایکٹیو ہیں۔</p>
-            <a href="manage_classes.php" class="btn btn-primary mt-3 btn-sm"><i class="fas fa-plus me-1"></i> کلاسز مینجمنٹ</a>
+            <h5><?php echo __('فی الوقت کوئی کلاس موجود نہیں ہے۔', 'No classes available at this time.'); ?></h5>
+            <p class="text-muted mb-0"><?php echo __('کلاسز مینجمنٹ میں جا کر نئی کلاسز شامل کریں یا تصدیق کریں کہ کلاسز ایکٹیو ہیں۔', 'Go to Class Management to add new classes or confirm classes are active.'); ?></p>
+            <a href="manage_classes.php" class="btn btn-primary mt-3 btn-sm"><i class="fas fa-plus me-1"></i> <?php echo __('کلاسز مینجمنٹ', 'Class Management'); ?></a>
         </div>
     <?php else: ?>
         <?php foreach ($grouped as $type => $classList): ?>
             <?php if (count($classList) > 0): ?>
                 <h4 class="mt-4 mb-3 border-bottom pb-2">
                     <?php if ($type == 'قرآن کریم'): ?>
-                        <i class="fas fa-quran text-success me-2"></i> <?php echo $type; ?>
+                        <i class="fas fa-quran text-success me-2"></i> <?php echo __('قرآن کریم', 'Holy Quran'); ?>
                     <?php else: ?>
-                        <i class="fas fa-book text-info me-2"></i> <?php echo $type; ?>
+                        <i class="fas fa-book text-info me-2"></i> <?php echo __('دیگر تعلیمات', 'Other Disciplines'); ?>
                     <?php endif; ?>
                 </h4>
                 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4 mb-4">
@@ -141,16 +141,17 @@ require_once 'header.php';
                             $color = "info";
                         }
                         
-                        $type_badge = htmlspecialchars($c['class_type'] ?? 'کلاس');
+                        $raw_badge = $c['class_type'] ?? 'کلاس';
+                        $type_badge = htmlspecialchars($raw_badge);
                         if (strpos($c['name'], 'حسن') !== false || strpos($c['name'], 'صوت') !== false || $type_badge === 'Husn Saut' || $type_badge === 'Husn') {
-                            $type_badge = 'حسن صوت';
+                            $type_badge = __('حسن صوت', 'Husn-e-Saut');
                         } elseif ($type_badge === 'Hifz/Gardan/Husn' || $type_badge === 'Hifz/Nazira') {
-                            $type_badge = 'حفظ / گردان';
+                            $type_badge = __('حفظ / گردان', 'Hifz / Revision');
                         }
-                        if ($type_badge === 'Nazira') $type_badge = 'ناظرہ';
-                        if ($type_badge === 'Tajweed') $type_badge = 'تجوید';
-                        if ($type_badge === 'Asri Taleem') $type_badge = 'عصری تعلیم';
-                        if ($type_badge === 'Darse Nizami') $type_badge = 'درس نظامی';
+                        if ($type_badge === 'Nazira') $type_badge = __('ناظرہ', 'Nazira');
+                        if ($type_badge === 'Tajweed') $type_badge = __('تجوید', 'Tajweed');
+                        if ($type_badge === 'Asri Taleem') $type_badge = __('عصری تعلیم', 'Contemporary Education');
+                        if ($type_badge === 'Darse Nizami') $type_badge = __('درس نظامی', 'Darse Nizami');
                     ?>
                     <div class="col">
                         <a href="<?php echo $link; ?>" class="text-decoration-none">
@@ -164,7 +165,7 @@ require_once 'header.php';
                                         <span class="badge bg-light text-dark border"><?php echo $type_badge; ?></span>
                                     </div>
                                     <span class="badge bg-secondary rounded-pill fs-6 px-3 py-2">
-                                        <i class="fas fa-users me-1"></i> <?php echo $cnt; ?> طلبہ
+                                        <i class="fas fa-users me-1"></i> <?php echo $cnt; ?> <?php echo __('طلبہ', 'Students'); ?>
                                     </span>
                                 </div>
                             </div>

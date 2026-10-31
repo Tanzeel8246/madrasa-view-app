@@ -1,7 +1,7 @@
-<?php
+﻿<?php
 /**
  * ════════════════════════════════════════════════════════════════════
- *  نیا ادارہ آن لائن رجسٹریشن — 14 روزہ مفت آزمائش (Cloud SaaS Onboarding)
+ *  نیا ادارہ آن لائن رجسٹریشن — 30 روزہ مفت آزمائش (Cloud SaaS Onboarding)
  *  Madrasa & Masjid Multi-Tenant Cloud SaaS Platform
  * ════════════════════════════════════════════════════════════════════
  */
@@ -143,8 +143,8 @@ try {
             'code' => 'basic',
             'name' => 'بنیادی پیکج (Basic)',
             'description' => '50 طلبہ، 3 کلاسز، 4 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + اینڈرائڈ + ونڈوز)',
-            'price_monthly' => 1500.00,
-            'price_yearly' => 15000.00,
+            'price_monthly' => 1000.00,
+            'price_yearly' => 10000.00,
             'max_students' => 50,
             'max_classes' => 3,
             'max_teachers' => 4,
@@ -157,8 +157,8 @@ try {
             'code' => 'standard',
             'name' => 'معیاری پیکج (Standard)',
             'description' => '100 طلبہ، 6 کلاسز، 8 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + اینڈرائڈ + ونڈوز)',
-            'price_monthly' => 2500.00,
-            'price_yearly' => 25000.00,
+            'price_monthly' => 2000.00,
+            'price_yearly' => 20000.00,
             'max_students' => 100,
             'max_classes' => 6,
             'max_teachers' => 8,
@@ -171,8 +171,8 @@ try {
             'code' => 'premium_200',
             'name' => 'ایڈوانس پیکج (Advanced)',
             'description' => '200 طلبہ، 12 کلاسز، 16 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + اینڈرائڈ + ونڈوز)',
-            'price_monthly' => 4000.00,
-            'price_yearly' => 40000.00,
+            'price_monthly' => 3000.00,
+            'price_yearly' => 30000.00,
             'max_students' => 200,
             'max_classes' => 12,
             'max_teachers' => 16,
@@ -299,8 +299,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 
                 $pdo->beginTransaction();
 
-                // 1. Create Tenant with 14-day trial (Dynamic Safe Column Mapping)
-                $trialEnds = date('Y-m-d', strtotime('+14 days'));
+                // 1. Create Tenant with 30-day trial (Dynamic Safe Column Mapping)
+                $trialEnds = date('Y-m-d', strtotime('+30 days'));
                 $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '-', $instituteCode));
                 $allMods = function_exists('get_default_module_keys') ? get_default_module_keys() : [];
                 $defaultModules = [];
@@ -353,10 +353,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                 $tenantStmt->execute($insVals);
                 $tenantId = (int)$pdo->lastInsertId();
 
-                // 2. Assign 14-Day Free Trial Subscription to chosen plan
+                // 2. Assign 30-Day Free Trial Subscription to chosen plan
                 $subStmt = $pdo->prepare("INSERT INTO `subscriptions` 
                     (`tenant_id`, `plan_id`, `billing_cycle`, `starts_at`, `ends_at`, `status`, `payment_method`) 
-                    VALUES (?, ?, ?, CURDATE(), ?, 'trial', '14_day_trial')");
+                    VALUES (?, ?, ?, CURDATE(), ?, 'trial', '30_day_trial')");
                 $subStmt->execute([$tenantId, $planId, $billingCycle, $trialEnds]);
 
                 // 3. Create Administrator for this Tenant (Dynamic Safe Column Mapping)
@@ -445,7 +445,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                 $dest = ($adminSysType === 'Masjid') ? 'masjid_dashboard.php' : 'dashboard.php';
                 $planNameUrdu = $planDetails['name'] ?? 'منتخب شدہ پیکج';
                 echo "<script>
-                    alert('مبارک ہو! آپ کا ادارہ کامیابی سے رجسٹر ہو گیا ہے۔\\nمنفرد ادارہ کوڈ: {$instituteCode}\\nپلان: {$planNameUrdu}\\nآپ کا 14 روزہ مفت ٹرائل فعال کر دیا گیا ہے۔');
+                    alert('مبارک ہو! آپ کا ادارہ کامیابی سے رجسٹر ہو گیا ہے۔\\nمنفرد ادارہ کوڈ: {$instituteCode}\\nپلان: {$planNameUrdu}\\nآپ کا 30 روزہ مفت ٹرائل فعال کر دیا گیا ہے۔');
                     window.location.replace('{$dest}');
                 </script>";
                 exit;
@@ -464,7 +464,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نیا ادارہ رجسٹریشن مع 14 روزہ مفت آزمائش — کلاؤڈ ساس پلیٹ فارم</title>
+    <title>نیا ادارہ رجسٹریشن مع 30 روزہ مفت آزمائش — کلاؤڈ ساس پلیٹ فارم</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600;700&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
@@ -580,7 +580,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
     <div class="text-center mb-4">
         <img src="logo_mindcrafts.svg" alt="Mindcrafts AI Logo" style="width: 75px; height: 75px; object-fit: contain; margin-bottom: 8px; border-radius: 18px; background: #061814; border: 1.5px solid rgba(16, 185, 129, 0.4); padding: 3px;">
         <h3 class="fw-bold text-success mb-1">مدرسہ مینیجمنٹ سسٹم — نیا ادارہ آن لائن رجسٹریشن</h3>
-        <p class="text-muted small mb-0">بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI) — 14 روزہ مفت آزمائش مع مکمل کلاؤڈ رسائی</p>
+        <p class="text-muted small mb-0">بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI) — 30 روزہ مفت آزمائش مع مکمل کلاؤڈ رسائی</p>
     </div>
 
     <!-- Auto-Generated Unique Madrasa Code Banner -->
@@ -725,7 +725,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                 <div class="p-3 rounded-3 border bg-light small" id="planFeatureBox">
                     <div class="d-flex align-items-center justify-content-between">
                         <span class="fw-bold text-success" id="selectedPlanTitle"><i class="fas fa-box-open me-1"></i> بنیادی پیکج (Basic)</span>
-                        <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fas fa-gift me-1"></i> 14 روزہ مفت ٹرائل فعال ہوگا</span>
+                        <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fas fa-gift me-1"></i> 30 روزہ مفت ٹرائل فعال ہوگا</span>
                     </div>
                     <div class="text-muted mt-2" id="selectedPlanLimits">
                         حدود: 50 طلبہ، 3 کلاسز، 4 اساتذہ و عملہ — تینوں پلیٹ فارمز (ویب + موبائل + ونڈوز)
@@ -762,13 +762,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             <div class="d-flex align-items-center gap-2">
                 <i class="fas fa-shield-halved fs-4 text-success"></i>
                 <div>
-                    <strong>14 دن کا مکمل مفت ٹرائل:</strong> کوئی کریڈٹ کارڈ درکار نہیں ہے۔ سائن اپ کرتے ہی منتخب شدہ پلان کے مطابق تمام خصوصیات، موبائل ایپ اور بیک اپ فوری فعال ہو جائیں گے۔
+                    <strong>30 دن کا مکمل مفت ٹرائل:</strong> کوئی کریڈٹ کارڈ درکار نہیں ہے۔ سائن اپ کرتے ہی منتخب شدہ پلان کے مطابق تمام خصوصیات، موبائل ایپ اور بیک اپ فوری فعال ہو جائیں گے۔
                 </div>
             </div>
         </div>
 
         <button type="submit" name="register" value="1" class="btn btn-register w-100">
-            🚀 ادارہ رجسٹر کریں اور 14 روزہ ٹرائل شروع کریں
+            🚀 ادارہ رجسٹر کریں اور 30 روزہ ٹرائل شروع کریں
         </button>
     </form>
     <?php endif; ?>
@@ -812,7 +812,7 @@ function updatePlanSummary() {
         var yPrice = parseFloat(optItem.getAttribute('data-yearly')) || 0;
 
         if (mPrice === 0 && yPrice === 0) {
-            optItem.textContent = name + ' — مفت آزمائش (14 دن فری ٹرائل)';
+            optItem.textContent = name + ' — مفت آزمائش (30 دن فری ٹرائل)';
         } else if (isYearly) {
             var saving = (mPrice * 12) - yPrice;
             var savingText = (saving > 0) ? ' (2 ماہ رعایت: ' + Number(saving).toLocaleString() + ' روپے بچت)' : '';
@@ -851,7 +851,7 @@ function updatePlanSummary() {
     limitsEl.innerHTML = '<div class="d-flex flex-column gap-1">' +
         '<div><i class="fas fa-check-circle text-success me-1"></i> <strong>وسائل کی حدود:</strong> ' + students + ' طلبہ، ' + classes + ' کلاسز، ' + teachers + ' اساتذہ و عملہ</div>' +
         '<div><i class="fas fa-laptop-code text-primary me-1"></i> <strong>دستیاب پلیٹ فارمز:</strong> ' + platforms + '</div>' +
-        '<div><i class="fas fa-clock text-warning me-1"></i> <strong>ٹرائل مدت:</strong> 14 دن تمام فیچرز مکمل فعال رہیں گے (کوئی پیشگی چارجز نہیں)</div>' +
+        '<div><i class="fas fa-clock text-warning me-1"></i> <strong>ٹرائل مدت:</strong> 30 دن تمام فیچرز مکمل فعال رہیں گے (کوئی پیشگی چارجز نہیں)</div>' +
         '</div>';
 }
 

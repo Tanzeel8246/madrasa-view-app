@@ -11,7 +11,7 @@ import '../utils/globals.dart';
 import '../utils/session.dart';
 import '../utils/network_service.dart';
 import '../utils/system_type_global.dart';
-import '../widgets/app_brand_logo.dart';
+import '../utils/sync_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/neo_box.dart';
 import 'dashboard.dart';
@@ -85,7 +85,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 _madrasaNameController.text =
                     s['madrasa_name']?.toString() ?? '';
                 _masjidNameController.text =
-                    s['masjid_name']?.toString() ?? 'مسجد اشرف المدارس';
+                    s['masjid_name']?.toString() ?? 'Ù…Ø³Ø¬Ø¯ Ø§Ø´Ø±Ù Ø§Ù„Ù…Ø¯Ø§Ø±Ø³';
                 _taglineController.text = s['tagline']?.toString() ?? '';
                 _phoneController.text = s['phone']?.toString() ?? '';
                 _addressController.text = s['address']?.toString() ?? '';
@@ -139,7 +139,7 @@ class _SettingsPageState extends State<SettingsPage> {
         setState(() {
           _madrasaNameController.text = s['madrasa_name']?.toString() ?? '';
           _masjidNameController.text =
-              s['masjid_name']?.toString() ?? 'مسجد اشرف المدارس';
+              s['masjid_name']?.toString() ?? 'Ù…Ø³Ø¬Ø¯ Ø§Ø´Ø±Ù Ø§Ù„Ù…Ø¯Ø§Ø±Ø³';
           _taglineController.text = s['tagline']?.toString() ?? '';
           _phoneController.text = s['phone']?.toString() ?? '';
           _addressController.text = s['address']?.toString() ?? '';
@@ -200,7 +200,7 @@ class _SettingsPageState extends State<SettingsPage> {
         });
       }
     } catch (e) {
-      _showError('تصویر منتخب کرنے میں خرابی: $e');
+      _showError('ØªØµÙˆÛŒØ± Ù…Ù†ØªØ®Ø¨ Ú©Ø±Ù†Û’ Ù…ÛŒÚº Ø®Ø±Ø§Ø¨ÛŒ: $e');
     }
   }
 
@@ -308,6 +308,7 @@ class _SettingsPageState extends State<SettingsPage> {
             }
           }
 
+          localMap['is_synced'] = 1;
           final db = await DBHelper().database;
           await db.update('settings', localMap, where: 'id = 1');
 
@@ -365,7 +366,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
                 content: Text(isUrduGlobal.value
-                    ? "سیٹنگز اور کسٹم برانڈنگ کامیابی سے اپڈیٹ ہو گئیں!"
+                    ? "Ø³ÛŒÙ¹Ù†Ú¯Ø² Ø§ÙˆØ± Ú©Ø³Ù¹Ù… Ø¨Ø±Ø§Ù†ÚˆÙ†Ú¯ Ú©Ø§Ù…ÛŒØ§Ø¨ÛŒ Ø³Û’ Ø§Ù¾ÚˆÛŒÙ¹ ÛÙˆ Ú¯Ø¦ÛŒÚº!"
                     : "Settings & branding updated successfully!"),
                 backgroundColor: Colors.green),
           );
@@ -388,12 +389,14 @@ class _SettingsPageState extends State<SettingsPage> {
           'ai_provider': _aiProvider,
           'auto_notify_day': _autoNotifyDay,
           'auto_notify_time': _autoNotifyTime,
+          'is_synced': 0,
         };
         final db = await DBHelper().database;
         await db.update('settings', localMap, where: 'id = 1');
+        SyncService.runTwoWaySync().catchError((_) {});
       } catch (_) {}
       _showError(
-          'کنکشن خرابی: سیٹنگز لوکل محفوظ ہو گئیں مگر سرور سے رابطہ نہیں ہو سکا۔');
+          'Ú©Ù†Ú©Ø´Ù† Ø®Ø±Ø§Ø¨ÛŒ: Ø³ÛŒÙ¹Ù†Ú¯Ø² Ù„ÙˆÚ©Ù„ Ù…Ø­ÙÙˆØ¸ ÛÙˆ Ú¯Ø¦ÛŒÚº Ù…Ú¯Ø± Ø³Ø±ÙˆØ± Ø³Û’ Ø±Ø§Ø¨Ø·Û Ù†ÛÛŒÚº ÛÙˆ Ø³Ú©Ø§Û”');
     }
     setState(() => _isLoading = false);
   }
@@ -431,7 +434,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 title: Text(
                     isUrdu
-                        ? "سافٹ ویئر سیٹنگ و برانڈنگ"
+                        ? "Ø³Ø§ÙÙ¹ ÙˆÛŒØ¦Ø± Ø³ÛŒÙ¹Ù†Ú¯ Ùˆ Ø¨Ø±Ø§Ù†ÚˆÙ†Ú¯"
                         : "Settings & Branding",
                     style: const TextStyle(
                         color: Colors.white, fontWeight: FontWeight.bold)),
@@ -445,14 +448,14 @@ class _SettingsPageState extends State<SettingsPage> {
                     onPressed: () async {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: Text(isUrdu
-                              ? "ڈیٹا سنک ہو رہا ہے..."
+                              ? "ÚˆÛŒÙ¹Ø§ Ø³Ù†Ú© ÛÙˆ Ø±ÛØ§ ÛÛ’..."
                               : "Syncing data...")));
                       try {
                         await _loadSettings();
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                               content: Text(isUrdu
-                                  ? "سیٹنگز ری فریش ہو گئیں!"
+                                  ? "Ø³ÛŒÙ¹Ù†Ú¯Ø² Ø±ÛŒ ÙØ±ÛŒØ´ ÛÙˆ Ú¯Ø¦ÛŒÚº!"
                                   : "Settings refreshed!"),
                               backgroundColor: Colors.green));
                         }
@@ -460,7 +463,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                               content: Text(isUrdu
-                                  ? "ری فریش میں خرابی آئی"
+                                  ? "Ø±ÛŒ ÙØ±ÛŒØ´ Ù…ÛŒÚº Ø®Ø±Ø§Ø¨ÛŒ Ø¢Ø¦ÛŒ"
                                   : "Refresh failed"),
                               backgroundColor: Colors.red));
                         }
@@ -487,7 +490,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     const SizedBox(width: 10),
                                     Text(
                                       isUrdu
-                                          ? "زبان و ظاہری حالت"
+                                          ? "Ø²Ø¨Ø§Ù† Ùˆ Ø¸Ø§ÛØ±ÛŒ Ø­Ø§Ù„Øª"
                                           : "Language & Theme",
                                       style: TextStyle(
                                           fontSize: 18,
@@ -499,7 +502,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 const SizedBox(width: 10),
                                 ListTile(
                                   contentPadding: EdgeInsets.zero,
-                                  title: const Text("اردو",
+                                  title: const Text("Ø§Ø±Ø¯Ùˆ",
                                       style: TextStyle(
                                           fontWeight: FontWeight.bold)),
                                   trailing: Switch(
@@ -523,7 +526,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                           color: primaryGreen),
                                       title: Text(
                                           isUrdu
-                                              ? "ڈارک موڈ (Dark Mode)"
+                                              ? "ÚˆØ§Ø±Ú© Ù…ÙˆÚˆ (Dark Mode)"
                                               : "Dark Mode",
                                           style: const TextStyle(
                                               fontWeight: FontWeight.bold)),
@@ -570,7 +573,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                         const SizedBox(width: 10),
                                         Text(
                                           isUrdu
-                                              ? "فعال سسٹم موڈ (Active Mode)"
+                                              ? "ÙØ¹Ø§Ù„ Ø³Ø³Ù¹Ù… Ù…ÙˆÚˆ (Active Mode)"
                                               : "Active System Mode",
                                           style: TextStyle(
                                             fontSize: 18,
@@ -583,7 +586,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     const SizedBox(height: 8),
                                     Text(
                                       isUrdu
-                                          ? "مدرسہ یا مسجد موڈ منتخب کریں، ایپ کا ڈیٹا اور انٹرفیس خودکار تبدیل ہو جائے گا:"
+                                          ? "Ù…Ø¯Ø±Ø³Û ÛŒØ§ Ù…Ø³Ø¬Ø¯ Ù…ÙˆÚˆ Ù…Ù†ØªØ®Ø¨ Ú©Ø±ÛŒÚºØŒ Ø§ÛŒÙ¾ Ú©Ø§ ÚˆÛŒÙ¹Ø§ Ø§ÙˆØ± Ø§Ù†Ù¹Ø±ÙÛŒØ³ Ø®ÙˆØ¯Ú©Ø§Ø± ØªØ¨Ø¯ÛŒÙ„ ÛÙˆ Ø¬Ø§Ø¦Û’ Ú¯Ø§:"
                                           : "Select Madrasa or Masjid mode, the app interface and data will adapt automatically:",
                                       style: TextStyle(
                                           fontSize: 12,
@@ -630,7 +633,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                                   const SizedBox(width: 8),
                                                   Text(
                                                     isUrdu
-                                                        ? 'مدرسہ موڈ'
+                                                        ? 'Ù…Ø¯Ø±Ø³Û Ù…ÙˆÚˆ'
                                                         : 'Madrasa Mode',
                                                     style: TextStyle(
                                                       fontWeight:
@@ -685,7 +688,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                                   const SizedBox(width: 8),
                                                   Text(
                                                     isUrdu
-                                                        ? 'مسجد موڈ'
+                                                        ? 'Ù…Ø³Ø¬Ø¯ Ù…ÙˆÚˆ'
                                                         : 'Masjid Mode',
                                                     style: TextStyle(
                                                       fontWeight:
@@ -723,7 +726,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     const SizedBox(width: 10),
                                     Text(
                                       isUrdu
-                                          ? "مدرسہ معلومات (Madrasa Profile)"
+                                          ? "Ù…Ø¯Ø±Ø³Û Ù…Ø¹Ù„ÙˆÙ…Ø§Øª (Madrasa Profile)"
                                           : "Madrasa Profile",
                                       style: TextStyle(
                                           fontSize: 18,
@@ -736,32 +739,32 @@ class _SettingsPageState extends State<SettingsPage> {
                                 _buildTextField(
                                     _madrasaNameController,
                                     isUrdu
-                                        ? "مدرسہ کا آفیشل نام"
+                                        ? "Ù…Ø¯Ø±Ø³Û Ú©Ø§ Ø¢ÙÛŒØ´Ù„ Ù†Ø§Ù…"
                                         : "Madrasa Official Name"),
                                 const SizedBox(height: 10),
                                 _buildTextField(
                                     _masjidNameController,
                                     isUrdu
-                                        ? "مسجد کا آفیشل نام (Masjid Name)"
+                                        ? "Ù…Ø³Ø¬Ø¯ Ú©Ø§ Ø¢ÙÛŒØ´Ù„ Ù†Ø§Ù… (Masjid Name)"
                                         : "Masjid Official Name"),
                                 const SizedBox(height: 10),
                                 _buildTextField(
                                     _taglineController,
                                     isUrdu
-                                        ? "سلوگن / ذیلی عنوان (Tagline)"
+                                        ? "Ø³Ù„ÙˆÚ¯Ù† / Ø°ÛŒÙ„ÛŒ Ø¹Ù†ÙˆØ§Ù† (Tagline)"
                                         : "Tagline"),
                                 const SizedBox(height: 10),
                                 _buildTextField(_phoneController,
-                                    isUrdu ? "رابطہ فون نمبر" : "Phone Number"),
+                                    isUrdu ? "Ø±Ø§Ø¨Ø·Û ÙÙˆÙ† Ù†Ù…Ø¨Ø±" : "Phone Number"),
                                 const SizedBox(height: 10),
                                 _buildTextField(_addressController,
-                                    isUrdu ? "مدرسہ کا مکمل پتہ" : "Address",
+                                    isUrdu ? "Ù…Ø¯Ø±Ø³Û Ú©Ø§ Ù…Ú©Ù…Ù„ Ù¾ØªÛ" : "Address",
                                     maxLines: 2),
                                 const SizedBox(height: 10),
                                 _buildTextField(
                                     _hijriYearController,
                                     isUrdu
-                                        ? "موجودہ ہجری سال (جیسے 1447)"
+                                        ? "Ù…ÙˆØ¬ÙˆØ¯Û ÛØ¬Ø±ÛŒ Ø³Ø§Ù„ (Ø¬ÛŒØ³Û’ 1447)"
                                         : "Current Hijri Year"),
                               ],
                             ),
@@ -780,7 +783,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     const SizedBox(width: 10),
                                     Text(
                                       isUrdu
-                                          ? "کسٹم برانڈنگ و دستاویزات"
+                                          ? "Ú©Ø³Ù¹Ù… Ø¨Ø±Ø§Ù†ÚˆÙ†Ú¯ Ùˆ Ø¯Ø³ØªØ§ÙˆÛŒØ²Ø§Øª"
                                           : "Custom Branding & Documents",
                                       style: TextStyle(
                                           fontSize: 18,
@@ -792,7 +795,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 const SizedBox(height: 8),
                                 Text(
                                   isUrdu
-                                      ? "موبائل گیلری سے لوگو، مہر اور رسید/سند کے بیک گراؤنڈز اپلوڈ کریں۔"
+                                      ? "Ù…ÙˆØ¨Ø§Ø¦Ù„ Ú¯ÛŒÙ„Ø±ÛŒ Ø³Û’ Ù„ÙˆÚ¯ÙˆØŒ Ù…ÛØ± Ø§ÙˆØ± Ø±Ø³ÛŒØ¯/Ø³Ù†Ø¯ Ú©Û’ Ø¨ÛŒÚ© Ú¯Ø±Ø§Ø¤Ù†ÚˆØ² Ø§Ù¾Ù„ÙˆÚˆ Ú©Ø±ÛŒÚºÛ”"
                                       : "Upload custom logo, stamp and document templates from gallery.",
                                   style: TextStyle(
                                       fontSize: 12,
@@ -803,10 +806,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                 // 1. Official Logo
                                 _buildBrandingItem(
                                   title: isUrdu
-                                      ? "مدرسہ کا آفیشل لوگو"
+                                      ? "Ù…Ø¯Ø±Ø³Û Ú©Ø§ Ø¢ÙÛŒØ´Ù„ Ù„ÙˆÚ¯Ùˆ"
                                       : "Official Logo",
                                   subtitle: isUrdu
-                                      ? "رسید، کارڈ اور سند پر نمایاں ہوگا"
+                                      ? "Ø±Ø³ÛŒØ¯ØŒ Ú©Ø§Ø±Úˆ Ø§ÙˆØ± Ø³Ù†Ø¯ Ù¾Ø± Ù†Ù…Ø§ÛŒØ§Úº ÛÙˆÚ¯Ø§"
                                       : "Displayed on receipts, cards and sanad",
                                   newFile: _newLogoFile,
                                   serverPath: _logoPath,
@@ -817,10 +820,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                 // 1b. Official Masjid Logo
                                 _buildBrandingItem(
                                   title: isUrdu
-                                      ? "مسجد کا آفیشل لوگو"
+                                      ? "Ù…Ø³Ø¬Ø¯ Ú©Ø§ Ø¢ÙÛŒØ´Ù„ Ù„ÙˆÚ¯Ùˆ"
                                       : "Masjid Official Logo",
                                   subtitle: isUrdu
-                                      ? "مسجد موڈ رسیدوں اور رپورٹس پر نمایاں ہوگا"
+                                      ? "Ù…Ø³Ø¬Ø¯ Ù…ÙˆÚˆ Ø±Ø³ÛŒØ¯ÙˆÚº Ø§ÙˆØ± Ø±Ù¾ÙˆØ±Ù¹Ø³ Ù¾Ø± Ù†Ù…Ø§ÛŒØ§Úº ÛÙˆÚ¯Ø§"
                                       : "Displayed on masjid receipts and reports",
                                   newFile: _newMasjidLogoFile,
                                   serverPath: _masjidLogoPath,
@@ -831,10 +834,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                 // 2. Official Stamp / Signature
                                 _buildBrandingItem(
                                   title: isUrdu
-                                      ? "پرنسپل / مہتمم کے دستخط و مہر"
+                                      ? "Ù¾Ø±Ù†Ø³Ù¾Ù„ / Ù…ÛØªÙ…Ù… Ú©Û’ Ø¯Ø³ØªØ®Ø· Ùˆ Ù…ÛØ±"
                                       : "Stamp / Signature",
                                   subtitle: isUrdu
-                                      ? "رسید اور سند پر خودکار شامل ہوگی"
+                                      ? "Ø±Ø³ÛŒØ¯ Ø§ÙˆØ± Ø³Ù†Ø¯ Ù¾Ø± Ø®ÙˆØ¯Ú©Ø§Ø± Ø´Ø§Ù…Ù„ ÛÙˆÚ¯ÛŒ"
                                       : "Auto-applied on receipts and certificates",
                                   newFile: _newStampFile,
                                   serverPath: _signatureStampPath,
@@ -845,10 +848,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                 // 3. Madrasa Receipt Background
                                 _buildBrandingItem(
                                   title: isUrdu
-                                      ? "مدرسہ رسید کسٹم بیک گراؤنڈ"
+                                      ? "Ù…Ø¯Ø±Ø³Û Ø±Ø³ÛŒØ¯ Ú©Ø³Ù¹Ù… Ø¨ÛŒÚ© Ú¯Ø±Ø§Ø¤Ù†Úˆ"
                                       : "Receipt Custom Background",
                                   subtitle: isUrdu
-                                      ? "چھپی ہوئی رسید کا اسکین شدہ پس منظر"
+                                      ? "Ú†Ú¾Ù¾ÛŒ ÛÙˆØ¦ÛŒ Ø±Ø³ÛŒØ¯ Ú©Ø§ Ø§Ø³Ú©ÛŒÙ† Ø´Ø¯Û Ù¾Ø³ Ù…Ù†Ø¸Ø±"
                                       : "Pre-printed receipt watermark/template",
                                   newFile: _newReceiptBgFile,
                                   serverPath: _receiptBgPath,
@@ -859,10 +862,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                 // 4. Student ID Card Background
                                 _buildBrandingItem(
                                   title: isUrdu
-                                      ? "سٹوڈنٹ کارڈ کسٹم بیک گراؤنڈ"
+                                      ? "Ø³Ù¹ÙˆÚˆÙ†Ù¹ Ú©Ø§Ø±Úˆ Ú©Ø³Ù¹Ù… Ø¨ÛŒÚ© Ú¯Ø±Ø§Ø¤Ù†Úˆ"
                                       : "ID Card Background",
                                   subtitle: isUrdu
-                                      ? "سٹینڈرڈ کارڈ سائز (CR80)"
+                                      ? "Ø³Ù¹ÛŒÙ†ÚˆØ±Úˆ Ú©Ø§Ø±Úˆ Ø³Ø§Ø¦Ø² (CR80)"
                                       : "Standard card dimensions (CR80)",
                                   newFile: _newIdCardBgFile,
                                   serverPath: _idCardBgPath,
@@ -873,10 +876,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                 // 5. Official Sanad Background
                                 _buildBrandingItem(
                                   title: isUrdu
-                                      ? "آفیشل سند کا کسٹم بیک گراؤنڈ"
+                                      ? "Ø¢ÙÛŒØ´Ù„ Ø³Ù†Ø¯ Ú©Ø§ Ú©Ø³Ù¹Ù… Ø¨ÛŒÚ© Ú¯Ø±Ø§Ø¤Ù†Úˆ"
                                       : "Sanad Custom Background",
                                   subtitle: isUrdu
-                                      ? "فارغین کی خالی سند کا فریم (A4 لینڈ اسکیپ)"
+                                      ? "ÙØ§Ø±ØºÛŒÙ† Ú©ÛŒ Ø®Ø§Ù„ÛŒ Ø³Ù†Ø¯ Ú©Ø§ ÙØ±ÛŒÙ… (A4 Ù„ÛŒÙ†Úˆ Ø§Ø³Ú©ÛŒÙ¾)"
                                       : "Certificate frame (A4 landscape)",
                                   newFile: _newSanadBgFile,
                                   serverPath: _sanadBgPath,
@@ -900,7 +903,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     const SizedBox(width: 10),
                                     Text(
                                       isUrdu
-                                          ? "اے پی آئی و آٹومیشن سیٹنگز"
+                                          ? "Ø§Û’ Ù¾ÛŒ Ø¢Ø¦ÛŒ Ùˆ Ø¢Ù¹ÙˆÙ…ÛŒØ´Ù† Ø³ÛŒÙ¹Ù†Ú¯Ø²"
                                           : "API & Automation Settings",
                                       style: TextStyle(
                                           fontSize: 18,
@@ -961,7 +964,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             icon: const Icon(Icons.save, size: 20),
                             label: Text(
                               isUrdu
-                                  ? "تمام سیٹنگز و برانڈنگ محفوظ کریں"
+                                  ? "ØªÙ…Ø§Ù… Ø³ÛŒÙ¹Ù†Ú¯Ø² Ùˆ Ø¨Ø±Ø§Ù†ÚˆÙ†Ú¯ Ù…Ø­ÙÙˆØ¸ Ú©Ø±ÛŒÚº"
                                   : "Save All Settings & Branding",
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 16),
@@ -992,7 +995,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                   icon: Icon(Icons.auto_fix_high,
                                       color: primaryGreen, size: 18),
                                   label: Text(
-                                    isUrdu ? "سیٹ اپ وزرڈ" : "Setup Wizard",
+                                    isUrdu ? "Ø³ÛŒÙ¹ Ø§Ù¾ ÙˆØ²Ø±Úˆ" : "Setup Wizard",
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: primaryGreen,
@@ -1025,7 +1028,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       color: Colors.blueGrey, size: 18),
                                   label: Text(
                                     isUrdu
-                                        ? "پرائیویسی پالیسی"
+                                        ? "Ù¾Ø±Ø§Ø¦ÛŒÙˆÛŒØ³ÛŒ Ù¾Ø§Ù„ÛŒØ³ÛŒ"
                                         : "Privacy Policy",
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
@@ -1112,7 +1115,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 Text(
                   newFile != null
                       ? (isUrdu
-                          ? 'نئی فائل منتخب ہے (محفوظ کریں)'
+                          ? 'Ù†Ø¦ÛŒ ÙØ§Ø¦Ù„ Ù…Ù†ØªØ®Ø¨ ÛÛ’ (Ù…Ø­ÙÙˆØ¸ Ú©Ø±ÛŒÚº)'
                           : 'New file selected (Save now)')
                       : subtitle,
                   style: TextStyle(
@@ -1131,8 +1134,8 @@ class _SettingsPageState extends State<SettingsPage> {
             onPressed: onPick,
             icon: const Icon(Icons.upload_file, size: 16),
             label: Text(newFile != null
-                ? (isUrdu ? "تبدیل" : "Change")
-                : (isUrdu ? "اپلوڈ" : "Upload")),
+                ? (isUrdu ? "ØªØ¨Ø¯ÛŒÙ„" : "Change")
+                : (isUrdu ? "Ø§Ù¾Ù„ÙˆÚˆ" : "Upload")),
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryGreen,
               foregroundColor: Colors.white,

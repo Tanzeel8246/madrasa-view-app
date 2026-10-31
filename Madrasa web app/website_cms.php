@@ -100,25 +100,25 @@ $pg_stmt->execute([$cur_tenant_id]);
 $pages = $pg_stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
-<div class="container-fluid py-4" dir="rtl">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <!-- Header -->
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
         <div>
             <h3 class="fw-bold mb-1" style="color: #284D3D;">
                 <i class="fas fa-globe me-2 text-warning"></i>
-                <?php echo $is_masjid ? 'ویب سائٹ و اعلانات CMS (مسجد)' : 'ویب سائٹ و سوشل CMS (Website & News Feed)'; ?>
+                <?php echo $is_masjid ? __('ویب سائٹ و اعلانات CMS (مسجد)', 'Website & Notices CMS (Masjid)') : __('ویب سائٹ و سوشل CMS (Website & News Feed)', 'Website & Social CMS (News Feed)'); ?>
             </h3>
-            <span class="text-muted">پبلک پورٹل، موبائل ایپ نیوز فیڈ اور اعلانات کا مرکزی انتظام</span>
+            <span class="text-muted"><?php echo __('پبلک پورٹل، موبائل ایپ نیوز فیڈ اور اعلانات کا مرکزی انتظام', 'Central management for public portal, mobile app news feed and announcements'); ?></span>
         </div>
         <div class="d-flex gap-2">
             <a href="index.php" target="_blank" class="btn btn-outline-primary fw-bold">
-                <i class="fas fa-external-link-alt me-1"></i> پبلک ویب سائٹ دیکھیں
+                <i class="fas fa-external-link-alt me-1"></i> <?php echo __('پبلک ویب سائٹ دیکھیں', 'View Public Website'); ?>
             </a>
             <button class="btn btn-warning fw-bold text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#addPageModal">
-                <i class="fas fa-file-alt me-1"></i> نیا ویب صفحہ
+                <i class="fas fa-file-alt me-1"></i> <?php echo __('نیا ویب صفحہ', 'New Web Page'); ?>
             </button>
             <button class="btn btn-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addAnnouncementModal">
-                <i class="fas fa-bullhorn me-1"></i> نیا اعلان شائع کریں
+                <i class="fas fa-bullhorn me-1"></i> <?php echo __('نیا اعلان شائع کریں', 'Post New Notice'); ?>
             </button>
         </div>
     </div>
@@ -141,12 +141,12 @@ $pages = $pg_stmt->fetchAll(PDO::FETCH_ASSOC);
     <ul class="nav nav-pills mb-4 gap-2" id="cmsTabs" role="tablist">
         <li class="nav-item">
             <button class="nav-link active fw-bold px-4" id="feed-tab" data-bs-toggle="pill" data-bs-target="#feed-pane">
-                <i class="fas fa-bullhorn me-1"></i> اعلانات و خبریں (News Feed)
+                <i class="fas fa-bullhorn me-1"></i> <?php echo __('اعلانات و خبریں (News Feed)', 'Announcements & News Feed'); ?>
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link fw-bold px-4" id="pages-tab" data-bs-toggle="pill" data-bs-target="#pages-pane">
-                <i class="fas fa-file-code me-1"></i> پبلک ویب پیجز (Custom Pages)
+                <i class="fas fa-file-code me-1"></i> <?php echo __('پبلک ویب پیجز (Custom Pages)', 'Public Web Pages (Custom)'); ?>
             </button>
         </li>
     </ul>
@@ -156,7 +156,7 @@ $pages = $pg_stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="tab-pane fade show active" id="feed-pane">
             <div class="row g-3">
                 <?php if (empty($announcements)): ?>
-                    <div class="col-12 text-center py-5 text-muted">کوئی اعلان یا خبر شائع نہیں کی گئی۔</div>
+                    <div class="col-12 text-center py-5 text-muted"><?php echo __('کوئی اعلان یا خبر شائع نہیں کی گئی۔', 'No notices or news published yet.'); ?></div>
                 <?php else: ?>
                     <?php foreach ($announcements as $an): ?>
                         <div class="col-lg-4 col-md-6">
@@ -174,10 +174,10 @@ $pages = $pg_stmt->fetchAll(PDO::FETCH_ASSOC);
 
                                     <div class="d-flex justify-content-between align-items-center pt-2 border-top">
                                         <span class="badge <?php echo $an['is_public'] ? 'bg-info text-dark' : 'bg-secondary'; ?>">
-                                            <i class="fas <?php echo $an['is_public'] ? 'fa-eye' : 'fa-lock'; ?> me-1"></i> <?php echo $an['is_public'] ? 'پبلک' : 'صرف ایپ'; ?>
+                                            <i class="fas <?php echo $an['is_public'] ? 'fa-eye' : 'fa-lock'; ?> me-1"></i> <?php echo $an['is_public'] ? __('پبلک', 'Public') : __('صرف ایپ', 'App Only'); ?>
                                         </span>
-                                        <a href="website_cms.php?delete_announcement=<?php echo $an['id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('کیا آپ واقعی یہ اعلان حذف کرنا چاہتے ہیں؟');">
-                                            <i class="fas fa-trash-alt me-1"></i> حذف
+                                        <a href="website_cms.php?delete_announcement=<?php echo $an['id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('<?php echo __('کیا آپ واقعی یہ اعلان حذف کرنا چاہتے ہیں؟', 'Are you sure you want to delete this notice?'); ?>');">
+                                            <i class="fas fa-trash-alt me-1"></i> <?php echo __('حذف', 'Delete'); ?>
                                         </a>
                                     </div>
                                 </div>
@@ -192,23 +192,23 @@ $pages = $pg_stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="tab-pane fade" id="pages-pane">
             <div class="card border-0 shadow-sm rounded-3">
                 <div class="card-body p-3">
-                    <h5 class="fw-bold mb-3"><i class="fas fa-file-alt me-2 text-primary"></i> پبلک ویب سائٹس کے صفحات</h5>
+                    <h5 class="fw-bold mb-3"><i class="fas fa-file-alt me-2 text-primary"></i> <?php echo __('پبلک ویب سائٹس کے صفحات', 'Public Website Pages'); ?></h5>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>ترتیب</th>
-                                    <th>صفحے کا عنوان</th>
-                                    <th>سلگ (URL)</th>
-                                    <th>مختصر تفصیل</th>
-                                    <th>اسٹیٹس</th>
-                                    <th>ایکشن</th>
+                                    <th><?php echo __('ترتیب', 'Order'); ?></th>
+                                    <th><?php echo __('صفحے کا عنوان', 'Page Title'); ?></th>
+                                    <th><?php echo __('سلگ (URL)', 'Slug (URL)'); ?></th>
+                                    <th><?php echo __('مختصر تفصیل', 'Meta Description'); ?></th>
+                                    <th><?php echo __('اسٹیٹس', 'Status'); ?></th>
+                                    <th><?php echo __('ایکشن', 'Action'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($pages)): ?>
                                     <tr>
-                                        <td colspan="6" class="text-center py-4 text-muted">ابھی تک کوئی کسٹم پیج نہیں بنایا گیا۔</td>
+                                        <td colspan="6" class="text-center py-4 text-muted"><?php echo __('ابھی تک کوئی کسٹم پیج نہیں بنایا گیا۔', 'No custom pages created yet.'); ?></td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($pages as $p): ?>
@@ -219,12 +219,12 @@ $pages = $pg_stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <td class="small text-muted"><?php echo htmlspecialchars(mb_substr($p['meta_description'] ?: '-', 0, 50)); ?></td>
                                             <td>
                                                 <span class="badge <?php echo $p['status']=='Published'?'bg-success':'bg-warning text-dark'; ?>">
-                                                    <?php echo $p['status']=='Published'?'شائع شدہ':'ڈرافٹ'; ?>
+                                                    <?php echo $p['status']=='Published' ? __('شائع شدہ', 'Published') : __('ڈرافٹ', 'Draft'); ?>
                                                 </span>
                                             </td>
                                             <td>
                                                 <button class="btn btn-sm btn-outline-primary" onclick="editPage(<?php echo htmlspecialchars(json_encode($p)); ?>)">
-                                                    <i class="fas fa-edit me-1"></i> ترمیم
+                                                    <i class="fas fa-edit me-1"></i> <?php echo __('ترمیم', 'Edit'); ?>
                                                 </button>
                                             </td>
                                         </tr>
@@ -244,45 +244,45 @@ $pages = $pg_stmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="modal-dialog">
         <form method="POST" class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title fw-bold"><i class="fas fa-bullhorn me-1"></i> نیا اعلان / خبر شائع کریں</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-bullhorn me-1"></i> <?php echo __('نیا اعلان / خبر شائع کریں', 'Post New Announcement / News'); ?></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">عنوان <span class="text-danger">*</span></label>
-                    <input type="text" name="title" class="form-control" required placeholder="مثلاً سالانہ جلسہ دستار فضیلت، چھٹیوں کا اعلان">
+                    <label class="form-label fw-bold"><?php echo __('عنوان', 'Title'); ?> <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control" required placeholder="<?php echo __('مثلاً سالانہ جلسہ دستار فضیلت، چھٹیوں کا اعلان', 'e.g. Annual Convocation, Vacation Announcement'); ?>">
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">کیٹیگری</label>
+                        <label class="form-label fw-bold"><?php echo __('کیٹیگری', 'Category'); ?></label>
                         <select name="category" class="form-select">
-                            <option value="خبر">اہم خبر</option>
-                            <option value="تقریب">تقریب / جلسہ</option>
-                            <option value="سرکلر">سرکلر و ہدایات</option>
-                            <option value="سنگِ میل">سنگِ میل و کامیابی</option>
+                            <option value="خبر"><?php echo __('اہم خبر', 'Important News'); ?></option>
+                            <option value="تقریب"><?php echo __('تقریب / جلسہ', 'Event / Program'); ?></option>
+                            <option value="سرکلر"><?php echo __('سرکلر و ہدایات', 'Circular / Notice'); ?></option>
+                            <option value="سنگِ میل"><?php echo __('سنگِ میل و کامیابی', 'Milestone / Achievement'); ?></option>
                         </select>
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">اشاعت کی تاریخ</label>
+                        <label class="form-label fw-bold"><?php echo __('اشاعت کی تاریخ', 'Publish Date'); ?></label>
                         <input type="date" name="publish_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">تصویر کا لنک (Image URL)</label>
+                    <label class="form-label fw-bold"><?php echo __('تصویر کا لنک (Image URL)', 'Image URL (Optional)'); ?></label>
                     <input type="url" name="image_url" class="form-control" placeholder="https://example.com/photo.jpg">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">تفصیل / مواد</label>
-                    <textarea name="body" class="form-control" rows="4" placeholder="مکمل متن یہاں لکھیں..."></textarea>
+                    <label class="form-label fw-bold"><?php echo __('تفصیل / مواد', 'Description / Body'); ?></label>
+                    <textarea name="body" class="form-control" rows="4" placeholder="<?php echo __('مکمل متن یہاں لکھیں...', 'Type full description here...'); ?>"></textarea>
                 </div>
                 <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" name="is_public" id="is_public_check" checked>
-                    <label class="form-check-label fw-bold" for="is_public_check">پبلک ویب سائٹ پر بھی دکھائیں</label>
+                    <label class="form-check-label fw-bold" for="is_public_check"><?php echo __('پبلک ویب سائٹ پر بھی دکھائیں', 'Also show on public website'); ?></label>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="add_announcement" class="btn btn-success fw-bold">شائع کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="add_announcement" class="btn btn-success fw-bold"><?php echo __('شائع کریں', 'Publish'); ?></button>
             </div>
         </form>
     </div>
@@ -293,45 +293,45 @@ $pages = $pg_stmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="modal-dialog modal-lg">
         <form method="POST" class="modal-content">
             <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title fw-bold"><i class="fas fa-file-code me-1"></i> کسٹم ویب صفحہ (CMS Page)</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-file-code me-1"></i> <?php echo __('کسٹم ویب صفحہ (CMS Page)', 'Custom Web Page (CMS)'); ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">صفحے کا عنوان <span class="text-danger">*</span></label>
-                        <input type="text" name="title" id="page_title_input" class="form-control" required placeholder="تعارف و تاریخ، شعبہ جات، قواعد و ضوابط">
+                        <label class="form-label fw-bold"><?php echo __('صفحے کا عنوان', 'Page Title'); ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="title" id="page_title_input" class="form-control" required placeholder="<?php echo __('تعارف و تاریخ، شعبہ جات، قواعد و ضوابط', 'About Us, Departments, Rules & Regulations'); ?>">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">سلگ / URL Identifier <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold"><?php echo __('سلگ / URL Identifier', 'Slug / URL Identifier'); ?> <span class="text-danger">*</span></label>
                         <input type="text" name="page_slug" id="page_slug_input" class="form-control" required placeholder="about-us, rules, facilities">
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">ترتیب نمبر (Sort Order)</label>
+                        <label class="form-label fw-bold"><?php echo __('ترتیب نمبر (Sort Order)', 'Sort Order'); ?></label>
                         <input type="number" name="sort_order" id="page_sort_input" class="form-control" value="0">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">اسٹیٹس</label>
+                        <label class="form-label fw-bold"><?php echo __('اسٹیٹس', 'Status'); ?></label>
                         <select name="status" id="page_status_select" class="form-select">
-                            <option value="Published">شائع شدہ (Published)</option>
-                            <option value="Draft">ڈرافٹ (Draft)</option>
+                            <option value="Published"><?php echo __('شائع شدہ (Published)', 'Published'); ?></option>
+                            <option value="Draft"><?php echo __('ڈرافٹ (Draft)', 'Draft'); ?></option>
                         </select>
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">مختصر میٹا تفصیل</label>
-                    <input type="text" name="meta_description" id="page_meta_input" class="form-control" placeholder="گوگل اور سرچ کے لیے مختصر خلاصہ">
+                    <label class="form-label fw-bold"><?php echo __('مختصر میٹا تفصیل', 'Meta Description'); ?></label>
+                    <input type="text" name="meta_description" id="page_meta_input" class="form-control" placeholder="<?php echo __('گوگل اور سرچ کے لیے مختصر خلاصہ', 'Short summary for SEO and search'); ?>">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">صفحے کا ایچ ٹی ایم ایل مواد (HTML Content)</label>
-                    <textarea name="content_html" id="page_content_input" class="form-control font-monospace" rows="8" placeholder="<p>صفحے کا پیراگراف...</p>"></textarea>
+                    <label class="form-label fw-bold"><?php echo __('صفحے کا ایچ ٹی ایم ایل مواد (HTML Content)', 'Page HTML Content'); ?></label>
+                    <textarea name="content_html" id="page_content_input" class="form-control font-monospace" rows="8" placeholder="<?php echo __('<p>صفحے کا پیراگراف...</p>', '<p>Page content paragraph...</p>'); ?>"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="save_web_page" class="btn btn-warning fw-bold text-dark">صفحہ محفوظ کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="save_web_page" class="btn btn-warning fw-bold text-dark"><?php echo __('صفحہ محفوظ کریں', 'Save Page'); ?></button>
             </div>
         </form>
     </div>

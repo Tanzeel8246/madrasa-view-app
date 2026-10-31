@@ -86,3 +86,9 @@ php.zip
 *.pyc
 *.ps1
 *.mp4
+
+# Temporary session, PHP local runtime & schema flags
+Madrasa web app/sessions/
+Madrasa web app/.*_done
+php/
+

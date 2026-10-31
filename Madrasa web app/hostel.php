@@ -165,22 +165,22 @@ $students = $pdo->query("
 ")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
-<div class="container-fluid py-4" dir="rtl">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <!-- Header Title -->
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
         <div>
             <h3 class="fw-bold mb-1" style="color: #284D3D;">
                 <i class="fas fa-hotel me-2 text-warning"></i>
-                <?php echo $is_masjid ? 'ہاسٹل و معتکفین رہائش (مسجد)' : 'ہاسٹل مینیجمنٹ سسٹم'; ?>
+                <?php echo $is_masjid ? __('ہاسٹل و معتکفین رہائش (مسجد)', 'Hostel & Itikaf Accommodation (Masjid)') : __('ہاسٹل مینیجمنٹ سسٹم', 'Hostel Management System'); ?>
             </h3>
-            <span class="text-muted">کمرہ جات، بیڈز کی الاٹمنٹ اور ماہانہ فیس انوائسز میں خودکار ہاسٹل چارجز</span>
+            <span class="text-muted"><?php echo __('کمرہ جات، بیڈز کی الاٹمنٹ اور ماہانہ فیس انوائسز میں خودکار ہاسٹل چارجز', 'Rooms, bed allocation and automated hostel charges in monthly fee invoices'); ?></span>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-warning fw-bold text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#allocModal">
-                <i class="fas fa-user-plus me-1"></i> طالب علم کو بیڈ الاٹ کریں
+                <i class="fas fa-user-plus me-1"></i> <?php echo __('طالب علم کو بیڈ الاٹ کریں', 'Allocate Bed to Student'); ?>
             </button>
             <button class="btn btn-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addRoomModal">
-                <i class="fas fa-plus-circle me-1"></i> نیا کمرہ بنائیں
+                <i class="fas fa-plus-circle me-1"></i> <?php echo __('نیا کمرہ بنائیں', 'Create New Room'); ?>
             </button>
         </div>
     </div>
@@ -205,7 +205,7 @@ $students = $pdo->query("
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-primary">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">کل کمرے</div>
+                        <div class="text-muted small"><?php echo __('کل کمرے', 'Total Rooms'); ?></div>
                         <h3 class="fw-bold text-primary mb-0"><?php echo $totalRooms; ?></h3>
                     </div>
                     <i class="fas fa-door-open fa-2x text-primary opacity-50"></i>
@@ -216,7 +216,7 @@ $students = $pdo->query("
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-info">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">کل بیڈز کی گنجائش</div>
+                        <div class="text-muted small"><?php echo __('کل بیڈز کی گنجائش', 'Total Bed Capacity'); ?></div>
                         <h3 class="fw-bold text-info mb-0"><?php echo $totalBeds; ?></h3>
                     </div>
                     <i class="fas fa-bed fa-2x text-info opacity-50"></i>
@@ -227,7 +227,7 @@ $students = $pdo->query("
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-danger">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">مقیم طلبہ (پر بیڈز)</div>
+                        <div class="text-muted small"><?php echo __('مقیم طلبہ (پر بیڈز)', 'Resident Students'); ?></div>
                         <h3 class="fw-bold text-danger mb-0"><?php echo $occupiedBeds; ?></h3>
                     </div>
                     <i class="fas fa-user-check fa-2x text-danger opacity-50"></i>
@@ -238,7 +238,7 @@ $students = $pdo->query("
             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-success">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="text-muted small">خالی بیڈز دستیاب</div>
+                        <div class="text-muted small"><?php echo __('خالی بیڈز دستیاب', 'Vacant Beds'); ?></div>
                         <h3 class="fw-bold text-success mb-0"><?php echo $availableBeds; ?></h3>
                     </div>
                     <i class="fas fa-check-double fa-2x text-success opacity-50"></i>
@@ -251,12 +251,12 @@ $students = $pdo->query("
     <ul class="nav nav-pills mb-3 gap-2" id="hostelTabs" role="tablist">
         <li class="nav-item">
             <button class="nav-link active fw-bold px-4" id="rooms-tab" data-bs-toggle="pill" data-bs-target="#rooms-pane">
-                <i class="fas fa-th-large me-1"></i> کمروں کا جائزہ (Visual Rooms)
+                <i class="fas fa-th-large me-1"></i> <?php echo __('کمروں کا جائزہ (Visual Rooms)', 'Visual Rooms Overview'); ?>
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link fw-bold px-4" id="residents-tab" data-bs-toggle="pill" data-bs-target="#residents-pane">
-                <i class="fas fa-users me-1"></i> مقیم طلبہ کا ریکارڈ (Residents List)
+                <i class="fas fa-users me-1"></i> <?php echo __('مقیم طلبہ کا ریکارڈ (Residents List)', 'Residents List'); ?>
             </button>
         </li>
     </ul>
@@ -267,8 +267,8 @@ $students = $pdo->query("
             <?php if (empty($rooms)): ?>
                 <div class="card border-0 shadow-sm p-5 text-center text-muted">
                     <i class="fas fa-hotel fa-3x mb-3 text-secondary opacity-50"></i>
-                    <h5>ابھی تک کوئی ہاسٹل روم نہیں بنایا گیا۔</h5>
-                    <p>اوپر دیے گئے بٹن 'نیا کمرہ بنائیں' سے پہلا کمرہ شامل کریں۔</p>
+                    <h5><?php echo __('ابھی تک کوئی ہاسٹل روم نہیں بنایا گیا۔', 'No hostel rooms created yet.'); ?></h5>
+                    <p><?php echo __('اوپر دیے گئے بٹن \'نیا کمرہ بنائیں\' سے پہلا کمرہ شامل کریں۔', 'Add the first room using the button above.'); ?></p>
                 </div>
             <?php else: ?>
                 <div class="row g-3">
@@ -284,33 +284,33 @@ $students = $pdo->query("
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <h5 class="fw-bold mb-0 text-dark">
-                                            کمرہ نمبر: <?php echo htmlspecialchars($rm['room_number']); ?>
+                                            <?php echo __('کمرہ نمبر:', 'Room No:'); ?> <?php echo htmlspecialchars($rm['room_number']); ?>
                                             <?php if (!empty($rm['room_name'])): ?>
                                                 <small class="text-muted fs-6">(<?php echo htmlspecialchars($rm['room_name']); ?>)</small>
                                             <?php endif; ?>
                                         </h5>
                                         <span class="badge <?php echo $isFull ? 'bg-danger' : 'bg-success'; ?>">
-                                            <?php echo $occ . ' / ' . $cap; ?> بیڈز
+                                            <?php echo $occ . ' / ' . $cap . ' ' . __('بیڈز', 'Beds'); ?>
                                         </span>
                                     </div>
                                     <div class="small text-muted mb-3">
-                                        ماہانہ فیس: <strong>Rs. <?php echo number_format($rm['monthly_fee'], 0); ?></strong>
+                                        <?php echo __('ماہانہ فیس:', 'Monthly Fee:'); ?> <strong>Rs. <?php echo number_format($rm['monthly_fee'], 0); ?></strong>
                                     </div>
 
                                     <!-- Visual Bed Badges -->
                                     <div class="border rounded-2 p-2 bg-light mb-3">
-                                        <div class="fw-bold small text-secondary mb-2"><i class="fas fa-bed me-1"></i> بیڈز کی صورتحال:</div>
+                                        <div class="fw-bold small text-secondary mb-2"><i class="fas fa-bed me-1"></i> <?php echo __('بیڈز کی صورتحال:', 'Beds Status:'); ?></div>
                                         <div class="d-flex flex-wrap gap-2">
                                             <?php for ($b = 1; $b <= $cap; $b++): 
                                                 $assigned = $rAllocs[$b - 1] ?? null;
                                             ?>
                                                 <?php if ($assigned): ?>
                                                     <span class="badge bg-danger p-2 text-start" title="<?php echo htmlspecialchars($assigned['student_name']); ?>">
-                                                        <i class="fas fa-user me-1"></i> <?php echo htmlspecialchars($assigned['bed_number'] ?: "بیڈ $b"); ?>: <?php echo htmlspecialchars(mb_substr($assigned['student_name'], 0, 10)); ?>
+                                                        <i class="fas fa-user me-1"></i> <?php echo htmlspecialchars($assigned['bed_number'] ?: (__('بیڈ ', 'Bed ') . $b)); ?>: <?php echo htmlspecialchars(mb_substr($assigned['student_name'], 0, 10)); ?>
                                                     </span>
                                                 <?php else: ?>
                                                     <span class="badge bg-outline-success border border-success text-success p-2">
-                                                        <i class="fas fa-check me-1"></i> بیڈ <?php echo $b; ?> (خالی)
+                                                        <i class="fas fa-check me-1"></i> <?php echo __('بیڈ ', 'Bed ') . $b; ?> (<?php echo __('خالی', 'Vacant'); ?>)
                                                     </span>
                                                 <?php endif; ?>
                                             <?php endfor; ?>
@@ -320,9 +320,9 @@ $students = $pdo->query("
                                     <!-- Card Actions -->
                                     <div class="d-flex justify-content-between align-items-center mt-auto">
                                         <button class="btn btn-sm btn-outline-warning fw-bold" onclick="openAllocForRoom('<?php echo $rId; ?>')" <?php echo $isFull ? 'disabled' : ''; ?>>
-                                            <i class="fas fa-user-plus me-1"></i> طالب علم الاٹ کریں
+                                            <i class="fas fa-user-plus me-1"></i> <?php echo __('طالب علم الاٹ کریں', 'Allocate Student'); ?>
                                         </button>
-                                        <a href="hostel.php?delete_room=<?php echo $rId; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('کیا آپ واقعی یہ کمرہ حذف کرنا چاہتے ہیں؟');">
+                                        <a href="hostel.php?delete_room=<?php echo $rId; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('<?php echo __('کیا آپ واقعی یہ کمرہ حذف کرنا چاہتے ہیں؟', 'Are you sure you want to delete this room?'); ?>');">
                                             <i class="fas fa-trash-alt"></i>
                                         </a>
                                     </div>
@@ -338,25 +338,25 @@ $students = $pdo->query("
         <div class="tab-pane fade" id="residents-pane">
             <div class="card border-0 shadow-sm rounded-3">
                 <div class="card-body p-3">
-                    <h5 class="fw-bold mb-3"><i class="fas fa-user-check me-2 text-primary"></i> مقیم طلبہ کی جامع رپورٹ</h5>
+                    <h5 class="fw-bold mb-3"><i class="fas fa-user-check me-2 text-primary"></i> <?php echo __('مقیم طلبہ کی جامع رپورٹ', 'Resident Students Comprehensive Report'); ?></h5>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>داخلہ نمبر</th>
-                                    <th>نامِ طالب علم</th>
-                                    <th>کلاس</th>
-                                    <th>کمرہ نمبر</th>
-                                    <th>بیڈ نمبر</th>
-                                    <th>ماہانہ ہاسٹل فیس</th>
-                                    <th>الاٹمنٹ تاریخ</th>
-                                    <th>ایکشن</th>
+                                    <th><?php echo __('داخلہ نمبر', 'Admission #'); ?></th>
+                                    <th><?php echo __('نامِ طالب علم', 'Student Name'); ?></th>
+                                    <th><?php echo __('کلاس', 'Class'); ?></th>
+                                    <th><?php echo __('کمرہ نمبر', 'Room #'); ?></th>
+                                    <th><?php echo __('بیڈ نمبر', 'Bed #'); ?></th>
+                                    <th><?php echo __('ماہانہ ہاسٹل فیس', 'Monthly Hostel Fee'); ?></th>
+                                    <th><?php echo __('الاٹمنٹ تاریخ', 'Allocation Date'); ?></th>
+                                    <th><?php echo __('ایکشن', 'Action'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($allocations)): ?>
                                     <tr>
-                                        <td colspan="8" class="text-center py-4 text-muted">فی الوقت کوئی طالب علم ہاسٹل میں الاٹ نہیں ہے۔</td>
+                                        <td colspan="8" class="text-center py-4 text-muted"><?php echo __('فی الوقت کوئی طالب علم ہاسٹل میں الاٹ نہیں ہے۔', 'No students currently allocated to hostel.'); ?></td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($allocations as $al): ?>
@@ -369,8 +369,8 @@ $students = $pdo->query("
                                             <td class="fw-bold text-success">Rs. <?php echo number_format($al['monthly_fee'], 0); ?></td>
                                             <td><?php echo htmlspecialchars($al['allocation_date']); ?></td>
                                             <td>
-                                                <a href="hostel.php?vacate_id=<?php echo $al['id']; ?>" class="btn btn-sm btn-outline-danger fw-bold" onclick="return confirm('کیا آپ واقعی اس طالب علم کو کمرے سے فارغ / خارج کرنا چاہتے ہیں؟');">
-                                                    <i class="fas fa-sign-out-alt me-1"></i> بیڈ خالی کریں
+                                                <a href="hostel.php?vacate_id=<?php echo $al['id']; ?>" class="btn btn-sm btn-outline-danger fw-bold" onclick="return confirm('<?php echo __('کیا آپ واقعی اس طالب علم کو کمرے سے فارغ / خارج کرنا چاہتے ہیں؟', 'Are you sure you want to vacate this bed?'); ?>');">
+                                                    <i class="fas fa-sign-out-alt me-1"></i> <?php echo __('بیڈ خالی کریں', 'Vacate Bed'); ?>
                                                 </a>
                                             </td>
                                         </tr>
@@ -390,38 +390,38 @@ $students = $pdo->query("
     <div class="modal-dialog">
         <form method="POST" class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title fw-bold"><i class="fas fa-plus-circle me-1"></i> نیا کمرہ بنائیں</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-plus-circle me-1"></i> <?php echo __('نیا کمرہ بنائیں', 'Add New Room'); ?></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">کمرہ نمبر <span class="text-danger">*</span></label>
-                        <input type="text" name="room_number" class="form-control" required placeholder="مثلاً 101، A-2">
+                        <label class="form-label fw-bold"><?php echo __('کمرہ نمبر', 'Room Number'); ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="room_number" class="form-control" required placeholder="<?php echo __('مثلاً 101، A-2', 'e.g. 101, A-2'); ?>">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">کمرے کا نام (اختیاری)</label>
-                        <input type="text" name="room_name" class="form-control" placeholder="مثلاً دار الحفظ، ابو حنیفہ ہال">
+                        <label class="form-label fw-bold"><?php echo __('کمرے کا نام (اختیاری)', 'Room Name (Optional)'); ?></label>
+                        <input type="text" name="room_name" class="form-control" placeholder="<?php echo __('مثلاً دار الحفظ، ابو حنیفہ ہال', 'e.g. Dar-ul-Hifz, Abu Hanifa Hall'); ?>">
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">بیڈز کی گنجائش <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold"><?php echo __('بیڈز کی گنجائش', 'Bed Capacity'); ?> <span class="text-danger">*</span></label>
                         <input type="number" name="capacity_beds" class="form-control" value="4" min="1" required>
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">ماہانہ ہاسٹل فیس (روپے)</label>
+                        <label class="form-label fw-bold"><?php echo __('ماہانہ ہاسٹل فیس (روپے)', 'Monthly Hostel Fee (PKR)'); ?></label>
                         <input type="number" step="0.01" name="monthly_fee" class="form-control" value="2000" required>
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">تفصیل / ہدایات</label>
+                    <label class="form-label fw-bold"><?php echo __('تفصیل / ہدایات', 'Description / Instructions'); ?></label>
                     <textarea name="remarks" class="form-control" rows="2"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="add_room" class="btn btn-success fw-bold">کمرہ محفوظ کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="add_room" class="btn btn-success fw-bold"><?php echo __('کمرہ محفوظ کریں', 'Save Room'); ?></button>
             </div>
         </form>
     </div>
@@ -432,25 +432,25 @@ $students = $pdo->query("
     <div class="modal-dialog">
         <form method="POST" class="modal-content">
             <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title fw-bold"><i class="fas fa-user-plus me-1"></i> طالب علم کو ہاسٹل الاٹ کریں</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-user-plus me-1"></i> <?php echo __('طالب علم کو ہاسٹل الاٹ کریں', 'Allocate Hostel to Student'); ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">کمرہ منتخب کریں <span class="text-danger">*</span></label>
+                    <label class="form-label fw-bold"><?php echo __('کمرہ منتخب کریں', 'Select Room'); ?> <span class="text-danger">*</span></label>
                     <select name="room_id" id="alloc_room_id" class="form-select" required>
-                        <option value="">-- کمرہ منتخب کریں --</option>
+                        <option value=""><?php echo __('-- کمرہ منتخب کریں --', '-- Select Room --'); ?></option>
                         <?php foreach ($rooms as $rm): ?>
                             <option value="<?php echo $rm['id']; ?>">
-                                کمرہ نمبر: <?php echo htmlspecialchars($rm['room_number']) . " (گنجائش: {$rm['capacity_beds']} بیڈز, فیس: Rs. {$rm['monthly_fee']})"; ?>
+                                <?php echo __('کمرہ نمبر:', 'Room No:') . ' ' . htmlspecialchars($rm['room_number']) . ' (' . __('گنجائش: ', 'Capacity: ') . $rm['capacity_beds'] . ' ' . __('بیڈز, فیس: Rs. ', 'Beds, Fee: Rs. ') . $rm['monthly_fee'] . ')'; ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">طالب علم منتخب کریں <span class="text-danger">*</span></label>
+                    <label class="form-label fw-bold"><?php echo __('طالب علم منتخب کریں', 'Select Student'); ?> <span class="text-danger">*</span></label>
                     <select name="student_id" class="form-select" required>
-                        <option value="">-- طالب علم منتخب کریں --</option>
+                        <option value=""><?php echo __('-- طالب علم منتخب کریں --', '-- Select Student --'); ?></option>
                         <?php foreach ($students as $st): ?>
                             <option value="<?php echo $st['id']; ?>">
                                 <?php echo htmlspecialchars($st['name']) . " ({$st['admission_number']} - {$st['class']})"; ?>
@@ -460,25 +460,25 @@ $students = $pdo->query("
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">بیڈ نمبر (اختیاری)</label>
-                        <input type="text" name="bed_number" class="form-control" placeholder="آٹو جنریٹ">
+                        <label class="form-label fw-bold"><?php echo __('بیڈ نمبر (اختیاری)', 'Bed Number (Optional)'); ?></label>
+                        <input type="text" name="bed_number" class="form-control" placeholder="<?php echo __('آٹو جنریٹ', 'Auto Generated'); ?>">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">الاٹمنٹ تاریخ</label>
+                        <label class="form-label fw-bold"><?php echo __('الاٹمنٹ تاریخ', 'Allocation Date'); ?></label>
                         <input type="date" name="allocation_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">نوٹس / سامان کی تفصیل</label>
-                    <textarea name="remarks" class="form-control" rows="2" placeholder="الماری، بستر وغیرہ"></textarea>
+                    <label class="form-label fw-bold"><?php echo __('نوٹس / سامان کی تفصیل', 'Notes / Items Details'); ?></label>
+                    <textarea name="remarks" class="form-control" rows="2" placeholder="<?php echo __('الماری، بستر وغیرہ', 'Cupboard, bed sheet, etc.'); ?>"></textarea>
                 </div>
                 <div class="alert alert-info py-2 small mb-0">
-                    <i class="fas fa-info-circle me-1"></i> الاٹمنٹ کے بعد طالب علم کا اسٹیٹس خودکار طور پر 'مقیم' ہو جائے گا اور ماہانہ انوائس بننے پر ہاسٹل فیس شامل ہوگی۔
+                    <i class="fas fa-info-circle me-1"></i> <?php echo __('الاٹمنٹ کے بعد طالب علم کا اسٹیٹس خودکار طور پر \'مقیم\' ہو جائے گا اور ماہانہ انوائس بننے پر ہاسٹل فیس شامل ہوگی۔', 'After allocation, student will be marked Resident and hostel fee will be included in monthly invoice.'); ?>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="allocate_student" class="btn btn-warning fw-bold text-dark">الاٹمنٹ محفوظ کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="allocate_student" class="btn btn-warning fw-bold text-dark"><?php echo __('الاٹمنٹ محفوظ کریں', 'Save Allocation'); ?></button>
             </div>
         </form>
     </div>

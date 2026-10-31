@@ -273,11 +273,11 @@ foreach ($classes as $c) {
 $allowed_periods = [];
 if ($class_id) {
     if (strpos($class_name, 'حفظ') !== false || strpos($class_name, 'گردان') !== false || strpos($class_name, 'حسن صوت') !== false) {
-        $base_periods = [1 => 'صبح', 2 => 'ناشتہ کے بعد', 3 => 'دوپہر', 4 => 'شام'];
+        $base_periods = ($lang === 'en') ? [1 => 'Morning', 2 => 'After Breakfast', 3 => 'Noon', 4 => 'Evening'] : [1 => 'صبح', 2 => 'ناشتہ کے بعد', 3 => 'دوپہر', 4 => 'شام'];
     } elseif (strpos($class_name, 'ناظرہ') !== false) {
-        $base_periods = [1 => 'صبح', 2 => 'شام'];
+        $base_periods = ($lang === 'en') ? [1 => 'Morning', 2 => 'Evening'] : [1 => 'صبح', 2 => 'شام'];
     } else {
-        $base_periods = [1 => 'سبق 1', 2 => 'سبق 2', 3 => 'سبق 3', 4 => 'سبق 4', 5 => 'سبق 5', 6 => 'سبق 6', 7 => 'مطالعہ', 8 => 'تکرار'];
+        $base_periods = ($lang === 'en') ? [1 => 'Period 1', 2 => 'Period 2', 3 => 'Period 3', 4 => 'Period 4', 5 => 'Period 5', 6 => 'Period 6', 7 => 'Self-Study (مطالعہ)', 8 => 'Revision (تکرار)'] : [1 => 'سبق 1', 2 => 'سبق 2', 3 => 'سبق 3', 4 => 'سبق 4', 5 => 'سبق 5', 6 => 'سبق 6', 7 => 'مطالعہ', 8 => 'تکرار'];
     }
 
     $selectedClassRow = null;
@@ -288,9 +288,9 @@ if ($class_id) {
         }
     }
     if (att_is_hifz_class($selectedClassRow ?? ['name' => $class_name])) {
-        $base_periods = [1 => 'صبح', 2 => 'ناشتہ کے بعد', 3 => 'دوپہر', 4 => 'شام'];
+        $base_periods = ($lang === 'en') ? [1 => 'Morning', 2 => 'After Breakfast', 3 => 'Noon', 4 => 'Evening'] : [1 => 'صبح', 2 => 'ناشتہ کے بعد', 3 => 'دوپہر', 4 => 'شام'];
     } elseif (att_is_nazira_class($selectedClassRow ?? ['name' => $class_name])) {
-        $base_periods = [1 => 'صبح', 2 => 'شام'];
+        $base_periods = ($lang === 'en') ? [1 => 'Morning', 2 => 'Evening'] : [1 => 'صبح', 2 => 'شام'];
     }
 
     if ($role === 'teacher' && !$can_class_attendance) {
@@ -454,10 +454,10 @@ if ($selected_class && $selected_period) {
             <div class="card-body text-center py-2">
                 <div class="d-flex justify-content-center align-items-center gap-3">
                     <button type="button" id="mic_btn" class="btn btn-light text-success fw-bold rounded-pill px-4 shadow" onclick="toggleVoice()">
-                        <i class="fas fa-microphone me-2"></i> <span>بولیں (Start)</span>
+                        <i class="fas fa-microphone me-2"></i> <span><?php echo __('بولیں (Start)', 'Start Voice'); ?></span>
                     </button>
                     <div id="status_text" class="text-white small text-start border-start ps-3" style="min-width: 250px;">
-                        <span class="opacity-75">مائیک بند ہے۔</span>
+                        <span class="opacity-75"><?php echo __('مائیک بند ہے۔', 'Mic is off.'); ?></span>
                     </div>
                 </div>
                 <div class="mt-2 small text-warning" style="font-size: 11px;">
@@ -471,13 +471,13 @@ if ($selected_class && $selected_period) {
         <div class="card p-3 shadow-sm border-top border-5 border-success mb-3">
             <div class="row align-items-center">
                 <div class="col-md-3">
-                    <label class="fw-bold">تاریخ منتخب کریں:</label>
+                    <label class="fw-bold"><?php echo __('تاریخ منتخب کریں:', 'Select Date:'); ?></label>
                     <input type="date" name="date" id="dateInput" class="form-control fw-bold" value="<?php echo htmlspecialchars($date); ?>" onchange="updateURL()">
                 </div>
                 <div class="col-md-3">
-                    <label class="fw-bold">کلاس منتخب کریں:</label>
+                    <label class="fw-bold"><?php echo __('کلاس منتخب کریں:', 'Select Class:'); ?></label>
                     <select name="class" id="classSelect" class="form-control fw-bold" onchange="updateURL()">
-                        <option value="">کلاس منتخب کریں</option>
+                        <option value=""><?php echo __('کلاس منتخب کریں', 'Select Class'); ?></option>
                         <?php foreach($classes as $c): ?>
                             <option value="<?php echo htmlspecialchars($c['name']); ?>" <?php echo ($selected_class === $c['name']) ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($c['name']); ?>
@@ -486,9 +486,9 @@ if ($selected_class && $selected_period) {
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="fw-bold">پیریڈ منتخب کریں:</label>
+                    <label class="fw-bold"><?php echo __('پیریڈ منتخب کریں:', 'Select Period:'); ?></label>
                     <select name="period_num" id="periodSelect" class="form-control fw-bold" onchange="updateURL()">
-                        <option value="">پیریڈ منتخب کریں</option>
+                        <option value=""><?php echo __('پیریڈ منتخب کریں', 'Select Period'); ?></option>
                         <?php foreach($allowed_periods as $p => $label): ?>
                             <option value="<?php echo htmlspecialchars($p); ?>" <?php echo ($selected_period == $p) ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($label); ?>
@@ -498,10 +498,10 @@ if ($selected_class && $selected_period) {
                 </div>
                 <div class="col-md-3 text-end d-flex align-items-end justify-content-end gap-2 mt-3 mt-md-0">
                     <button type="button" id="wa_btn" class="btn btn-outline-success fw-bold px-3 shadow" <?php echo (!$selected_class || !$selected_period || empty($students)) ? 'disabled' : ''; ?> onclick="openWhatsAppModal()">
-                        <i class="fab fa-whatsapp me-1"></i> WhatsApp متن
+                        <i class="fab fa-whatsapp me-1"></i> <?php echo __('WhatsApp متن', 'WhatsApp Text'); ?>
                     </button>
                     <button type="submit" name="save_attendance" id="save_btn" class="btn btn-success fw-bold px-3 shadow" <?php echo (!$selected_class || !$selected_period) ? 'disabled' : ''; ?>>
-                        <i class="fas fa-save me-1"></i> محفوظ کریں
+                        <i class="fas fa-save me-1"></i> <?php echo __('محفوظ کریں', 'Save'); ?>
                     </button>
                 </div>
             </div>
@@ -514,9 +514,9 @@ if ($selected_class && $selected_period) {
                     <table class="table table-bordered table-hover align-middle text-center m-0">
                         <thead style="background: #284D3D; color: white;">
                             <tr>
-                                <th style="width: 80px;">رول نمبر</th>
-                                <th class="text-start ps-3">نام</th>
-                                <th style="width: 450px;">حاضری اور تاخیر (پیریڈ <?php echo htmlspecialchars($selected_period); ?>)</th>
+                                <th style="width: 80px;"><?php echo __('رول نمبر', 'Roll No'); ?></th>
+                                <th class="text-start ps-3"><?php echo __('نام', 'Name'); ?></th>
+                                <th style="width: 450px;"><?php echo __('حاضری اور تاخیر', 'Attendance & Late'); ?> (<?php echo __('پیریڈ', 'Period'); ?> <?php echo htmlspecialchars($selected_period); ?>)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -526,7 +526,7 @@ if ($selected_class && $selected_period) {
                                 <tr class="table-warning border-warning">
                                     <td class="fw-bold h5 m-0 align-middle">
                                         <input type="hidden" name="teacher_ids[]" value="<?php echo htmlspecialchars($t['id']); ?>">
-                                        استاذ
+                                        <?php echo __('استاذ', 'Teacher'); ?>
                                     </td>
                                     <td class="text-start ps-3 m-0 align-middle">
                                         <span class="fw-bold h6 d-block mb-1 text-primary">
@@ -544,10 +544,10 @@ if ($selected_class && $selected_period) {
                                                         class="form-select form-select-sm fw-bold text-center" 
                                                         style="height: 45px;"
                                                         onchange="toggleTeacherPeriodLate(this, <?= $t['id'] ?>)">
-                                                    <option value="P" <?= $t['status'] == 'P' ? 'selected' : '' ?>>حاضر</option>
-                                                    <option value="L" <?= $t['status'] == 'L' ? 'selected' : '' ?>>رخصت</option>
-                                                    <option value="LA" <?= $t['status'] == 'LA' ? 'selected' : '' ?>>رخصت اتفاقی</option>
-                                                    <option value="OD" <?= $t['status'] == 'OD' ? 'selected' : '' ?>>بکار مدرسہ</option>
+                                                    <option value="P" <?= $t['status'] == 'P' ? 'selected' : '' ?>><?php echo __('حاضر', 'Present'); ?></option>
+                                                    <option value="L" <?= $t['status'] == 'L' ? 'selected' : '' ?>><?php echo __('رخصت', 'Leave'); ?></option>
+                                                    <option value="LA" <?= $t['status'] == 'LA' ? 'selected' : '' ?>><?php echo __('رخصت اتفاقی', 'Casual Leave'); ?></option>
+                                                    <option value="OD" <?= $t['status'] == 'OD' ? 'selected' : '' ?>><?php echo __('بکار مدرسہ', 'On Duty'); ?></option>
                                                 </select>
                                             </div>
                                             <div class="col-7" id="t_period_late_block_<?= $t['id'] ?>" 
@@ -556,13 +556,13 @@ if ($selected_class && $selected_period) {
                                                         id="t_period_late_sel_<?= $t['id'] ?>"
                                                         onchange="toggleTeacherPeriodMins(this, <?= $t['id'] ?>)"
                                                         style="height:38px; font-size:13px; flex:1;">
-                                                    <option value="0" <?= (int)($t['late_minutes'] ?? 0) == 0 ? 'selected' : '' ?>>بلا تاخیر</option>
-                                                    <option value="late" <?= (int)($t['late_minutes'] ?? 0) > 0 ? 'selected' : '' ?>>تاخیر ▼</option>
+                                                    <option value="0" <?= (int)($t['late_minutes'] ?? 0) == 0 ? 'selected' : '' ?>><?php echo __('بلا تاخیر', 'On Time'); ?></option>
+                                                    <option value="late" <?= (int)($t['late_minutes'] ?? 0) > 0 ? 'selected' : '' ?>><?php echo __('تاخیر ▼', 'Late ▼'); ?></option>
                                                 </select>
                                                 <input type="number" 
                                                        id="t_period_late_mins_<?= $t['id'] ?>"
                                                        value="<?= (int)($t['late_minutes'] ?? 0) > 0 ? (int)$t['late_minutes'] : '' ?>" 
-                                                       placeholder="منٹ"
+                                                       placeholder="<?php echo __('منٹ', 'Mins'); ?>"
                                                        min="1" max="999"
                                                        class="form-control form-control-sm text-center" 
                                                        style="height:38px; font-size:13px; width:70px; display:<?= (int)($t['late_minutes'] ?? 0) > 0 ? 'block' : 'none' ?>;"
@@ -599,7 +599,7 @@ if ($selected_class && $selected_period) {
                                 <td class="fw-bold bg-light h5 m-0"><?php echo htmlspecialchars($s['admission_number']); ?></td>
                                 <td class="text-start ps-3 m-0">
                                     <span class="fw-bold h6 d-block mb-1"><?php echo htmlspecialchars($s['name']); ?></span>
-                                    <small class="text-muted" style="font-size: 12px;">ولد: <?php echo htmlspecialchars($s['father_name']); ?></small>
+                                    <small class="text-muted" style="font-size: 12px;"><?php echo __('ولد:', 'S/O:'); ?> <?php echo htmlspecialchars($s['father_name']); ?></small>
                                 </td>
                                 <td>
                                     <!-- Hidden field that stores the final late minutes value -->
@@ -625,13 +625,13 @@ if ($selected_class && $selected_period) {
                                                     id="late_sel_<?= $s['id'] ?>_<?= htmlspecialchars($selected_period) ?>"
                                                     onchange="toggleStudentMins(this, <?= $s['id'] ?>, '<?= htmlspecialchars($selected_period) ?>')"
                                                     style="height:38px; font-size:13px; flex:1;">
-                                                <option value="0" <?= $late_mins == 0 ? 'selected' : '' ?>>بلا تاخیر</option>
-                                                <option value="late" <?= $late_mins > 0 ? 'selected' : '' ?>>تاخیر ▼</option>
+                                                <option value="0" <?= $late_mins == 0 ? 'selected' : '' ?>><?php echo __('بلا تاخیر', 'On Time'); ?></option>
+                                                <option value="late" <?= $late_mins > 0 ? 'selected' : '' ?>><?php echo __('تاخیر ▼', 'Late ▼'); ?></option>
                                             </select>
                                             <input type="number" 
                                                    id="late_mins_<?= $s['id'] ?>_<?= htmlspecialchars($selected_period) ?>"
                                                    value="<?= $late_mins > 0 ? $late_mins : '' ?>" 
-                                                   placeholder="منٹ"
+                                                   placeholder="<?php echo __('منٹ', 'Mins'); ?>"
                                                    min="1" max="999"
                                                    class="form-control form-control-sm text-center" 
                                                    style="height:38px; font-size:13px; width:70px; display:<?= $late_mins > 0 ? 'block' : 'none' ?>;"

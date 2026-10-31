@@ -3,7 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../db_helper.dart';
+import '../utils/globals.dart';
 import '../utils/network_service.dart';
+import 'offline_sync_queue.dart';
 import 'sync_config.dart';
 import 'sync_download.dart';
 import 'sync_models.dart';
@@ -114,7 +116,22 @@ class SyncEngine {
 
       int completedSteps = 0;
 
-    // 1. Upload Phase
+      // 0. Offline Sync Queue Drain Phase
+      try {
+        final sqliteDb = await db.database;
+        final tid = currentTenantId.value ?? 1;
+        final drained = await OfflineSyncQueue.processPendingQueue(
+          db: sqliteDb,
+          tenantId: tid,
+        );
+        if (drained > 0) {
+          uploadedPerTable['offline_queue'] = drained;
+        }
+      } catch (e) {
+        debugPrint('Offline queue drain error: $e');
+      }
+
+      // 1. Upload Phase
     for (final table in uploadableTables) {
       progress.value = SyncProgress(
         currentTable: table,

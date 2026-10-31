@@ -48,38 +48,38 @@ $recent = $stmt->fetchAll();
     <div class="row">
         <div class="col-md-4">
             <div class="card shadow border-danger border-top border-3">
-                <div class="card-header bg-white fw-bold text-danger"><i class="fas fa-exclamation-triangle me-2"></i> شکایت / نوٹ درج کریں</div>
+                <div class="card-header bg-white fw-bold text-danger"><i class="fas fa-exclamation-triangle me-2"></i> <?php echo __('شکایت / نوٹ درج کریں', 'Enter Complaint / Note'); ?></div>
                 <div class="card-body">
                     <form method="POST">
                         <div class="mb-3">
-                            <label class="fw-bold text-primary mb-1"><i class="fas fa-users me-1"></i> طلباء منتخب کریں (ایک یا ایک سے زیادہ)</label>
-                            <select name="std_ids[]" class="form-select select2" multiple="multiple" required data-placeholder="-- طلباء منتخب کریں --">
+                            <label class="fw-bold text-primary mb-1"><i class="fas fa-users me-1"></i> <?php echo __('طلباء منتخب کریں (ایک یا ایک سے زیادہ)', 'Select Students (One or more)'); ?></label>
+                            <select name="std_ids[]" class="form-select select2" multiple="multiple" required data-placeholder="<?php echo __('-- طلباء منتخب کریں --', '-- Select Students --'); ?>">
                                 <?php foreach($students as $s): ?>
                                     <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?><?php echo !empty($s['father_name']) ? ' ولد ' . htmlspecialchars($s['father_name']) : ''; ?> (ID: <?php echo htmlspecialchars($s['admission_number']); ?>)</option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label>تاریخ</label>
+                            <label><?php echo __('تاریخ', 'Date'); ?></label>
                             <input type="date" name="date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                         </div>
                         <div class="mb-3">
-                            <label>کیٹیگری (Category)</label>
+                            <label><?php echo __('کیٹیگری (Category)', 'Category'); ?></label>
                             <select name="category" id="cat_select" class="form-select" onchange="if(this.value=='__NEW__') document.getElementById('new_cat_div').style.display='block'; else document.getElementById('new_cat_div').style.display='none';" required>
-                                <option value="اساتذہ/مدرسہ کی طرف سے (نوٹ)">اساتذہ/مدرسہ کی طرف سے (نوٹ)</option>
+                                <option value="اساتذہ/مدرسہ کی طرف سے (نوٹ)"><?php echo __('اساتذہ/مدرسہ کی طرف سے (نوٹ)', 'From Teacher/Madrasa (Note)'); ?></option>
                                 <?php foreach($categories as $c): if($c != 'اساتذہ/مدرسہ کی طرف سے (نوٹ)') echo "<option value='$c'>$c</option>"; endforeach; ?>
-                                <option value="__NEW__" class="fw-bold text-danger">+ نئی کیٹیگری شامل کریں</option>
+                                <option value="__NEW__" class="fw-bold text-danger"><?php echo __('+ نئی کیٹیگری شامل کریں', '+ Add New Category'); ?></option>
                             </select>
                         </div>
                         <div class="mb-3" id="new_cat_div" style="display:none;">
-                            <label>نئی کیٹیگری کا نام</label>
-                            <input type="text" name="new_category" class="form-control" placeholder="مثلاً: صفائی، ڈسپلن...">
+                            <label><?php echo __('نئی کیٹیگری کا نام', 'New Category Name'); ?></label>
+                            <input type="text" name="new_category" class="form-control" placeholder="<?php echo __('مثلاً: صفائی، ڈسپلن...', 'e.g. Cleanliness, Discipline...'); ?>">
                         </div>
                         <div class="mb-3">
-                            <label>تفصیل (شکایت / نوٹ)</label>
-                            <textarea name="complaint" class="form-control" rows="4" placeholder="مثلاً: آج سبق یاد نہیں کیا، یا کلاس میں شرارت کی۔۔۔" required></textarea>
+                            <label><?php echo __('تفصیل (شکایت / نوٹ)', 'Details (Complaint / Note)'); ?></label>
+                            <textarea name="complaint" class="form-control" rows="4" placeholder="<?php echo __('مثلاً: آج سبق یاد نہیں کیا، یا کلاس میں شرارت کی۔۔۔', 'e.g. Lesson not memorized, disruption in class...'); ?>" required></textarea>
                         </div>
-                        <button type="submit" name="save_complaint" class="btn btn-danger w-100 fw-bold">محفوظ کریں</button>
+                        <button type="submit" name="save_complaint" class="btn btn-danger w-100 fw-bold"><?php echo __('محفوظ کریں', 'Save'); ?></button>
                     </form>
                 </div>
             </div>
@@ -88,11 +88,11 @@ $recent = $stmt->fetchAll();
         <div class="col-md-8">
             <div class="card shadow">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-history me-2"></i> حالیہ ریکارڈ (آخری 50)</span>
+                    <span><i class="fas fa-history me-2"></i> <?php echo __('حالیہ ریکارڈ (آخری 50)', 'Recent Records (Last 50)'); ?></span>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
-                        <thead><tr><th>تاریخ</th><th>طالب علم</th><th>شکایت</th><th>ایکشن</th></tr></thead>
+                        <thead><tr><th><?php echo __('تاریخ', 'Date'); ?></th><th><?php echo __('طالب علم', 'Student'); ?></th><th><?php echo __('شکایت', 'Complaint'); ?></th><th><?php echo __('ایکشن', 'Action'); ?></th></tr></thead>
                         <tbody>
                             <?php foreach($recent as $r): ?>
                             <tr>

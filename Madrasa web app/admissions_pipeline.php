@@ -380,10 +380,10 @@ $all_inquiries = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // گروپ بندی برائے 4 کالمز
 $stages = [
-    'Pending'     => ['title' => 'موصولہ درخواستیں', 'color' => '#0288d1', 'icon' => 'fa-inbox', 'items' => []],
-    'Interviewed' => ['title' => 'ٹیسٹ و انٹرویو',   'color' => '#f57c00', 'icon' => 'fa-comments', 'items' => []],
-    'Accepted'    => ['title' => 'منظور شدہ داخلے',  'color' => '#2e7d32', 'icon' => 'fa-check-circle', 'items' => []],
-    'Rejected'    => ['title' => 'مسترد شدہ',        'color' => '#c62828', 'icon' => 'fa-times-circle', 'items' => []]
+    'Pending'     => ['title' => __('موصولہ درخواستیں', 'Received Applications'), 'color' => '#0288d1', 'icon' => 'fa-inbox', 'items' => []],
+    'Interviewed' => ['title' => __('ٹیسٹ و انٹرویو', 'Test & Interview'),   'color' => '#f57c00', 'icon' => 'fa-comments', 'items' => []],
+    'Accepted'    => ['title' => __('منظور شدہ داخلے', 'Approved Admissions'),  'color' => '#2e7d32', 'icon' => 'fa-check-circle', 'items' => []],
+    'Rejected'    => ['title' => __('مسترد شدہ', 'Rejected'),        'color' => '#c62828', 'icon' => 'fa-times-circle', 'items' => []]
 ];
 
 foreach ($all_inquiries as $inq) {
@@ -401,19 +401,19 @@ $total_count = count($all_inquiries);
         <div>
             <h2 class="fw-bold text-dark m-0 d-flex align-items-center">
                 <i class="fas fa-stream text-primary me-2"></i>
-                <?php echo $is_masjid ? 'مراحلِ داخلہ (مکتب)' : 'مراحلِ داخلہ'; ?>
+                <?php echo $is_masjid ? __('مراحلِ داخلہ (مکتب)', 'Admission Pipeline (Maktab)') : __('مراحلِ داخلہ', 'Admission Pipeline'); ?>
                 <span class="badge bg-<?php echo $is_masjid ? 'info' : 'success'; ?> ms-3 fs-6">
-                    <?php echo $is_masjid ? 'مسجد / مکتب موڈ' : 'مدرسہ موڈ'; ?>
+                    <?php echo $is_masjid ? __('مسجد / مکتب موڈ', 'Masjid / Maktab Mode') : __('مدرسہ موڈ', 'Madrasa Mode'); ?>
                 </span>
             </h2>
-            <p class="text-muted m-0 small mt-1">نئے داخلوں کے مراحل، انٹرویو، منظوری اور طالب علم اندراج کا بورڈ</p>
+            <p class="text-muted m-0 small mt-1"><?php echo __('نئے داخلوں کے مراحل، انٹرویو، منظوری اور طالب علم اندراج کا بورڈ', 'New admissions stages, interviews, approvals and student enrollment board'); ?></p>
         </div>
         <div class="d-flex gap-2 mt-2 mt-md-0">
             <button class="btn btn-outline-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#directEnrollModal">
-                <i class="fas fa-user-plus me-1"></i> ڈائریکٹ طالب علم شامل کریں
+                <i class="fas fa-user-plus me-1"></i> <?php echo __('ڈائریکٹ طالب علم شامل کریں', 'Direct Admission'); ?>
             </button>
             <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#newInquiryModal">
-                <i class="fas fa-file-signature me-1"></i> نئی درخواست درج کریں
+                <i class="fas fa-file-signature me-1"></i> <?php echo __('نئی درخواست درج کریں', 'New Application'); ?>
             </button>
         </div>
     </div>
@@ -439,12 +439,12 @@ $total_count = count($all_inquiries);
                 <div class="col-md-5">
                     <div class="input-group">
                         <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                        <input type="text" name="search" class="form-control border-start-0" placeholder="نام، ولدیت یا موبائل نمبر تلاش کریں..." value="<?php echo htmlspecialchars($search); ?>">
+                        <input type="text" name="search" class="form-control border-start-0" placeholder="<?php echo __('نام، ولدیت یا موبائل نمبر تلاش کریں...', 'Search name, father name or mobile...'); ?>" value="<?php echo htmlspecialchars($search); ?>">
                     </div>
                 </div>
                 <div class="col-md-4">
                     <select name="class_filter" class="form-select">
-                        <option value="">-- تمام کلاسز --</option>
+                        <option value=""><?php echo __('-- تمام کلاسز --', '-- All Classes --'); ?></option>
                         <?php foreach ($classes as $c): ?>
                             <option value="<?php echo htmlspecialchars($c); ?>" <?php if ($class_filter === $c) echo 'selected'; ?>>
                                 <?php echo htmlspecialchars($c); ?>
@@ -454,10 +454,10 @@ $total_count = count($all_inquiries);
                 </div>
                 <div class="col-md-3 d-flex gap-2">
                     <button type="submit" class="btn btn-dark w-100 fw-bold">
-                        <i class="fas fa-filter me-1"></i> فلٹر کریں
+                        <i class="fas fa-filter me-1"></i> <?php echo __('فلٹر کریں', 'Filter'); ?>
                     </button>
                     <?php if ($search !== '' || $class_filter !== ''): ?>
-                        <a href="admissions_pipeline.php" class="btn btn-outline-secondary">ری سیٹ</a>
+                        <a href="admissions_pipeline.php" class="btn btn-outline-secondary"><?php echo __('ری سیٹ', 'Reset'); ?></a>
                     <?php endif; ?>
                 </div>
             </form>
@@ -487,7 +487,7 @@ $total_count = count($all_inquiries);
                         <?php if (empty($stage['items'])): ?>
                             <div class="text-center text-muted py-5">
                                 <i class="fas fa-folder-open fa-2x mb-2 opacity-50"></i>
-                                <p class="small m-0">اس مرحلے میں کوئی درخواست نہیں</p>
+                                <p class="small m-0"><?php echo __('اس مرحلے میں کوئی درخواست نہیں', 'No applications in this stage'); ?></p>
                             </div>
                         <?php else: ?>
                             <?php foreach ($stage['items'] as $item): 
@@ -509,7 +509,7 @@ $total_count = count($all_inquiries);
                                             <?php echo htmlspecialchars($item['student_name']); ?>
                                         </h6>
                                         <p class="small text-muted mb-1">
-                                            <strong>ولدیت:</strong> <?php echo htmlspecialchars($item['father_name']); ?>
+                                            <strong><?php echo __('ولدیت:', 'Father:'); ?></strong> <?php echo htmlspecialchars($item['father_name']); ?>
                                         </p>
 
                                         <div class="d-flex flex-wrap gap-1 mb-2">
@@ -532,7 +532,7 @@ $total_count = count($all_inquiries);
                                                     <?php echo htmlspecialchars($item['phone']); ?>
                                                 </a>
                                                 <a href="https://wa.me/<?php echo preg_replace('/[^0-9]/', '', $item['phone']); ?>" target="_blank" class="badge bg-success text-white text-decoration-none">
-                                                    <i class="fab fa-whatsapp"></i> واٹس ایپ
+                                                    <i class="fab fa-whatsapp"></i> <?php echo __('واٹس ایپ', 'WhatsApp'); ?>
                                                 </a>
                                             </p>
                                         <?php endif; ?>
@@ -540,7 +540,7 @@ $total_count = count($all_inquiries);
                                         <?php if (!empty($item['interview_date'])): ?>
                                             <div class="p-2 rounded bg-warning bg-opacity-10 border border-warning border-opacity-25 small mb-2">
                                                 <div class="fw-bold text-warning-emphasis">
-                                                    <i class="fas fa-calendar-check me-1"></i> انٹرویو: <?php echo htmlspecialchars($item['interview_date']); ?>
+                                                    <i class="fas fa-calendar-check me-1"></i> <?php echo __('انٹرویو:', 'Interview:'); ?> <?php echo htmlspecialchars($item['interview_date']); ?>
                                                 </div>
                                                 <?php if (!empty($item['interview_notes'])): ?>
                                                     <div class="text-muted small mt-1"><?php echo htmlspecialchars($item['interview_notes']); ?></div>
@@ -551,7 +551,7 @@ $total_count = count($all_inquiries);
                                         <!-- اینرولڈ بیج اگر کنورٹ ہو چکا ہو -->
                                         <?php if ($is_converted): ?>
                                             <div class="alert alert-success p-1 mb-2 text-center small fw-bold">
-                                                <i class="fas fa-check-double me-1"></i> باقاعدہ طالب علم بن چکا ہے
+                                                <i class="fas fa-check-double me-1"></i> <?php echo __('باقاعدہ طالب علم بن چکا ہے', 'Enrolled as Regular Student'); ?>
                                             </div>
                                         <?php endif; ?>
 
@@ -560,7 +560,7 @@ $total_count = count($all_inquiries);
                                             <!-- مرحلہ منتقلی ڈراپ ڈاؤن -->
                                             <div class="dropdown">
                                                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                                    منتقل کریں
+                                                    <?php echo __('منتقل کریں', 'Move'); ?>
                                                 </button>
                                                 <ul class="dropdown-menu shadow">
                                                     <?php foreach ($stages as $k => $s): if ($k === $stage_key) continue; ?>
@@ -580,14 +580,14 @@ $total_count = count($all_inquiries);
                                             <!-- انٹرویو تفصیل بٹن -->
                                             <button class="btn btn-sm btn-outline-warning" 
                                                     onclick="openInterviewModal(<?php echo htmlspecialchars(json_encode($item)); ?>)">
-                                                <i class="fas fa-pencil-alt"></i> انٹرویو
+                                                <i class="fas fa-pencil-alt"></i> <?php echo __('انٹرویو', 'Interview'); ?>
                                             </button>
 
                                             <!-- طالب علم بنانے کا سنہری بٹن (صرف Accepted پر اگر کنورٹ نہ ہوا ہو) -->
                                             <?php if ($stage_key === 'Accepted' && !$is_converted): ?>
                                                 <button class="btn btn-sm btn-success fw-bold flex-grow-1" 
                                                         onclick="openEnrollModal(<?php echo htmlspecialchars(json_encode($item)); ?>)">
-                                                    <i class="fas fa-user-plus me-1"></i> طالب علم بنائیں
+                                                    <i class="fas fa-user-plus me-1"></i> <?php echo __('طالب علم بنائیں', 'Enroll Student'); ?>
                                                 </button>
                                             <?php endif; ?>
 

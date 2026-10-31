@@ -238,9 +238,9 @@ class _LoginPageState extends State<LoginPage> {
             (isTrial ? 'trial' : 'active');
         final tSystemType = uniBody['tenant_system_type']?.toString() ??
             (uniBody['system_type']?.toString() ?? 'Both');
-        final maxStudents = int.tryParse(uniBody['max_students']?.toString() ?? '50') ?? 50;
-        final maxClasses = int.tryParse(uniBody['max_classes']?.toString() ?? '3') ?? 3;
-        final maxTeachers = int.tryParse(uniBody['max_teachers']?.toString() ?? '4') ?? 4;
+        final maxStudents = int.tryParse(uniBody['max_students']?.toString() ?? '20') ?? 20;
+        final maxClasses = int.tryParse(uniBody['max_classes']?.toString() ?? '1') ?? 1;
+        final maxTeachers = int.tryParse(uniBody['max_teachers']?.toString() ?? '2') ?? 2;
 
         currentTenantIsTrial.value = isTrial;
         currentTenantTrialDaysLeft.value = trialDaysLeft;

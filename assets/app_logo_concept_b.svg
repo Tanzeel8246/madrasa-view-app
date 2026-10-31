@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Dark Luxury Slate Emerald Base -->
+    <radialGradient id="bgB" cx="50%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#0c2e22" />
+      <stop offset="55%" stop-color="#051610" />
+      <stop offset="100%" stop-color="#020806" />
+    </radialGradient>
+
+    <!-- Sovereign 24K Gold Gradient -->
+    <linearGradient id="goldB" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fffbeb" />
+      <stop offset="20%" stop-color="#fde047" />
+      <stop offset="55%" stop-color="#eab308" />
+      <stop offset="85%" stop-color="#ca8a04" />
+      <stop offset="100%" stop-color="#854d0e" />
+    </linearGradient>
+
+    <!-- Royal Emerald Gradient -->
+    <linearGradient id="emeraldB" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="50%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#044e37" />
+    </linearGradient>
+
+    <!-- Cyan Glow -->
+    <linearGradient id="cyanB" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+
+    <filter id="glowB" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Squircle Base -->
+  <rect x="20" y="20" width="472" height="472" rx="112" fill="url(#bgB)" stroke="url(#goldB)" stroke-width="5" />
+  <rect x="32" y="32" width="448" height="448" rx="100" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1.5" />
+
+  <!-- Outer Concentric Orbit -->
+  <circle cx="256" cy="205" r="145" fill="none" stroke="url(#goldB)" stroke-width="1.8" opacity="0.35" />
+  <circle cx="256" cy="205" r="158" fill="none" stroke="url(#cyanB)" stroke-width="1.2" stroke-dasharray="6,4" opacity="0.4" />
+
+  <!-- ============================================================ -->
+  <!-- ICONIC EMBLEM: SWEEPING CRESCENT EMBRACING THE MIHRAB BOOK -->
+  <!-- ============================================================ -->
+  <g id="minimal-emblem" transform="translate(0, -10)">
+
+    <!-- Sweeping Grand Golden Crescent (شاہی سنہری ہلال) -->
+    <path d="M 285 70 C 180 70 120 145 120 220 C 120 295 185 345 270 345 C 315 345 355 330 380 305 C 320 325 240 310 190 260 C 145 215 155 140 230 95 C 255 80 280 75 285 70 Z" 
+          fill="url(#goldB)" 
+          filter="url(#glowB)" />
+
+    <!-- Center Majestic Mihrab Silhouette (مرکزی زمردی محراب) -->
+    <path d="M 205 310 L 205 210 Q 205 130 270 100 Q 335 130 335 210 L 335 310 Z" 
+          fill="url(#emeraldB)" 
+          stroke="url(#goldB)" 
+          stroke-width="2.5" />
+
+    <!-- Inner Golden Arched Halo -->
+    <path d="M 218 310 L 218 218 Q 218 152 270 125 Q 322 152 322 218 L 322 310" 
+          fill="none" 
+          stroke="url(#goldB)" 
+          stroke-width="1.5" 
+          opacity="0.8" />
+
+    <!-- Floating 8-Point Star at the Arch Apex -->
+    <g transform="translate(270, 78)" filter="url(#glowB)">
+      <polygon points="0,-14 4,-4 14,0 4,4 0,14 -4,4 -14,0 -4,-4" fill="url(#goldB)" />
+      <circle cx="0" cy="0" r="2.5" fill="#ffffff" />
+    </g>
+
+    <!-- Open Holy Quran Inside Mihrab Heart (محراب کے دل میں کھلا قرآنِ پاک) -->
+    <g transform="translate(20, 25)">
+      <!-- Left Page -->
+      <path d="M 250 200 C 225 185 185 190 160 200 C 158 228 160 248 160 250 C 190 240 225 235 250 255 Z" 
+            fill="#ffffff" stroke="#c7b17c" stroke-width="1.5" />
+      <!-- Right Page -->
+      <path d="M 250 200 C 275 185 315 190 340 200 C 342 228 340 248 340 250 C 310 240 275 235 250 255 Z" 
+            fill="#f8fafc" stroke="#c7b17c" stroke-width="1.5" />
+
+      <!-- Quranic Inscriptions -->
+      <line x1="175" y1="212" x2="235" y2="224" stroke="url(#goldB)" stroke-width="2.2" stroke-linecap="round" />
+      <line x1="175" y1="222" x2="235" y2="234" stroke="#059669" stroke-width="1.8" stroke-linecap="round" />
+      <line x1="175" y1="232" x2="235" y2="244" stroke="url(#goldB)" stroke-width="1.8" stroke-linecap="round" />
+
+      <line x1="265" y1="224" x2="325" y2="212" stroke="url(#goldB)" stroke-width="2.2" stroke-linecap="round" />
+      <line x1="265" y1="234" x2="325" y2="222" stroke="#059669" stroke-width="1.8" stroke-linecap="round" />
+      <line x1="265" y1="244" x2="325" y2="232" stroke="url(#goldB)" stroke-width="1.8" stroke-linecap="round" />
+
+      <!-- Stand -->
+      <path d="M 225 250 L 190 285 L 208 290 L 242 258 Z" fill="#92400e" stroke="url(#goldB)" stroke-width="1.2" />
+      <path d="M 275 250 L 310 285 L 292 290 L 258 258 Z" fill="#b45309" stroke="url(#goldB)" stroke-width="1.2" />
+    </g>
+
+    <!-- Bottom Tech Nodes Connection -->
+    <line x1="150" y1="315" x2="390" y2="315" stroke="url(#goldB)" stroke-width="1.5" opacity="0.6" />
+    <circle cx="270" cy="315" r="4.5" fill="url(#goldB)" />
+    <circle cx="205" cy="315" r="3.5" fill="#38bdf8" />
+    <circle cx="335" cy="315" r="3.5" fill="#38bdf8" />
+  </g>
+
+  <!-- Typography Banner -->
+  <g transform="translate(0, 362)">
+    <rect x="80" y="0" width="352" height="54" rx="27" fill="rgba(6, 24, 18, 0.85)" stroke="url(#goldB)" stroke-width="2" />
+    <text x="256" y="37" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="31" font-weight="900" letter-spacing="4" fill="url(#goldB)">
+      MC-MMS
+    </text>
+    <text x="256" y="78" text-anchor="middle" font-family="'Noto Nastaliq Urdu', 'Plus Jakarta Sans', Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="1" fill="#38bdf8">
+      بائے مائنڈ کرافٹس اے آئی (Cloud ERP)
+    </text>
+    <text x="256" y="98" text-anchor="middle" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="10" font-weight="600" letter-spacing="3" fill="#94a3b8">
+      SMART MANAGEMENT ECOSYSTEM
+    </text>
+  </g>
+</svg>

@@ -72,7 +72,9 @@ function handle_sync_up($pdo, $user, $input = null) {
         'husn_saut_record' => [], 'admission_inquiries' => [], 'lib_books' => [], 'lib_issues' => [],
         'inventory_items' => [], 'inventory_sales' => [], 'hostel_rooms' => [], 'hostel_allocations' => [],
         'job_postings' => [], 'job_applicants' => [], 'web_pages' => [], 'announcements' => [],
-        'teacher_leaves' => []
+        'teacher_leaves' => [], 'course_structure' => [], 'course_subjects' => [],
+        'student_course_enrollment' => [], 'exam_subject_results' => [],
+        'student_year_promotion' => [], 'settings' => []
     ];
     $serverIds = [
         'finance_entries' => [],
@@ -81,7 +83,28 @@ function handle_sync_up($pdo, $user, $input = null) {
         'notices' => [],
         'students' => [],
         'maktab_students' => [],
-        'teacher_leaves' => []
+        'teacher_leaves' => [],
+        'exams' => [],
+        'lib_books' => [],
+        'lib_issues' => [],
+        'inventory_items' => [],
+        'inventory_sales' => [],
+        'hostel_rooms' => [],
+        'hostel_allocations' => [],
+        'job_postings' => [],
+        'job_applicants' => [],
+        'web_pages' => [],
+        'announcements' => [],
+        'course_structure' => [],
+        'course_subjects' => [],
+        'student_course_enrollment' => [],
+        'exam_subject_results' => [],
+        'student_year_promotion' => [],
+        'settings' => [],
+        'acc_vouchers' => [],
+        'acc_ledger_entries' => [],
+        'complaints' => [],
+        'parent_complaints' => [],
     ];
     $syncErrors = [];
 

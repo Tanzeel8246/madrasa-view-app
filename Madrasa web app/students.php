@@ -358,29 +358,40 @@ if(isset($_GET['edit'])) {
             <div class="card-body text-center py-2">
                 <div class="d-flex justify-content-center align-items-center gap-3">
                     <button type="button" id="mic_btn" class="btn btn-light text-primary fw-bold rounded-pill px-4 shadow" onclick="toggleVoice()">
-                        <i class="fas fa-microphone me-2"></i> <span>بولیں (Start)</span>
+                        <i class="fas fa-microphone me-2"></i> <span><?php echo ($lang === 'en') ? 'Speak (Start)' : 'بولیں (Start)'; ?></span>
                     </button>
                     <div id="status_text" class="text-white small text-start border-start ps-3" style="min-width: 250px;">
-                        <span class="opacity-75">مائیک بند ہے۔</span>
+                        <span class="opacity-75"><?php echo ($lang === 'en') ? 'Mic is off.' : 'مائیک بند ہے۔'; ?></span>
                     </div>
                 </div>
-                <div class="mt-2 small"><b>طریقہ:</b> "نام احمد، ولدیت علی، رول نمبر 50، کلاس حفظ، رابطہ 03001234567، پتہ لاہور... اوکے"</div>
+                <div class="mt-2 small"><b><?php echo ($lang === 'en') ? 'Format:' : 'طریقہ:'; ?></b> <?php echo ($lang === 'en') ? '"Name Ahmed, Father Ali, Roll 50, Class Hifz, Contact 03001234567, Address Lahore... OK"' : '"نام احمد، ولدیت علی، رول نمبر 50، کلاس حفظ، رابطہ 03001234567، پتہ لاہور... اوکے"'; ?></div>
             </div>
         </div>
     </div>
 
+    <?php $studentQuota = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'students', $cur_tenant_id) : ['allowed' => true]; ?>
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="text-primary fw-bold m-0"><i class="fas fa-users"></i> طلباء کا ریکارڈ</h3>
+        <h3 class="text-primary fw-bold m-0"><i class="fas fa-users"></i> <?php echo ($lang === 'en') ? 'Students Record' : 'طلباء کا ریکارڈ'; ?></h3>
         <button class="btn btn-success fw-bold shadow" onclick="toggleForm()">
-            <i class="fas fa-user-plus me-2"></i> نیا طالب علم شامل کریں
+            <i class="fas fa-user-plus me-2"></i> <?php echo ($lang === 'en') ? 'Add New Student' : 'نیا طالب علم شامل کریں'; ?>
         </button>
     </div>
 
     <?php if(isset($msg)) echo $msg; ?>
+    <?php if (!$studentQuota['allowed'] && !$edit_data): ?>
+        <div class="alert alert-danger fw-bold shadow-sm p-3 mb-3 border-2 border-danger d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-lock me-2 fs-5"></i> <strong><?php echo ($lang === 'en') ? 'Limit Reached:' : 'حد مکمل (Quota Reached):'; ?></strong> <?php echo ($lang === 'en') ? 'You have reached the student limit for your subscription plan. Please upgrade your plan to register new students.' : htmlspecialchars($studentQuota['message']); ?>
+            </div>
+            <a href="subscription_status.php" class="btn btn-sm btn-danger px-3 py-1 fw-bold text-white shadow-sm">
+                <i class="fas fa-arrow-up me-1"></i> <?php echo ($lang === 'en') ? 'Upgrade Plan' : 'سبسکرپشن اپ گریڈ کریں'; ?>
+            </a>
+        </div>
+    <?php endif; ?>
 
     <div id="student_form_container" class="card shadow-sm mb-4 border-top border-5 border-primary" style="display: <?php echo $show_form ? 'block' : 'none'; ?>;">
         <div class="card-header bg-light">
-            <h5 class="fw-bold m-0 text-primary"><?php echo $edit_data ? 'ریکارڈ اپڈیٹ کریں' : 'نیا اندراج'; ?></h5>
+            <h5 class="fw-bold m-0 text-primary"><?php echo $edit_data ? __('ریکارڈ اپڈیٹ کریں', 'Update Record') : __('نیا اندراج', 'New Enrollment'); ?></h5>
         </div>
         <div class="card-body">
             <form method="POST" enctype="multipart/form-data">
@@ -389,22 +400,22 @@ if(isset($_GET['edit'])) {
                 <input type="hidden" name="old_photo" value="<?php echo $edit_data['photo']??''; ?>">
                 <div class="row g-3">
                     <div class="col-md-3">
-                        <label class="fw-bold">نام طالب علم <span class="text-danger">*</span></label>
+                        <label class="fw-bold"><?php echo __('نام طالب علم', 'Student Name'); ?> <span class="text-danger">*</span></label>
                         <input type="text" name="name" id="s_name" class="form-control" required value="<?php echo $edit_data['name']??''; ?>">
                     </div>
                     <div class="col-md-3">
-                        <label class="fw-bold">ولدیت <span class="text-danger">*</span></label>
+                        <label class="fw-bold"><?php echo __('ولدیت', 'Father Name'); ?> <span class="text-danger">*</span></label>
                         <input type="text" name="father_name" id="s_fname" class="form-control" required value="<?php echo $edit_data['father_name']??''; ?>">
                     </div>
                     <div class="col-md-3">
-                        <label class="fw-bold">داخلہ نمبر (Registration No) <span class="text-danger">*</span></label>
-                        <input type="text" name="admission_number" id="s_adm" class="form-control" required value="<?php echo $edit_data['admission_number'] ?? $suggested_adm_no; ?>" placeholder="مثلاً <?php echo $suggested_adm_no; ?>">
-                        <small class="text-muted">آخری نمبر: <b><?php echo $current_hijri_year . "-" . sprintf("%02d", $last_serial); ?></b></small>
+                        <label class="fw-bold"><?php echo __('داخلہ نمبر (Registration No)', 'Admission / Reg No'); ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="admission_number" id="s_adm" class="form-control" required value="<?php echo $edit_data['admission_number'] ?? $suggested_adm_no; ?>" placeholder="<?php echo ($lang === 'en') ? 'e.g. ' . $suggested_adm_no : 'مثلاً ' . $suggested_adm_no; ?>">
+                        <small class="text-muted"><?php echo __('آخری نمبر:', 'Last Serial:'); ?> <b><?php echo $current_hijri_year . "-" . sprintf("%02d", $last_serial); ?></b></small>
                     </div>
                     <div class="col-md-3">
-                        <label class="fw-bold">کلاس / درجہ</label>
+                        <label class="fw-bold"><?php echo __('کلاس / درجہ', 'Class / Grade'); ?></label>
                         <select name="class" id="s_class" class="form-control" onchange="toggleQuranEdition(this.value)">
-                            <option value="">کلاس منتخب کریں</option>
+                            <option value=""><?php echo __('کلاس منتخب کریں', 'Select Class'); ?></option>
                             <?php 
                             foreach($allowed_classes as $cl) {
                                 if ($cl['status'] !== 'Active') continue;
@@ -416,20 +427,20 @@ if(isset($_GET['edit'])) {
                     </div>
                     
                     <div class="col-md-4">
-                        <label class="fw-bold">رہائشی حیثیت (Residential Status)</label>
+                        <label class="fw-bold"><?php echo __('رہائشی حیثیت (Residential Status)', 'Residential Status'); ?></label>
                         <select name="residence_status" class="form-control">
-                            <option value="">منتخب کریں</option>
-                            <option value="residential_aided" <?php echo (isset($edit_data['residence_status']) && $edit_data['residence_status'] == 'residential_aided') ? 'selected' : ''; ?>>اقامتی، امدادی</option>
-                            <option value="non_residential_non_aided" <?php echo (isset($edit_data['residence_status']) && $edit_data['residence_status'] == 'non_residential_non_aided') ? 'selected' : ''; ?>>غیر اقامتی، غیر امدادی</option>
-                            <option value="residential_non_aided" <?php echo (isset($edit_data['residence_status']) && $edit_data['residence_status'] == 'residential_non_aided') ? 'selected' : ''; ?>>اقامتی، غیر امدادی</option>
-                            <option value="non_residential_aided" <?php echo (isset($edit_data['residence_status']) && $edit_data['residence_status'] == 'non_residential_aided') ? 'selected' : ''; ?>>غیر اقامتی، امدادی</option>
+                            <option value=""><?php echo __('منتخب کریں', 'Select'); ?></option>
+                            <option value="residential_aided" <?php echo (isset($edit_data['residence_status']) && $edit_data['residence_status'] == 'residential_aided') ? 'selected' : ''; ?>><?php echo __('اقامتی، امدادی', 'Boarding, Aided'); ?></option>
+                            <option value="non_residential_non_aided" <?php echo (isset($edit_data['residence_status']) && $edit_data['residence_status'] == 'non_residential_non_aided') ? 'selected' : ''; ?>><?php echo __('غیر اقامتی، غیر امدادی', 'Day Scholar, Self-Financed'); ?></option>
+                            <option value="residential_non_aided" <?php echo (isset($edit_data['residence_status']) && $edit_data['residence_status'] == 'residential_non_aided') ? 'selected' : ''; ?>><?php echo __('اقامتی، غیر امدادی', 'Boarding, Self-Financed'); ?></option>
+                            <option value="non_residential_aided" <?php echo (isset($edit_data['residence_status']) && $edit_data['residence_status'] == 'non_residential_aided') ? 'selected' : ''; ?>><?php echo __('غیر اقامتی، امدادی', 'Day Scholar, Aided'); ?></option>
                         </select>
                     </div>
                     
                     <div class="col-md-8" id="quran_edition_group" style="display: none;">
                         <div class="row g-2">
                             <div class="col-md-6">
-                                <label class="fw-bold text-success"><i class="fas fa-quran me-1"></i> قرآن کریم نسخہ / لائنز (Quran Edition)</label>
+                                <label class="fw-bold text-success"><i class="fas fa-quran me-1"></i> <?php echo __('قرآن کریم نسخہ / لائنز (Quran Edition)', 'Quran Edition / Lines'); ?></label>
                                 <select name="quran_edition" id="s_quran_edition" class="form-control border-success">
                                     <option value="13 سطری" <?php echo (isset($edit_data['quran_edition']) && $edit_data['quran_edition'] == '13 سطری') ? 'selected' : ''; ?>>13 سطری قرآن کریم (13 Lines)</option>
                                     <option value="15 سطری" <?php echo (isset($edit_data['quran_edition']) && $edit_data['quran_edition'] == '15 سطری') ? 'selected' : ''; ?>>15 سطری قرآن کریم (15 Lines)</option>
@@ -457,32 +468,32 @@ if(isset($_GET['edit'])) {
                     </div>
 
                     <div class="col-md-4">
-                        <label class="fw-bold">رابطہ نمبر <span class="text-danger">*</span></label>
+                        <label class="fw-bold"><?php echo __('رابطہ نمبر', 'Contact Number'); ?> <span class="text-danger">*</span></label>
                         <input type="text" name="contact_number" id="s_contact" class="form-control" required placeholder="0300xxxxxxx" value="<?php echo $edit_data['contact_number']??''; ?>">
                     </div>
 
                     <div class="col-md-4">
-                        <label class="fw-bold">تاریخ داخلہ</label>
+                        <label class="fw-bold"><?php echo __('تاریخ داخلہ', 'Admission Date'); ?></label>
                         <input type="date" name="admission_date" class="form-control" value="<?php echo $edit_data['admission_date']??''; ?>">
                     </div>
 
                     <div class="col-md-4">
-                        <label class="fw-bold">تاریخ فراغت (Alumni Only)</label>
+                        <label class="fw-bold"><?php echo __('تاریخ فراغت (Alumni Only)', 'Graduation Date (Alumni Only)'); ?></label>
                         <input type="date" name="graduation_date" class="form-control" value="<?php echo $edit_data['graduation_date']??''; ?>">
                     </div>
 
                     <div class="col-md-4">
-                        <label class="fw-bold">تعلیمی دورانیہ</label>
-                        <input type="text" name="duration" class="form-control" placeholder="مثلاً 3 سال" value="<?php echo $edit_data['duration']??''; ?>">
+                        <label class="fw-bold"><?php echo __('تعلیمی دورانیہ', 'Duration'); ?></label>
+                        <input type="text" name="duration" class="form-control" placeholder="<?php echo __('مثلاً 3 سال', 'e.g. 3 Years'); ?>" value="<?php echo $edit_data['duration']??''; ?>">
                     </div>
 
                     <div class="col-md-8">
-                        <label class="fw-bold">مکمل پتہ</label>
+                        <label class="fw-bold"><?php echo __('مکمل پتہ', 'Full Address'); ?></label>
                         <input type="text" name="address" id="s_addr" class="form-control" value="<?php echo $edit_data['address']??''; ?>">
                     </div>
 
                     <div class="col-md-4">
-                        <label class="fw-bold">تصویر (Photo)</label>
+                        <label class="fw-bold"><?php echo __('تصویر (Photo)', 'Photo'); ?></label>
                         <input type="file" name="photo" class="form-control">
                         <?php if(!empty($edit_data['photo'])): ?>
                             <img src="<?php echo $edit_data['photo']; ?>" class="mt-2 rounded" width="50">
@@ -490,8 +501,8 @@ if(isset($_GET['edit'])) {
                     </div>
 
                     <div class="col-12 text-end">
-                        <button type="button" class="btn btn-secondary me-2" onclick="toggleForm()">کینسل</button>
-                        <button type="submit" name="save_student" id="save_btn" class="btn btn-primary fw-bold px-4"><?php echo t('btn_save_ur'); ?></button>
+                        <button type="button" class="btn btn-secondary me-2" onclick="toggleForm()"><?php echo __('کینسل', 'Cancel'); ?></button>
+                        <button type="submit" name="save_student" id="save_btn" class="btn btn-primary fw-bold px-4"><?php echo __('محفوظ کریں', 'Save'); ?></button>
                     </div>
                 </div>
             </form>
@@ -500,12 +511,12 @@ if(isset($_GET['edit'])) {
 
     <?php 
     $residence_tabs = [
-        'all' => 'تمام',
-        'residential_aided' => 'اقامتی، امدادی',
-        'non_residential_non_aided' => 'غیر اقامتی، غیر امدادی',
-        'residential_non_aided' => 'اقامتی، غیر امدادی',
-        'non_residential_aided' => 'غیر اقامتی، امدادی',
-        'alumni' => 'فارغ التحصیل'
+        'all' => ($lang === 'en') ? 'All' : 'تمام',
+        'residential_aided' => ($lang === 'en') ? 'Boarding, Aided' : 'اقامتی، امدادی',
+        'non_residential_non_aided' => ($lang === 'en') ? 'Day Scholar, Self-Financed' : 'غیر اقامتی، غیر امدادی',
+        'residential_non_aided' => ($lang === 'en') ? 'Boarding, Self-Financed' : 'اقامتی، غیر امدادی',
+        'non_residential_aided' => ($lang === 'en') ? 'Day Scholar, Aided' : 'غیر اقامتی، امدادی',
+        'alumni' => ($lang === 'en') ? 'Alumni / Passed Out' : 'فارغ التحصیل'
     ];
     ?>
     <ul class="nav nav-tabs mb-4 flex-nowrap overflow-x-auto text-nowrap border-bottom" id="residenceTabs" role="tablist" style="overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: thin;">
@@ -548,15 +559,15 @@ if(isset($_GET['edit'])) {
                 <table class="table table-bordered table-hover align-middle text-center m-0 bg-white">
                     <thead class="table-secondary">
                         <tr>
-                            <th>نمبرشمار</th>
-                            <th>رول نمبر</th>
-                            <th class="text-start ps-3">نام طالب علم</th>
-                            <th>ولدیت</th>
-                            <th>رابطہ نمبر</th>
-                            <th>کیٹیگری</th>
-                            <th>تاریخ داخلہ</th>
-                            <th>تاریخ فراغت</th>
-                            <th>دورانیہ</th>
+                            <th><?php echo ($lang === 'en') ? 'S.No' : 'نمبرشمار'; ?></th>
+                            <th><?php echo ($lang === 'en') ? 'Roll No / Reg' : 'رول نمبر'; ?></th>
+                            <th class="text-start ps-3"><?php echo ($lang === 'en') ? 'Student Name' : 'نام طالب علم'; ?></th>
+                            <th><?php echo ($lang === 'en') ? "Father's Name" : 'ولدیت'; ?></th>
+                            <th><?php echo ($lang === 'en') ? 'Contact No' : 'رابطہ نمبر'; ?></th>
+                            <th><?php echo ($lang === 'en') ? 'Category' : 'کیٹیگری'; ?></th>
+                            <th><?php echo ($lang === 'en') ? 'Admission Date' : 'تاریخ داخلہ'; ?></th>
+                            <th><?php echo ($lang === 'en') ? 'Graduation Date' : 'تاریخ فراغت'; ?></th>
+                            <th><?php echo ($lang === 'en') ? 'Duration' : 'دورانیہ'; ?></th>
                             <th><?php echo t('action_col'); ?></th>
                         </tr>
                     </thead>
@@ -630,20 +641,20 @@ if(isset($_GET['edit'])) {
                         ?>
                         <div class="card shadow-sm border-0 mb-4 border-top border-3 border-primary">
                             <div class="card-header bg-light">
-                                <h5 class="m-0 fw-bold text-primary"><i class="fas fa-users me-2"></i> کلاس: <?php echo $cName; ?></h5>
+                                <h5 class="m-0 fw-bold text-primary"><i class="fas fa-users me-2"></i> <?php echo ($lang === 'en') ? ('Class: ' . $cName) : ('کلاس: ' . $cName); ?></h5>
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-hover align-middle text-center m-0">
                                         <thead class="table-light">
                                             <tr>
-                                                <th>نمبرشمار</th>
-                                                <th>رول نمبر</th>
-                                                <th><?php echo t('photo'); ?></th>
-                                                <th>نام طالب علم</th>
-                                                <th><?php echo t('father_name'); ?></th>
-                                                <th><?php echo t('contact'); ?></th>
-                                                <th style="width: 200px;"><?php echo t('action_col'); ?></th>
+                                                <th><?php echo ($lang === 'en') ? 'S.No' : 'نمبرشمار'; ?></th>
+                                                <th><?php echo ($lang === 'en') ? 'Roll No / Reg' : 'رول نمبر'; ?></th>
+                                                <th><?php echo ($lang === 'en') ? 'Photo' : 'تصویر'; ?></th>
+                                                <th><?php echo ($lang === 'en') ? 'Student Name' : 'نام طالب علم'; ?></th>
+                                                <th><?php echo ($lang === 'en') ? "Father's Name" : 'ولدیت'; ?></th>
+                                                <th><?php echo ($lang === 'en') ? 'Contact' : 'رابطہ نمبر'; ?></th>
+                                                <th style="width: 200px;"><?php echo ($lang === 'en') ? 'Actions' : 'ایکشن'; ?></th>
                                             </tr>
                                         </thead>
                                         <tbody>

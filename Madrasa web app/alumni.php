@@ -115,11 +115,11 @@ if ($selected_cat === 'all') {
 
 function get_category_badge($cat) {
     if ($cat === 'dropped') {
-        return '<span class="badge bg-warning text-dark px-2 py-1"><i class="fas fa-pause-circle me-1"></i> ترکِ تعلیم</span>';
+        return '<span class="badge bg-warning text-dark px-2 py-1"><i class="fas fa-pause-circle me-1"></i> ' . __('ترکِ تعلیم', 'Dropped') . '</span>';
     } elseif ($cat === 'expelled') {
-        return '<span class="badge bg-danger px-2 py-1"><i class="fas fa-user-slash me-1"></i> خارج کردہ</span>';
+        return '<span class="badge bg-danger px-2 py-1"><i class="fas fa-user-slash me-1"></i> ' . __('خارج کردہ', 'Expelled') . '</span>';
     }
-    return '<span class="badge bg-success px-2 py-1"><i class="fas fa-graduation-cap me-1"></i> تکمیلِ تعلیم</span>';
+    return '<span class="badge bg-success px-2 py-1"><i class="fas fa-graduation-cap me-1"></i> ' . __('تکمیلِ تعلیم', 'Graduated') . '</span>';
 }
 
 function get_category_name_ur($cat) {
@@ -132,12 +132,12 @@ function get_category_name_ur($cat) {
 
 <div class="container-fluid py-4 no-print">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <h2 class="text-dark fw-bold m-0"><i class="fas fa-user-graduate me-2 text-primary"></i> رجسٹر فارغ التحصیل طلباء (Alumni Register)</h2>
+        <h2 class="text-dark fw-bold m-0"><i class="fas fa-user-graduate me-2 text-primary"></i> <?php echo __('رجسٹر فارغ التحصیل طلباء (Alumni Register)', 'Graduated & Alumni Students Register'); ?></h2>
         <div class="d-flex gap-2 align-items-center">
             <button onclick="window.print()" class="btn btn-dark shadow-sm">
-                <i class="fas fa-print me-1"></i> فہرست پرنٹ کریں
+                <i class="fas fa-print me-1"></i> <?php echo __('فہرست پرنٹ کریں', 'Print List'); ?>
             </button>
-            <div class="text-muted ms-3">کل تعداد: <span class="badge bg-primary fs-6"><?php echo count($alumni); ?></span></div>
+            <div class="text-muted ms-3"><?php echo __('کل تعداد:', 'Total:'); ?> <span class="badge bg-primary fs-6"><?php echo count($alumni); ?></span></div>
         </div>
     </div>
 
@@ -147,25 +147,25 @@ function get_category_name_ur($cat) {
             <ul class="nav nav-pills gap-2">
                 <li class="nav-item">
                     <a class="nav-link <?php echo $selected_cat === 'all' ? 'active bg-dark' : 'text-dark'; ?>" href="alumni.php?cat=all">
-                        <i class="fas fa-list me-1"></i> تمام طلباء 
+                        <i class="fas fa-list me-1"></i> <?php echo __('تمام طلباء', 'All Students'); ?> 
                         <span class="badge bg-secondary ms-1"><?php echo $count_all; ?></span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link <?php echo $selected_cat === 'completed' ? 'active bg-success' : 'text-success'; ?>" href="alumni.php?cat=completed">
-                        <i class="fas fa-graduation-cap me-1"></i> تعلیم مکمل کرنے والے 
+                        <i class="fas fa-graduation-cap me-1"></i> <?php echo __('تعلیم مکمل کرنے والے', 'Graduated'); ?> 
                         <span class="badge bg-success-subtle text-success ms-1"><?php echo $count_completed; ?></span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link <?php echo $selected_cat === 'dropped' ? 'active bg-warning text-dark' : 'text-warning'; ?>" href="alumni.php?cat=dropped">
-                        <i class="fas fa-pause-circle me-1"></i> درمیان میں چھوڑنے والے (ترکِ تعلیم) 
+                        <i class="fas fa-pause-circle me-1"></i> <?php echo __('درمیان میں چھوڑنے والے (ترکِ تعلیم)', 'Dropped Out'); ?> 
                         <span class="badge bg-warning-subtle text-warning ms-1"><?php echo $count_dropped; ?></span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link <?php echo $selected_cat === 'expelled' ? 'active bg-danger' : 'text-danger'; ?>" href="alumni.php?cat=expelled">
-                        <i class="fas fa-user-slash me-1"></i> خارج کیے جانے والے 
+                        <i class="fas fa-user-slash me-1"></i> <?php echo __('خارج کیے جانے والے', 'Expelled'); ?> 
                         <span class="badge bg-danger-subtle text-danger ms-1"><?php echo $count_expelled; ?></span>
                     </a>
                 </li>
@@ -179,18 +179,18 @@ function get_category_name_ur($cat) {
                 <table class="table table-hover align-middle mb-0">
                     <thead class="bg-light">
                         <tr>
-                            <th class="ps-4">نمبر شمار</th>
-                            <th>داخلہ نمبر</th>
-                            <th>تصویر</th>
-                            <th>نام طالب علم</th>
-                            <th>ولدیت</th>
-                            <th>نوعیت / کیٹیگری</th>
-                            <th>داخلہ / فراغت</th>
-                            <th>تعلیمی دورانیہ</th>
-                            <th>امتحان وفاق</th>
-                            <th>محراب (تراویح)</th>
-                            <th>وجہ / تفصیلات</th>
-                            <th class="text-center no-print">ایکشن</th>
+                            <th class="ps-4"><?php echo __('نمبر شمار', 'Sr #'); ?></th>
+                            <th><?php echo __('داخلہ نمبر', 'Adm No'); ?></th>
+                            <th><?php echo __('تصویر', 'Photo'); ?></th>
+                            <th><?php echo __('نام طالب علم', 'Student Name'); ?></th>
+                            <th><?php echo __('ولدیت', 'Father Name'); ?></th>
+                            <th><?php echo __('نوعیت / کیٹیگری', 'Category'); ?></th>
+                            <th><?php echo __('داخلہ / فراغت', 'Adm / Grad'); ?></th>
+                            <th><?php echo __('تعلیمی دورانیہ', 'Duration'); ?></th>
+                            <th><?php echo __('امتحان وفاق', 'Wifaq Exam'); ?></th>
+                            <th><?php echo __('محراب (تراویح)', 'Mehrab'); ?></th>
+                            <th><?php echo __('وجہ / تفصیلات', 'Reason / Details'); ?></th>
+                            <th class="text-center no-print"><?php echo __('ایکشن', 'Action'); ?></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -214,15 +214,15 @@ function get_category_name_ur($cat) {
                                     <td><?php echo $s['father_name']; ?></td>
                                     <td><?php echo get_category_badge($cat); ?></td>
                                     <td>
-                                        <div class="small">داخلہ: <span class="text-muted"><?php echo $s['admission_date']; ?></span></div>
-                                        <div class="small">فراغت: <span class="text-success fw-bold"><?php echo $s['graduation_date']; ?></span></div>
+                                        <div class="small"><?php echo __('داخلہ:', 'Adm:'); ?> <span class="text-muted"><?php echo $s['admission_date']; ?></span></div>
+                                        <div class="small"><?php echo __('فراغت:', 'Grad:'); ?> <span class="text-success fw-bold"><?php echo $s['graduation_date']; ?></span></div>
                                     </td>
                                     <td><span class="badge bg-light text-dark border"><?php echo $s['duration'] ?: '---'; ?></span></td>
                                     <td>
                                         <?php if (!empty($s['wifaq_exam'])): ?>
-                                            <span class="badge bg-info text-dark">ہاں <?php echo !empty($s['wifaq_marks']) ? '(' . $s['wifaq_marks'] . ')' : ''; ?></span>
+                                            <span class="badge bg-info text-dark"><?php echo __('ہاں', 'Yes'); ?> <?php echo !empty($s['wifaq_marks']) ? '(' . $s['wifaq_marks'] . ')' : ''; ?></span>
                                         <?php else: ?>
-                                            <span class="text-muted small">نہیں</span>
+                                            <span class="text-muted small"><?php echo __('نہیں', 'No'); ?></span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
@@ -234,14 +234,14 @@ function get_category_name_ur($cat) {
                                     </td>
                                     <td>
                                         <div class="small text-muted" style="max-width: 180px; word-wrap: break-word;">
-                                            <?php echo $s['leaving_reason'] ?: 'درج نہیں'; ?>
+                                            <?php echo $s['leaving_reason'] ?: __('درج نہیں', 'Not specified'); ?>
                                         </div>
                                     </td>
                                     <td class="text-center no-print">
                                         <div class="btn-group">
                                             <?php if ($cat === 'completed'): ?>
                                                 <a href="print_sanad.php?student_id=<?php echo $s['id']; ?>" class="btn btn-sm btn-success fw-bold shadow-sm" title="سند الفراغ جاری و پرنٹ کریں" target="_blank">
-                                                    <i class="fas fa-award me-1"></i> سند
+                                                    <i class="fas fa-award me-1"></i> <?php echo __('سند', 'Certificate'); ?>
                                                 </a>
                                             <?php endif; ?>
                                             <button type="button" class="btn btn-sm btn-outline-warning text-dark" title="نوعیت / کیٹیگری تبدیل کریں" onclick="openCatModal(<?php echo $s['id']; ?>, '<?php echo htmlspecialchars(addslashes($s['name'])); ?>', '<?php echo $cat; ?>', '<?php echo htmlspecialchars(addslashes($s['leaving_reason'] ?? '')); ?>')">
@@ -262,7 +262,7 @@ function get_category_name_ur($cat) {
                                 <td colspan="12" class="text-center py-5">
                                     <div class="text-muted">
                                         <i class="fas fa-folder-open fa-3x mb-3"></i>
-                                        <p class="fs-5">اس کیٹیگری میں کوئی ریکارڈ موجود نہیں ہے۔</p>
+                                        <p class="fs-5"><?php echo __('اس کیٹیگری میں کوئی ریکارڈ موجود نہیں ہے۔', 'No records found in this category.'); ?></p>
                                     </div>
                                 </td>
                             </tr>

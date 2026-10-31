@@ -14,11 +14,11 @@ $tenant_id = (int)get_current_tenant_id();
 
 // Helper for grade
 function get_grade_badge($pct) {
-    if ($pct >= 80) return '<span class="badge bg-success rounded-pill px-3 py-1">ممتاز</span>';
-    if ($pct >= 70) return '<span class="badge bg-primary rounded-pill px-3 py-1">جید جدا</span>';
-    if ($pct >= 60) return '<span class="badge bg-info text-dark rounded-pill px-3 py-1">جید</span>';
-    if ($pct >= 40) return '<span class="badge bg-warning text-dark rounded-pill px-3 py-1">مقبول</span>';
-    return '<span class="badge bg-danger rounded-pill px-3 py-1">راسب</span>';
+    if ($pct >= 80) return '<span class="badge bg-success rounded-pill px-3 py-1">' . __('ممتاز', 'Mumtaz') . '</span>';
+    if ($pct >= 70) return '<span class="badge bg-primary rounded-pill px-3 py-1">' . __('جید جدا', 'Jayyid Jiddan') . '</span>';
+    if ($pct >= 60) return '<span class="badge bg-info text-dark rounded-pill px-3 py-1">' . __('جید', 'Jayyid') . '</span>';
+    if ($pct >= 40) return '<span class="badge bg-warning text-dark rounded-pill px-3 py-1">' . __('مقبول', 'Maqbool') . '</span>';
+    return '<span class="badge bg-danger rounded-pill px-3 py-1">' . __('راسب', 'Rasib (Failed)') . '</span>';
 }
 
 // Fetch Exams
@@ -40,14 +40,14 @@ $selected_student_id = (int)($_GET['student_id'] ?? 0);
 $selected_subject_id = (int)($_GET['subject_id'] ?? 0);
 
 $darse_nizami_year_names = [
-    1 => 'سال اول (درجہ اولیٰ)',
-    2 => 'سال دوم (درجہ ثانیہ)',
-    3 => 'سال سوم (درجہ ثالثہ)',
-    4 => 'سال چہارم (درجہ رابعہ)',
-    5 => 'سال پنجم (درجہ خامسہ)',
-    6 => 'سال ششم (درجہ سادسہ)',
-    7 => 'سال ہفتم (درجہ عالیہ)',
-    8 => 'سال ہشتم (درجہ عالمیہ / دورۂ حدیث)'
+    1 => __('سال اول (درجہ اولیٰ)', 'Year 1 (Ula)'),
+    2 => __('سال دوم (درجہ ثانیہ)', 'Year 2 (Sania)'),
+    3 => __('سال سوم (درجہ ثالثہ)', 'Year 3 (Salisa)'),
+    4 => __('سال چہارم (درجہ رابعہ)', 'Year 4 (Rabia)'),
+    5 => __('سال پنجم (درجہ خامسہ)', 'Year 5 (Khamisa)'),
+    6 => __('سال ششم (درجہ سادسہ)', 'Year 6 (Sadisa)'),
+    7 => __('سال ہفتم (درجہ عالیہ)', 'Year 7 (Aliya)'),
+    8 => __('سال ہشتم (درجہ عالمیہ / دورۂ حدیث)', 'Year 8 (Almiya / Hadith)')
 ];
 
 // --- 1. Class / Year Performance Data ---
@@ -173,20 +173,20 @@ $annual_summary = $ann_stmt->fetchAll(PDO::FETCH_ASSOC);
 include 'header.php';
 ?>
 
-<div class="container-fluid py-4" dir="rtl">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <!-- Top Header Card -->
     <div class="card border-0 shadow-sm rounded-4 mb-4 text-white p-4" style="background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-                <h2 class="fw-bold mb-1"><i class="fas fa-chart-line me-2"></i> درس نظامی و عصری علوم — جامع تعلیمی و امتحانی رپورٹس</h2>
-                <p class="mb-0 text-white-50">کلاس کی کارکردگی، پوزیشن ہولڈرز، کمزور طلبہ کی نشاندہی، اور سالانہ تعلیمی خلاصہ</p>
+                <h2 class="fw-bold mb-1"><i class="fas fa-chart-line me-2"></i> <?php echo __('درس نظامی و عصری علوم — جامع تعلیمی و امتحانی رپورٹس', 'Dars-e-Nizami & Contemporary Studies — Academic Reports'); ?></h2>
+                <p class="mb-0 text-white-50"><?php echo __('کلاس کی کارکردگی، پوزیشن ہولڈرز، کمزور طلبہ کی نشاندہی، اور سالانہ تعلیمی خلاصہ', 'Class performance, position holders, weak students identification, and annual summary'); ?></p>
             </div>
             <div class="d-flex gap-2">
                 <a href="academic_results_entry.php" class="btn btn-warning text-dark fw-bold rounded-pill px-3 shadow-sm">
-                    <i class="fas fa-edit me-1"></i> نتائج انٹری
+                    <i class="fas fa-edit me-1"></i> <?php echo __('نتائج انٹری', 'Results Entry'); ?>
                 </a>
                 <a href="course_manager.php" class="btn btn-outline-light rounded-pill px-3">
-                    <i class="fas fa-cogs me-1"></i> کورس سیٹ اپ
+                    <i class="fas fa-cogs me-1"></i> <?php echo __('کورس سیٹ اپ', 'Course Setup'); ?>
                 </a>
             </div>
         </div>
@@ -196,22 +196,22 @@ include 'header.php';
     <ul class="nav nav-pills mb-4 bg-white p-2 rounded-4 shadow-sm">
         <li class="nav-item">
             <a class="nav-link rounded-pill px-4 <?php echo ($tab === 'class') ? 'active bg-success' : 'text-dark'; ?>" href="academic_reports.php?tab=class&exam_id=<?php echo $selected_exam_id; ?>&course_id=<?php echo $selected_course_id; ?>&year_no=<?php echo $selected_year_no; ?>">
-                <i class="fas fa-users-class me-1"></i> کلاس وار کارکردگی و پوزیشنز
+                <i class="fas fa-users-class me-1"></i> <?php echo __('کلاس وار کارکردگی و پوزیشنز', 'Class Performance & Positions'); ?>
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link rounded-pill px-4 <?php echo ($tab === 'subject') ? 'active bg-success' : 'text-dark'; ?>" href="academic_reports.php?tab=subject&exam_id=<?php echo $selected_exam_id; ?>&course_id=<?php echo $selected_course_id; ?>&year_no=<?php echo $selected_year_no; ?>">
-                <i class="fas fa-book me-1"></i> مضمون وار تجزیہ و کمزور طلبہ
+                <i class="fas fa-book me-1"></i> <?php echo __('مضمون وار تجزیہ و کمزور طلبہ', 'Subject Analysis & Weak Students'); ?>
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link rounded-pill px-4 <?php echo ($tab === 'student') ? 'active bg-success' : 'text-dark'; ?>" href="academic_reports.php?tab=student&student_id=<?php echo $selected_student_id; ?>">
-                <i class="fas fa-user-graduate me-1"></i> انفرادی طالب علم رپورٹ
+                <i class="fas fa-user-graduate me-1"></i> <?php echo __('انفرادی طالب علم رپورٹ', 'Individual Student Report'); ?>
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link rounded-pill px-4 <?php echo ($tab === 'annual') ? 'active bg-success' : 'text-dark'; ?>" href="academic_reports.php?tab=annual">
-                <i class="fas fa-file-invoice me-1"></i> سالانہ کورس خلاصہ (Annual Summary)
+                <i class="fas fa-file-invoice me-1"></i> <?php echo __('سالانہ کورس خلاصہ (Annual Summary)', 'Annual Course Summary'); ?>
             </a>
         </li>
     </ul>
@@ -223,7 +223,7 @@ include 'header.php';
             <form method="GET" class="row g-3 align-items-end">
                 <input type="hidden" name="tab" value="class">
                 <div class="col-md-4">
-                    <label class="form-label fw-bold">امتحان</label>
+                    <label class="form-label fw-bold"><?php echo __('امتحان', 'Exam'); ?></label>
                     <select name="exam_id" class="form-select rounded-3" onchange="this.form.submit()">
                         <?php foreach ($all_exams as $ex): ?>
                             <option value="<?php echo $ex['id']; ?>" <?php echo ($selected_exam_id == $ex['id']) ? 'selected' : ''; ?>>
@@ -233,7 +233,7 @@ include 'header.php';
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-bold">کورس</label>
+                    <label class="form-label fw-bold"><?php echo __('کورس', 'Course'); ?></label>
                     <select name="course_id" class="form-select rounded-3" onchange="this.form.submit()">
                         <?php foreach ($all_courses as $c): ?>
                             <option value="<?php echo $c['id']; ?>" <?php echo ($selected_course_id == $c['id']) ? 'selected' : ''; ?>>
@@ -243,7 +243,7 @@ include 'header.php';
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label fw-bold">سال / درجہ</label>
+                    <label class="form-label fw-bold"><?php echo __('سال / درجہ', 'Year / Grade'); ?></label>
                     <select name="year_no" class="form-select rounded-3" onchange="this.form.submit()">
                         <?php for ($y = 1; $y <= 8; $y++): ?>
                             <option value="<?php echo $y; ?>" <?php echo ($selected_year_no == $y) ? 'selected' : ''; ?>>
@@ -262,25 +262,25 @@ include 'header.php';
         <div class="row g-3 mb-4 text-center">
             <div class="col-md-2 col-6">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <div class="text-muted small">شامل طلبہ</div>
+                    <div class="text-muted small"><?php echo __('شامل طلبہ', 'Enrolled'); ?></div>
                     <div class="fw-bold fs-4 text-dark"><?php echo $class_stats['total']; ?></div>
                 </div>
             </div>
             <div class="col-md-2 col-6">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <div class="text-muted small">کامیاب طلبہ</div>
+                    <div class="text-muted small"><?php echo __('کامیاب طلبہ', 'Passed'); ?></div>
                     <div class="fw-bold fs-4 text-success"><?php echo $class_stats['passed']; ?></div>
                 </div>
             </div>
             <div class="col-md-2 col-6">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <div class="text-muted small">ناکام طلبہ</div>
+                    <div class="text-muted small"><?php echo __('ناکام طلبہ', 'Failed'); ?></div>
                     <div class="fw-bold fs-4 text-danger"><?php echo $class_stats['failed']; ?></div>
                 </div>
             </div>
             <div class="col-md-2 col-6">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <div class="text-muted small">شرح کامیابی</div>
+                    <div class="text-muted small"><?php echo __('شرح کامیابی', 'Pass Rate'); ?></div>
                     <div class="fw-bold fs-4 text-primary">
                         <?php echo ($class_stats['total'] > 0) ? round(($class_stats['passed'] / $class_stats['total']) * 100, 1) : 0; ?>%
                     </div>
@@ -288,13 +288,13 @@ include 'header.php';
             </div>
             <div class="col-md-2 col-6">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <div class="text-muted small">اوسط نمبرات</div>
+                    <div class="text-muted small"><?php echo __('اوسط نمبرات', 'Avg Marks'); ?></div>
                     <div class="fw-bold fs-4 text-info"><?php echo $class_stats['avg_pct']; ?>%</div>
                 </div>
             </div>
             <div class="col-md-2 col-6">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <div class="text-muted small">ممتاز گریڈ</div>
+                    <div class="text-muted small"><?php echo __('ممتاز گریڈ', 'Mumtaz Grade'); ?></div>
                     <div class="fw-bold fs-4 text-success"><?php echo $class_stats['mumtaz']; ?></div>
                 </div>
             </div>
@@ -305,10 +305,10 @@ include 'header.php';
             <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
                 <h5 class="fw-bold mb-0 text-dark">
                     <i class="fas fa-trophy me-2 text-warning"></i> 
-                    پوزیشن ہولڈرز اور کلاس رینکنگ لسٹ
+                    <?php echo __('پوزیشن ہولڈرز اور کلاس رینکنگ لسٹ', 'Position Holders & Class Rankings'); ?>
                 </h5>
                 <a href="print_academic_result_card.php?exam_id=<?php echo $selected_exam_id; ?>&course_id=<?php echo $selected_course_id; ?>&year_no=<?php echo $selected_year_no; ?>" target="_blank" class="btn btn-outline-success btn-sm rounded-pill px-3">
-                    <i class="fas fa-print me-1"></i> تمام رزلٹ کارڈز پرنٹ
+                    <i class="fas fa-print me-1"></i> <?php echo __('تمام رزلٹ کارڈز پرنٹ', 'Print All Result Cards'); ?>
                 </a>
             </div>
 
@@ -316,21 +316,21 @@ include 'header.php';
                 <table class="table table-hover align-middle mb-0 text-center">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 70px;">پوزیشن</th>
-                            <th style="width: 80px;">رول نمبر</th>
-                            <th class="text-end">طالب علم کا نام</th>
-                            <th class="text-end">ولدیت</th>
-                            <th>حاصل کردہ نمبرات</th>
-                            <th>فیصد</th>
-                            <th>گریڈ</th>
-                            <th>حیثیت</th>
-                            <th>کارڈ</th>
+                            <th style="width: 70px;"><?php echo __('پوزیشن', 'Position'); ?></th>
+                            <th style="width: 80px;"><?php echo __('رول نمبر', 'Roll No'); ?></th>
+                            <th class="text-end"><?php echo __('طالب علم کا نام', 'Student Name'); ?></th>
+                            <th class="text-end"><?php echo __('ولدیت', 'Father Name'); ?></th>
+                            <th><?php echo __('حاصل کردہ نمبرات', 'Marks Obtained'); ?></th>
+                            <th><?php echo __('فیصد', 'Percentage'); ?></th>
+                            <th><?php echo __('گریڈ', 'Grade'); ?></th>
+                            <th><?php echo __('حیثیت', 'Status'); ?></th>
+                            <th><?php echo __('کارڈ', 'Card'); ?></th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($class_students)): ?>
                             <tr>
-                                <td colspan="9" class="py-5 text-muted">اس سال میں کوئی نتائج نہیں ملے۔</td>
+                                <td colspan="9" class="py-5 text-muted"><?php echo __('اس سال میں کوئی نتائج نہیں ملے۔', 'No results found for this year.'); ?></td>
                             </tr>
                         <?php else: ?>
                             <?php 
@@ -343,11 +343,11 @@ include 'header.php';
                                 <tr>
                                     <td>
                                         <?php if ($pos === 1): ?>
-                                            <span class="badge bg-warning text-dark rounded-pill px-2 py-1"><i class="fas fa-medal me-1"></i> اول</span>
+                                            <span class="badge bg-warning text-dark rounded-pill px-2 py-1"><i class="fas fa-medal me-1"></i> <?php echo __('اول', '1st'); ?></span>
                                         <?php elseif ($pos === 2): ?>
-                                            <span class="badge bg-secondary text-white rounded-pill px-2 py-1"><i class="fas fa-medal me-1"></i> دوم</span>
+                                            <span class="badge bg-secondary text-white rounded-pill px-2 py-1"><i class="fas fa-medal me-1"></i> <?php echo __('دوم', '2nd'); ?></span>
                                         <?php elseif ($pos === 3): ?>
-                                            <span class="badge bg-danger text-white rounded-pill px-2 py-1"><i class="fas fa-medal me-1"></i> سوم</span>
+                                            <span class="badge bg-danger text-white rounded-pill px-2 py-1"><i class="fas fa-medal me-1"></i> <?php echo __('سوم', '3rd'); ?></span>
                                         <?php else: ?>
                                             <span class="text-muted fw-bold"><?php echo $pos; ?></span>
                                         <?php endif; ?>
@@ -386,7 +386,7 @@ include 'header.php';
             <form method="GET" class="row g-3 align-items-end">
                 <input type="hidden" name="tab" value="subject">
                 <div class="col-md-3">
-                    <label class="form-label fw-bold">امتحان</label>
+                    <label class="form-label fw-bold"><?php echo __('امتحان', 'Exam'); ?></label>
                     <select name="exam_id" class="form-select rounded-3" onchange="this.form.submit()">
                         <?php foreach ($all_exams as $ex): ?>
                             <option value="<?php echo $ex['id']; ?>" <?php echo ($selected_exam_id == $ex['id']) ? 'selected' : ''; ?>>
@@ -396,7 +396,7 @@ include 'header.php';
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label fw-bold">کورس</label>
+                    <label class="form-label fw-bold"><?php echo __('کورس', 'Course'); ?></label>
                     <select name="course_id" class="form-select rounded-3" onchange="this.form.submit()">
                         <?php foreach ($all_courses as $c): ?>
                             <option value="<?php echo $c['id']; ?>" <?php echo ($selected_course_id == $c['id']) ? 'selected' : ''; ?>>
@@ -406,7 +406,7 @@ include 'header.php';
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label fw-bold">سال / درجہ</label>
+                    <label class="form-label fw-bold"><?php echo __('سال / درجہ', 'Year / Grade'); ?></label>
                     <select name="year_no" class="form-select rounded-3" onchange="this.form.submit()">
                         <?php for ($y = 1; $y <= 8; $y++): ?>
                             <option value="<?php echo $y; ?>" <?php echo ($selected_year_no == $y) ? 'selected' : ''; ?>>

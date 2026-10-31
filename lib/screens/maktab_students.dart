@@ -508,7 +508,7 @@ class _MaktabStudentsPageState extends State<MaktabStudentsPage> {
                       final isSuper = currentUserRole.value == 'superadmin' || 
                           (currentUserRole.value == 'admin' && currentUserId.value == 1);
                       final maxStd = currentTenantMaxStudents.value;
-                      if (!isSuper && (_activeMaktabStudents.length + _alumniMaktabStudents.length) >= maxStd) {
+                      if (!isSuper && _activeMaktabStudents.length >= maxStd) {
                         showDialog(
                           context: context,
                           builder: (ctx) => AlertDialog(

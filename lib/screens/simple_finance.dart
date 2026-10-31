@@ -525,13 +525,13 @@ class _SimpleFinancePageState extends State<SimpleFinancePage> {
     final lowerAcc = accountName.toLowerCase();
     final uname = (currentUserName.value ?? '').trim().toLowerCase();
     final uid = currentUserId.value;
-    if (uid == 3 || uname.contains('saleem') || uname.contains('سلیم')) {
+    if (uname.isNotEmpty && (lowerAcc.contains(uname) || uname.contains(lowerAcc))) return true;
+    if (uname.contains('saleem') || uname.contains('سلیم') || uid == 3) {
       if (lowerAcc.contains('سلیم') || lowerAcc.contains('saleem')) return true;
     }
-    if (uid == 1 || uname.contains('tanzeel') || uname.contains('تنزیل')) {
+    if (uname.contains('tanzeel') || uname.contains('تنزیل') || uid == 1) {
       if (lowerAcc.contains('تنزیل') || lowerAcc.contains('tanzeel')) return true;
     }
-    if (uname.isNotEmpty && lowerAcc.contains(uname)) return true;
     return false;
   }
 
@@ -657,7 +657,7 @@ class _SimpleFinancePageState extends State<SimpleFinancePage> {
         }
       }
 
-      // 3. Exactly the 4 canonical users' expense accounts (deduplicated)
+      // 3. User advance / expense accounts (dynamic for any tenant)
       const canonicalCodes = {'1501', '1502', '1503', '1633'};
       const excludedCodes = {'1504', '1505', '1632', '1635', '1636', '1637', '1639'};
       final seenUsers = <String>{};
@@ -671,10 +671,8 @@ class _SimpleFinancePageState extends State<SimpleFinancePage> {
 
         if (canonicalCodes.contains(code) ||
             ((name.contains('خرچ کھاتہ') || name.contains('ایڈوانس') || name.toLowerCase().contains('advance')) && !name.contains('وصولی'))) {
-          final uKey = name.contains('عثمان') ? 'usman' : (
-                       name.contains('تنزیل') ? 'tanzeel' : (
-                       name.contains('سلیم') ? 'saleem' : (
-                       name.contains('حماد') ? 'hammad' : name)));
+          // Clean dynamic account name key
+          final uKey = name.replaceAll(RegExp(r'[^a-zA-Z\u0600-\u06FF]'), '').trim();
           if (!seenUsers.contains(uKey)) {
             seenUsers.add(uKey);
             list.add(a);
@@ -1666,15 +1664,19 @@ class _SimpleFinancePageState extends State<SimpleFinancePage> {
 
 
 
+      final instituteTitle = (currentTenantName.value != null && currentTenantName.value!.isNotEmpty)
+          ? currentTenantName.value!
+          : (isUrduGlobal.value ? 'مدرسہ مینیجمنٹ سسٹم' : 'Madrasa Management System');
+
       await Share.shareXFiles(
 
         [XFile(imagePath.path)],
 
         text: isUrduGlobal.value
 
-            ? '\u0645\u062f\u0631\u0633\u06c1 \u0627\u0634\u0631\u0641 \u0627\u0644\u0645\u062f\u0627\u0631\u0633 - \u0631\u0633\u06cc\u062f'
+            ? '$instituteTitle - رسید'
 
-            : 'Madrasa Receipt',
+            : '$instituteTitle - Receipt',
 
       );
 
@@ -1709,17 +1711,22 @@ class _SimpleFinancePageState extends State<SimpleFinancePage> {
       final db = await DBHelper().database;
       final uId = int.tryParse(row['user_id']?.toString() ?? '') ??
           (currentUserId.value ?? 1);
+      final isTenant1 = (currentTenantId.value == 1);
       final int minNo;
       final int maxLimit;
-      if (uId == 1) {
+      if (isTenant1 && uId == 1) {
         minNo = 300000;
         maxLimit = 400000;
-      } else if (uId == 3) {
+      } else if (isTenant1 && uId == 3) {
         minNo = 700000;
         maxLimit = 800000;
-      } else {
+      } else if (isTenant1) {
         minNo = uId * 100000;
         maxLimit = (uId + 1) * 100000;
+      } else {
+        // SaaS Multi-tenant dynamic numbering: sequentially increment across tenant
+        minNo = 1000;
+        maxLimit = 999999999;
       }
 
       final result = await db.rawQuery(
@@ -2499,23 +2506,28 @@ class _SimpleFinancePageState extends State<SimpleFinancePage> {
         try {
           final db = await DBHelper().database;
           int userId = currentUserId.value ?? 1;
+          final isTenant1 = (currentTenantId.value == 1);
           final int minNo;
           final int maxLimit;
-          if (userId == 1) {
+          if (isTenant1 && userId == 1) {
             minNo = 300000;
             maxLimit = 400000;
-          } else if (userId == 3) {
+          } else if (isTenant1 && userId == 3) {
             minNo = 700000;
             maxLimit = 800000;
-          } else {
+          } else if (isTenant1) {
             minNo = userId * 100000;
             maxLimit = (userId + 1) * 100000;
+          } else {
+            // SaaS Multi-tenant dynamic sequential numbering
+            minNo = 1000;
+            maxLimit = 999999999;
           }
 
           // Self-healing: Ensure deleted records never hold receipt numbers
           await db.rawUpdate(
               'UPDATE $table SET computer_receipt_no = NULL WHERE (is_deleted = 1) AND computer_receipt_no IS NOT NULL');
-          if (userId == 1) {
+          if (isTenant1 && userId == 1) {
             final countRes = await db.rawQuery(
                 'SELECT COUNT(*) FROM $table WHERE computer_receipt_no > 300040 AND computer_receipt_no < 300057 AND (is_deleted = 0 OR is_deleted IS NULL)');
             final countBetween = (countRes.isNotEmpty && countRes.first.values.isNotEmpty)
@@ -2538,7 +2550,8 @@ class _SimpleFinancePageState extends State<SimpleFinancePage> {
         } catch (e) {
           debugPrint("Error fetching max receipt no: $e");
           int userId = currentUserId.value ?? 1;
-          int baseMin = (userId == 1) ? 300000 : ((userId == 3) ? 700000 : userId * 100000);
+          final isTenant1 = (currentTenantId.value == 1);
+          int baseMin = (isTenant1 && userId == 1) ? 300000 : ((isTenant1 && userId == 3) ? 700000 : (isTenant1 ? userId * 100000 : 1000));
           compReceiptNo = baseMin + 1;
         }
         formattedReceiptNo = isMasjid ? 'M-$compReceiptNo' : '$compReceiptNo';

@@ -14,7 +14,8 @@ $cur_tenant_id = (int)get_current_tenant_id();
 $success_msg = '';
 
 function ta_status_label($status) {
-    $labels = ['P' => 'حاضر', 'L' => 'رخصت', 'LA' => 'رخصت اتفاقی', 'OD' => 'بکار مدرسہ'];
+    global $lang; $isEn = ($lang === 'en');
+    $labels = $isEn ? ['P' => 'Present', 'L' => 'Leave', 'LA' => 'Casual Leave', 'OD' => 'On Duty'] : ['P' => 'حاضر', 'L' => 'رخصت', 'LA' => 'رخصت اتفاقی', 'OD' => 'بکار مدرسہ'];
     return $labels[$status] ?? $status;
 }
 
@@ -51,19 +52,24 @@ function ta_is_nazira_class($classRowOrName) {
 function ta_period_label($className, $periodNo) {
     $name = (string)$className;
     $p = (int)$periodNo;
+    global $lang;
+    $isEn = ($lang === 'en');
+    $hifzMap = $isEn ? [1 => 'Morning', 2 => 'After Breakfast', 3 => 'Noon', 4 => 'Evening'] : [1 => 'صبح', 2 => 'ناشتہ کے بعد', 3 => 'دوپہر', 4 => 'شام'];
+    $naziraMap = $isEn ? [1 => 'Morning', 2 => 'Evening'] : [1 => 'صبح', 2 => 'شام'];
+    $defaultP = $isEn ? ('Period ' . $p) : ('پیریڈ ' . $p);
     if (ta_is_hifz_class($name)) {
-        return [1 => 'صبح', 2 => 'ناشتہ کے بعد', 3 => 'دوپہر', 4 => 'شام'][$p] ?? ('پیریڈ ' . $p);
+        return $hifzMap[$p] ?? $defaultP;
     }
     if (ta_is_nazira_class($name)) {
-        return [1 => 'صبح', 2 => 'شام'][$p] ?? ('پیریڈ ' . $p);
+        return $naziraMap[$p] ?? $defaultP;
     }
     if (strpos($name, 'حفظ') !== false || strpos($name, 'گردان') !== false || strpos($name, 'حسن صوت') !== false) {
-        return [1 => 'صبح', 2 => 'ناشتہ کے بعد', 3 => 'دوپہر', 4 => 'شام'][$p] ?? ('پیریڈ ' . $p);
+        return $hifzMap[$p] ?? $defaultP;
     }
     if (strpos($name, 'ناظرہ') !== false) {
-        return [1 => 'صبح', 2 => 'شام'][$p] ?? ('پیریڈ ' . $p);
+        return $naziraMap[$p] ?? $defaultP;
     }
-    return 'پیریڈ ' . $p;
+    return $defaultP;
 }
 
 function ta_sync_daily_summary(PDO $pdo, $teacherId, $date, $tenantId = 1) {
@@ -360,22 +366,22 @@ $stmt->execute([$date, $cur_tenant_id]);
 foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
     $existing[$r['teacher_id'].'|'.$r['class_id'].'|'.$r['period_no']] = $r;
 }
-$status_opts = ['P' => 'حاضر', 'L' => 'رخصت', 'LA' => 'رخصت اتفاقی', 'OD' => 'بکار مدرسہ'];
+$status_opts = ['P' => __('حاضر', 'Present'), 'L' => __('رخصت', 'Leave'), 'LA' => __('رخصت اتفاقی', 'Casual Leave'), 'OD' => __('بکار مدرسہ', 'On Duty')];
 ?>
 
 <div class="container-fluid py-3">
     <div class="d-flex align-items-center justify-content-between mb-3">
-        <h4 class="fw-bold mb-0"><i class="fas fa-chalkboard-teacher me-2 text-success"></i>اساتذہ کی پیریڈ وار حاضری</h4>
-        <a href="teacher_attendance_report.php" class="btn btn-outline-primary btn-sm fw-bold"><i class="fas fa-chart-bar me-1"></i> رپورٹ</a>
+        <h4 class="fw-bold mb-0"><i class="fas fa-chalkboard-teacher me-2 text-success"></i><?php echo __('اساتذہ کی پیریڈ وار حاضری', 'Teachers Period-wise Attendance'); ?></h4>
+        <a href="teacher_attendance_report.php" class="btn btn-outline-primary btn-sm fw-bold"><i class="fas fa-chart-bar me-1"></i> <?php echo __('رپورٹ', 'Report'); ?></a>
     </div>
     <?php if ($success_msg): ?><div class="alert alert-success fw-bold shadow-sm">✓ <?= htmlspecialchars($success_msg) ?></div><?php endif; ?>
     <form method="POST">
         <div class="card shadow-sm mb-4 border-0"><div class="card-body p-3"><div class="row align-items-end g-2">
-            <div class="col-md-3"><label class="fw-bold mb-1">تاریخ:</label><input type="date" name="date" class="form-control fw-bold" value="<?= htmlspecialchars($date) ?>" onchange="this.form.submit()"></div>
+            <div class="col-md-3"><label class="fw-bold mb-1"><?php echo __('تاریخ:', 'Date:'); ?></label><input type="date" name="date" class="form-control fw-bold" value="<?= htmlspecialchars($date) ?>" onchange="this.form.submit()"></div>
             <div class="col-md-4">
-                <label class="fw-bold mb-1">استاد منتخب کریں:</label>
+                <label class="fw-bold mb-1"><?php echo __('استاد منتخب کریں:', 'Select Teacher:'); ?></label>
                 <select id="teacherFilter" class="form-select fw-bold">
-                    <option value="">-- تمام اساتذہ --</option>
+                    <option value=""><?php echo __('-- تمام اساتذہ --', '-- All Teachers --'); ?></option>
                     <?php 
                     if (!empty($teacherMap)) {
                         foreach ($teacherMap as $tid => $t) {
@@ -385,15 +391,15 @@ $status_opts = ['P' => 'حاضر', 'L' => 'رخصت', 'LA' => 'رخصت اتفا
                     ?>
                 </select>
             </div>
-            <div class="col-md-2"><label class="fw-bold mb-1">کل مقررہ پیریڈز:</label><div class="fw-bold text-primary fs-5" id="visiblePeriodsCount"><?= count($assignments) ?></div></div>
-            <div class="col-md-3 text-end"><button type="submit" name="save_teacher_period_attendance" class="btn btn-success fw-bold px-4 shadow w-100"><i class="fas fa-save me-2"></i>محفوظ کریں</button></div>
+            <div class="col-md-2"><label class="fw-bold mb-1"><?php echo __('کل مقررہ پیریڈز:', 'Total Periods:'); ?></label><div class="fw-bold text-primary fs-5" id="visiblePeriodsCount"><?= count($assignments) ?></div></div>
+            <div class="col-md-3 text-end"><button type="submit" name="save_teacher_period_attendance" class="btn btn-success fw-bold px-4 shadow w-100"><i class="fas fa-save me-2"></i><?php echo __('محفوظ کریں', 'Save'); ?></button></div>
         </div></div></div>
         <?php if (empty($assignments)): ?>
-            <div class="alert alert-warning text-center fw-bold">ابھی کسی استاد کو کلاس/پیریڈ الاٹ نہیں کیا گیا۔</div>
+            <div class="alert alert-warning text-center fw-bold"><?php echo __('ابھی کسی استاد کو کلاس/پیریڈ الاٹ نہیں کیا گیا۔', 'No classes/periods assigned to any teacher yet.'); ?></div>
         <?php else: ?>
         <div class="card shadow-sm border-0"><div class="card-body p-0"><div class="table-responsive">
             <table class="table table-bordered table-hover align-middle text-center m-0">
-                <thead style="background:#284D3D;color:white"><tr><th>#</th><th class="text-start">استاد</th><th>کلاس</th><th>پیریڈ</th><th>حاضری</th><th>تاخیر</th><th>نوٹ</th></tr></thead>
+                <thead style="background:#284D3D;color:white"><tr><th>#</th><th class="text-start"><?php echo __('استاد', 'Teacher'); ?></th><th><?php echo __('کلاس', 'Class'); ?></th><th><?php echo __('پیریڈ', 'Period'); ?></th><th><?php echo __('حاضری', 'Attendance'); ?></th><th><?php echo __('تاخیر', 'Late'); ?></th><th><?php echo __('نوٹ', 'Note'); ?></th></tr></thead>
                 <tbody>
                 <?php $sr=1; foreach ($assignments as $a): if (!isset($teacherMap[$a['teacher_id']])) continue; $key=$a['teacher_id'].'|'.$a['class_id'].'|'.$a['period_no']; $att=$existing[$key]??[]; $cur=$att['status']??'P'; $late=(int)($att['late_minutes']??0); ?>
                     <tr class="attendance-row <?= $cur==='P' ? ($late>0?'table-warning':'table-success') : ($cur==='A'?'table-danger':'table-info') ?>" data-teacher-id="<?= htmlspecialchars($a['teacher_id']) ?>">
@@ -409,7 +415,7 @@ $status_opts = ['P' => 'حاضر', 'L' => 'رخصت', 'LA' => 'رخصت اتفا
                 </tbody>
             </table>
         </div></div></div>
-        <div class="mt-3 text-end"><button type="submit" name="save_teacher_period_attendance" class="btn btn-success fw-bold px-5 shadow-sm">تمام حاضری محفوظ کریں</button></div>
+        <div class="mt-3 text-end"><button type="submit" name="save_teacher_period_attendance" class="btn btn-success fw-bold px-5 shadow-sm"><?php echo __('تمام حاضری محفوظ کریں', 'Save All Attendance'); ?></button></div>
         <?php endif; ?>
     </form>
 </div>

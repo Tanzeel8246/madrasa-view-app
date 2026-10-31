@@ -127,29 +127,29 @@ $applicants = $pdo->query("
 
 // Stages Pipeline
 $stageDefs = [
-    'Pending' => ['title' => 'موصولہ درخواستیں', 'color' => 'primary', 'icon' => 'fa-inbox'],
-    'Interviewed' => ['title' => 'انٹرویو مرحلہ', 'color' => 'warning', 'icon' => 'fa-calendar-check'],
-    'Selected' => ['title' => 'منتخب شدہ (بھرتی)', 'color' => 'success', 'icon' => 'fa-check-circle'],
-    'Rejected' => ['title' => 'مسترد شدہ', 'color' => 'danger', 'icon' => 'fa-times-circle'],
+    'Pending' => ['title' => __('موصولہ درخواستیں', 'Received Applications'), 'color' => 'primary', 'icon' => 'fa-inbox'],
+    'Interviewed' => ['title' => __('انٹرویو مرحلہ', 'Interview Stage'), 'color' => 'warning', 'icon' => 'fa-calendar-check'],
+    'Selected' => ['title' => __('منتخب شدہ (بھرتی)', 'Selected (Hired)'), 'color' => 'success', 'icon' => 'fa-check-circle'],
+    'Rejected' => ['title' => __('مسترد شدہ', 'Rejected'), 'color' => 'danger', 'icon' => 'fa-times-circle'],
 ];
 ?>
 
-<div class="container-fluid py-4" dir="rtl">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <!-- Header -->
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
         <div>
             <h3 class="fw-bold mb-1" style="color: #284D3D;">
                 <i class="fas fa-user-tie me-2 text-warning"></i>
-                <?php echo $is_masjid ? 'بھرتی و نوکریاں (مسجد / مکتب عملہ)' : 'بھرتی و اساتذہ نوکریاں (Recruitment)'; ?>
+                <?php echo $is_masjid ? __('بھرتی و نوکریاں (مسجد / مکتب عملہ)', 'Recruitment & Jobs (Masjid / Maktab Staff)') : __('بھرتی و اساتذہ نوکریاں (Recruitment)', 'Recruitment & Teacher Jobs'); ?>
             </h3>
-            <span class="text-muted">خالی آسامیوں، امیدواروں کی سی وی اور انٹرویو پائپ لائن کا انتظام</span>
+            <span class="text-muted"><?php echo __('خالی آسامیوں، امیدواروں کی سی وی اور انٹرویو پائپ لائن کا انتظام', 'Manage job vacancies, applicant CVs and interview pipeline'); ?></span>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-warning fw-bold text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#addApplicantModal">
-                <i class="fas fa-user-plus me-1"></i> امیدوار شامل کریں
+                <i class="fas fa-user-plus me-1"></i> <?php echo __('امیدوار شامل کریں', 'Add Applicant'); ?>
             </button>
             <button class="btn btn-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addJobModal">
-                <i class="fas fa-briefcase me-1"></i> نئی آسامی شامل کریں
+                <i class="fas fa-briefcase me-1"></i> <?php echo __('نئی آسامی شامل کریں', 'Add New Job'); ?>
             </button>
         </div>
     </div>
@@ -172,12 +172,12 @@ $stageDefs = [
     <ul class="nav nav-pills mb-4 gap-2" id="recTabs" role="tablist">
         <li class="nav-item">
             <button class="nav-link active fw-bold px-4" id="pipeline-tab" data-bs-toggle="pill" data-bs-target="#pipeline-pane">
-                <i class="fas fa-stream me-1"></i> پائپ لائن بورڈ (Kanban / Stages)
+                <i class="fas fa-stream me-1"></i> <?php echo __('پائپ لائن بورڈ (Kanban / Stages)', 'Pipeline Board (Kanban / Stages)'); ?>
             </button>
         </li>
         <li class="nav-item">
             <button class="nav-link fw-bold px-4" id="jobs-tab" data-bs-toggle="pill" data-bs-target="#jobs-pane">
-                <i class="fas fa-briefcase me-1"></i> خالی آسامیاں (Job Openings)
+                <i class="fas fa-briefcase me-1"></i> <?php echo __('خالی آسامیاں (Job Openings)', 'Job Openings'); ?>
             </button>
         </li>
     </ul>
@@ -201,7 +201,7 @@ $stageDefs = [
                             </div>
                             <div class="card-body p-2" style="min-height: 400px; max-height: 650px; overflow-y: auto;">
                                 <?php if (empty($stageApps)): ?>
-                                    <div class="text-center py-5 text-muted small">کوئی درخواست نہیں</div>
+                                    <div class="text-center py-5 text-muted small"><?php echo __('کوئی درخواست نہیں', 'No applications'); ?></div>
                                 <?php else: ?>
                                     <?php foreach ($stageApps as $app): ?>
                                         <div class="card border-0 shadow-sm mb-2 rounded-2 bg-white">
@@ -212,27 +212,27 @@ $stageDefs = [
                                                 </div>
                                                 <div class="small text-muted mb-2">
                                                     <i class="fas fa-phone-alt me-1 text-success"></i> <?php echo htmlspecialchars($app['phone']); ?><br>
-                                                    <i class="fas fa-graduation-cap me-1 text-primary"></i> <?php echo htmlspecialchars($app['qualification'] ?: 'تعلیم درج نہیں'); ?>
+                                                    <i class="fas fa-graduation-cap me-1 text-primary"></i> <?php echo htmlspecialchars($app['qualification'] ?: __('تعلیم درج نہیں', 'Education not specified')); ?>
                                                 </div>
                                                 <?php if (!empty($app['interview_date'])): ?>
                                                     <div class="badge bg-warning text-dark mb-2">
-                                                        <i class="fas fa-calendar-alt me-1"></i> انٹرویو: <?php echo htmlspecialchars($app['interview_date']); ?>
+                                                        <i class="fas fa-calendar-alt me-1"></i> <?php echo __('انٹرویو:', 'Interview:'); ?> <?php echo htmlspecialchars($app['interview_date']); ?>
                                                     </div>
                                                 <?php endif; ?>
 
                                                 <div class="d-flex justify-content-between align-items-center pt-2 border-top">
                                                     <button class="btn btn-sm btn-outline-primary" onclick="openStageModal(<?php echo htmlspecialchars(json_encode($app)); ?>)">
-                                                        <i class="fas fa-exchange-alt me-1"></i> مرحلہ بدلیں
+                                                        <i class="fas fa-exchange-alt me-1"></i> <?php echo __('مرحلہ بدلیں', 'Change Stage'); ?>
                                                     </button>
                                                     <?php if ($stKey === 'Selected' && empty($app['converted_teacher_id'])): ?>
-                                                        <form method="POST" class="d-inline" onsubmit="return confirm('کیا آپ اس امیدوار کو اساتذہ لسٹ میں شامل کرنا چاہتے ہیں؟');">
+                                                        <form method="POST" class="d-inline" onsubmit="return confirm('<?php echo __('کیا آپ اس امیدوار کو اساتذہ لسٹ میں شامل کرنا چاہتے ہیں؟', 'Are you sure you want to add this applicant to teachers list?'); ?>');">
                                                             <input type="hidden" name="applicant_id" value="<?php echo $app['id']; ?>">
                                                             <button type="submit" name="hire_teacher" class="btn btn-sm btn-success fw-bold">
-                                                                <i class="fas fa-user-check me-1"></i> ملازم بنائیں
+                                                                <i class="fas fa-user-check me-1"></i> <?php echo __('ملازم بنائیں', 'Hire / Convert'); ?>
                                                             </button>
                                                         </form>
                                                     <?php elseif (!empty($app['converted_teacher_id'])): ?>
-                                                        <span class="badge bg-success"><i class="fas fa-check me-1"></i> ملازم درج شدہ</span>
+                                                        <span class="badge bg-success"><i class="fas fa-check me-1"></i> <?php echo __('ملازم درج شدہ', 'Employee Registered'); ?></span>
                                                     <?php endif; ?>
                                                 </div>
                                             </div>
@@ -250,37 +250,37 @@ $stageDefs = [
         <div class="tab-pane fade" id="jobs-pane">
             <div class="card border-0 shadow-sm rounded-3">
                 <div class="card-body p-3">
-                    <h5 class="fw-bold mb-3"><i class="fas fa-briefcase me-2 text-primary"></i> آسامیوں کی تفصیلات</h5>
+                    <h5 class="fw-bold mb-3"><i class="fas fa-briefcase me-2 text-primary"></i> <?php echo __('آسامیوں کی تفصیلات', 'Job Vacancies Details'); ?></h5>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>عنوانِ ملازمت</th>
-                                    <th>شعبہ</th>
-                                    <th>قسم</th>
-                                    <th>تنخواہ</th>
-                                    <th>آخری تاریخ</th>
-                                    <th>اہلیت / تقاضے</th>
-                                    <th>اسٹیٹس</th>
+                                    <th><?php echo __('عنوانِ ملازمت', 'Job Title'); ?></th>
+                                    <th><?php echo __('شعبہ', 'Department'); ?></th>
+                                    <th><?php echo __('قسم', 'Type'); ?></th>
+                                    <th><?php echo __('تنخواہ', 'Salary'); ?></th>
+                                    <th><?php echo __('آخری تاریخ', 'Deadline'); ?></th>
+                                    <th><?php echo __('اہلیت / تقاضے', 'Requirements'); ?></th>
+                                    <th><?php echo __('اسٹیٹس', 'Status'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($jobs)): ?>
                                     <tr>
-                                        <td colspan="7" class="text-center py-4 text-muted">کوئی آسامی موجود نہیں ہے۔</td>
+                                        <td colspan="7" class="text-center py-4 text-muted"><?php echo __('کوئی آسامی موجود نہیں ہے۔', 'No job openings found.'); ?></td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($jobs as $j): ?>
                                         <tr>
                                             <td class="fw-bold"><?php echo htmlspecialchars($j['title']); ?></td>
-                                            <td><span class="badge bg-light text-dark border"><?php echo htmlspecialchars($j['department'] ?: 'عام'); ?></span></td>
+                                            <td><span class="badge bg-light text-dark border"><?php echo htmlspecialchars($j['department'] ?: __('عام', 'General')); ?></span></td>
                                             <td><span class="badge bg-info text-dark"><?php echo htmlspecialchars($j['job_type']); ?></span></td>
-                                            <td><?php echo htmlspecialchars($j['salary_range'] ?: 'حسبِ لیاقت'); ?></td>
-                                            <td><?php echo htmlspecialchars($j['deadline'] ?: 'اوپن'); ?></td>
+                                            <td><?php echo htmlspecialchars($j['salary_range'] ?: __('حسبِ لیاقت', 'Negotiable')); ?></td>
+                                            <td><?php echo htmlspecialchars($j['deadline'] ?: __('اوپن', 'Open')); ?></td>
                                             <td class="small text-muted"><?php echo htmlspecialchars($j['requirements'] ?: '-'); ?></td>
                                             <td>
                                                 <span class="badge <?php echo $j['status']=='Open'?'bg-success':'bg-secondary'; ?>">
-                                                    <?php echo $j['status']=='Open'?'کھلی ہے':'بند'; ?>
+                                                    <?php echo $j['status']=='Open' ? __('کھلی ہے', 'Open') : __('بند', 'Closed'); ?>
                                                 </span>
                                             </td>
                                         </tr>
@@ -300,46 +300,46 @@ $stageDefs = [
     <div class="modal-dialog">
         <form method="POST" class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title fw-bold"><i class="fas fa-briefcase me-1"></i> نئی آسامی کا اندراج</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-briefcase me-1"></i> <?php echo __('نئی آسامی کا اندراج', 'Add New Job Posting'); ?></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">آسامی کا عنوان <span class="text-danger">*</span></label>
-                    <input type="text" name="title" class="form-control" required placeholder="مثلاً مدرس حفظ، قاری ناظرہ، نگران ہاسٹل، اکاؤنٹنٹ">
+                    <label class="form-label fw-bold"><?php echo __('آسامی کا عنوان', 'Job Title'); ?> <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control" required placeholder="<?php echo __('مثلاً مدرس حفظ، قاری ناظرہ، نگران ہاسٹل، اکاؤنٹنٹ', 'e.g. Hifz Teacher, Nazra Qari, Hostel Warden, Accountant'); ?>">
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">شعبہ</label>
-                        <input type="text" name="department" class="form-control" placeholder="حفظ، کتب، ایڈمن">
+                        <label class="form-label fw-bold"><?php echo __('شعبہ', 'Department'); ?></label>
+                        <input type="text" name="department" class="form-control" placeholder="<?php echo __('حفظ، کتب، ایڈمن', 'Hifz, Books, Admin'); ?>">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">ملازمت کی نوعیت</label>
+                        <label class="form-label fw-bold"><?php echo __('ملازمت کی نوعیت', 'Job Type'); ?></label>
                         <select name="job_type" class="form-select">
-                            <option value="Full-time">مکمل وقتی (Full-time)</option>
-                            <option value="Part-time">جز وقتی (Part-time)</option>
-                            <option value="Visiting">عارضی / وزٹنگ</option>
+                            <option value="Full-time"><?php echo __('مکمل وقتی (Full-time)', 'Full-time'); ?></option>
+                            <option value="Part-time"><?php echo __('جز وقتی (Part-time)', 'Part-time'); ?></option>
+                            <option value="Visiting"><?php echo __('عارضی / وزٹنگ', 'Visiting / Temporary'); ?></option>
                         </select>
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">تنخواہ کا تخمینہ</label>
+                        <label class="form-label fw-bold"><?php echo __('تنخواہ کا تخمینہ', 'Salary Range'); ?></label>
                         <input type="text" name="salary_range" class="form-control" placeholder="25,000 - 35,000">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">آخری تاریخ برائے درخواست</label>
+                        <label class="form-label fw-bold"><?php echo __('آخری تاریخ برائے درخواست', 'Application Deadline'); ?></label>
                         <input type="date" name="deadline" class="form-control">
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">اہلیت و تقاضے</label>
-                    <textarea name="requirements" class="form-control" rows="2" placeholder="وفاق المدارس سند، تجوید، 2 سالہ تجربہ"></textarea>
+                    <label class="form-label fw-bold"><?php echo __('اہلیت و تقاضے', 'Requirements & Qualifications'); ?></label>
+                    <textarea name="requirements" class="form-control" rows="2" placeholder="<?php echo __('وفاق المدارس سند، تجوید، 2 سالہ تجربہ', 'Wifaq certificate, Tajweed, 2-year experience'); ?>"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="add_job" class="btn btn-success fw-bold">آسامی شائع کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="add_job" class="btn btn-success fw-bold"><?php echo __('آسامی شائع کریں', 'Publish Job'); ?></button>
             </div>
         </form>
     </div>
@@ -350,14 +350,14 @@ $stageDefs = [
     <div class="modal-dialog">
         <form method="POST" class="modal-content">
             <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title fw-bold"><i class="fas fa-user-plus me-1"></i> امیدوار کی درخواست درج کریں</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-user-plus me-1"></i> <?php echo __('امیدوار کی درخواست درج کریں', 'Register Applicant'); ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">آسامی منتخب کریں <span class="text-danger">*</span></label>
+                    <label class="form-label fw-bold"><?php echo __('آسامی منتخب کریں', 'Select Job'); ?> <span class="text-danger">*</span></label>
                     <select name="job_id" class="form-select" required>
-                        <option value="">-- منتخب کریں --</option>
+                        <option value=""><?php echo __('-- منتخب کریں --', '-- Select Job --'); ?></option>
                         <?php foreach ($jobs as $j): ?>
                             <option value="<?php echo $j['id']; ?>"><?php echo htmlspecialchars($j['title']) . " ({$j['department']})"; ?></option>
                         <?php endforeach; ?>
@@ -365,42 +365,42 @@ $stageDefs = [
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">امیدوار کا نام <span class="text-danger">*</span></label>
-                        <input type="text" name="applicant_name" class="form-control" required placeholder="نام">
+                        <label class="form-label fw-bold"><?php echo __('امیدوار کا نام', 'Applicant Name'); ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="applicant_name" class="form-control" required placeholder="<?php echo __('نام', 'Name'); ?>">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">والد کا نام</label>
-                        <input type="text" name="father_name" class="form-control" placeholder="ولدیت">
+                        <label class="form-label fw-bold"><?php echo __('والد کا نام', 'Father Name'); ?></label>
+                        <input type="text" name="father_name" class="form-control" placeholder="<?php echo __('ولدیت', 'Father Name'); ?>">
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">رابطہ نمبر <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold"><?php echo __('رابطہ نمبر', 'Phone Number'); ?> <span class="text-danger">*</span></label>
                         <input type="text" name="phone" class="form-control" required placeholder="0300-1234567">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">ای میل (اختیاری)</label>
+                        <label class="form-label fw-bold"><?php echo __('ای میل (اختیاری)', 'Email (Optional)'); ?></label>
                         <input type="email" name="email" class="form-control">
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">تعلیم / ڈگری</label>
-                        <input type="text" name="qualification" class="form-control" placeholder="شہادت العالمیہ / بی اے">
+                        <label class="form-label fw-bold"><?php echo __('تعلیم / ڈگری', 'Qualification / Degree'); ?></label>
+                        <input type="text" name="qualification" class="form-control" placeholder="<?php echo __('شہادت العالمیہ / بی اے', 'Shahadat-ul-Alamiya / BA'); ?>">
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">تجربہ</label>
-                        <input type="text" name="experience" class="form-control" placeholder="مثلاً 3 سالہ تدریس">
+                        <label class="form-label fw-bold"><?php echo __('تجربہ', 'Experience'); ?></label>
+                        <input type="text" name="experience" class="form-control" placeholder="<?php echo __('مثلاً 3 سالہ تدریس', 'e.g. 3 years teaching'); ?>">
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">نوٹس / ابتدائی رائے</label>
+                    <label class="form-label fw-bold"><?php echo __('نوٹس / ابتدائی رائے', 'Notes / Initial Remarks'); ?></label>
                     <textarea name="notes" class="form-control" rows="2"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="add_applicant" class="btn btn-warning fw-bold text-dark">درخواست محفوظ کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="add_applicant" class="btn btn-warning fw-bold text-dark"><?php echo __('درخواست محفوظ کریں', 'Save Application'); ?></button>
             </div>
         </form>
     </div>
@@ -412,35 +412,35 @@ $stageDefs = [
         <form method="POST" class="modal-content">
             <input type="hidden" name="applicant_id" id="stage_app_id">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold"><i class="fas fa-exchange-alt me-1"></i> امیدوار کا مرحلہ تبدیل کریں</h5>
+                <h5 class="modal-title fw-bold"><i class="fas fa-exchange-alt me-1"></i> <?php echo __('امیدوار کا مرحلہ تبدیل کریں', 'Update Applicant Stage'); ?></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">موجودہ امیدوار</label>
+                    <label class="form-label fw-bold"><?php echo __('موجودہ امیدوار', 'Current Applicant'); ?></label>
                     <input type="text" id="stage_app_name" class="form-control bg-light" readonly>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">نیا مرحلہ منتخب کریں</label>
+                    <label class="form-label fw-bold"><?php echo __('نیا مرحلہ منتخب کریں', 'Select New Stage'); ?></label>
                     <select name="status" id="stage_status" class="form-select" required>
-                        <option value="Pending">موصولہ (Pending)</option>
-                        <option value="Interviewed">انٹرویو شیڈول (Interviewed)</option>
-                        <option value="Selected">منتخب شدہ (Selected / Hired)</option>
-                        <option value="Rejected">مسترد شدہ (Rejected)</option>
+                        <option value="Pending"><?php echo __('موصولہ (Pending)', 'Pending'); ?></option>
+                        <option value="Interviewed"><?php echo __('انٹرویو شیڈول (Interviewed)', 'Interview Scheduled'); ?></option>
+                        <option value="Selected"><?php echo __('منتخب شدہ (Selected / Hired)', 'Selected / Hired'); ?></option>
+                        <option value="Rejected"><?php echo __('مسترد شدہ (Rejected)', 'Rejected'); ?></option>
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">انٹرویو کی تاریخ (اگر شیڈول کرنا ہو)</label>
+                    <label class="form-label fw-bold"><?php echo __('انٹرویو کی تاریخ (اگر شیڈول کرنا ہو)', 'Interview Date (if scheduling)'); ?></label>
                     <input type="date" name="interview_date" id="stage_interview_date" class="form-control">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">انٹرویو نوٹس / ممتحن کی رائے</label>
+                    <label class="form-label fw-bold"><?php echo __('انٹرویو نوٹس / ممتحن کی رائے', 'Interview Notes / Feedback'); ?></label>
                     <textarea name="interview_notes" id="stage_interview_notes" class="form-control" rows="2"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
-                <button type="submit" name="update_status" class="btn btn-primary fw-bold">اسٹیٹس اپڈیٹ کریں</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                <button type="submit" name="update_status" class="btn btn-primary fw-bold"><?php echo __('اسٹیٹس اپڈیٹ کریں', 'Update Status'); ?></button>
             </div>
         </form>
     </div>

@@ -143,36 +143,36 @@ $all_students_stmt->execute([$tenant_id]);
 $available_students = $all_students_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $darse_nizami_year_names = [
-    1 => 'سال اول (درجہ اولیٰ)',
-    2 => 'سال دوم (درجہ ثانیہ)',
-    3 => 'سال سوم (درجہ ثالثہ)',
-    4 => 'سال چہارم (درجہ رابعہ)',
-    5 => 'سال پنجم (درجہ خامسہ)',
-    6 => 'سال ششم (درجہ سادسہ)',
-    7 => 'سال ہفتم (درجہ عالیہ)',
-    8 => 'سال ہشتم (درجہ عالمیہ / دورۂ حدیث)'
+    1 => __('سال اول (درجہ اولیٰ)', 'Year 1 (Ula)'),
+    2 => __('سال دوم (درجہ ثانیہ)', 'Year 2 (Sania)'),
+    3 => __('سال سوم (درجہ ثالثہ)', 'Year 3 (Salisa)'),
+    4 => __('سال چہارم (درجہ رابعہ)', 'Year 4 (Rabia)'),
+    5 => __('سال پنجم (درجہ خامسہ)', 'Year 5 (Khamisa)'),
+    6 => __('سال ششم (درجہ سادسہ)', 'Year 6 (Sadisa)'),
+    7 => __('سال ہفتم (درجہ عالیہ)', 'Year 7 (Aliya)'),
+    8 => __('سال ہشتم (درجہ عالمیہ / دورۂ حدیث)', 'Year 8 (Almiya / Hadith)')
 ];
 
 include 'header.php';
 ?>
 
-<div class="container-fluid py-4" dir="rtl">
+<div class="container-fluid py-4" dir="<?php echo ($lang === 'ur') ? 'rtl' : 'ltr'; ?>">
     <!-- Header Card -->
     <div class="card border-0 shadow-sm rounded-4 mb-4 text-white p-4" style="background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-                <h2 class="fw-bold mb-1"><i class="fas fa-user-graduate me-2"></i> طلبہ کورس انرولمنٹ و سالانہ درجات رجسٹریشن</h2>
-                <p class="mb-0 text-white-50">طلبہ کو درس نظامی، عصری علوم کے درجات اور سالانہ تعلیمی سیشن میں رجسٹر کریں</p>
+                <h2 class="fw-bold mb-1"><i class="fas fa-user-graduate me-2"></i> <?php echo __('طلبہ کورس انرولمنٹ و سالانہ درجات رجسٹریشن', 'Student Course Enrollment & Grade Registration'); ?></h2>
+                <p class="mb-0 text-white-50"><?php echo __('طلبہ کو درس نظامی، عصری علوم کے درجات اور سالانہ تعلیمی سیشن میں رجسٹر کریں', 'Register students into courses, grades and academic sessions'); ?></p>
             </div>
             <div class="d-flex gap-2">
                 <button type="button" class="btn btn-warning text-dark fw-bold px-3 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#enrollSingleModal">
-                    <i class="fas fa-user-plus me-1"></i> انفرادی داخلہ
+                    <i class="fas fa-user-plus me-1"></i> <?php echo __('انفرادی داخلہ', 'Single Enrollment'); ?>
                 </button>
                 <button type="button" class="btn btn-light text-success fw-bold px-3 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#enrollBulkModal">
-                    <i class="fas fa-users me-1"></i> اجتماعی (Bulk) داخلہ
+                    <i class="fas fa-users me-1"></i> <?php echo __('اجتماعی (Bulk) داخلہ', 'Bulk Enrollment'); ?>
                 </button>
                 <a href="course_manager.php" class="btn btn-outline-light rounded-pill px-3">
-                    <i class="fas fa-cogs me-1"></i> کورس سیٹ اپ
+                    <i class="fas fa-cogs me-1"></i> <?php echo __('کورس سیٹ اپ', 'Course Setup'); ?>
                 </a>
             </div>
         </div>
@@ -196,9 +196,9 @@ include 'header.php';
     <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
         <form method="GET" class="row g-3 align-items-end">
             <div class="col-md-3">
-                <label class="form-label fw-bold">کورس منتخب کریں</label>
+                <label class="form-label fw-bold"><?php echo __('کورس منتخب کریں', 'Select Course'); ?></label>
                 <select name="course_id" class="form-select rounded-3" onchange="this.form.submit()">
-                    <option value="0">تمام کورسز</option>
+                    <option value="0"><?php echo __('تمام کورسز', 'All Courses'); ?></option>
                     <?php foreach ($courses as $c): ?>
                         <option value="<?php echo $c['id']; ?>" <?php echo ($filter_course == $c['id']) ? 'selected' : ''; ?>>
                             <?php echo htmlspecialchars($c['name']); ?> (<?php echo $c['gender']; ?>)
@@ -207,9 +207,9 @@ include 'header.php';
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label fw-bold">سال / درجہ</label>
+                <label class="form-label fw-bold"><?php echo __('سال / درجہ', 'Year / Grade'); ?></label>
                 <select name="year_no" class="form-select rounded-3" onchange="this.form.submit()">
-                    <option value="0">تمام سال / درجات</option>
+                    <option value="0"><?php echo __('تمام سال / درجات', 'All Years / Grades'); ?></option>
                     <?php for ($i = 1; $i <= 10; $i++): ?>
                         <option value="<?php echo $i; ?>" <?php echo ($filter_year == $i) ? 'selected' : ''; ?>>
                             <?php echo $darse_nizami_year_names[$i] ?? "سال {$i}"; ?>
@@ -218,18 +218,18 @@ include 'header.php';
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label fw-bold">کیفیت (Status)</label>
+                <label class="form-label fw-bold"><?php echo __('کیفیت (Status)', 'Status'); ?></label>
                 <select name="status" class="form-select rounded-3" onchange="this.form.submit()">
-                    <option value="">تمام کیفیات</option>
-                    <option value="active" <?php echo ($filter_status === 'active') ? 'selected' : ''; ?>>فعال (Active)</option>
-                    <option value="completed" <?php echo ($filter_status === 'completed') ? 'selected' : ''; ?>>مکمل شدہ (Completed)</option>
-                    <option value="detained" <?php echo ($filter_status === 'detained') ? 'selected' : ''; ?>>روکا گیا (Detained)</option>
-                    <option value="dropped" <?php echo ($filter_status === 'dropped') ? 'selected' : ''; ?>>خارج (Dropped)</option>
+                    <option value=""><?php echo __('تمام کیفیات', 'All Statuses'); ?></option>
+                    <option value="active" <?php echo ($filter_status === 'active') ? 'selected' : ''; ?>><?php echo __('فعال (Active)', 'Active'); ?></option>
+                    <option value="completed" <?php echo ($filter_status === 'completed') ? 'selected' : ''; ?>><?php echo __('مکمل شدہ (Completed)', 'Completed'); ?></option>
+                    <option value="detained" <?php echo ($filter_status === 'detained') ? 'selected' : ''; ?>><?php echo __('روکا گیا (Detained)', 'Detained'); ?></option>
+                    <option value="dropped" <?php echo ($filter_status === 'dropped') ? 'selected' : ''; ?>><?php echo __('خارج (Dropped)', 'Dropped'); ?></option>
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label fw-bold">تلاش (نام، رول نمبر)</label>
-                <input type="text" name="search" class="form-control rounded-3" value="<?php echo htmlspecialchars($search); ?>" placeholder="نام یا رول نمبر...">
+                <label class="form-label fw-bold"><?php echo __('تلاش (نام، رول نمبر)', 'Search (Name, Roll No)'); ?></label>
+                <input type="text" name="search" class="form-control rounded-3" value="<?php echo htmlspecialchars($search); ?>" placeholder="<?php echo __('نام یا رول نمبر...', 'Name or Roll No...'); ?>">
             </div>
             <div class="col-md-1">
                 <button type="submit" class="btn btn-success w-100 rounded-3"><i class="fas fa-search"></i></button>
@@ -240,23 +240,23 @@ include 'header.php';
     <!-- Enrollments Table -->
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
         <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
-            <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-list-check me-2 text-success"></i> داخلہ یافتہ طلبہ کی فہرست</h5>
-            <span class="badge bg-primary rounded-pill px-3 py-2 fs-6">کل تعداد: <?php echo count($enrollments); ?></span>
+            <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-list-check me-2 text-success"></i> <?php echo __('داخلہ یافتہ طلبہ کی فہرست', 'Enrolled Students List'); ?></h5>
+            <span class="badge bg-primary rounded-pill px-3 py-2 fs-6"><?php echo __('کل تعداد:', 'Total Count:'); ?> <?php echo count($enrollments); ?></span>
         </div>
 
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 text-center">
                 <thead class="table-light">
                     <tr>
-                        <th style="width: 70px;">رول نمبر</th>
-                        <th class="text-end">طالب علم کا نام</th>
-                        <th class="text-end">ولدیت</th>
-                        <th>کورس</th>
-                        <th>موجودہ سال / درجہ</th>
-                        <th>تعلیمی سیشن</th>
-                        <th>داخلہ تاریخ</th>
-                        <th>حیثیت</th>
-                        <th>ایکشنز</th>
+                        <th style="width: 70px;"><?php echo __('رول نمبر', 'Roll No'); ?></th>
+                        <th class="text-end"><?php echo __('طالب علم کا نام', 'Student Name'); ?></th>
+                        <th class="text-end"><?php echo __('ولدیت', 'Father Name'); ?></th>
+                        <th><?php echo __('کورس', 'Course'); ?></th>
+                        <th><?php echo __('موجودہ سال / درجہ', 'Current Year / Grade'); ?></th>
+                        <th><?php echo __('تعلیمی سیشن', 'Academic Session'); ?></th>
+                        <th><?php echo __('داخلہ تاریخ', 'Enrollment Date'); ?></th>
+                        <th><?php echo __('حیثیت', 'Status'); ?></th>
+                        <th><?php echo __('ایکشنز', 'Actions'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -264,7 +264,7 @@ include 'header.php';
                         <tr>
                             <td colspan="9" class="py-5 text-muted">
                                 <i class="fas fa-user-slash fa-3x mb-2 text-black-50"></i>
-                                <p class="mb-0">اس فلٹر کے مطابق کوئی طالب علم داخل نہیں ہے۔</p>
+                                <p class="mb-0"><?php echo __('اس فلٹر کے مطابق کوئی طالب علم داخل نہیں ہے۔', 'No students enrolled matching this filter.'); ?></p>
                             </td>
                         </tr>
                     <?php else: ?>
@@ -281,11 +281,11 @@ include 'header.php';
                                 <td><small class="text-muted"><?php echo htmlspecialchars($e['enrollment_date'] ?? '—'); ?></small></td>
                                 <td>
                                     <?php if ($e['status'] === 'active'): ?>
-                                        <span class="badge bg-success rounded-pill">فعال</span>
+                                        <span class="badge bg-success rounded-pill"><?php echo __('فعال', 'Active'); ?></span>
                                     <?php elseif ($e['status'] === 'completed'): ?>
-                                        <span class="badge bg-info text-dark rounded-pill">فارغ التحصیل</span>
+                                        <span class="badge bg-info text-dark rounded-pill"><?php echo __('فارغ التحصیل', 'Graduated'); ?></span>
                                     <?php elseif ($e['status'] === 'detained'): ?>
-                                        <span class="badge bg-warning text-dark rounded-pill">روکا گیا</span>
+                                        <span class="badge bg-warning text-dark rounded-pill"><?php echo __('روکا گیا', 'Detained'); ?></span>
                                     <?php else: ?>
                                         <span class="badge bg-secondary rounded-pill"><?php echo htmlspecialchars($e['status']); ?></span>
                                     <?php endif; ?>
@@ -336,7 +336,7 @@ include 'header.php';
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">کورس منتخب کریں</label>
+                        <label class="form-label fw-bold"><?php echo __('کورس منتخب کریں', 'Select Course'); ?></label>
                         <select name="course_id" class="form-select rounded-3" required>
                             <?php foreach ($courses as $c): ?>
                                 <option value="<?php echo $c['id']; ?>"><?php echo htmlspecialchars($c['name']); ?> (<?php echo $c['gender']; ?>)</option>
@@ -345,7 +345,7 @@ include 'header.php';
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-6">
-                            <label class="form-label fw-bold">سال / درجہ</label>
+                            <label class="form-label fw-bold"><?php echo __('سال / درجہ', 'Year / Grade'); ?></label>
                             <select name="current_year" class="form-select rounded-3" required>
                                 <?php for ($i = 1; $i <= 8; $i++): ?>
                                     <option value="<?php echo $i; ?>"><?php echo $darse_nizami_year_names[$i] ?? "سال {$i}"; ?></option>
@@ -474,7 +474,7 @@ include 'header.php';
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-6">
-                            <label class="form-label fw-bold">سال / درجہ</label>
+                            <label class="form-label fw-bold"><?php echo __('سال / درجہ', 'Year / Grade'); ?></label>
                             <select name="current_year" id="edit_cyear" class="form-select rounded-3" required>
                                 <?php for ($i = 1; $i <= 8; $i++): ?>
                                     <option value="<?php echo $i; ?>"><?php echo $darse_nizami_year_names[$i] ?? "سال {$i}"; ?></option>

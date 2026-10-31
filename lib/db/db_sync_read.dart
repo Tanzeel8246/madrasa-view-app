@@ -11,12 +11,18 @@ extension DbSyncRead on DBHelper {
       if (checkTable.isEmpty) return [];
       if (table == 'acc_ledger_entries') {
         return await db.rawQuery('''
-          SELECT e.*, v.voucher_no, a.code AS account_code
+          SELECT e.*, v.voucher_no, a.code AS account_code, a.name AS account_name
           FROM acc_ledger_entries e
           LEFT JOIN acc_vouchers v ON v.id = e.voucher_id
           LEFT JOIN acc_chart_of_accounts a ON a.id = e.account_id
           WHERE COALESCE(e.is_synced, 0) = 0
         ''');
+      }
+      if (table == 'settings') {
+        final cols = await db.rawQuery("PRAGMA table_info(settings)");
+        if (!cols.any((c) => c['name'] == 'is_synced')) return [];
+        return await db.query('settings',
+            where: 'COALESCE(is_synced, 0) = ?', whereArgs: [0]);
       }
       return await db
           .query(table, where: 'COALESCE(is_synced, 0) = ?', whereArgs: [0]);
@@ -82,5 +88,65 @@ extension DbSyncRead on DBHelper {
         );
       }
     });
+  }
+
+  Future<void> markRecordAsSynced(String table, int id, int? serverId) async {
+    Database db = await database;
+    try {
+      if (serverId == null || serverId <= 0 || serverId == id) {
+        await db.update(table, {'is_synced': 1}, where: 'id = ?', whereArgs: [id]);
+        return;
+      }
+      final cols = await db.rawQuery("PRAGMA table_info($table)");
+      final hasServerId = cols.any((c) => c['name'] == 'server_id');
+      if (!hasServerId) {
+        await db.update(table, {'is_synced': 1}, where: 'id = ?', whereArgs: [id]);
+        return;
+      }
+
+      await db.transaction((txn) async {
+        final current = await txn.query(table, where: 'id = ?', whereArgs: [id], limit: 1);
+        if (current.isEmpty) return;
+
+        // Deduplication: if an entry from web sync down already has this server_id
+        final existingWithServerId = await txn.query(
+          table,
+          where: 'server_id = ? AND id != ?',
+          whereArgs: [serverId, id],
+          limit: 1,
+        );
+        if (existingWithServerId.isNotEmpty) {
+          final dupId = existingWithServerId.first['id'];
+          await txn.delete(table, where: 'id = ?', whereArgs: [dupId]);
+        }
+
+        final existingWithId = await txn.query(
+          table,
+          where: 'id = ?',
+          whereArgs: [serverId],
+          limit: 1,
+        );
+        if (existingWithId.isEmpty) {
+          await txn.update(
+            table,
+            {'id': serverId, 'server_id': serverId, 'is_synced': 1},
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        } else {
+          await txn.update(
+            table,
+            {'server_id': serverId, 'is_synced': 1},
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint("markRecordAsSynced error ($table, $id): $e");
+      try {
+        await db.update(table, {'is_synced': 1}, where: 'id = ?', whereArgs: [id]);
+      } catch (_) {}
+    }
   }
 }

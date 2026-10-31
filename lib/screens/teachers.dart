@@ -813,7 +813,8 @@ class _TeachersPageState extends State<TeachersPage> {
                     final isSuper = currentUserRole.value == 'superadmin' || 
                         (currentUserRole.value == 'admin' && currentUserId.value == 1);
                     final maxTch = currentTenantMaxTeachers.value;
-                    if (!isSuper && _allTeachers.length >= maxTch) {
+                    final activeCount = _allTeachers.where((t) => (t['is_deleted'] == 0 || t['is_deleted'] == null) && (t['status'] == 'Active' || t['status'] == null || t['status'] == '')).length;
+                    if (!isSuper && activeCount >= maxTch) {
                       showDialog(
                         context: context,
                         builder: (ctx) => AlertDialog(
