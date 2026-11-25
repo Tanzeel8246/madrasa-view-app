@@ -32,6 +32,22 @@ if (!function_exists('acc_ensure_audit_log_schema')) {
         } catch (Throwable $e) {
             error_log("[acc_audit_log schema error] " . $e->getMessage());
         }
+
+        // BUGFIX B-06: the acc_vouchers.status heal used to run inside
+        // acc_log_audit() on EVERY call. ALTER TABLE is DDL and forces an
+        // implicit COMMIT, which silently committed the caller's open
+        // transaction; the caller's own commit() then threw "There is no
+        // active transaction" and the request died on the generic error page
+        // even though the data was saved. Schema healing belongs here, in the
+        // once-only schema path — callers must invoke
+        // acc_ensure_audit_log_schema() OUTSIDE any transaction.
+        try {
+            $pdo->exec("ALTER TABLE acc_vouchers MODIFY COLUMN status VARCHAR(50) DEFAULT 'Pending'");
+        } catch (Throwable $eStatus) {
+            try {
+                $pdo->exec("ALTER TABLE acc_vouchers MODIFY COLUMN status ENUM('Pending', 'Approved', 'Rejected', 'Reversed', 'Cancelled') DEFAULT 'Pending'");
+            } catch (Throwable $eStatus2) {}
+        }
     }
 }
 
@@ -40,14 +56,9 @@ if (!function_exists('acc_log_audit')) {
         try {
             acc_ensure_audit_log_schema($pdo);
 
-            // Self-heal status column to avoid ENUM truncation error on 'Reversed'
-            try {
-                $pdo->exec("ALTER TABLE acc_vouchers MODIFY COLUMN status VARCHAR(50) DEFAULT 'Pending'");
-            } catch (Throwable $eStatus) {
-                try {
-                    $pdo->exec("ALTER TABLE acc_vouchers MODIFY COLUMN status ENUM('Pending', 'Approved', 'Rejected', 'Reversed', 'Cancelled') DEFAULT 'Pending'");
-                } catch (Throwable $eStatus2) {}
-            }
+            // BUGFIX B-06: no DDL here anymore (see acc_ensure_audit_log_schema).
+            // Running ALTER TABLE inside a caller's transaction implicitly
+            // commits it and breaks the caller's commit().
 
             $tenant_id = (int)($tenant_id ?: (function_exists('get_current_tenant_id') ? get_current_tenant_id() : 1));
             

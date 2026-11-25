@@ -138,7 +138,7 @@ class _HostelScreenState extends State<HostelScreen>
   }
 
   Widget _buildRoomsTab() {
-    final vacantBeds = _totalBedsCapacity - _occupiedBedsCount;
+    final vacantBeds = (_totalBedsCapacity > _occupiedBedsCount) ? (_totalBedsCapacity - _occupiedBedsCount) : 0;
 
     return Column(
       children: [

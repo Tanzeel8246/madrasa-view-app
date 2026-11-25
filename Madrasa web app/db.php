@@ -6,6 +6,11 @@
  * Maintains 100% backwards compatibility for all 200+ dependent web pages.
  */
 
+// 0. Version Definition
+if (file_exists(__DIR__ . '/version.php')) {
+    require_once __DIR__ . '/version.php';
+}
+
 // 1. Database Configuration & Connection
 require_once __DIR__ . '/config/database.php';
 
@@ -166,6 +171,176 @@ if (!function_exists('get_period_date_range')) {
     }
 }
 
+/**
+ * Phase 4 Canonical Attendance Calculator (H-5 & A6 As-Of Unified)
+ * Single Source of Truth across annual_report.php, dashboard.php, and attendance_report.php
+ */
+if (!function_exists('get_canonical_attendance_stats')) {
+    function get_canonical_attendance_stats(PDO $pdo, string $start_date, string $end_date, int $tenant_id = 1, string $sys = 'Madrasa'): array {
+        $tenant_id = max(1, (int)$tenant_id);
+        $total_slots = 0;
+        $present_slots = 0;
+        $absent_slots = 0;
+        $leave_slots = 0;
+        $late_slots = 0;
+
+        $sys_cond_s = ($sys === 'Masjid')
+            ? "s.system_type = 'Masjid'"
+            : "(s.system_type = 'Madrasa' OR s.system_type IS NULL OR s.system_type = '')";
+
+        $t_cond_a  = ($tenant_id === 1) ? "(a.tenant_id = 1 OR a.tenant_id IS NULL OR a.tenant_id = 0)" : "a.tenant_id = $tenant_id";
+        $t_cond_s  = ($tenant_id === 1) ? "(s.tenant_id = 1 OR s.tenant_id IS NULL OR s.tenant_id = 0)" : "s.tenant_id = $tenant_id";
+        $t_cond_pa = ($tenant_id === 1) ? "(pa.tenant_id = 1 OR pa.tenant_id IS NULL OR pa.tenant_id = 0)" : "pa.tenant_id = $tenant_id";
+        $t_cond_ma = ($tenant_id === 1) ? "(ma.tenant_id = 1 OR ma.tenant_id IS NULL OR ma.tenant_id = 0)" : "ma.tenant_id = $tenant_id";
+        $t_cond_ms = ($tenant_id === 1) ? "(ms.tenant_id = 1 OR ms.tenant_id IS NULL OR ms.tenant_id = 0)" : "ms.tenant_id = $tenant_id";
+        $t_cond_dh = ($tenant_id === 1) ? "(dh.tenant_id = 1 OR dh.tenant_id IS NULL OR dh.tenant_id = 0)" : "dh.tenant_id = $tenant_id";
+
+        $has_status = false;
+        try {
+            $has_status = (bool)$pdo->query("SHOW COLUMNS FROM attendance LIKE 'status'")->fetch();
+        } catch (Throwable $e) {}
+        $status_sql = $has_status ? " OR (a.status IN ('P', 'Present', 'حاضر'))" : "";
+
+        $has_exit = false;
+        try {
+            $has_exit = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'exit_date'")->fetch();
+        } catch (Throwable $e) {}
+        $exit_sql_a  = $has_exit ? "AND (s.exit_date IS NULL OR s.exit_date >= a.date)" : "";
+        $exit_sql_pa = $has_exit ? "AND (s.exit_date IS NULL OR s.exit_date >= pa.date)" : "";
+        $exit_sql_dh = $has_exit ? "AND (s.exit_date IS NULL OR s.exit_date >= dh.date)" : "";
+
+        // 1. Regular Daily Attendance (As-Of scoped)
+        try {
+            $stmt_att = $pdo->prepare("
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN (
+                        a.status_1 IN ('P', 'Present', 'حاضر') OR (a.late_1 > 0)
+                        OR a.status_2 IN ('P', 'Present', 'حاضر') OR (a.late_2 > 0)
+                        OR (a.status_3 IN ('P', 'Present', 'حاضر'))
+                        OR (a.status_4 IN ('P', 'Present', 'حاضر'))
+                        $status_sql
+                    ) THEN 1 ELSE 0 END) as presents,
+                    SUM(CASE WHEN (
+                        a.late_1 > 0 OR a.late_2 > 0 OR a.late_3 > 0 OR a.late_4 > 0
+                    ) THEN 1 ELSE 0 END) as lates
+                FROM attendance a
+                JOIN students s ON a.student_id = s.id
+                WHERE a.date BETWEEN ? AND ?
+                  AND (a.is_deleted = 0 OR a.is_deleted IS NULL)
+                  AND $t_cond_a
+                  AND $t_cond_s
+                  AND $sys_cond_s
+                  AND (s.admission_date IS NULL OR s.admission_date <= a.date)
+                  $exit_sql_a
+                  AND (s.graduation_date IS NULL OR s.graduation_date >= a.date)
+            ");
+            $stmt_att->execute([$start_date, $end_date]);
+            $row = $stmt_att->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                $total_slots += (int)($row['total'] ?? 0);
+                $present_slots += (int)($row['presents'] ?? 0);
+                $late_slots += (int)($row['lates'] ?? 0);
+            }
+        } catch (Throwable $e) {}
+
+        // 2. Period Attendance (As-Of scoped)
+        try {
+            $stmt_pa = $pdo->prepare("
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN pa.status IN ('P', 'Present', 'حاضر') THEN 1 ELSE 0 END) as presents,
+                    SUM(CASE WHEN pa.status IN ('A', 'Absent', 'غیر حاضر') THEN 1 ELSE 0 END) as absents,
+                    SUM(CASE WHEN pa.status IN ('L', 'Leave', 'رخصت') THEN 1 ELSE 0 END) as leaves
+                FROM period_attendance pa
+                JOIN students s ON pa.student_id = s.id
+                WHERE pa.date BETWEEN ? AND ?
+                  AND $t_cond_pa
+                  AND $t_cond_s
+                  AND $sys_cond_s
+                  AND (s.admission_date IS NULL OR s.admission_date <= pa.date)
+                  $exit_sql_pa
+                  AND (s.graduation_date IS NULL OR s.graduation_date >= pa.date)
+            ");
+            $stmt_pa->execute([$start_date, $end_date]);
+            $row_pa = $stmt_pa->fetch(PDO::FETCH_ASSOC);
+            if ($row_pa) {
+                $total_slots += (int)($row_pa['total'] ?? 0);
+                $present_slots += (int)($row_pa['presents'] ?? 0);
+                $absent_slots += (int)($row_pa['absents'] ?? 0);
+                $leave_slots += (int)($row_pa['leaves'] ?? 0);
+            }
+        } catch (Throwable $e) {}
+
+        // 3. Maktab Attendance (if Masjid mode)
+        if ($sys === 'Masjid') {
+            try {
+                $has_m_exit = (bool)$pdo->query("SHOW COLUMNS FROM maktab_students LIKE 'exit_date'")->fetch();
+                $m_exit_sql = $has_m_exit ? "AND (ms.exit_date IS NULL OR ms.exit_date >= ma.date)" : "";
+                $stmt_m = $pdo->prepare("
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN ma.status IN ('P', 'Present', 'حاضر') THEN 1 ELSE 0 END) as presents,
+                        SUM(CASE WHEN ma.status IN ('A', 'Absent', 'غیر حاضر') THEN 1 ELSE 0 END) as absents,
+                        SUM(CASE WHEN ma.status IN ('L', 'Leave', 'رخصت') THEN 1 ELSE 0 END) as leaves
+                    FROM maktab_attendance ma
+                    JOIN maktab_students ms ON ma.student_id = ms.id
+                    WHERE ma.date BETWEEN ? AND ?
+                      AND (ma.is_deleted = 0 OR ma.is_deleted IS NULL)
+                      AND $t_cond_ma
+                      AND $t_cond_ms
+                      AND (ms.admission_date IS NULL OR ms.admission_date <= ma.date)
+                      $m_exit_sql
+                ");
+                $stmt_m->execute([$start_date, $end_date]);
+                $row_m = $stmt_m->fetch(PDO::FETCH_ASSOC);
+                if ($row_m) {
+                    $total_slots += (int)($row_m['total'] ?? 0);
+                    $present_slots += (int)($row_m['presents'] ?? 0);
+                    $absent_slots += (int)($row_m['absents'] ?? 0);
+                    $leave_slots += (int)($row_m['leaves'] ?? 0);
+                }
+            } catch (Throwable $e) {}
+        }
+
+        // 4. Fallback to daily_hifz if 0 total
+        if ($total_slots === 0) {
+            try {
+                $stmt_dh = $pdo->prepare("
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN dh.sabaq_status NOT IN ('غیر حاضر', 'Absent', 'A', 'رخصت', 'Leave', 'L') AND dh.sabaq_status != '' AND dh.sabaq_status IS NOT NULL THEN 1 ELSE 0 END) as presents
+                    FROM daily_hifz dh
+                    JOIN students s ON dh.student_id = s.id
+                    WHERE dh.date BETWEEN ? AND ?
+                      AND $t_cond_dh
+                      AND $t_cond_s
+                      AND $sys_cond_s
+                      AND (s.admission_date IS NULL OR s.admission_date <= dh.date)
+                      $exit_sql_dh
+                      AND (s.graduation_date IS NULL OR s.graduation_date >= dh.date)
+                ");
+                $stmt_dh->execute([$start_date, $end_date]);
+                $row_dh = $stmt_dh->fetch(PDO::FETCH_ASSOC);
+                if ($row_dh && (int)($row_dh['total'] ?? 0) > 0) {
+                    $total_slots += (int)($row_dh['total'] ?? 0);
+                    $present_slots += (int)($row_dh['presents'] ?? 0);
+                }
+            } catch (Throwable $e) {}
+        }
+
+        $pct = $total_slots > 0 ? round(($present_slots / $total_slots) * 100, 1) : 0.0;
+        return [
+            'total_slots' => $total_slots,
+            'present_slots' => $present_slots,
+            'absent_slots' => $absent_slots,
+            'leave_slots' => $leave_slots,
+            'late_slots' => $late_slots,
+            'percentage' => $pct
+        ];
+    }
+}
+
 // Auto-create new tables for Hifz/Attendance features (only on explicit migration request)
 if (!function_exists('ensure_legacy_feature_tables')) {
     function ensure_legacy_feature_tables(PDO $pdo) {
@@ -302,6 +477,8 @@ try { $pdo->exec("ALTER TABLE finance ADD COLUMN computer_receipt_no INT DEFAULT
 try { $pdo->exec("ALTER TABLE heads ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE acc_chart_of_accounts ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE acc_chart_of_accounts ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE admission_applications MODIFY COLUMN status VARCHAR(50) DEFAULT 'Pending'"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE admission_applications ADD COLUMN rejection_reason TEXT DEFAULT NULL"); } catch (Throwable $e) {}
 
 
     $examCols = [
@@ -1034,9 +1211,41 @@ $trans = [
 ];
 
 function t($key) { 
-    global $lang, $trans; 
-    // اگر لفظ ڈکشنری میں ہے تو واپس کرو، ورنہ وہی انگریزی لفظ دکھا دو تاکہ ایرر نہ آئے
-    $cur_lang = !empty($lang) ? $lang : ($_SESSION['lang'] ?? ($_COOKIE['app_language'] ?? 'ur'));
+    global $lang, $trans, $pdo; 
+    $cur_lang = !empty($lang) ? $lang : ($_SESSION['lang'] ?? ($_COOKIE['app_language'] ?? ($_COOKIE['lang'] ?? 'ur')));
+    // S11 FIX: Dynamic institution name per active tenant from settings/tenants (zero hardcoding / cross-tenant leak)
+    if ($key === 'app_name') {
+        $sys = $_SESSION['system_type'] ?? 'Madrasa';
+        $tId = function_exists('get_current_tenant_id') ? max(1, (int)get_current_tenant_id()) : 1;
+        if ($sys === 'Masjid') {
+            if (!empty($_SESSION['masjid_name'])) return $_SESSION['masjid_name'];
+            try {
+                if ($pdo) {
+                    $mStmt = $pdo->prepare("SELECT masjid_name FROM settings WHERE tenant_id = ? AND masjid_name IS NOT NULL AND TRIM(masjid_name) != '' LIMIT 1");
+                    $mStmt->execute([$tId]);
+                    $mName = $mStmt->fetchColumn();
+                    if ($mName) {
+                        $_SESSION['masjid_name'] = $mName;
+                        return $mName;
+                    }
+                }
+            } catch (Throwable $e) {}
+        } else {
+            if (!empty($_SESSION['tenant_name'])) return $_SESSION['tenant_name'];
+            try {
+                if ($pdo) {
+                    $sStmt = $pdo->prepare("SELECT madrasa_name FROM settings WHERE tenant_id = ? AND madrasa_name IS NOT NULL AND TRIM(madrasa_name) != '' LIMIT 1");
+                    $sStmt->execute([$tId]);
+                    $sName = $sStmt->fetchColumn();
+                    if ($sName) {
+                        $_SESSION['tenant_name'] = $sName;
+                        return $sName;
+                    }
+                }
+            } catch (Throwable $e) {}
+        }
+    }
+    // اگر لفظ ڈکشنری میں ہے تو واپس کرو، ورنہ سادہ ترجمہ دکھا دو
     if (isset($trans[$key][$cur_lang])) {
         return $trans[$key][$cur_lang];
     }
@@ -1143,6 +1352,16 @@ if (!function_exists('get_next_chart_code')) {
 
 if (!function_exists('resequence_chart_of_accounts')) {
     function resequence_chart_of_accounts(PDO $pdo, $tenant_id = null) {
+        // BUGFIX B-08: DISABLED. This function renumbered every account code
+        // sequentially on chart add/edit/delete AND on every chart page view
+        // (via sync_all_heads_with_chart_and_departments). Adding any account
+        // shifted the codes of all later accounts, so the Chart of Accounts
+        // and the Trial Balance disagreed about which code an account had
+        // (e.g. fee receivable 1003 vs 1004) and ledger history appeared to
+        // move between accounts. Account codes must be immutable once issued;
+        // canonical legacy codes are merged once by
+        // acc_ensure_standard_chart_and_orphans_repaired() instead.
+        return;
         if ($tenant_id === null) $tenant_id = (int)get_current_tenant_id();
         try {
             $types = [
@@ -1289,8 +1508,19 @@ function sync_all_heads_with_chart_and_departments(PDO $pdo, $tenant_id = null) 
                     
                     $rawType = strtolower(trim((string)($h['type'] ?? '')));
                     $isInc = ($rawType === 'income' || strpos($rawType, 'revenue') !== false);
-                    $chartType = $isInc ? 'Revenue' : 'Expense';
-                    
+                    $nLower = mb_strtolower($name, 'UTF-8');
+                    if (mb_strpos($nLower, 'نقد') !== false || mb_strpos($nLower, 'cash') !== false || mb_strpos($nLower, 'بینک') !== false || mb_strpos($nLower, 'بنک') !== false || mb_strpos($nLower, 'bank') !== false) {
+                        $chartType = 'Asset';
+                    } elseif (mb_strpos($nLower, 'قرض') !== false || mb_strpos($nLower, 'loan') !== false) {
+                        $chartType = (mb_strpos($nLower, 'لیا') !== false || mb_strpos($nLower, 'واجب') !== false) ? 'Liability' : 'Asset';
+                    } elseif (mb_strpos($nLower, 'زکوۃ') !== false || mb_strpos($nLower, 'زکوٰۃ') !== false || mb_strpos($nLower, 'zakat') !== false) {
+                        $chartType = 'Liability';
+                    } elseif (mb_strpos($nLower, 'سرمایہ') !== false || mb_strpos($nLower, 'capital') !== false || mb_strpos($nLower, 'equity') !== false) {
+                        $chartType = 'Equity';
+                    } else {
+                        $chartType = $isInc ? 'Revenue' : 'Expense';
+                    }
+
                     $checkChart->execute([$name, $tenant_id]);
                     if (!$checkChart->fetch()) {
                         try {
@@ -1301,6 +1531,32 @@ function sync_all_heads_with_chart_and_departments(PDO $pdo, $tenant_id = null) 
                 }
             }
         } catch (Throwable $e) {}
+
+        // 4b. Mandatory Equity accounts (3001/3002) and Zakat Fund (2101) - avoid duplicates with 4- or 5-digit codes
+        try {
+            $chkCode = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE code IN (?, ?) AND tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+            $chkCode->execute(['3001', '30001', $tenant_id]);
+            if (!$chkCode->fetch()) {
+                $checkChart->execute(['Capital / General Fund (سرمایہ / بنیادی فنڈ)', $tenant_id]);
+                if (!$checkChart->fetch()) {
+                    $insertChart->execute(['3001', 'Capital / General Fund (سرمایہ / بنیادی فنڈ)', 'Equity', $tenant_id]);
+                }
+            }
+            $chkCode->execute(['3002', '30002', $tenant_id]);
+            if (!$chkCode->fetch()) {
+                $checkChart->execute(['Retained Surplus / Deficit (خالص فاضل / خسارہ فنڈ)', $tenant_id]);
+                if (!$checkChart->fetch()) {
+                    $insertChart->execute(['3002', 'Retained Surplus / Deficit (خالص فاضل / خسارہ فنڈ)', 'Equity', $tenant_id]);
+                }
+            }
+            $chkCode->execute(['2101', '21001', $tenant_id]);
+            if (!$chkCode->fetch()) {
+                $checkChart->execute(['Zakat Fund (زکوٰۃ فنڈ)', $tenant_id]);
+                if (!$checkChart->fetch()) {
+                    $insertChart->execute(['2101', 'Zakat Fund (زکوٰۃ فنڈ)', 'Liability', $tenant_id]);
+                }
+            }
+        } catch (Throwable $eEq) {}
 
         // 5. Sync departments -> heads & acc_chart_of_accounts (as Expense)
         try {
@@ -1492,9 +1748,16 @@ if (!function_exists('log_activity')) {
             if ($user_name === null) {
                 $user_name = $_SESSION['user_name'] ?? ($_SESSION['name'] ?? ($_SESSION['role'] ?? 'سسٹم'));
             }
-            $stmt = $pdo->prepare("INSERT INTO activity_logs (user_id, user_name, action_type, description, created_at) VALUES (?, ?, ?, ?, NOW())");
-            $stmt->execute([$user_id, $user_name, $action_type, $description]);
-        } catch (Throwable $e) {}
+            $sys_type = $_SESSION['system_type'] ?? 'Madrasa';
+            $t_id = function_exists('get_current_tenant_id') ? max(1, (int)get_current_tenant_id()) : 1;
+            $stmt = $pdo->prepare("INSERT INTO activity_logs (user_id, user_name, action_type, description, system_type, tenant_id, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+            $stmt->execute([$user_id, $user_name, $action_type, $description, $sys_type, $t_id]);
+        } catch (Throwable $e) {
+            try {
+                $stmt2 = $pdo->prepare("INSERT INTO activity_logs (user_id, user_name, action_type, description, created_at) VALUES (?, ?, ?, ?, NOW())");
+                $stmt2->execute([$user_id, $user_name, $action_type, $description]);
+            } catch (Throwable $e2) {}
+        }
     }
 }
 
@@ -1685,7 +1948,177 @@ if (!function_exists('ensure_phase2_tables')) {
             ensure_column($pdo, 'admission_inquiries', 'duration', "VARCHAR(50) DEFAULT ''");
             ensure_column($pdo, 'admission_inquiries', 'residence_status', "VARCHAR(50) DEFAULT ''");
             ensure_column($pdo, 'admission_inquiries', 'photo', "VARCHAR(255) DEFAULT ''");
+            $stdTables = ['students', 'maktab_students'];
+            $fullCols = [
+                'guardian_name' => "VARCHAR(150) DEFAULT ''",
+                'guardian_cnic' => "VARCHAR(30) DEFAULT ''",
+                'guardian_relation' => "VARCHAR(50) DEFAULT ''",
+                'guardian_address' => "TEXT DEFAULT NULL",
+                'prev_madaris' => "TEXT DEFAULT NULL",
+                'qualification' => "VARCHAR(100) DEFAULT ''",
+                'last_studied' => "VARCHAR(150) DEFAULT ''",
+                'leave_reason' => "TEXT DEFAULT NULL",
+                'dob' => "DATE DEFAULT NULL",
+                'email' => "VARCHAR(100) DEFAULT ''",
+                'class_name' => "VARCHAR(100) DEFAULT ''"
+            ];
+            foreach ($stdTables as $stbl) {
+                foreach ($fullCols as $fcol => $fdef) {
+                    ensure_column($pdo, $stbl, $fcol, $fdef);
+                }
+            }
         } catch (Throwable $e) {}
+    }
+}
+
+if (!function_exists('get_next_admission_number')) {
+    function get_next_admission_number(PDO $pdo, string $system_type = 'Madrasa', ?int $tenant_id = null, bool $increment = true): array {
+        if ($tenant_id === null && function_exists('get_current_tenant_id')) {
+            $tenant_id = (int)get_current_tenant_id();
+        }
+        $tenant_id = max(1, (int)($tenant_id ?: 1));
+        $tCond = ($tenant_id === 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $tenant_id";
+
+        // 1. Ensure id_sequences table exists
+        try {
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS id_sequences (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    tenant_id INT NOT NULL DEFAULT 1,
+                    seq_key VARCHAR(50) NOT NULL,
+                    current_val INT NOT NULL DEFAULT 0,
+                    hijri_year VARCHAR(10) NOT NULL DEFAULT '1447',
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_tenant_key (tenant_id, seq_key)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+        } catch (Throwable $e) {}
+
+        // 2. Determine Hijri Year from settings (supports live column current_hijri_year and EAV fallback)
+        $hijri_year = '1447';
+        try {
+            $hStmt = $pdo->prepare("SELECT current_hijri_year FROM settings WHERE $tCond ORDER BY id ASC LIMIT 1");
+            $hStmt->execute();
+            $val = trim((string)$hStmt->fetchColumn());
+            if ($val !== '' && preg_match('/^\d{4}/', $val, $m)) {
+                $hijri_year = $m[0];
+            }
+        } catch (Throwable $e) {
+            try {
+                $hStmt2 = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key IN ('hijri_year', 'academic_year', 'current_hijri_year') AND tenant_id = ? LIMIT 1");
+                $hStmt2->execute([$tenant_id]);
+                $val2 = trim((string)$hStmt2->fetchColumn());
+                if ($val2 !== '' && preg_match('/^\d{4}/', $val2, $m2)) {
+                    $hijri_year = $m2[0];
+                }
+            } catch (Throwable $e2) {}
+        }
+
+        $seq_key = 'admission_' . strtolower($system_type);
+
+        // 3. Find current max serial across existing students/inquiries/applications
+        try {
+            $sStmt = $pdo->prepare("SELECT current_val, hijri_year FROM id_sequences WHERE tenant_id = ? AND seq_key = ? LIMIT 1");
+            $sStmt->execute([$tenant_id, $seq_key]);
+            $row = $sStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$row) {
+                $maxSerial = 1450;
+                $tbl = ($system_type === 'Masjid') ? 'maktab_students' : 'students';
+                try {
+                    $q = $pdo->prepare("SELECT admission_number FROM $tbl WHERE $tCond AND admission_number != ''");
+                    $q->execute();
+                    while ($ad = $q->fetchColumn()) {
+                        if (preg_match('/(\d+)$/', (string)$ad, $m)) {
+                            $num = (int)$m[1];
+                            if ($num > $maxSerial && $num < 999999) {
+                                $maxSerial = $num;
+                            }
+                        }
+                    }
+                } catch (Throwable $e) {}
+
+                try {
+                    $q2 = $pdo->prepare("SELECT admission_number FROM admission_inquiries WHERE $tCond AND admission_number != ''");
+                    $q2->execute();
+                    while ($ad = $q2->fetchColumn()) {
+                        if (preg_match('/(\d+)$/', (string)$ad, $m)) {
+                            $num = (int)$m[1];
+                            if ($num > $maxSerial && $num < 999999) {
+                                $maxSerial = $num;
+                            }
+                        }
+                    }
+                } catch (Throwable $e) {}
+
+                $pdo->prepare("INSERT INTO id_sequences (tenant_id, seq_key, current_val, hijri_year) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE current_val = GREATEST(current_val, VALUES(current_val))")
+                    ->execute([$tenant_id, $seq_key, $maxSerial, $hijri_year]);
+                $current_val = $maxSerial;
+            } else {
+                $current_val = (int)$row['current_val'];
+                if (!empty($row['hijri_year'])) {
+                    $hijri_year = $row['hijri_year'];
+                }
+            }
+
+            $candidate_serial = $current_val + 1;
+            $tbl = ($system_type === 'Masjid') ? 'maktab_students' : 'students';
+            $collision = true;
+            $max_tries = 5000;
+
+            while ($collision && $max_tries > 0) {
+                $max_tries--;
+                $candidate_adm_no = $hijri_year . '-' . str_pad((string)$candidate_serial, 4, '0', STR_PAD_LEFT);
+                $exists = false;
+
+                try {
+                    $c1 = $pdo->prepare("SELECT 1 FROM $tbl WHERE admission_number = ? AND $tCond LIMIT 1");
+                    $c1->execute([$candidate_adm_no]);
+                    if ($c1->fetch()) $exists = true;
+                } catch (Throwable $e) {}
+
+                if (!$exists) {
+                    try {
+                        $c2 = $pdo->prepare("SELECT 1 FROM admission_inquiries WHERE admission_number = ? AND $tCond LIMIT 1");
+                        $c2->execute([$candidate_adm_no]);
+                        if ($c2->fetch()) $exists = true;
+                    } catch (Throwable $e) {}
+                }
+
+                if (!$exists) {
+                    try {
+                        $c3 = $pdo->prepare("SELECT 1 FROM admission_applications WHERE admission_number = ? AND $tCond LIMIT 1");
+                        $c3->execute([$candidate_adm_no]);
+                        if ($c3->fetch()) $exists = true;
+                    } catch (Throwable $e) {}
+                }
+
+                if ($exists) {
+                    $candidate_serial++;
+                } else {
+                    $collision = false;
+                }
+            }
+
+            if ($increment) {
+                $pdo->prepare("UPDATE id_sequences SET current_val = ?, updated_at = NOW() WHERE tenant_id = ? AND seq_key = ?")->execute([$candidate_serial, $tenant_id, $seq_key]);
+            }
+
+            $next_serial = $candidate_serial;
+            $adm_no = $hijri_year . '-' . str_pad((string)$next_serial, 4, '0', STR_PAD_LEFT);
+            return [
+                'admission_number' => $adm_no,
+                'serial_no' => $next_serial,
+                'hijri_year' => $hijri_year
+            ];
+        } catch (Throwable $e) {
+            $fallback_serial = 1455;
+            return [
+                'admission_number' => $hijri_year . '-' . $fallback_serial,
+                'serial_no' => $fallback_serial,
+                'hijri_year' => $hijri_year
+            ];
+        }
     }
 }
 
@@ -2015,10 +2448,138 @@ if (!function_exists('record_inventory_sale_with_voucher')) {
     }
 }
 
+if (!function_exists('ensure_academic_courses_tables')) {
+    function ensure_academic_courses_tables(PDO $pdo) {
+        try {
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS `course_structure` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `name` VARCHAR(150) NOT NULL,
+                    `course_type` VARCHAR(50) DEFAULT 'Darse_Nizami',
+                    `total_years` INT DEFAULT 8,
+                    `gender` VARCHAR(20) DEFAULT 'بنین',
+                    `description` TEXT,
+                    `system_type` VARCHAR(20) DEFAULT 'Madrasa',
+                    `tenant_id` INT NOT NULL DEFAULT 1,
+                    `is_active` TINYINT(1) DEFAULT 1,
+                    `is_deleted` TINYINT(1) DEFAULT 0,
+                    `is_synced` TINYINT(1) DEFAULT 0,
+                    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (`tenant_id`),
+                    INDEX (`system_type`),
+                    INDEX (`is_deleted`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
+
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS `course_subjects` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `course_id` INT NOT NULL,
+                    `year_no` INT NOT NULL DEFAULT 1,
+                    `year_name` VARCHAR(100) DEFAULT '',
+                    `subject_name` VARCHAR(150) NOT NULL,
+                    `book_name` VARCHAR(150) DEFAULT '',
+                    `max_marks` DECIMAL(6,2) DEFAULT 100.00,
+                    `pass_marks` DECIMAL(6,2) DEFAULT 40.00,
+                    `subject_order` INT DEFAULT 1,
+                    `is_optional` TINYINT(1) DEFAULT 0,
+                    `tenant_id` INT NOT NULL DEFAULT 1,
+                    `is_deleted` TINYINT(1) DEFAULT 0,
+                    `is_synced` TINYINT(1) DEFAULT 0,
+                    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (`course_id`),
+                    INDEX (`year_no`),
+                    INDEX (`tenant_id`),
+                    INDEX (`is_deleted`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
+
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS `student_course_enrollment` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `student_id` INT NOT NULL,
+                    `course_id` INT NOT NULL,
+                    `current_year` INT NOT NULL DEFAULT 1,
+                    `enrollment_date` DATE,
+                    `expected_completion_year` VARCHAR(20) DEFAULT '',
+                    `roll_number` VARCHAR(50) DEFAULT '',
+                    `status` VARCHAR(30) DEFAULT 'Active',
+                    `remarks` TEXT,
+                    `tenant_id` INT NOT NULL DEFAULT 1,
+                    `is_deleted` TINYINT(1) DEFAULT 0,
+                    `is_synced` TINYINT(1) DEFAULT 0,
+                    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (`student_id`),
+                    INDEX (`course_id`),
+                    INDEX (`tenant_id`),
+                    INDEX (`status`),
+                    INDEX (`is_deleted`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
+
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS `exam_subject_results` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `exam_id` INT NOT NULL,
+                    `student_id` INT NOT NULL,
+                    `course_id` INT DEFAULT 0,
+                    `year_no` INT DEFAULT 1,
+                    `subject_id` INT NOT NULL,
+                    `subject_name` VARCHAR(150) NOT NULL,
+                    `marks_obtained` DECIMAL(6,2) DEFAULT 0.00,
+                    `max_marks` DECIMAL(6,2) DEFAULT 100.00,
+                    `is_absent` TINYINT(1) DEFAULT 0,
+                    `grade` VARCHAR(30) DEFAULT '',
+                    `remarks` TEXT,
+                    `system_type` VARCHAR(20) DEFAULT 'Madrasa',
+                    `tenant_id` INT NOT NULL DEFAULT 1,
+                    `is_deleted` TINYINT(1) DEFAULT 0,
+                    `is_synced` TINYINT(1) DEFAULT 0,
+                    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (`exam_id`),
+                    INDEX (`student_id`),
+                    INDEX (`subject_id`),
+                    INDEX (`tenant_id`),
+                    INDEX (`is_deleted`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
+
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS `student_year_promotion` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `student_id` INT NOT NULL,
+                    `course_id` INT NOT NULL,
+                    `from_year` INT NOT NULL,
+                    `to_year` INT NOT NULL,
+                    `academic_session` VARCHAR(50) DEFAULT '',
+                    `status` VARCHAR(30) DEFAULT 'Pass',
+                    `promoted_by` INT DEFAULT NULL,
+                    `promotion_date` DATE,
+                    `remarks` TEXT,
+                    `tenant_id` INT NOT NULL DEFAULT 1,
+                    `is_deleted` TINYINT(1) DEFAULT 0,
+                    `is_synced` TINYINT(1) DEFAULT 0,
+                    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX (`student_id`),
+                    INDEX (`course_id`),
+                    INDEX (`tenant_id`),
+                    INDEX (`is_deleted`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
+        } catch (Throwable $e) {}
+    }
+}
+
 if (isset($_GET['migrate_phases_schema']) && $_GET['migrate_phases_schema'] === '1') {
     try {
         ensure_phase1_tables($pdo);
         ensure_phase2_tables($pdo);
         ensure_phase3_4_tables($pdo);
+        ensure_academic_courses_tables($pdo);
     } catch (Throwable $e) {}
 }

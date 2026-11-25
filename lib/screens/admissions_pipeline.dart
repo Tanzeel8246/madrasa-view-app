@@ -613,8 +613,11 @@ class _AdmissionsPipelineScreenState extends State<AdmissionsPipelineScreen>
       return;
     }
     final cleanPhone = rawPhone.startsWith('0') ? '92${rawPhone.substring(1)}' : rawPhone;
+    final instName = (currentTenantName.value ?? '').trim().isNotEmpty
+        ? currentTenantName.value!.trim()
+        : 'ادارہ';
     final msg =
-        "السلام علیکم ورحمۃ اللہ!\nمحترم $sName ولد $fName کی داخلہ درخواست برائے جامعہ اشرف المدارس پر ٹیسٹ و انٹرویو مقرر کیا گیا ہے۔\n📅 تاریخ: $dateStr\n⏰ وقت: $timeStr\n📍 ادارہ: جامعہ اشرف المدارس، فروکہ\nبراہ کرم مقررہ تاریخ اور وقت پر اصل اسناد و شناختی دستاویزات کے ہمراہ تشریف لائیں۔ شکریہ!";
+        "السلام علیکم ورحمۃ اللہ!\nمحترم $sName ولد $fName کی داخلہ درخواست برائے $instName پر ٹیسٹ و انٹرویو مقرر کیا گیا ہے۔\n📅 تاریخ: $dateStr\n⏰ وقت: $timeStr\n📍 ادارہ: $instName\nبراہ کرم مقررہ تاریخ اور وقت پر اصل اسناد و شناختی دستاویزات کے ہمراہ تشریف لائیں۔ شکریہ!";
     final url = Uri.parse("https://wa.me/$cleanPhone?text=${Uri.encodeComponent(msg)}");
     try {
       await launchUrl(url, mode: LaunchMode.externalApplication);

@@ -471,7 +471,9 @@ class _InKindDonationsScreenState extends State<InKindDonationsScreen> {
                                   await imagePath.writeAsBytes(image);
                                   await Share.shareXFiles(
                                     [XFile(imagePath.path)],
-                                    text: isUrduGlobal.value ? 'رسید عطیات (اشیاء) - جامعہ اشرف المدارس' : 'In-Kind Donation Receipt',
+                                    text: isUrduGlobal.value
+                                        ? 'رسید عطیات (اشیاء) - ${(currentTenantName.value ?? '').trim().isNotEmpty ? currentTenantName.value!.trim() : 'مدرسہ مینجمنٹ سسٹم'}'
+                                        : 'In-Kind Donation Receipt',
                                   );
                                 } catch (e) {
                                   debugPrint("Share error: $e");

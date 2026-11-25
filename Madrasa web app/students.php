@@ -3,6 +3,18 @@ require_once 'db.php';
 include 'header.php'; 
 $cur_tenant_id = (int)get_current_tenant_id();
 
+$curRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin_std = in_array($curRole, ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim'], true);
+$has_explicit_std_perm = (function_exists('app_has_perm') && app_has_perm('manage_students')) || (function_exists('has_perm') && has_perm('manage_students'));
+// Strict Invariant (G-3 / H-1): Teachers NEVER mutate/manage student records directly
+$can_manage_students = $is_admin_std || ($curRole !== 'teacher' && $curRole !== 'mudarris' && $has_explicit_std_perm);
+
+$is_restricted_std = isset($_GET['edit']) || isset($_POST['graduate_student']) || isset($_GET['restore']) || isset($_POST['promote_student']) || isset($_GET['delete']) || isset($_POST['save_student']) || isset($_POST['update_student']) || isset($_POST['restore_student']) || isset($_POST['delete_student']) || isset($_POST['add_student']);
+if ($is_restricted_std && !$can_manage_students) {
+    http_response_code(403);
+    die("<div style='text-align:center;padding:50px;font-family:sans-serif;' dir='rtl'><h2 style='color:#dc3545;'>غیر مجاز رسائی (403 Forbidden)</h2><p style='font-size:16px;color:#555;'>آپ کے پاس طلبہ کا ریکارڈ ترمیم کرنے، شامل کرنے یا تبدیل کرنے کے انتظامی اختیارات نہیں ہیں۔</p><a href='students.php' style='display:inline-block;padding:8px 20px;background:#0d6efd;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;'>واپس طلبہ لسٹ پر جائیں</a></div>");
+}
+
 // --- ایکشنز (Actions) ---
 
 // 1. فارغ التحصیل کرنا (Alumni)
@@ -253,9 +265,22 @@ if (!$is_admin) {
 
 $active_students = [];
 try {
+    // BUGFIX B-15: the students page had no search at all. `q` matches name,
+    // father name, admission number or contact number.
+    $q = trim((string)($_GET['q'] ?? ''));
+    $search_cond = "1=1";
+    $search_params = [];
+    if ($q !== '') {
+        $search_cond = "(name LIKE ? OR father_name LIKE ? OR admission_number LIKE ? OR contact_number LIKE ?)";
+        $search_params = ["%$q%", "%$q%", "%$q%", "%$q%"];
+    }
     if (!empty($_GET['class_filter']) && $has_class_col) {
-        $stmt = $pdo->prepare("SELECT * FROM students WHERE $active_status_cond AND $tenant_cond AND $del_cond AND $sys_cond AND class = ? AND ($class_condition) $order_by");
-        $stmt->execute([$_GET['class_filter']]);
+        $stmt = $pdo->prepare("SELECT * FROM students WHERE $active_status_cond AND $tenant_cond AND $del_cond AND $sys_cond AND class = ? AND ($class_condition) AND $search_cond $order_by");
+        $stmt->execute(array_merge([$_GET['class_filter']], $search_params));
+        $active_students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } elseif ($q !== '') {
+        $stmt = $pdo->prepare("SELECT * FROM students WHERE $active_status_cond AND $tenant_cond AND $del_cond AND $sys_cond AND ($class_condition) AND $search_cond $order_by");
+        $stmt->execute($search_params);
         $active_students = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } else {
         $active_students = $pdo->query("SELECT * FROM students WHERE $active_status_cond AND $tenant_cond AND $del_cond AND $sys_cond AND ($class_condition) $order_by")->fetchAll(PDO::FETCH_ASSOC);
@@ -339,7 +364,7 @@ try {
 // --- ایڈٹ موڈ ---
 $edit_data = null;
 $show_form = false; 
-if(isset($_GET['edit'])) {
+if(isset($_GET['edit']) && $can_manage_students) {
     try {
         $stmt = $pdo->prepare("SELECT * FROM students WHERE id=? " . ($has_tenant_col ? " AND $tenant_cond" : ""));
         $stmt->execute([$_GET['edit']]);
@@ -353,6 +378,7 @@ if(isset($_GET['edit'])) {
 
 <div class="container-fluid">
     
+    <?php if ($can_manage_students): ?>
     <div class="sticky-top pt-2" style="z-index: 100;">
         <div class="card mb-3 bg-dark text-white shadow-lg border-0" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
             <div class="card-body text-center py-2">
@@ -368,14 +394,25 @@ if(isset($_GET['edit'])) {
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
     <?php $studentQuota = function_exists('check_quota_limit') ? check_quota_limit($pdo, 'students', $cur_tenant_id) : ['allowed' => true]; ?>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="text-primary fw-bold m-0"><i class="fas fa-users"></i> <?php echo ($lang === 'en') ? 'Students Record' : 'طلباء کا ریکارڈ'; ?></h3>
+        <?php if ($can_manage_students): ?>
         <button class="btn btn-success fw-bold shadow" onclick="toggleForm()">
             <i class="fas fa-user-plus me-2"></i> <?php echo ($lang === 'en') ? 'Add New Student' : 'نیا طالب علم شامل کریں'; ?>
         </button>
+        <?php endif; ?>
     </div>
+
+    <!-- BUGFIX B-15: student search -->
+    <form method="GET" class="d-flex gap-2 mb-3">
+        <?php if (!empty($_GET['class_filter'])): ?><input type="hidden" name="class_filter" value="<?php echo htmlspecialchars($_GET['class_filter']); ?>"><?php endif; ?>
+        <input type="text" name="q" class="form-control" placeholder="<?php echo ($lang === 'en') ? 'Search by name, father name, admission no. or phone…' : 'نام، ولدیت، داخلہ نمبر یا فون سے تلاش کریں…'; ?>" value="<?php echo htmlspecialchars($_GET['q'] ?? ''); ?>">
+        <button type="submit" class="btn btn-primary fw-bold"><i class="fas fa-search me-1"></i> <?php echo ($lang === 'en') ? 'Search' : 'تلاش'; ?></button>
+        <?php if (!empty($_GET['q'])): ?><a href="students.php" class="btn btn-outline-secondary"><?php echo ($lang === 'en') ? 'Clear' : 'صاف کریں'; ?></a><?php endif; ?>
+    </form>
 
     <?php if(isset($msg)) echo $msg; ?>
     <?php if (!$studentQuota['allowed'] && !$edit_data): ?>
@@ -389,6 +426,7 @@ if(isset($_GET['edit'])) {
         </div>
     <?php endif; ?>
 
+    <?php if ($can_manage_students): ?>
     <div id="student_form_container" class="card shadow-sm mb-4 border-top border-5 border-primary" style="display: <?php echo $show_form ? 'block' : 'none'; ?>;">
         <div class="card-header bg-light">
             <h5 class="fw-bold m-0 text-primary"><?php echo $edit_data ? __('ریکارڈ اپڈیٹ کریں', 'Update Record') : __('نیا اندراج', 'New Enrollment'); ?></h5>
@@ -508,6 +546,7 @@ if(isset($_GET['edit'])) {
             </form>
         </div>
     </div>
+    <?php endif; ?>
 
     <?php 
     $residence_tabs = [
@@ -601,6 +640,7 @@ if(isset($_GET['edit'])) {
                                             <i class="fas fa-certificate me-1"></i> سند
                                         </a>
                                     <?php endif; ?>
+                                    <?php if ($can_manage_students): ?>
                                     <form method="POST" action="students.php" style="display:inline-block;" onsubmit="return confirm('کیا اسے دوبارہ موجودہ لسٹ میں شامل کرنا ہے؟');">
                                         <?php echo csrf_field(); ?>
                                         <input type="hidden" name="restore_student" value="1">
@@ -613,6 +653,7 @@ if(isset($_GET['edit'])) {
                                         <input type="hidden" name="student_id" value="<?php echo $s['id']; ?>">
                                         <button type="submit" class="btn btn-sm btn-outline-danger" title="ہمیشہ کے لیے ڈیلیٹ"><i class="fas fa-trash"></i></button>
                                     </form>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -685,6 +726,7 @@ if(isset($_GET['edit'])) {
                                                         <a href="print_id_card.php?id=<?php echo $s['id']; ?>" class="btn btn-sm btn-success text-white" title="آئی ڈی کارڈ" target="_blank">
                                                             <i class="fas fa-id-card"></i>
                                                         </a>
+                                                        <?php if ($can_manage_students): ?>
                                                         <a href="students.php?edit=<?php echo $s['id']; ?>" class="btn btn-sm btn-primary" title="<?php echo t('btn_edit'); ?>"><i class="fas fa-edit"></i></a>
                                                         
                                                         <button type="button" class="btn btn-sm btn-dark text-warning" title="فارغ التحصیل کریں" onclick="openGraduateModal('<?php echo $s['id']; ?>', '<?php echo addslashes($s['name']); ?>', '<?php echo $s['admission_date']; ?>')">
@@ -701,6 +743,7 @@ if(isset($_GET['edit'])) {
                                                             <input type="hidden" name="student_id" value="<?php echo $s['id']; ?>">
                                                             <button type="submit" class="btn btn-sm btn-danger" title="ڈیلیٹ"><i class="fas fa-trash"></i></button>
                                                         </form>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </td>
                                             </tr>

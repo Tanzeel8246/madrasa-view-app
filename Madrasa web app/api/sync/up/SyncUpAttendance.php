@@ -136,13 +136,30 @@ class SyncUpAttendance {
 
                     $shift = normalize_shift($a['shift'] ?? '1');
                     $statusCol = "status_{$shift}"; $lateCol = "late_{$shift}";
+                    $statusCode = normalize_status_code($a['status'] ?? 'P');
+                    $lateMins = (int)($a['delay_minutes'] ?? 0);
+
                     $check = $pdo->prepare("SELECT id FROM attendance WHERE date = ? AND student_id = ? AND tenant_id = ?");
                     $check->execute([$date, $studentId, $tId]);
                     if ($check->rowCount() > 0) {
-                        $pdo->prepare("UPDATE attendance SET $statusCol = ?, $lateCol = ? WHERE id = ? AND tenant_id = ?")->execute([normalize_status_code($a['status'] ?? 'P'), (int)($a['delay_minutes'] ?? 0), $check->fetchColumn(), $tId]);
+                        $pdo->prepare("UPDATE attendance SET $statusCol = ?, $lateCol = ? WHERE id = ? AND tenant_id = ?")->execute([$statusCode, $lateMins, $check->fetchColumn(), $tId]);
                     } else {
-                        $pdo->prepare("INSERT INTO attendance (date, student_id, $statusCol, $lateCol, tenant_id) VALUES (?, ?, ?, ?, ?)")->execute([$date, $studentId, normalize_status_code($a['status'] ?? 'P'), (int)($a['delay_minutes'] ?? 0), $tId]);
+                        $pdo->prepare("INSERT INTO attendance (date, student_id, $statusCol, $lateCol, tenant_id) VALUES (?, ?, ?, ?, ?)")->execute([$date, $studentId, $statusCode, $lateMins, $tId]);
                     }
+
+                    // D-07 Dual-write to period_attendance so Web attendance sheet immediately reflects mobile sync
+                    try {
+                        $chkP = $pdo->prepare("SELECT id FROM period_attendance WHERE student_id = ? AND date = ? AND period_num = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1");
+                        $chkP->execute([$studentId, $date, $shift, $tId]);
+                        $periodRowId = $chkP->fetchColumn();
+                        if ($periodRowId) {
+                            $pdo->prepare("UPDATE period_attendance SET status = ?, remarks = ?, tenant_id = ? WHERE id = ?")
+                                ->execute([$statusCode, (string)$lateMins, $tId, $periodRowId]);
+                        } else {
+                            $pdo->prepare("INSERT INTO period_attendance (student_id, date, period_num, status, remarks, tenant_id) VALUES (?, ?, ?, ?, ?, ?)")
+                                ->execute([$studentId, $date, $shift, $statusCode, (string)$lateMins, $tId]);
+                        }
+                    } catch (Throwable $ePeriod) {}
                     
                     // Auto SMS Hook for Absent/Leave
                     $statusCode = normalize_status_code($a['status'] ?? 'P');

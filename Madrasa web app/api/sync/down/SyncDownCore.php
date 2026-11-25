@@ -97,10 +97,18 @@ class SyncDownCore {
             $data['masjid_assets'] = [];
         }
 
+        $isMasjidReq = ($requested_sys === 'Masjid');
+        $bookSysCond = $isMasjidReq
+            ? " AND (system_type = 'Masjid' OR system_type = 'Shared')"
+            : " AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '' OR system_type = 'Shared')";
+        $modSysCond = $isMasjidReq
+            ? " AND system_type = 'Masjid'"
+            : " AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+
         // Admission Inquiries (Phase 2)
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['admission_inquiries'] = $ctx->fetchAll("SELECT * FROM admission_inquiries WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
+            $data['admission_inquiries'] = $ctx->fetchAll("SELECT * FROM admission_inquiries WHERE $tCond $modSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
         } catch (Throwable $e) {
             try {
                 $data['admission_inquiries'] = $ctx->fetchAll("SELECT * FROM admission_inquiries WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 1000");
@@ -110,7 +118,7 @@ class SyncDownCore {
         // Library Books (Phase 2)
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['lib_books'] = $ctx->fetchAll("SELECT * FROM lib_books WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
+            $data['lib_books'] = $ctx->fetchAll("SELECT * FROM lib_books WHERE $tCond $bookSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
         } catch (Throwable $e) {
             try {
                 $data['lib_books'] = $ctx->fetchAll("SELECT * FROM lib_books WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
@@ -120,7 +128,7 @@ class SyncDownCore {
         // Library Issues (Phase 2)
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['lib_issues'] = $ctx->fetchAll("SELECT * FROM lib_issues WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
+            $data['lib_issues'] = $ctx->fetchAll("SELECT * FROM lib_issues WHERE $tCond $bookSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
         } catch (Throwable $e) {
             try {
                 $data['lib_issues'] = $ctx->fetchAll("SELECT * FROM lib_issues WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
@@ -130,7 +138,7 @@ class SyncDownCore {
         // Phase 3: School Shop & Inventory
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['inventory_items'] = $ctx->fetchAll("SELECT * FROM inventory_items WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
+            $data['inventory_items'] = $ctx->fetchAll("SELECT * FROM inventory_items WHERE $tCond $modSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
         } catch (Throwable $e) {
             try {
                 $data['inventory_items'] = $ctx->fetchAll("SELECT * FROM inventory_items WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
@@ -139,7 +147,7 @@ class SyncDownCore {
 
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['inventory_sales'] = $ctx->fetchAll("SELECT * FROM inventory_sales WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
+            $data['inventory_sales'] = $ctx->fetchAll("SELECT * FROM inventory_sales WHERE $tCond $modSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 5000");
         } catch (Throwable $e) {
             try {
                 $data['inventory_sales'] = $ctx->fetchAll("SELECT * FROM inventory_sales WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 5000");
@@ -149,7 +157,7 @@ class SyncDownCore {
         // Phase 3: Hostel Management
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['hostel_rooms'] = $ctx->fetchAll("SELECT * FROM hostel_rooms WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
+            $data['hostel_rooms'] = $ctx->fetchAll("SELECT * FROM hostel_rooms WHERE $tCond $modSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
         } catch (Throwable $e) {
             try {
                 $data['hostel_rooms'] = $ctx->fetchAll("SELECT * FROM hostel_rooms WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 1000");
@@ -158,7 +166,7 @@ class SyncDownCore {
 
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['hostel_allocations'] = $ctx->fetchAll("SELECT * FROM hostel_allocations WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 2000");
+            $data['hostel_allocations'] = $ctx->fetchAll("SELECT * FROM hostel_allocations WHERE $tCond $modSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 2000");
         } catch (Throwable $e) {
             try {
                 $data['hostel_allocations'] = $ctx->fetchAll("SELECT * FROM hostel_allocations WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 2000");
@@ -168,7 +176,7 @@ class SyncDownCore {
         // Phase 4: Jobs & Recruitment
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['job_postings'] = $ctx->fetchAll("SELECT * FROM job_postings WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
+            $data['job_postings'] = $ctx->fetchAll("SELECT * FROM job_postings WHERE $tCond $modSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
         } catch (Throwable $e) {
             try {
                 $data['job_postings'] = $ctx->fetchAll("SELECT * FROM job_postings WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 1000");
@@ -177,17 +185,23 @@ class SyncDownCore {
 
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['job_applicants'] = $ctx->fetchAll("SELECT * FROM job_applicants WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 2000");
+            $data['job_applicants'] = $ctx->fetchAll("SELECT * FROM job_applicants WHERE $tCond $modSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 2000");
         } catch (Throwable $e) {
             try {
                 $data['job_applicants'] = $ctx->fetchAll("SELECT * FROM job_applicants WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 2000");
             } catch (Throwable $e2) { $data['job_applicants'] = []; }
         }
 
+        // Masjid Itikaf
+        try {
+            $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
+            $data['masjid_itikaf'] = $ctx->fetchAll("SELECT * FROM masjid_itikaf WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
+        } catch (Throwable $e) { $data['masjid_itikaf'] = []; }
+
         // Phase 4: Website CMS & Announcements
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['web_pages'] = $ctx->fetchAll("SELECT * FROM web_pages WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 500");
+            $data['web_pages'] = $ctx->fetchAll("SELECT * FROM web_pages WHERE $tCond $modSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY sort_order ASC, id DESC LIMIT 500");
         } catch (Throwable $e) {
             try {
                 $data['web_pages'] = $ctx->fetchAll("SELECT * FROM web_pages WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 500");
@@ -196,7 +210,7 @@ class SyncDownCore {
 
         try {
             $delta = $ctx->since_dt ? " AND (updated_at >= '{$ctx->since_dt}' OR created_at >= '{$ctx->since_dt}')" : "";
-            $data['announcements'] = $ctx->fetchAll("SELECT * FROM announcements WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY id DESC LIMIT 1000");
+            $data['announcements'] = $ctx->fetchAll("SELECT * FROM announcements WHERE $tCond $modSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$delta ORDER BY publish_date DESC, id DESC LIMIT 1000");
         } catch (Throwable $e) {
             try {
                 $data['announcements'] = $ctx->fetchAll("SELECT * FROM announcements WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC LIMIT 1000");

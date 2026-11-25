@@ -662,20 +662,22 @@ class SyncUpStudents {
                     $totalYears = max(1, (int)($item['total_years'] ?? 8));
                     $gender = trim($item['gender'] ?? 'بنین');
                     $desc = trim($item['description'] ?? '');
+                    $sysType = trim($item['system_type'] ?? 'Madrasa') ?: 'Madrasa';
                     $isActive = (int)($item['is_active'] ?? 1);
+                    $isDeleted = (int)($item['is_deleted'] ?? 0);
 
-                    $check = $pdo->prepare("SELECT id FROM course_structure WHERE name = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
-                    $check->execute([$name, $tId]);
+                    $check = $pdo->prepare("SELECT id FROM course_structure WHERE (id = ? OR name = ?) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$localId ?: 0, $name, $tId]);
                     $existingId = $check->fetchColumn();
                     $savedCourseId = null;
 
                     if ($existingId) {
-                        $pdo->prepare("UPDATE course_structure SET course_type = ?, total_years = ?, gender = ?, description = ?, is_active = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
-                            ->execute([$courseType, $totalYears, $gender, $desc, $isActive, $existingId, $tId]);
+                        $pdo->prepare("UPDATE course_structure SET name = ?, course_type = ?, total_years = ?, gender = ?, description = ?, system_type = ?, is_active = ?, is_deleted = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                            ->execute([$name, $courseType, $totalYears, $gender, $desc, $sysType, $isActive, $isDeleted, $existingId, $tId]);
                         $savedCourseId = (int)$existingId;
                     } else {
-                        $pdo->prepare("INSERT INTO course_structure (name, course_type, total_years, gender, description, is_active, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                            ->execute([$name, $courseType, $totalYears, $gender, $desc, $isActive, $tId]);
+                        $pdo->prepare("INSERT INTO course_structure (name, course_type, total_years, gender, description, system_type, is_active, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                            ->execute([$name, $courseType, $totalYears, $gender, $desc, $sysType, $isActive, $isDeleted, $tId]);
                         $savedCourseId = (int)$pdo->lastInsertId();
                     }
                     if ($localId !== null) {
@@ -707,25 +709,26 @@ class SyncUpStudents {
                     if ($courseId <= 0) continue;
 
                     $yearNo = max(1, (int)($item['year_no'] ?? 1));
-                    $yearTitle = trim($item['year_title'] ?? '');
+                    $yearName = trim($item['year_name'] ?? $item['year_title'] ?? '');
                     $bookName = trim($item['book_name'] ?? '');
                     $maxMarks = (float)($item['max_marks'] ?? 100);
                     $passMarks = (float)($item['pass_marks'] ?? 40);
-                    $subjectOrder = (int)($item['subject_order'] ?? 0);
+                    $subjectOrder = (int)($item['subject_order'] ?? 1);
                     $isOptional = (int)($item['is_optional'] ?? 0);
+                    $isDeleted = (int)($item['is_deleted'] ?? 0);
 
-                    $check = $pdo->prepare("SELECT id FROM course_subjects WHERE course_id = ? AND year_no = ? AND subject_name = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
-                    $check->execute([$courseId, $yearNo, $subjectName, $tId]);
+                    $check = $pdo->prepare("SELECT id FROM course_subjects WHERE (id = ? OR (course_id = ? AND year_no = ? AND subject_name = ?)) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$localId ?: 0, $courseId, $yearNo, $subjectName, $tId]);
                     $existingId = $check->fetchColumn();
                     $savedSubjectId = null;
 
                     if ($existingId) {
-                        $pdo->prepare("UPDATE course_subjects SET year_title = ?, book_name = ?, max_marks = ?, pass_marks = ?, subject_order = ?, is_optional = ? WHERE id = ?")
-                            ->execute([$yearTitle, $bookName, $maxMarks, $passMarks, $subjectOrder, $isOptional, $existingId]);
+                        $pdo->prepare("UPDATE course_subjects SET course_id = ?, year_no = ?, year_name = ?, subject_name = ?, book_name = ?, max_marks = ?, pass_marks = ?, subject_order = ?, is_optional = ?, is_deleted = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                            ->execute([$courseId, $yearNo, $yearName, $subjectName, $bookName, $maxMarks, $passMarks, $subjectOrder, $isOptional, $isDeleted, $existingId, $tId]);
                         $savedSubjectId = (int)$existingId;
                     } else {
-                        $pdo->prepare("INSERT INTO course_subjects (course_id, year_no, year_title, subject_name, book_name, max_marks, pass_marks, subject_order, is_optional, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                            ->execute([$courseId, $yearNo, $yearTitle, $subjectName, $bookName, $maxMarks, $passMarks, $subjectOrder, $isOptional, $tId]);
+                        $pdo->prepare("INSERT INTO course_subjects (course_id, year_no, year_name, subject_name, book_name, max_marks, pass_marks, subject_order, is_optional, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                            ->execute([$courseId, $yearNo, $yearName, $subjectName, $bookName, $maxMarks, $passMarks, $subjectOrder, $isOptional, $isDeleted, $tId]);
                         $savedSubjectId = (int)$pdo->lastInsertId();
                     }
                     if ($localId !== null) {
@@ -748,22 +751,25 @@ class SyncUpStudents {
                     }
                     if ($studentId <= 0 || $courseId <= 0) continue;
                     $currentYear = max(1, (int)($item['current_year'] ?? 1));
-                    $session = trim($item['academic_session'] ?? '');
+                    $expectedYear = trim($item['expected_completion_year'] ?? '');
+                    $rollNumber = trim($item['roll_number'] ?? '');
+                    $remarks = trim($item['remarks'] ?? '');
                     $enrollDate = normalize_date($item['enrollment_date'] ?? date('Y-m-d'));
-                    $status = trim($item['status'] ?? 'active');
+                    $status = trim($item['status'] ?? 'Active');
+                    $isDeleted = (int)($item['is_deleted'] ?? 0);
 
-                    $check = $pdo->prepare("SELECT id FROM student_course_enrollment WHERE student_id = ? AND course_id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
-                    $check->execute([$studentId, $courseId, $tId]);
+                    $check = $pdo->prepare("SELECT id FROM student_course_enrollment WHERE (id = ? OR (student_id = ? AND course_id = ?)) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$localId ?: 0, $studentId, $courseId, $tId]);
                     $existingId = $check->fetchColumn();
                     $savedEnrollId = null;
 
                     if ($existingId) {
-                        $pdo->prepare("UPDATE student_course_enrollment SET current_year = ?, academic_session = ?, enrollment_date = ?, status = ? WHERE id = ?")
-                            ->execute([$currentYear, $session, $enrollDate, $status, $existingId]);
+                        $pdo->prepare("UPDATE student_course_enrollment SET current_year = ?, enrollment_date = ?, expected_completion_year = ?, roll_number = ?, status = ?, remarks = ?, is_deleted = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                            ->execute([$currentYear, $enrollDate, $expectedYear, $rollNumber, $status, $remarks, $isDeleted, $existingId, $tId]);
                         $savedEnrollId = (int)$existingId;
                     } else {
-                        $pdo->prepare("INSERT INTO student_course_enrollment (student_id, course_id, current_year, academic_session, enrollment_date, status, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                            ->execute([$studentId, $courseId, $currentYear, $session, $enrollDate, $status, $tId]);
+                        $pdo->prepare("INSERT INTO student_course_enrollment (student_id, course_id, current_year, enrollment_date, expected_completion_year, roll_number, status, remarks, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                            ->execute([$studentId, $courseId, $currentYear, $enrollDate, $expectedYear, $rollNumber, $status, $remarks, $isDeleted, $tId]);
                         $savedEnrollId = (int)$pdo->lastInsertId();
                     }
                     if ($localId !== null) {
@@ -797,19 +803,21 @@ class SyncUpStudents {
                     $isAbsent = (int)($item['is_absent'] ?? 0);
                     $grade = trim($item['grade'] ?? 'مقبول');
                     $remarks = trim($item['remarks'] ?? '');
+                    $sysType = trim($item['system_type'] ?? 'Madrasa') ?: 'Madrasa';
+                    $isDeleted = (int)($item['is_deleted'] ?? 0);
 
-                    $check = $pdo->prepare("SELECT id FROM exam_subject_results WHERE exam_id = ? AND student_id = ? AND (subject_id = ? OR subject_name = ?) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
-                    $check->execute([$examId, $studentId, $subjectId, $subjectName, $tId]);
+                    $check = $pdo->prepare("SELECT id FROM exam_subject_results WHERE (id = ? OR (exam_id = ? AND student_id = ? AND (subject_id = ? OR subject_name = ?))) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$localId ?: 0, $examId, $studentId, $subjectId, $subjectName, $tId]);
                     $existingId = $check->fetchColumn();
                     $savedResId = null;
 
                     if ($existingId) {
-                        $pdo->prepare("UPDATE exam_subject_results SET course_id = ?, year_no = ?, marks_obtained = ?, max_marks = ?, is_absent = ?, grade = ?, remarks = ? WHERE id = ?")
-                            ->execute([$courseId, $yearNo, $obtained, $maxMarks, $isAbsent, $grade, $remarks, $existingId]);
+                        $pdo->prepare("UPDATE exam_subject_results SET course_id = ?, year_no = ?, marks_obtained = ?, max_marks = ?, is_absent = ?, grade = ?, remarks = ?, system_type = ?, is_deleted = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                            ->execute([$courseId, $yearNo, $obtained, $maxMarks, $isAbsent, $grade, $remarks, $sysType, $isDeleted, $existingId, $tId]);
                         $savedResId = (int)$existingId;
                     } else {
-                        $pdo->prepare("INSERT INTO exam_subject_results (tenant_id, exam_id, student_id, course_id, year_no, subject_id, subject_name, marks_obtained, max_marks, is_absent, grade, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                            ->execute([$tId, $examId, $studentId, $courseId, $yearNo, $subjectId, $subjectName, $obtained, $maxMarks, $isAbsent, $grade, $remarks]);
+                        $pdo->prepare("INSERT INTO exam_subject_results (tenant_id, exam_id, student_id, course_id, year_no, subject_id, subject_name, marks_obtained, max_marks, is_absent, grade, remarks, system_type, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                            ->execute([$tId, $examId, $studentId, $courseId, $yearNo, $subjectId, $subjectName, $obtained, $maxMarks, $isAbsent, $grade, $remarks, $sysType, $isDeleted]);
                         $savedResId = (int)$pdo->lastInsertId();
                     }
                     if ($localId !== null) {
@@ -834,13 +842,26 @@ class SyncUpStudents {
                     $fromYear = (int)($item['from_year'] ?? 1);
                     $toYear = (int)($item['to_year'] ?? 2);
                     $session = trim($item['academic_session'] ?? '');
-                    $status = trim($item['status'] ?? 'Promoted');
+                    $status = trim($item['status'] ?? 'Pass');
                     $promotedBy = to_int_or_null($item['promoted_by'] ?? null);
+                    $promoDate = !empty($item['promotion_date']) ? normalize_date($item['promotion_date']) : null;
                     $remarks = trim($item['remarks'] ?? '');
+                    $isDeleted = (int)($item['is_deleted'] ?? 0);
 
-                    $pdo->prepare("INSERT INTO student_year_promotion (tenant_id, student_id, course_id, from_year, to_year, academic_session, status, promoted_by, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                        ->execute([$tId, $studentId, $courseId, $fromYear, $toYear, $session, $status, $promotedBy, $remarks]);
-                    $savedPromoId = (int)$pdo->lastInsertId();
+                    $check = $pdo->prepare("SELECT id FROM student_year_promotion WHERE (id = ? OR (student_id = ? AND course_id = ? AND from_year = ? AND to_year = ?)) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$localId ?: 0, $studentId, $courseId, $fromYear, $toYear, $tId]);
+                    $existingId = $check->fetchColumn();
+                    $savedPromoId = null;
+
+                    if ($existingId) {
+                        $pdo->prepare("UPDATE student_year_promotion SET academic_session = ?, status = ?, promoted_by = ?, promotion_date = ?, remarks = ?, is_deleted = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                            ->execute([$session, $status, $promotedBy, $promoDate, $remarks, $isDeleted, $existingId, $tId]);
+                        $savedPromoId = (int)$existingId;
+                    } else {
+                        $pdo->prepare("INSERT INTO student_year_promotion (tenant_id, student_id, course_id, from_year, to_year, academic_session, status, promoted_by, promotion_date, remarks, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                            ->execute([$tId, $studentId, $courseId, $fromYear, $toYear, $session, $status, $promotedBy, $promoDate, $remarks, $isDeleted]);
+                        $savedPromoId = (int)$pdo->lastInsertId();
+                    }
 
                     if ($localId !== null) {
                         $syncedIds['student_year_promotion'][] = $localId;

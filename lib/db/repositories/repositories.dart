@@ -4,3 +4,7 @@ export 'finance_repository.dart';
 export 'academic_repository.dart';
 export 'masjid_repository.dart';
 export 'settings_repository.dart';
+export 'inventory_repository.dart';
+export 'library_repository.dart';
+export 'hostel_repository.dart';
+export 'admin_repository.dart';

@@ -170,6 +170,8 @@ if (empty($plans)) {
     <meta name="googlebot" content="index, follow">
     <meta name="author" content="MindCrafts AI (مائنڈکرافٹ)">
     <meta name="application-name" content="MC-MMS">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" href="favicon.ico">
     <link rel="canonical" href="https://madrasa.mamfss.com/">
 
     <!-- Open Graph / Facebook / WhatsApp / LinkedIn -->
@@ -668,22 +670,60 @@ if (empty($plans)) {
             color: white;
             box-shadow: 0 12px 30px rgba(37, 211, 102, 0.6);
         }
+
+        /* Mobile Navbar & Nastaliq Line-Height Safety */
+        .navbar-custom .navbar-brand {
+            min-width: 0;
+            max-width: calc(100% - 60px);
+        }
+        .navbar-custom .urdu-brand-title {
+            line-height: 1.75;
+            display: block;
+        }
+        .badge-pill-glow, .badge {
+            line-height: 1.5;
+        }
+        @media (max-width: 575.98px) {
+            .navbar-custom {
+                padding-top: 0.65rem !important;
+                padding-bottom: 0.65rem !important;
+            }
+            .navbar-custom .navbar-brand img {
+                width: 36px !important;
+                height: 36px !important;
+                flex-shrink: 0;
+            }
+            .navbar-custom .navbar-brand .fs-5 {
+                font-size: 0.95rem !important;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 235px;
+            }
+            .hero-title {
+                font-size: 1.85rem !important;
+                line-height: 1.65 !important;
+            }
+            #home {
+                margin-top: 96px !important;
+            }
+        }
     </style>
 </head>
 <body>
 
     <!-- 🌟 Navigation Bar -->
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top py-3">
-        <div class="container">
+        <div class="container flex-wrap">
             <a class="navbar-brand d-flex align-items-center gap-2" href="#">
                 <img src="logo_mindcrafts.svg" alt="Mindcrafts AI" style="width: 44px; height: 44px; border-radius: 12px; object-fit: contain; background: #061814; border: 1px solid rgba(16, 185, 129, 0.4); padding: 2px;">
-                <div>
-                    <span class="fw-bold fs-5 tracking-tight" style="color: #fff;"><?php echo ($lang=='ur') ? 'مدرسہ مینیجمنٹ <span style="color: var(--sa-primary);">سسٹم</span>' : 'Madrasa Management <span style="color: var(--sa-primary);">System</span>'; ?></span>
-                    <small class="d-block text-muted" style="font-size: 11px; margin-top: -4px;"><?php echo ($lang=='ur') ? 'بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)' : 'By MindCrafts AI'; ?> — <span class="badge bg-success bg-opacity-25 text-success font-monospace" style="font-size: 10px;">v5.7.134 (SaaS Edition)</span></small>
+                <div style="min-width: 0;">
+                    <span class="fw-bold fs-5 tracking-tight <?php echo ($lang=='ur') ? 'urdu-brand-title' : 'd-block'; ?>" style="color: #fff;"><?php echo ($lang=='ur') ? 'مدرسہ مینیجمنٹ <span style="color: var(--sa-primary);">سسٹم</span>' : 'Madrasa Management <span style="color: var(--sa-primary);">System</span>'; ?></span>
+                    <small class="d-block text-muted mt-1" style="font-size: 11px; line-height: 1.45;"><?php echo ($lang=='ur') ? 'بائے مائنڈ کرافٹس اے آئی' : 'By MindCrafts AI'; ?> <span class="badge bg-success bg-opacity-25 text-success font-monospace ms-1 d-none d-sm-inline-block" style="font-size: 10px;">v<?php echo htmlspecialchars(defined('APP_VERSION') ? APP_VERSION : '5.7.161'); ?> (SaaS Edition)</span></small>
                 </div>
             </a>
 
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+            <button class="navbar-toggler border-0 flex-shrink-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
@@ -1364,16 +1404,19 @@ if (empty($plans)) {
                 </p>
 
                 <div class="d-flex flex-wrap justify-content-center gap-3">
-                    <a href="https://madrasa.mamfss.com/downloads/MAMFSS_App.apk" class="btn btn-sa-primary py-3 px-4 fs-5">
+                    <a href="downloads/MAMFSS_App.apk" class="btn btn-sa-primary py-3 px-4 fs-5">
                         <i class="fab fa-android fs-4"></i> <?php echo __('اینڈرائڈ ایپ ڈاؤن لوڈ (APK)', 'Download Android App (APK)'); ?>
                     </a>
-                    <a href="https://madrasa.mamfss.com/downloads/MAMFSS_Setup.exe" class="btn btn-sa-outline py-3 px-4 fs-5">
+                    <a href="downloads/MAMFSS_Setup.exe" class="btn btn-sa-outline py-3 px-4 fs-5">
                         <i class="fab fa-windows fs-4"></i> <?php echo __('ونڈوز انسٹالر ڈاؤن لوڈ (EXE)', 'Download Windows Setup (EXE)'); ?>
                     </a>
                     <a href="login.php" class="btn btn-sa-outline py-3 px-4 fs-5">
                         <i class="fas fa-desktop fs-4"></i> <?php echo __('ویب ایڈمن میں داخل ہوں', 'Open Web Admin Panel'); ?>
                     </a>
                 </div>
+                <p class="text-muted small mt-4 mb-0">
+                    <?php echo __('ایپ ورژن 5.7.138 — اینڈرائڈ 7.0 یا جدید درکار ہے۔ ایپ میں لاگ اِن کے لیے وہی اکاؤنٹ استعمال کریں جو منتظم نے ویب پینل کے "صارفین" (Users) سیکشن میں استاد کے لیے بنایا ہو؛ ادارہ کوڈ درج کرنا نہ بھولیں۔', 'App version 5.7.138 — requires Android 7.0 or newer. To sign in to the app, use the account the admin created for the teacher in the web panel\'s Users section, and enter your institute code.'); ?>
+                </p>
             </div>
         </div>
     </section>
@@ -1434,7 +1477,7 @@ if (empty($plans)) {
                     &copy; <?php echo date('Y'); ?> MAMFSS Cloud Madrasa Management System. <?php echo __('تمام جملہ حقوق محفوظ ہیں۔', 'All rights reserved.'); ?>
                 </div>
                 <div class="d-flex gap-3 align-items-center">
-                    <span class="badge bg-secondary bg-opacity-25 text-white border border-secondary font-monospace" style="font-size: 11px;">v5.7.134 (SaaS Edition)</span>
+                    <span class="badge bg-secondary bg-opacity-25 text-white border border-secondary font-monospace" style="font-size: 11px;">v<?php echo htmlspecialchars(defined('APP_VERSION') ? APP_VERSION : '5.7.161'); ?> (SaaS Edition)</span>
                     <span>|</span>
                     <a href="#rules" class="text-muted text-decoration-none"><?php echo __('پرائیویسی پالیسی', 'Privacy Policy'); ?></a>
                 </div>

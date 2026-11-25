@@ -33,7 +33,7 @@ class CoreSyncSaver {
             'sanad_bg': s['sanad_bg']?.toString(),
             'signature_stamp_path': s['signature_stamp_path']?.toString(),
             'sanad_layout_json': s['sanad_layout_json']?.toString(),
-            'masjid_name': s['masjid_name']?.toString() ?? 'مسجد اشرف المدارس',
+            'masjid_name': s['masjid_name']?.toString() ?? 'جامع مسجد',
             'masjid_logo_path': s['masjid_logo_path']?.toString(),
           },
           conflictAlgorithm: ConflictAlgorithm.replace,

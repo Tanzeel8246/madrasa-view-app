@@ -1,5 +1,19 @@
 <?php 
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
 require_once 'db.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(403);
+    die('Unauthorized access. Please login first.');
+}
+$cur_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_priv_role = in_array($cur_role, ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim', 'accountant'], true)
+    || app_has_perm('manage_masjid_finance')
+    || app_has_perm('manage_finance');
+if (!$is_priv_role) {
+    http_response_code(403);
+    die('Access denied.');
+}
 
 if (!isset($_GET['id'])) { die('Invalid Request'); }
 
@@ -429,12 +443,13 @@ function getUrduHijriDate($dateStr) {
         }
 
         function getShareText() {
+            const instName = <?php echo json_encode(!empty($settings['masjid_name']) ? $settings['masjid_name'] : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : t('app_name')), JSON_UNESCAPED_UNICODE); ?>;
             const donor = "<?php echo addslashes((string)$data['donor_name']); ?>";
             const amount = "<?php echo number_format((float)$data['amount']); ?>";
             const head = "<?php echo addslashes((string)($data['head_name'] ?: $data['description'])); ?>";
             const receiptNo = "<?php echo htmlspecialchars((string)$data['computer_receipt_no']); ?>";
             
-            return `*جامع مسجد و مدرسہ اشرف المدارس فروکہ*\n` +
+            return `*${instName}*\n` +
                    `محترم جناب: ${donor}\n` +
                    `رقم: ${amount} روپے\n` +
                    `مد: ${head}\n` +

@@ -409,6 +409,45 @@ class _AccVouchersPageState extends State<AccVouchersPage> {
     );
   }
 
+  Widget _buildStatusBadge(String? status) {
+    final s = status?.toLowerCase() ?? 'pending';
+    final isUrdu = isUrduGlobal.value;
+    Color bgColor;
+    Color textColor;
+    String label;
+
+    if (s == 'void' || s == 'cancelled' || s == 'منسوخ') {
+      bgColor = Colors.red.shade50;
+      textColor = Colors.red.shade700;
+      label = isUrdu ? 'منسوخ شدہ' : 'Void';
+    } else if (s == 'approved' || s == 'منظور') {
+      bgColor = Colors.green.shade50;
+      textColor = Colors.green.shade700;
+      label = isUrdu ? 'منظور شدہ' : 'Approved';
+    } else {
+      bgColor = Colors.orange.shade50;
+      textColor = Colors.orange.shade800;
+      label = isUrdu ? 'زیر التواء' : 'Pending';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: textColor.withOpacity(0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -494,7 +533,8 @@ class _AccVouchersPageState extends State<AccVouchersPage> {
                                       fontWeight: FontWeight.bold,
                                       color: Colors.green),
                                 ),
-                                Text(v['status']?.toString() ?? 'Pending'),
+                                const SizedBox(height: 4),
+                                _buildStatusBadge(v['status']?.toString()),
                               ],
                             ),
                             onTap: () => _showVoucherDetails(v),

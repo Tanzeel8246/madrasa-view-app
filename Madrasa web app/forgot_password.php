@@ -5,6 +5,9 @@ require_once 'send_sms.php';
 
 $error = '';
 $success = '';
+$fp_site_name = $_SESSION['tenant_name'] ?? '';
+if (!$fp_site_name) { try { $fp_site_name = (string)($pdo->query("SELECT madrasa_name FROM settings LIMIT 1")->fetchColumn() ?: ''); } catch (Throwable $e) {} }
+if (!$fp_site_name) $fp_site_name = 'MC-MMS';
 $step = isset($_SESSION['reset_step']) ? $_SESSION['reset_step'] : 1; // 1: Info, 2: OTP, 3: New Password
 
 // مرحلہ 1: داخلہ نمبر اور موبائل نمبر کی تصدیق اور OTP بھیجنا
@@ -24,7 +27,7 @@ if (isset($_POST['send_otp'])) {
             $_SESSION['reset_step'] = 2;
             $_SESSION['reset_mobile'] = $mobile;
             
-            $msg = "مدرسہ اشرف المدارس: پاسورڈ تبدیل کرنے کے لیے آپ کا کوڈ (OTP) یہ ہے: $otp";
+            $msg = "$fp_site_name: پاسورڈ تبدیل کرنے کے لیے آپ کا کوڈ (OTP) یہ ہے: $otp";
             send_sms($mobile, $msg);
             
             $success = "آپ کے رجسٹرڈ موبائل نمبر پر 4 ہندسوں کا کوڈ بھیج دیا گیا ہے۔";
@@ -83,7 +86,7 @@ if (isset($_POST['restart'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>پاسورڈ دوبارہ ترتیب دیں - مدرسہ اشرف المدارس</title>
+    <title>پاسورڈ دوبارہ ترتیب دیں - <?php echo htmlspecialchars($fp_site_name); ?></title>
     
     <script>
         // Immediate theme load logic to prevent FOUC

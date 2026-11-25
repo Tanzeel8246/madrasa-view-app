@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import '../../db_helper.dart';
+import '../../utils/data_refresh_bus.dart';
 
 class AcademicRepository {
   final DBHelper _dbHelper;
@@ -33,11 +34,15 @@ class AcademicRepository {
     final db = await _db;
     final values = Map<String, dynamic>.from(data);
     values['is_synced'] = 0;
-    return await db.insert(
+    final id = await db.insert(
       'daily_hifz',
       values,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    DataRefreshBus.notify(DataDomain.academics,
+        action: 'save_hifz', entityId: values['student_id']);
+    return id;
   }
 
   // 2. Nazira
@@ -66,11 +71,15 @@ class AcademicRepository {
     final db = await _db;
     final values = Map<String, dynamic>.from(data);
     values['is_synced'] = 0;
-    return await db.insert(
+    final id = await db.insert(
       'daily_nazira',
       values,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    DataRefreshBus.notify(DataDomain.academics,
+        action: 'save_nazira', entityId: values['student_id']);
+    return id;
   }
 
   // 3. Qaida
@@ -99,11 +108,15 @@ class AcademicRepository {
     final db = await _db;
     final values = Map<String, dynamic>.from(data);
     values['is_synced'] = 0;
-    return await db.insert(
+    final id = await db.insert(
       'qaida_records',
       values,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    DataRefreshBus.notify(DataDomain.academics,
+        action: 'save_qaida', entityId: values['student_id']);
+    return id;
   }
 
   // 4. Exams & Results
@@ -124,11 +137,26 @@ class AcademicRepository {
   Future<List<Map<String, dynamic>>> getExamResults(int examId) async {
     final db = await _db;
     return await db.rawQuery('''
-      SELECT er.*, s.name as student_name, s.roll_no, s.class_name
+      SELECT er.*, s.name as student_name, s.roll_number, s.class_name
       FROM exam_results er
       JOIN students s ON er.student_id = s.id
       WHERE er.exam_id = ? AND (er.is_deleted = 0 OR er.is_deleted IS NULL)
       ORDER BY er.obtained_marks DESC
     ''', [examId]);
+  }
+
+  Future<int> saveExamResult(Map<String, dynamic> data) async {
+    final db = await _db;
+    final values = Map<String, dynamic>.from(data);
+    values['is_synced'] = 0;
+    final id = await db.insert(
+      'exam_results',
+      values,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
+    DataRefreshBus.notify(DataDomain.academics,
+        action: 'save_result', entityId: id);
+    return id;
   }
 }

@@ -47,11 +47,19 @@ class SyncDownFinance {
             $isAdminRole ||
             strtolower((string)$userRole) === 'nazim' ||
             has_permission($userRole, $user['permissions'] ?? [], 'manage_finance', $requested_sys) ||
+            has_permission($userRole, $user['permissions'] ?? [], 'manage_finance_entry', $requested_sys) ||
+            has_permission($userRole, $user['permissions'] ?? [], 'manage_finance_report', $requested_sys) ||
+            has_permission($userRole, $user['permissions'] ?? [], 'manage_simple_finance', $requested_sys) ||
             has_permission($userRole, $user['permissions'] ?? [], 'manage_masjid_finance', $requested_sys) ||
             has_permission($userRole, $user['permissions'] ?? [], 'manage_masjid_finance_entry', $requested_sys) ||
             has_permission($userRole, $user['permissions'] ?? [], 'manage_masjid_finance_report', $requested_sys) ||
             in_array('manage_finance', (array)($user['permissions'] ?? [])) ||
-            in_array('manage_masjid_finance', (array)($user['permissions'] ?? []))
+            in_array('manage_finance_entry', (array)($user['permissions'] ?? [])) ||
+            in_array('manage_finance_report', (array)($user['permissions'] ?? [])) ||
+            in_array('manage_simple_finance', (array)($user['permissions'] ?? [])) ||
+            in_array('manage_masjid_finance', (array)($user['permissions'] ?? [])) ||
+            in_array('manage_masjid_finance_entry', (array)($user['permissions'] ?? [])) ||
+            in_array('manage_masjid_finance_report', (array)($user['permissions'] ?? []))
         );
 
         // Auto-ensure required columns on finance & payroll tables
@@ -111,28 +119,67 @@ class SyncDownFinance {
                 $uid = intval($user['id'] ?? 0);
                 $uName = trim((string)($user['name'] ?? ''));
                 $uUsername = trim((string)($user['username'] ?? ''));
-                
-                // Construct robust user condition to capture all records owned by user ID or user name
+
+                // Construct robust user condition to capture all records owned by user ID, name, spender_name or donor_name
                 $uCondParts = ["user_id = $uid"];
                 if ($uName !== '') {
                     $uCondParts[] = "user_name = " . $pdo->quote($uName);
+                    $uCondParts[] = "spender_name = " . $pdo->quote($uName);
+                    $uCondParts[] = "donor_name = " . $pdo->quote($uName);
                 }
                 if ($uUsername !== '') {
                     $uCondParts[] = "user_name = " . $pdo->quote($uUsername);
+                    $uCondParts[] = "spender_name = " . $pdo->quote($uUsername);
+                    $uCondParts[] = "donor_name = " . $pdo->quote($uUsername);
                 }
-                // Special alias for Saleem (ID 3)
-                if ($uid === 3 || mb_stripos($uUsername, 'saleem') !== false || mb_stripos($uName, 'سلیم') !== false) {
-                    $uCondParts[] = "user_name LIKE '%سلیم%'";
-                    $uCondParts[] = "user_name LIKE '%saleem%'";
+
+                // Resolve personal Asset accounts (Advance / Collection) scoped strictly to this tenant
+                $userAccountIds = [];
+                $accSearchTerms = [];
+                if ($uName !== '') $accSearchTerms[] = "name LIKE " . $pdo->quote('%' . $uName . '%');
+                if ($uUsername !== '') $accSearchTerms[] = "name LIKE " . $pdo->quote('%' . $uUsername . '%');
+                if (!empty($accSearchTerms)) {
+                    $accWhere = implode(' OR ', $accSearchTerms);
+                    $pRows = $ctx->fetchAll("SELECT id, code, name FROM acc_chart_of_accounts WHERE $tCond AND type = 'Asset' AND ($accWhere) AND (is_deleted = 0 OR is_deleted IS NULL)");
+                    foreach ($pRows as $pr) {
+                        $pCode = trim((string)($pr['code'] ?? ''));
+                        $pName = mb_strtolower((string)($pr['name'] ?? ''));
+                        if ($pCode === '1001' || $pCode === '1002' || mb_strpos($pName, 'loan') !== false || mb_strpos($pName, 'قرض') !== false) continue;
+                        $userAccountIds[] = (int)$pr['id'];
+                    }
                 }
+                if (!empty($userAccountIds)) {
+                    $uCondParts[] = "account_id IN (" . implode(',', array_unique($userAccountIds)) . ")";
+                }
+
                 $userCond = "(" . implode(' OR ', array_unique($uCondParts)) . ")";
 
-                $data['finance_history'] = $ctx->fetchAll("SELECT * FROM finance WHERE $userCond AND $tCond AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '') $financeDateCond ORDER BY date DESC, id DESC LIMIT 5000");
-                $masjidFinanceRows = $ctx->fetchAll("SELECT * FROM finance WHERE $userCond AND $tCond AND system_type = 'Masjid' $financeDateCond ORDER BY date DESC, id DESC LIMIT 5000");
+                // Multi-tenant dynamic privacy guard: prevent admin-owned entries of this tenant from leaking to non-admin staff
+                $adminExcludeIds = [];
+                $adminExcludeNames = ['admin'];
+                try {
+                    $admRows = $ctx->fetchAll("SELECT id, name, username FROM admins WHERE $tCond AND LOWER(role) IN ('admin', 'superadmin', 'super_admin', 'administrator')");
+                    foreach ($admRows as $ar) {
+                        if ((int)$ar['id'] !== $uid) {
+                            $adminExcludeIds[] = (int)$ar['id'];
+                            if (!empty($ar['username'])) $adminExcludeNames[] = mb_strtolower(trim((string)$ar['username']));
+                            if (!empty($ar['name'])) $adminExcludeNames[] = mb_strtolower(trim((string)$ar['name']));
+                        }
+                    }
+                } catch (Throwable $eAdmG) {}
+                $admNameQuoted = implode(',', array_map(function($n) use ($pdo) { return $pdo->quote($n); }, array_unique($adminExcludeNames)));
+                $admIdCond = !empty($adminExcludeIds) ? "AND (user_id IS NULL OR user_id NOT IN (" . implode(',', $adminExcludeIds) . "))" : "";
+                $nonAdminCheck = "(LOWER(TRIM(COALESCE(user_name, ''))) NOT IN ($admNameQuoted) $admIdCond)";
+                $privacyGuard = !empty($userAccountIds)
+                    ? " AND (account_id IN (" . implode(',', array_unique($userAccountIds)) . ") OR user_id = $uid OR $nonAdminCheck)"
+                    : " AND (user_id = $uid OR $nonAdminCheck)";
+
+                $data['finance_history'] = $ctx->fetchAll("SELECT * FROM finance WHERE $userCond $privacyGuard AND $tCond AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '') $financeDateCond ORDER BY date DESC, id DESC LIMIT 5000");
+                $masjidFinanceRows = $ctx->fetchAll("SELECT * FROM finance WHERE $userCond $privacyGuard AND $tCond AND system_type = 'Masjid' $financeDateCond ORDER BY date DESC, id DESC LIMIT 5000");
                 try {
                     $hasMasjidFinTable = !empty($pdo->query("SHOW TABLES LIKE 'masjid_finance'")->fetchAll());
                     if ($hasMasjidFinTable) {
-                        $mRows = $ctx->fetchAll("SELECT * FROM masjid_finance WHERE $userCond AND $tCond $financeDateCond ORDER BY date DESC, id DESC LIMIT 5000");
+                        $mRows = $ctx->fetchAll("SELECT * FROM masjid_finance WHERE $userCond $privacyGuard AND $tCond $financeDateCond ORDER BY date DESC, id DESC LIMIT 5000");
                         if (!empty($mRows)) {
                             $masjidFinanceRows = array_merge($masjidFinanceRows, $mRows);
                         }
@@ -193,10 +240,10 @@ class SyncDownFinance {
 
             // Vouchers
             try {
-                $voucherDateCond = $since_dt 
-                    ? " AND (created_at >= '$since_dt' OR date >= '" . substr($since_dt, 0, 10) . "' OR type = 'Contra' OR reference LIKE 'TRANSFER-%')"
+                $voucherDateCond = $since_dt
+                    ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')"
                     : ($since_date ? " AND (date >= '$since_date' OR created_at >= '$since_date' OR type = 'Contra' OR reference LIKE 'TRANSFER-%')" : "");
-                $data['acc_vouchers'] = $ctx->fetchAll("SELECT * FROM acc_vouchers WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$voucherDateCond ORDER BY date DESC, id DESC LIMIT 1000");
+                $data['acc_vouchers'] = $ctx->fetchAll("SELECT * FROM acc_vouchers WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$voucherDateCond ORDER BY date DESC, id DESC LIMIT 5000");
             } catch (Throwable $e) {
                 try {
                     $data['acc_vouchers'] = $ctx->fetchAll("SELECT * FROM acc_vouchers WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY date DESC, id DESC LIMIT 500");
@@ -205,8 +252,8 @@ class SyncDownFinance {
 
             // Ledger Entries
             try {
-                $ledgerDateCond = $since_dt 
-                    ? " AND (v.created_at >= '$since_dt' OR v.date >= '" . substr($since_dt, 0, 10) . "' OR v.type = 'Contra' OR v.reference LIKE 'TRANSFER-%')"
+                $ledgerDateCond = $since_dt
+                    ? " AND (e.created_at >= '$since_dt' OR v.updated_at >= '$since_dt' OR v.created_at >= '$since_dt')"
                     : ($since_date ? " AND (v.date >= '$since_date' OR v.created_at >= '$since_date' OR v.type = 'Contra' OR v.reference LIKE 'TRANSFER-%')" : "");
                 $data['acc_ledger_entries'] = $ctx->fetchAll("SELECT e.*, v.voucher_no FROM acc_ledger_entries e JOIN acc_vouchers v ON e.voucher_id = v.id WHERE (v.tenant_id = $tId OR v.tenant_id IS NULL) AND (v.is_deleted = 0 OR v.is_deleted IS NULL)$ledgerDateCond ORDER BY e.id DESC LIMIT 5000");
             } catch (Throwable $e) {
@@ -215,15 +262,19 @@ class SyncDownFinance {
                 } catch (Throwable $e2) { $data['acc_ledger_entries'] = []; }
             }
 
+            $finSysCond = ($requested_sys === 'Masjid')
+                ? " AND system_type = 'Masjid'"
+                : " AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+
             $payrollDateCond = $since_dt
                 ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')"
                 : ($since_date ? " AND month_year >= '" . date('Y-m', strtotime($since_date)) . "'" : "");
-            $data['acc_payroll'] = $ctx->fetchAll("SELECT * FROM acc_payroll WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$payrollDateCond ORDER BY month_year DESC, id DESC LIMIT 5000");
+            $data['acc_payroll'] = $ctx->fetchAll("SELECT * FROM acc_payroll WHERE $tCond $finSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$payrollDateCond ORDER BY month_year DESC, id DESC LIMIT 5000");
 
             $invoiceDateCond = $since_dt
                 ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')"
                 : ($since_date ? " AND (date >= '$since_date' OR due_date >= '$since_date')" : "");
-            $data['acc_invoices'] = $ctx->fetchAll("SELECT * FROM acc_invoices WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$invoiceDateCond ORDER BY id DESC LIMIT 1000");
+            $data['acc_invoices'] = $ctx->fetchAll("SELECT * FROM acc_invoices WHERE $tCond $finSysCond AND (is_deleted = 0 OR is_deleted IS NULL)$invoiceDateCond ORDER BY id DESC LIMIT 1000");
         }
 
         // Additional fee permissions
@@ -234,16 +285,19 @@ class SyncDownFinance {
         }
 
         // In-Kind Donations & Loans
+        $finSysCond2 = ($requested_sys === 'Masjid')
+            ? " AND system_type = 'Masjid'"
+            : " AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
         $hasInKind = ($isAdminRole || has_permission($userRole, $user['permissions'] ?? [], 'manage_in_kind_donations', $requested_sys) || has_permission($userRole, $user['permissions'] ?? [], 'manage_masjid_in_kind_donations', $requested_sys));
         if ($hasInKind) {
             $inKindCond = $since_dt ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')" : ($since_date ? " AND date >= '$since_date'" : "");
-            $data['in_kind_donations'] = $ctx->fetchAll("SELECT * FROM in_kind_donations WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$inKindCond ORDER BY date DESC, id DESC LIMIT 3000");
+            $data['in_kind_donations'] = $ctx->fetchAll("SELECT * FROM in_kind_donations WHERE $tCond $finSysCond2 AND (is_deleted = 0 OR is_deleted IS NULL)$inKindCond ORDER BY date DESC, id DESC LIMIT 3000");
         } else {
             $data['in_kind_donations'] = [];
         }
         $loanDateCond = $since_dt ? " AND (updated_at >= '$since_dt' OR created_at >= '$since_dt')" : "";
-        $data['staff_loans'] = $ctx->fetchAll("SELECT * FROM staff_loans WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$loanDateCond ORDER BY id DESC LIMIT 5000");
+        $data['staff_loans'] = $ctx->fetchAll("SELECT * FROM staff_loans WHERE $tCond $finSysCond2 AND (is_deleted = 0 OR is_deleted IS NULL)$loanDateCond ORDER BY id DESC LIMIT 5000");
         $loanTxDateCond = $since_dt ? " AND created_at >= '$since_dt'" : ($since_date ? " AND date >= '$since_date'" : "");
-        $data['loan_transactions'] = $ctx->fetchAll("SELECT * FROM loan_transactions WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)$loanTxDateCond ORDER BY date DESC, id DESC LIMIT 5000");
+        $data['loan_transactions'] = $ctx->fetchAll("SELECT * FROM loan_transactions WHERE $tCond $finSysCond2 AND (is_deleted = 0 OR is_deleted IS NULL)$loanTxDateCond ORDER BY date DESC, id DESC LIMIT 5000");
     }
 }

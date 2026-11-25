@@ -13,6 +13,34 @@ if (!$can_manage) {
 
 ensure_phase3_4_tables($pdo);
 
+// BUGFIX B-05 (schema hardening): CREATE TABLE IF NOT EXISTS never upgrades an
+// existing table, so installs seeded by seed_demo_data.php keep the minimal
+// job_postings/job_applicants shape (no system_type, posting_id instead of
+// job_id, ...) and this page throws. Self-heal the columns the page relies on.
+foreach ([
+    "ALTER TABLE job_postings ADD COLUMN system_type VARCHAR(20) DEFAULT 'Madrasa'",
+    "ALTER TABLE job_postings ADD COLUMN job_type VARCHAR(50) DEFAULT NULL",
+    "ALTER TABLE job_postings ADD COLUMN salary_range VARCHAR(100) DEFAULT NULL",
+    "ALTER TABLE job_postings ADD COLUMN deadline DATE DEFAULT NULL",
+    "ALTER TABLE job_postings ADD COLUMN status VARCHAR(30) DEFAULT 'Open'",
+    "ALTER TABLE job_postings ADD COLUMN is_synced INT DEFAULT 0",
+    "ALTER TABLE job_postings ADD COLUMN tenant_id INT DEFAULT 1",
+    "ALTER TABLE job_applicants ADD COLUMN job_id INT DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN father_name VARCHAR(255) DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN email VARCHAR(255) DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN qualification VARCHAR(255) DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN experience VARCHAR(255) DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN resume_path VARCHAR(255) DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN interview_date DATE DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN interview_notes TEXT DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN notes TEXT DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN system_type VARCHAR(20) DEFAULT 'Madrasa'",
+    "ALTER TABLE job_applicants ADD COLUMN converted_teacher_id INT DEFAULT NULL",
+    "ALTER TABLE job_applicants ADD COLUMN is_synced INT DEFAULT 0",
+    "ALTER TABLE job_applicants ADD COLUMN tenant_id INT DEFAULT 1",
+] as $__heal_sql) { try { $pdo->exec($__heal_sql); } catch (Throwable $e) {} }
+try { $pdo->exec("UPDATE job_applicants SET job_id = posting_id WHERE (job_id IS NULL OR job_id = 0) AND posting_id IS NOT NULL"); } catch (Throwable $e) {}
+
 $active_sys = $_SESSION['active_system'] ?? ($_SESSION['system_type'] ?? 'Madrasa');
 $is_masjid = ($active_sys === 'Masjid');
 
@@ -117,11 +145,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['hire_teacher'])) {
 $jobs = $pdo->query("SELECT * FROM job_postings WHERE $sys_cond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch Applicants with Job Title
+// BUGFIX B-05: the unqualified $sys_cond made `system_type` ambiguous in this JOIN
+// (both job_applicants and job_postings have the column) -> MySQL error 1052 ->
+// the whole page was replaced by the generic error page. Qualify with alias `a`.
+$sys_cond_a = $is_masjid
+    ? "a.system_type = 'Masjid'"
+    : "(a.system_type = 'Madrasa' OR a.system_type IS NULL OR a.system_type = '')";
 $applicants = $pdo->query("
     SELECT a.*, j.title as job_title, j.department
     FROM job_applicants a
     JOIN job_postings j ON a.job_id = j.id
-    WHERE $sys_cond AND (a.is_deleted = 0 OR a.is_deleted IS NULL)
+    WHERE $sys_cond_a AND (a.is_deleted = 0 OR a.is_deleted IS NULL)
     ORDER BY a.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 

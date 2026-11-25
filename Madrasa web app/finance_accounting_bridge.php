@@ -118,6 +118,12 @@ if (!function_exists('finance_accounting_post')) {
             return;
         }
 
+        $desc = trim((string)($finance['description'] ?? ''));
+        if (mb_strpos($desc, 'وظیفہ/تنخواہ ادا کی گئی برائے ماہ') !== false || (mb_strpos($desc, 'وظائف عملہ') !== false && mb_strpos($desc, 'تنخواہ') !== false)) {
+            // Defense-in-depth: Payroll entries post via payroll_accounting_post (PR-AC / PR-PAY), not a duplicate FIN- voucher.
+            return;
+        }
+
         $type = strtolower(trim((string)($finance['type'] ?? '')));
         $isExpense = $type === 'expense';
 
@@ -144,9 +150,10 @@ if (!function_exists('finance_accounting_post')) {
             } catch (Throwable $e) {}
         }
         $targetType = $isExpense ? 'Expense' : 'Revenue';
-        $is_zakat = (strpos($headName, 'زکوۃ') !== false || strpos($headName, 'زکوٰۃ') !== false || stripos($headName, 'zakat') !== false);
-        $is_sadaqah = (strpos($headName, 'صدقات') !== false || stripos($headName, 'sadaqah') !== false || strpos($headName, 'صدقہ') !== false);
-        $is_fee = (strpos($headName, 'فیس') !== false || stripos($headName, 'fee') !== false);
+        $hLower = mb_strtolower($headName, 'UTF-8');
+        $is_zakat = (mb_strpos($hLower, 'زکوۃ') !== false || mb_strpos($hLower, 'زکوٰۃ') !== false || mb_strpos($hLower, 'زکو') !== false || mb_strpos($hLower, 'zakat') !== false);
+        $is_sadaqah = (mb_strpos($hLower, 'صدقات') !== false || mb_strpos($hLower, 'صدقہ') !== false || mb_strpos($hLower, 'sadaqah') !== false);
+        $is_fee = (mb_strpos($hLower, 'فیس') !== false || mb_strpos($hLower, 'fee') !== false);
         $offsetId = 0;
         if (!$isExpense && $is_zakat) {
             $offsetId = finance_accounting_ensure_account($pdo, '2101', 'Zakat Fund (فنڈ زکوٰۃ - امانت)', 'Liability', $tenant_id);
@@ -155,7 +162,7 @@ if (!function_exists('finance_accounting_post')) {
         } elseif (!$isExpense && $is_fee) {
             $offsetId = finance_accounting_ensure_account($pdo, '4001', 'Fee Income (آمدن تعلیمی فیس)', 'Revenue', $tenant_id);
         }
-        if ($headName !== '') {
+        if ($offsetId <= 0 && $headName !== '') {
             try {
                 $findAcc = $pdo->prepare("SELECT id FROM acc_chart_of_accounts WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
                 $findAcc->execute([$headName, $tenant_id]);
@@ -220,6 +227,100 @@ if (!function_exists('finance_accounting_post')) {
             if ($ownTransaction && $pdo->inTransaction()) $pdo->rollBack();
             throw $e;
         }
+    }
+}
+
+if (!function_exists('acc_invoice_process_payment')) {
+    function acc_invoice_process_payment(PDO $pdo, $invoiceId, $tenantId = null, $userId = 1, $paymentDate = null) {
+        $invoiceId = (int)$invoiceId;
+        if ($invoiceId <= 0) return false;
+        if ($tenantId === null && function_exists('get_current_tenant_id')) {
+            $tenantId = (int)get_current_tenant_id();
+        }
+        $tenantId = max(1, (int)($tenantId ?: 1));
+        $userId = max(1, (int)$userId);
+        $tCondI = ($tenantId === 1) ? "(i.tenant_id = 1 OR i.tenant_id IS NULL OR i.tenant_id = 0)" : "i.tenant_id = $tenantId";
+        $tCondBase = ($tenantId === 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $tenantId";
+
+        // 1. Fetch invoice and student details
+        $stmt = $pdo->prepare("
+            SELECT i.*, s.name as student_name, s.system_type as student_sys
+            FROM acc_invoices i
+            LEFT JOIN students s ON i.student_id = s.id
+            WHERE i.id = ? AND $tCondI
+            LIMIT 1
+        ");
+        $stmt->execute([$invoiceId]);
+        $inv = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$inv) return false;
+
+        $amount = (float)$inv['amount'];
+        $invNo = trim($inv['invoice_no'] ?? ('INV-' . $invoiceId));
+        $stdName = trim($inv['student_name'] ?? 'طالب علم');
+        $mYear = trim($inv['month_year'] ?? date('Y-m'));
+        $payDate = $paymentDate ?: date('Y-m-d');
+        $sysType = !empty($inv['student_sys']) ? $inv['student_sys'] : 'Madrasa';
+
+        // Update invoice status to Paid
+        try {
+            $pdo->prepare("UPDATE acc_invoices SET status = 'Paid' WHERE id = ? AND $tCondBase")->execute([$invoiceId]);
+        } catch (Throwable $e) {}
+
+        if ($amount <= 0) return true;
+
+        // 2. Resolve Head ID for Fee Income (فیس آمدن)
+        $headId = 0;
+        try {
+            $hStmt = $pdo->prepare("SELECT id FROM heads WHERE name IN ('فیس آمدن', 'فیس', 'Fee Income') AND type = 'Income' AND $tCondBase AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+            $hStmt->execute();
+            $headId = (int)$hStmt->fetchColumn();
+            if (!$headId) {
+                $hIns = $pdo->prepare("INSERT INTO heads (name, type, tenant_id, is_deleted) VALUES ('فیس آمدن', 'Income', ?, 0)");
+                $hIns->execute([$tenantId]);
+                $headId = (int)$pdo->lastInsertId();
+            }
+        } catch (Throwable $e) {}
+
+        // 3. Resolve Cash Account (4-digit canonical 1001 or existing)
+        $cashAccId = function_exists('finance_accounting_ensure_account')
+            ? finance_accounting_ensure_account($pdo, '1001', 'Cash in Hand (نقد رقم)', 'Asset', $tenantId)
+            : 1;
+
+        // 4. Check if finance entry already exists for this invoice
+        $desc = "فیس انوائس وصولی: $invNo ($stdName - $mYear)";
+        $chkFin = $pdo->prepare("SELECT id FROM finance WHERE (description LIKE ? OR manual_receipt_no = ?) AND (is_deleted = 0 OR is_deleted IS NULL) AND $tCondBase LIMIT 1");
+        $chkFin->execute(["%$invNo%", $invNo]);
+        $finId = (int)$chkFin->fetchColumn();
+
+        if (!$finId) {
+            try {
+                $compReceipt = function_exists('next_user_receipt_no') ? next_user_receipt_no($pdo, $userId, $sysType, $tenantId) : null;
+                $finIns = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, head_name, amount, date, donor_name, description, manual_receipt_no, computer_receipt_no, is_deleted, system_type, account_id, payment_method, tenant_id) VALUES (?, 'Admin', 'Income', ?, 'فیس آمدن', ?, ?, ?, ?, ?, ?, 0, ?, ?, 'Cash', ?)");
+                $finIns->execute([$userId, $headId, $amount, $payDate, $stdName, $desc, $invNo, $compReceipt, $sysType, $cashAccId, $tenantId]);
+                $finId = (int)$pdo->lastInsertId();
+            } catch (Throwable $eFin) {
+                error_log('[acc_invoice_process_payment] finance insert error: ' . $eFin->getMessage());
+            }
+        }
+
+        // 5. Post to accounting bridge (Voucher & Ledger)
+        if ($finId > 0 && function_exists('finance_accounting_post')) {
+            try {
+                finance_accounting_post($pdo, $finId);
+            } catch (Throwable $ePost) {}
+        }
+
+        // 6. Record in fee_submissions for legacy compatibility and defaulters clearing
+        try {
+            $subChk = $pdo->prepare("SELECT id FROM fee_submissions WHERE student_id = ? AND submission_date LIKE ? AND $tCondBase LIMIT 1");
+            $subChk->execute([(int)$inv['student_id'], "$mYear%"]);
+            if (!$subChk->fetchColumn()) {
+                $subIns = $pdo->prepare("INSERT INTO fee_submissions (student_id, amount, submission_date, date, status, finance_id, system_type, tenant_id) VALUES (?, ?, ?, ?, 'Approved', ?, ?, ?)");
+                $subIns->execute([(int)$inv['student_id'], $amount, $payDate, $payDate, ($finId > 0 ? $finId : null), $sysType, $tenantId]);
+            }
+        } catch (Throwable $eSub) {}
+
+        return true;
     }
 }
 
@@ -973,14 +1074,20 @@ if (!function_exists('finance_get_unified_accounting_truth')) {
         if ($tenant_id === null && function_exists('get_current_tenant_id')) {
             $tenant_id = (int)get_current_tenant_id();
         }
-        $tenant_id = (int)($tenant_id ?: 1);
+        $tenant_id = max(1, (int)($tenant_id ?: 1));
 
-        finance_accounting_backfill($pdo, $fromDate, $toDate);
+        // Read-only mandate: never run finance_accounting_backfill() inside GET read helpers.
 
         $sys_cond = ($sys === 'Masjid') ? "v.system_type = 'Masjid'" : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
-        
+        $t_cond_e = ($tenant_id === 1) ? "(e.tenant_id = 1 OR e.tenant_id IS NULL OR e.tenant_id = 0)" : "e.tenant_id = ?";
+        $t_cond_v = ($tenant_id === 1) ? "(v.tenant_id = 1 OR v.tenant_id IS NULL OR v.tenant_id = 0)" : "v.tenant_id = ?";
+
         $date_cond = "";
-        $params = [$tenant_id, $tenant_id];
+        $params = [];
+        if ($tenant_id !== 1) {
+            $params[] = $tenant_id;
+            $params[] = $tenant_id;
+        }
         if (!empty($fromDate)) {
             $date_cond .= " AND v.date >= ?";
             $params[] = $fromDate;
@@ -992,13 +1099,13 @@ if (!function_exists('finance_get_unified_accounting_truth')) {
 
         // Query all approved ledger entries with account details
         $sql = "
-            SELECT a.id, a.code, a.name, a.type, 
-                   SUM(e.debit) as total_debit, 
+            SELECT a.id, a.code, a.name, a.type,
+                   SUM(e.debit) as total_debit,
                    SUM(e.credit) as total_credit
             FROM acc_chart_of_accounts a
-            JOIN acc_ledger_entries e ON a.id = e.account_id AND e.tenant_id = ?
-            JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND v.tenant_id = ? AND $sys_cond $date_cond
-            WHERE a.is_deleted = 0
+            JOIN acc_ledger_entries e ON a.id = e.account_id AND $t_cond_e
+            JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $t_cond_v AND $sys_cond $date_cond
+            WHERE (a.is_deleted = 0 OR a.is_deleted IS NULL)
             GROUP BY a.id, a.code, a.name, a.type
             ORDER BY a.code ASC
         ";
@@ -1015,6 +1122,7 @@ if (!function_exists('finance_get_unified_accounting_truth')) {
         $zakat_fund = 0.0;
         $sadaqah_fund = 0.0;
         $liabilities = 0.0;
+        $other_assets = 0.0; // BUGFIX B-09
 
         foreach ($rows as $r) {
             $dr = (float)($r['total_debit'] ?? 0);
@@ -1029,18 +1137,21 @@ if (!function_exists('finance_get_unified_accounting_truth')) {
                 $total_expense += ($dr - $cr);
             } elseif ($type === 'Asset') {
                 $asset_bal = ($dr - $cr);
-                if ($code === '1001' || strpos($name, 'Cash') !== false || strpos($name, 'نقد') !== false) {
+                if ($code === '1001' || $code === '10001' || strpos($name, 'Cash') !== false || strpos($name, 'نقد') !== false) {
                     $cash_in_hand += $asset_bal;
-                } elseif ($code === '1002' || strpos($name, 'Bank') !== false || strpos($name, 'بینک') !== false) {
+                } elseif ($code === '1002' || $code === '10002' || strpos($name, 'Bank') !== false || strpos($name, 'بینک') !== false) {
                     $bank_balances += $asset_bal;
-                } elseif ($code === '1101' || strpos($name, 'Receivable') !== false || strpos($name, 'وصول') !== false) {
+                } elseif ($code === '1101' || $code === '1003' || $code === '1004' || $code === '11001' || strpos($name, 'Receivable') !== false || strpos($name, 'وصول') !== false) {
+                    // BUGFIX B-08/B-09: canonical receivable codes are 1003/1004/11001
                     $receivables += $asset_bal;
+                } else {
+                    $other_assets += $asset_bal;
                 }
             } elseif ($type === 'Liability') {
                 $liab_bal = ($cr - $dr);
-                if ($code === '2101' || strpos($name, 'زکوٰۃ') !== false || strpos($name, 'زکوۃ') !== false || strpos($name, 'Zakat') !== false) {
+                if ($code === '2101' || $code === '21001' || strpos($name, 'زکوٰۃ') !== false || strpos($name, 'زکوۃ') !== false || strpos($name, 'Zakat') !== false) {
                     $zakat_fund += $liab_bal;
-                } elseif ($code === '2102' || strpos($name, 'صدقات') !== false || strpos($name, 'Sadaqah') !== false) {
+                } elseif ($code === '2102' || $code === '21002' || strpos($name, 'صدقات') !== false || strpos($name, 'Sadaqah') !== false) {
                     $sadaqah_fund += $liab_bal;
                 } else {
                     $liabilities += $liab_bal;
@@ -1058,6 +1169,7 @@ if (!function_exists('finance_get_unified_accounting_truth')) {
             'bank_balances' => $bank_balances,
             'total_liquid_cash' => ($cash_in_hand + $bank_balances),
             'receivables' => $receivables,
+            'other_assets' => $other_assets,
             'zakat_fund' => $zakat_fund,
             'sadaqah_fund' => $sadaqah_fund,
             'other_liabilities' => $liabilities,

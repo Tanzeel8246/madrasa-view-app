@@ -238,7 +238,9 @@ class _AcademicResultPreviewPageState extends State<AcademicResultPreviewPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'جامعہ / مدرسہ اشرف المدارس',
+                                    (currentTenantName.value ?? '').trim().isNotEmpty
+                                        ? currentTenantName.value!.trim()
+                                        : 'مدرسہ مینجمنٹ سسٹم',
                                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryGreen),
                                   ),
                                   Text(

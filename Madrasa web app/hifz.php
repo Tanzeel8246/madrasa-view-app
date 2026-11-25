@@ -27,9 +27,14 @@ if (isset($_POST['save_hifz'])) {
             $s_lines = trim($_POST['sabaq_not_recited_reason'] ?? '') ?: 'بغیر وجہ';
             $s_status = 'نہیں سنایا';
             $s_time = '';
+            $s_surah = '';
+            $s_mistakes = null;
         } else {
             $s_parah = $_POST['sabaq_p'] ?? '';
             $s_lines = $_POST['sabaq_l'] ?? '';
+            // BUGFIX B-16: surah name + mistakes count (landing page advertises them; the form/table lacked them)
+            $s_surah = trim((string)($_POST['sabaq_surah'] ?? ''));
+            $s_mistakes = (isset($_POST['sabaq_mistakes']) && $_POST['sabaq_mistakes'] !== '') ? (int)$_POST['sabaq_mistakes'] : null;
             $s_status = $_POST['sabaq_s'] ?? '';
             $s_time = $_POST['sabaq_time'] ?? '';
         }
@@ -107,6 +112,10 @@ if (isset($_POST['save_hifz'])) {
         }
 
         $cur_tenant_id = (int)get_current_tenant_id();
+        if (function_exists('ensure_column')) {
+            try { ensure_column($pdo, 'daily_hifz', 'sabaq_surah', 'VARCHAR(100) DEFAULT NULL'); } catch (Throwable $e) {}
+            try { ensure_column($pdo, 'daily_hifz', 'sabaq_mistakes', 'INT DEFAULT NULL'); } catch (Throwable $e) {}
+        }
         $exist = $pdo->prepare("SELECT * FROM daily_hifz WHERE student_id = ? AND date = ? AND tenant_id = ?");
         $exist->execute([$std_id, $date, $cur_tenant_id]);
         $row = $exist->fetch();
@@ -117,6 +126,8 @@ if (isset($_POST['save_hifz'])) {
             };
             $s_parah = $keepOld($s_parah, $row['sabaq_parah'] ?? '');
             $s_lines = $keepOld($s_lines, $row['sabaq_lines'] ?? '');
+            $s_surah = $keepOld($s_surah, $row['sabaq_surah'] ?? '');
+            if ($s_mistakes === null && isset($row['sabaq_mistakes'])) $s_mistakes = (int)$row['sabaq_mistakes'];
             $s_status = $keepOld($s_status, $row['sabaq_status'] ?? '');
             $sq_parah = $keepOld($sq_parah, $row['sabqi_parah'] ?? '');
             $sq_amt = $keepOld($sq_amt, $row['sabqi_amount'] ?? '');
@@ -128,11 +139,11 @@ if (isset($_POST['save_hifz'])) {
             $s_time = $keepOld($s_time, $row['sabaq_time'] ?? '');
             $sq_time = $keepOld($sq_time, $row['sabqi_time'] ?? '');
             $m_time = $keepOld($m_time, $row['manzil_time'] ?? '');
-            $sql = "UPDATE daily_hifz SET sabaq_parah=?, sabaq_lines=?, sabaq_status=?, sabqi_parah=?, sabqi_amount=?, sabqi_status=?, sabqi_listener=?, manzil_parah=?, manzil_amount=?, manzil_status=?, manzil_listener=?, sabaq_time=?, sabqi_time=?, manzil_time=? WHERE id=? AND tenant_id=?";
-            $pdo->prepare($sql)->execute([$s_parah, $s_lines, $s_status, $sq_parah, $sq_amt, $sq_status, $sq_list, $m_parah_final, $m_total_amt, $m_status, $m_list, $s_time, $sq_time, $m_time, $row['id'], $cur_tenant_id]);
+            $sql = "UPDATE daily_hifz SET sabaq_parah=?, sabaq_lines=?, sabaq_status=?, sabaq_surah=?, sabaq_mistakes=?, sabqi_parah=?, sabqi_amount=?, sabqi_status=?, sabqi_listener=?, manzil_parah=?, manzil_amount=?, manzil_status=?, manzil_listener=?, sabaq_time=?, sabqi_time=?, manzil_time=? WHERE id=? AND tenant_id=?";
+            $pdo->prepare($sql)->execute([$s_parah, $s_lines, $s_status, $s_surah, $s_mistakes, $sq_parah, $sq_amt, $sq_status, $sq_list, $m_parah_final, $m_total_amt, $m_status, $m_list, $s_time, $sq_time, $m_time, $row['id'], $cur_tenant_id]);
         } else {
-            $sql = "INSERT INTO daily_hifz (student_id, date, sabaq_parah, sabaq_lines, sabaq_status, sabqi_parah, sabqi_amount, sabqi_status, sabqi_listener, manzil_parah, manzil_amount, manzil_status, manzil_listener, sabaq_time, sabqi_time, manzil_time, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $pdo->prepare($sql)->execute([$std_id, $date, $s_parah, $s_lines, $s_status, $sq_parah, $sq_amt, $sq_status, $sq_list, $m_parah_final, $m_total_amt, $m_status, $m_list, $s_time, $sq_time, $m_time, $cur_tenant_id]);
+            $sql = "INSERT INTO daily_hifz (student_id, date, sabaq_parah, sabaq_lines, sabaq_status, sabaq_surah, sabaq_mistakes, sabqi_parah, sabqi_amount, sabqi_status, sabqi_listener, manzil_parah, manzil_amount, manzil_status, manzil_listener, sabaq_time, sabqi_time, manzil_time, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $pdo->prepare($sql)->execute([$std_id, $date, $s_parah, $s_lines, $s_status, $s_surah, $s_mistakes, $sq_parah, $sq_amt, $sq_status, $sq_list, $m_parah_final, $m_total_amt, $m_status, $m_list, $s_time, $sq_time, $m_time, $cur_tenant_id]);
         }
         
         echo "<div class='alert alert-success text-center fw-bold shadow mt-2' id='alert_msg'>✅ حفظ کا ریکارڈ محفوظ / اپڈیٹ ہو گیا!</div>";
@@ -251,6 +262,10 @@ function parahDropdown($name, $id) {
                     <div id="sabaq_fields_div">
                         <div class="mb-3"><label class="small fw-bold">پارہ نمبر</label><?php echo parahDropdown('sabaq_p', 'sabaq_p'); ?></div>
                         <div class="mb-3"><label class="small fw-bold">لائنیں</label><input type="number" name="sabaq_l" id="sabaq_l" class="form-control fw-bold text-center"></div>
+                        <div class="row mb-3">
+                            <div class="col-6"><label class="small fw-bold">سورۃ کا نام</label><input type="text" name="sabaq_surah" id="sabaq_surah" class="form-control" placeholder="مثلاً: البقرہ"></div>
+                            <div class="col-6"><label class="small fw-bold">غلطیاں</label><input type="number" name="sabaq_mistakes" id="sabaq_mistakes" class="form-control fw-bold text-center" min="0" placeholder="0"></div>
+                        </div>
                         <div class="row mb-3">
                             <div class="col-6">
                                 <label class="small fw-bold"><?php echo t('status_ur'); ?></label>
@@ -614,6 +629,8 @@ function fetchHifzRecord() {
             let data = res.data;
             document.getElementById('sabaq_p').value = data.sabaq_parah || '';
             document.getElementById('sabaq_l').value = data.sabaq_lines || '';
+            if (document.getElementById('sabaq_surah')) document.getElementById('sabaq_surah').value = data.sabaq_surah || '';
+            if (document.getElementById('sabaq_mistakes')) document.getElementById('sabaq_mistakes').value = (data.sabaq_mistakes ?? '');
             document.getElementById('sabaq_s').value = data.sabaq_status || '';
             document.getElementById('sabaq_time').value = data.sabaq_time || '';
             document.getElementById('sabqi_p').value = data.sabqi_parah || '';

@@ -273,18 +273,25 @@ try {
         ");
         $absentStmt->execute([$window_start, $cur_tid, $cur_tid]);
     } else {
+        // BUGFIX B-13/B-07: web-entered attendance lives in period_attendance;
+        // this query used to read only the legacy `attendance` table, so
+        // absences recorded in the web register never raised an alert.
         $absentStmt = $pdo->prepare("
             SELECT a.student_id, a.date, s.name as student_name, s.class as class_name, s.contact_number
-            FROM attendance a
+            FROM (
+                SELECT student_id, date, id FROM attendance
+                WHERE tenant_id = ? AND (status_1 IN ('A', 'Absent', 'غیر حاضر') OR status_2 IN ('A', 'Absent', 'غیر حاضر') OR status_3 IN ('A', 'Absent', 'غیر حاضر') OR status_4 IN ('A', 'Absent', 'غیر حاضر') OR status IN ('A', 'Absent', 'غیر حاضر')) AND (is_deleted = 0 OR is_deleted IS NULL)
+                UNION
+                SELECT student_id, date, id FROM period_attendance
+                WHERE tenant_id = ? AND status IN ('A', 'Absent', 'غیر حاضر') AND (is_deleted = 0 OR is_deleted IS NULL)
+            ) a
             JOIN students s ON a.student_id = s.id
-            WHERE a.date >= ? AND a.tenant_id = ? AND s.tenant_id = ?
-              AND (a.status_1 IN ('A', 'Absent', 'غیر حاضر') OR a.status_2 IN ('A', 'Absent', 'غیر حاضر') OR a.status_3 IN ('A', 'Absent', 'غیر حاضر') OR a.status_4 IN ('A', 'Absent', 'غیر حاضر') OR a.status IN ('A', 'Absent', 'غیر حاضر'))
-              AND (a.is_deleted = 0 OR a.is_deleted IS NULL)
+            WHERE a.date >= ? AND s.tenant_id = ?
               AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
               AND (s.status = 'Active' OR s.status = '' OR s.status IS NULL)
             ORDER BY a.date DESC, a.id DESC LIMIT 100
         ");
-        $absentStmt->execute([$window_start, $cur_tid, $cur_tid]);
+        $absentStmt->execute([$cur_tid, $cur_tid, $window_start, $cur_tid]);
     }
     $absentees = $absentStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -407,20 +414,25 @@ try {
 
     // 3b. رواں ماہ کے فیس ڈیفالٹرز (Fee Defaulters)
     $currentMonth = date('Y-m');
+    // BUGFIX B-13/B-06: students.monthly_fee is 0 for web-created students, so
+    // the old `monthly_fee > 0` gate silenced every fee alert. Also treat a
+    // student with an Unpaid invoice for this month as a defaulter and use the
+    // invoice total as the amount when monthly_fee is 0.
     $feeDefaultersStmt = $pdo->prepare("
-        SELECT s.id, s.name, s.class, s.contact_number, s.monthly_fee
+        SELECT s.id, s.name, s.class, s.contact_number, s.monthly_fee,
+               (SELECT COALESCE(SUM(amount), 0) FROM acc_invoices WHERE student_id = s.id AND tenant_id = ? AND status = 'Unpaid' AND month_year = ?) AS unpaid_total
         FROM $std_tbl s
         WHERE s.tenant_id = ?
           AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
           AND (s.status = 'Active' OR s.status IS NULL OR s.status = '')
-          AND s.monthly_fee > 0
+          AND (s.monthly_fee > 0 OR EXISTS (SELECT 1 FROM acc_invoices WHERE student_id = s.id AND tenant_id = ? AND status = 'Unpaid' AND month_year = ?))
           AND s.id NOT IN (
               SELECT student_id FROM fee_submissions 
               WHERE tenant_id = ? AND (date LIKE ? OR submission_date LIKE ?) AND (LOWER(status) IN ('approved', 'paid', 'ادا شدہ') OR status IS NULL)
           )
         ORDER BY s.class ASC, s.name ASC LIMIT 25
     ");
-    $feeDefaultersStmt->execute([$cur_tid, $cur_tid, "$currentMonth%", "$currentMonth%"]);
+    $feeDefaultersStmt->execute([$cur_tid, $currentMonth, $cur_tid, $cur_tid, $currentMonth, $cur_tid, "$currentMonth%", "$currentMonth%"]);
     $feeDefaulters = $feeDefaultersStmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($feeDefaulters as $fd) {
@@ -428,7 +440,7 @@ try {
             'type' => 'fee_defaulter',
             'severity' => 'warning',
             'title' => 'ماہانہ فیس بقایا جات',
-            'description' => "{$fd['name']} ({$fd['class']}) کی رواں ماہ کی فیس مبلغ Rs. " . number_format($fd['monthly_fee']) . " تاحال جمع نہیں ہوئی۔",
+            'description' => "{$fd['name']} ({$fd['class']}) کی رواں ماہ کی فیس مبلغ Rs. " . number_format(((float)($fd['monthly_fee'] ?? 0) > 0 ? (float)$fd['monthly_fee'] : (float)($fd['unpaid_total'] ?? 0))) . " تاحال جمع نہیں ہوئی۔",
             'student_id' => $fd['id'],
             'student_name' => $fd['name'],
             'class_name' => $fd['class'],
@@ -445,6 +457,11 @@ try {
 // ==========================================
 try {
     // 4a. رخصتیں
+    // BUGFIX B-13 (hardening): each source in this block gets its own guard —
+    // previously one failing query (e.g. a column missing on an older
+    // install) aborted the whole block silently and every admin alert,
+    // including complaints and teacher leaves below, stayed at zero.
+    try {
     $pendingLeavesStmt = $pdo->prepare("
         SELECT l.*, s.name as student_name, s.class as class_name, s.contact_number
         FROM leave_applications l
@@ -471,7 +488,10 @@ try {
         ];
     }
 
+    } catch (Throwable $e) {}
+
     // 4b. شکایات
+    try {
     $pendingComplaintsStmt = $pdo->prepare("
         SELECT c.*, s.name as student_name, s.class as class_name, s.contact_number
         FROM parent_complaints c
@@ -497,6 +517,69 @@ try {
             'action_url' => "admin_requests.php"
         ];
     }
+    } catch (Throwable $e) {}
+
+    // BUGFIX B-13: the web complaint form (add_complaint.php) writes the
+    // `complaints` table, but this page only ever read `parent_complaints`
+    // (parent portal / mobile), so staff-filed complaints never alerted.
+    // Surface complaints filed in the last 30 days from the web table too.
+    try {
+        $staffComplaintsStmt = $pdo->prepare("
+            SELECT c.*, s.name as student_name, s.class as class_name, s.contact_number
+            FROM complaints c
+            LEFT JOIN students s ON c.student_id = s.id
+            WHERE c.tenant_id = ? AND c.date >= ?
+            ORDER BY c.id DESC LIMIT 20
+        ");
+        $staffComplaintsStmt->execute([$cur_tid, date('Y-m-d', strtotime('-30 days'))]);
+        foreach ($staffComplaintsStmt->fetchAll(PDO::FETCH_ASSOC) as $sc) {
+            $admin_alerts[] = [
+                'type' => 'staff_complaint',
+                'severity' => 'warning',
+                'title' => 'درج شدہ شکایت / نوٹ',
+                'description' => "طالب علم {$sc['student_name']} کے بارے میں شکایت درج ہے: \"{$sc['complaint']}\"",
+                'student_id' => $sc['student_id'],
+                'student_name' => $sc['student_name'],
+                'class_name' => $sc['class_name'],
+                'contact_number' => $sc['contact_number'],
+                'date' => $sc['date'] ?? $today,
+                'view_url' => !empty($sc['student_id']) ? ("parent_report.php?std_id=" . $sc['student_id']) : null,
+                'action_url' => "manage_complaints.php"
+            ];
+        }
+    } catch (Throwable $e) {}
+
+    // BUGFIX B-13: teacher leaves never appeared on this page at all (only
+    // student leaves did), and an APPROVED teacher leave is exactly what the
+    // office needs to see. Show pending ones as action alerts and this week's
+    // approved ones as information.
+    try {
+        $tLeavesStmt = $pdo->prepare("
+            SELECT tl.*, t.name as teacher_name
+            FROM teacher_leaves tl
+            LEFT JOIN teachers t ON tl.teacher_id = t.id
+            WHERE tl.tenant_id = ? AND (tl.is_deleted = 0 OR tl.is_deleted IS NULL)
+              AND (tl.status = 'Pending' OR (tl.status = 'Approved' AND tl.start_date >= ?))
+            ORDER BY tl.id DESC LIMIT 20
+        ");
+        $tLeavesStmt->execute([$cur_tid, date('Y-m-d', strtotime('-7 days'))]);
+        foreach ($tLeavesStmt->fetchAll(PDO::FETCH_ASSOC) as $tl) {
+            $isPending = ($tl['status'] === 'Pending');
+            $admin_alerts[] = [
+                'type' => $isPending ? 'teacher_leave_pending' : 'teacher_leave_approved',
+                'severity' => $isPending ? 'warning' : 'info',
+                'title' => $isPending ? 'استاد کی رخصت زیرِ التواء' : 'استاد کی منظور شدہ رخصت',
+                'description' => "استاد {$tl['teacher_name']} کی رخصت ({$tl['leave_type']}) " . ($isPending ? 'منظوری کی منتظر ہے۔' : 'منظور ہو چکی ہے۔') . " مدت: {$tl['start_date']} تا {$tl['end_date']}۔ وجہ: {$tl['reason']}",
+                'student_id' => 0,
+                'student_name' => $tl['teacher_name'],
+                'class_name' => '',
+                'contact_number' => '',
+                'date' => $tl['start_date'] ?? $today,
+                'view_url' => null,
+                'action_url' => "teacher_leaves.php"
+            ];
+        }
+    } catch (Throwable $e) {}
 } catch (Exception $e) {}
 
 // Post-process alerts: assign IDs, check read status, and filter

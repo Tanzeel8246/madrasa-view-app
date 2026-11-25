@@ -375,6 +375,25 @@ $status_opts = ['P' => __('حاضر', 'Present'), 'L' => __('رخصت', 'Leave')
         <a href="teacher_attendance_report.php" class="btn btn-outline-primary btn-sm fw-bold"><i class="fas fa-chart-bar me-1"></i> <?php echo __('رپورٹ', 'Report'); ?></a>
     </div>
     <?php if ($success_msg): ?><div class="alert alert-success fw-bold shadow-sm">✓ <?= htmlspecialchars($success_msg) ?></div><?php endif; ?>
+    <?php
+    // BUGFIX B-17: teachers without a class/period allocation never appear on
+    // this page and there was no hint why. List them with the fix path.
+    try {
+        $allActiveTeachers = $pdo->prepare("SELECT id, name FROM teachers WHERE tenant_id = ? AND (status='Active' OR status='حاضر' OR status='فعال' OR status='' OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND $sys_cond");
+        $allActiveTeachers->execute([$cur_tenant_id]);
+        $unallocated = [];
+        foreach ($allActiveTeachers->fetchAll(PDO::FETCH_ASSOC) as $at) {
+            if (!isset($teacherMap[(int)$at['id']])) $unallocated[] = $at['name'];
+        }
+    } catch (Throwable $e) { $unallocated = []; }
+    if (!empty($unallocated)): ?>
+    <div class="alert alert-warning fw-bold shadow-sm">
+        <i class="fas fa-exclamation-triangle me-1"></i>
+        <?php echo __('مندرجہ ذیل اساتذہ کسی کلاس/پیریڈ کے لیے مختص نہیں، اس لیے ان کی حاضری یہاں درج نہیں ہو سکتی:', 'The following teachers are not allocated to any class/period, so their attendance cannot be marked here:'); ?>
+        <?php echo htmlspecialchars(implode('، ', $unallocated)); ?>
+        <a href="manage_classes.php" class="btn btn-sm btn-warning fw-bold ms-2"><?php echo __('کلاسز میں استاد مختص کریں', 'Allocate in Manage Classes'); ?></a>
+    </div>
+    <?php endif; ?>
     <form method="POST">
         <div class="card shadow-sm mb-4 border-0"><div class="card-body p-3"><div class="row align-items-end g-2">
             <div class="col-md-3"><label class="fw-bold mb-1"><?php echo __('تاریخ:', 'Date:'); ?></label><input type="date" name="date" class="form-control fw-bold" value="<?= htmlspecialchars($date) ?>" onchange="this.form.submit()"></div>

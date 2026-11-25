@@ -107,13 +107,16 @@ class _FeeRemindersPageState extends State<FeeRemindersPage> {
       rawPhone = '92${rawPhone.substring(1)}';
     }
 
+    final instName = (currentTenantName.value ?? '').trim().isNotEmpty
+        ? currentTenantName.value!.trim()
+        : 'ادارہ';
     final message = '''
 محترم والدین: جناب $father!
 السلام علیکم ورحمۃ اللہ وبرکاتہ!
 اطلاع دی جاتی ہے کہ طالب علم *$name* کی بابت ماہ *$month* کے تعلیمی اخراجات / ماہانہ فیس مبلغ *$amount روپے* واجب الادا ہیں۔
 براہ کرم بر وقت جمع کروا کر رسید حاصل فرمائیں۔
 شکریہ!
-_ادارہ اشرف المدارس فروکہ_
+_${instName}_
 '''.trim();
 
     if (rawPhone.length >= 10) {
@@ -131,8 +134,11 @@ _ادارہ اشرف المدارس فروکہ_
   void _sendBulkRemindersWhatsApp() {
     if (_filteredDefaulters.isEmpty) return;
 
+    final instName = (currentTenantName.value ?? '').trim().isNotEmpty
+        ? currentTenantName.value!.trim()
+        : 'مدرسہ مینجمنٹ سسٹم';
     final buffer = StringBuffer();
-    buffer.writeln('📋 *فہرست واجب الادا فیس جات - مدرسہ اشرف المدارس فروکہ*');
+    buffer.writeln('📋 *فہرست واجب الادا فیس جات - $instName*');
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
     buffer.writeln('📅 *ماہ:* ${intl.DateFormat('MMMM yyyy').format(DateTime.now())}');
     buffer.writeln('👥 *کل طلبہ:* ${_filteredDefaulters.length}');
@@ -145,7 +151,7 @@ _ادارہ اشرف المدارس فروکہ_
     }
 
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
-    buffer.writeln('_اشرف المدارس مینجمنٹ سسٹم_');
+    buffer.writeln('_$instName مینجمنٹ سسٹم_');
 
     Share.share(buffer.toString(), subject: 'بقایاجات فیس لسٹ');
   }

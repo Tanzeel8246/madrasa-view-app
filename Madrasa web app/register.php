@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * ════════════════════════════════════════════════════════════════════
  *  نیا ادارہ آن لائن رجسٹریشن — 30 روزہ مفت آزمائش (Cloud SaaS Onboarding)
@@ -96,15 +96,17 @@ function generate_next_institute_code(PDO $pdo) {
     $candidate = sprintf("M-%s-%03d", $year2, $nextSeq);
 
     // Collision safety loop
-    while (true) {
-        $chk = $pdo->prepare("SELECT COUNT(*) FROM tenants WHERE UPPER(code) = ?");
-        $chk->execute([strtoupper($candidate)]);
-        if ((int)$chk->fetchColumn() === 0) {
-            break;
+    try {
+        while (true) {
+            $chk = $pdo->prepare("SELECT COUNT(*) FROM tenants WHERE UPPER(code) = ?");
+            $chk->execute([strtoupper($candidate)]);
+            if ((int)$chk->fetchColumn() === 0) {
+                break;
+            }
+            $nextSeq++;
+            $candidate = sprintf("M-%s-%03d", $year2, $nextSeq);
         }
-        $nextSeq++;
-        $candidate = sprintf("M-%s-%03d", $year2, $nextSeq);
-    }
+    } catch (Throwable $eChk) {}
     return $candidate;
 }
 
@@ -464,6 +466,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" href="favicon.ico">
     <title>نیا ادارہ رجسٹریشن مع 30 روزہ مفت آزمائش — کلاؤڈ ساس پلیٹ فارم</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -505,12 +509,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             border-color: #059669;
             box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.15);
         }
+        .register-card h3, .register-card h2 {
+            line-height: 2.1 !important;
+        }
         .code-display-box {
             background: linear-gradient(135deg, #059669 0%, #047857 100%);
             color: #ffffff;
             border-radius: 14px;
             padding: 14px 18px;
             display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
             align-items: center;
             justify-content: space-between;
             box-shadow: 0 6px 15px rgba(5, 150, 105, 0.25);
@@ -520,6 +529,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             font-size: 1.4rem;
             font-weight: 800;
             letter-spacing: 1px;
+            white-space: nowrap;
+            flex-shrink: 0;
             background: rgba(255, 255, 255, 0.2);
             padding: 4px 14px;
             border-radius: 8px;

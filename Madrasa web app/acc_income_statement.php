@@ -22,12 +22,12 @@ $dept_id = !empty($_GET['department_id']) ? (int)$_GET['department_id'] : null;
 $cur_tenant_id = (int)get_current_tenant_id($pdo);
 $sys = $_SESSION['system_type'] ?? 'Madrasa';
 $sys_cond = ($sys === 'Masjid') ? "v.system_type = 'Masjid'" : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
-finance_accounting_backfill($pdo, $from_date, $to_date, $cur_tenant_id);
+// Read-only report: no backfill mutation on GET
 
-$cur_tenant_id = (int)get_current_tenant_id($pdo);
-
-// Fetch Departments
-$departments = $pdo->query("SELECT id, name FROM departments WHERE status = 'Active'")->fetchAll(PDO::FETCH_ASSOC);
+// Fetch Departments (tenant-scoped)
+$dept_stmt = $pdo->prepare("SELECT id, name FROM departments WHERE status = 'Active' AND tenant_id = ? ORDER BY name");
+$dept_stmt->execute([$cur_tenant_id]);
+$departments = $dept_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Prepare Query
 $params = [$cur_tenant_id, $cur_tenant_id, $from_date, $to_date, $cur_tenant_id];

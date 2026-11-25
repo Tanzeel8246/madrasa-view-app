@@ -141,9 +141,25 @@ if (!function_exists('get_allowed_classes')) {
                     }
                 } catch (Exception $e) {}
 
-                if (!empty($teacherClasses)) {
-                    return $teacherClasses;
-                }
+                // 4. Check class_periods table where teacher_id matches or teacher_ids contains $userId
+                try {
+                    $cpStmt = $pdo->prepare("SELECT DISTINCT class_id FROM class_periods WHERE (teacher_id = ? OR teacher_ids LIKE ?) AND $tenant_cond AND (is_deleted = 0 OR is_deleted IS NULL)");
+                    $cpStmt->execute([$userId, '%' . $userId . '%']);
+                    $cpClassIds = $cpStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+                    if (!empty($cpClassIds)) {
+                        $cpIdsQuoted = implode(',', array_map('intval', $cpClassIds));
+                        $cpClassesStmt = $pdo->query("SELECT * FROM classes WHERE id IN ($cpIdsQuoted) AND $sys_cond AND $tenant_cond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY $orderBy");
+                        if ($cpClassesStmt) {
+                            foreach ($cpClassesStmt->fetchAll(PDO::FETCH_ASSOC) as $cc) {
+                                if (!in_array($cc['id'], array_column($teacherClasses, 'id'))) {
+                                    $teacherClasses[] = $cc;
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception $e) {}
+
+                return $teacherClasses;
             }
 
             // Non-admin (nazim, staff) restricted strictly by allowed_classes
@@ -320,7 +336,15 @@ if (!function_exists('verify_pass')) {
  * ════════════════════════════════════════════════════════════════════
  */
 if (!defined('MADRASA_AUTH_SECRET')) {
-    define('MADRASA_AUTH_SECRET', 'minds_madrasa_ai_auth_key_2026_cloud_erp_secret_hmac');
+    $sec = function_exists('get_env_val') ? get_env_val('MADRASA_AUTH_SECRET', '') : (getenv('MADRASA_AUTH_SECRET') ?: ($_ENV['MADRASA_AUTH_SECRET'] ?? ''));
+    if (empty($sec)) {
+        $sec = function_exists('get_env_val') ? get_env_val('MADRASA_API_SECRET', '') : (getenv('MADRASA_API_SECRET') ?: ($_ENV['MADRASA_API_SECRET'] ?? ''));
+    }
+    if (empty($sec)) {
+        error_log("[FATAL SECURITY] MADRASA_AUTH_SECRET / MADRASA_API_SECRET is not configured in .env!");
+        throw new RuntimeException("MADRASA_AUTH_SECRET environment variable is required.");
+    }
+    define('MADRASA_AUTH_SECRET', $sec);
 }
 
 if (!function_exists('madrasa_is_https')) {

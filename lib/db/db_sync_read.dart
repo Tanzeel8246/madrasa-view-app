@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../db_helper.dart';
@@ -30,6 +32,71 @@ extension DbSyncRead on DBHelper {
       debugPrint("GetUnsynced Error ($table): $e");
       return [];
     }
+  }
+
+  /// Whether [table] currently has a column named [column].
+  Future<bool> syncTableHasColumn(String table, String column) async {
+    try {
+      final Database db = await database;
+      final cols = await db.rawQuery("PRAGMA table_info($table)");
+      return cols.any((c) => c['name'] == column);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// SYNC-SAFETY (F-01): guarantee that [row] carries a client_uuid that is
+  /// PERSISTED in the local database before any upload attempt.
+  ///
+  /// The server deduplicates finance uploads on (tenant_id, client_uuid).
+  /// Previously, when a row had no uuid, the uploader invented a fresh one
+  /// from the current timestamp on EVERY attempt — so if the server saved
+  /// the row but the response was lost, the retry arrived with a different
+  /// uuid and the server inserted a duplicate. Generating the uuid once and
+  /// writing it back to the local row makes every retry idempotent.
+  ///
+  /// Returns the uuid to send (also written back into [row]), or null when
+  /// the table has no client_uuid column (the server does not deduplicate
+  /// those tables by uuid, so none is invented for them).
+  Future<String?> ensureClientUuidPersisted(
+      String table, Map<String, dynamic> row) async {
+    final existing = row['client_uuid']?.toString().trim() ?? '';
+    if (existing.isNotEmpty) return existing;
+
+    final id = int.tryParse(row['id']?.toString() ?? '');
+    if (id == null) return null;
+    if (!await syncTableHasColumn(table, 'client_uuid')) return null;
+
+    var uuid =
+        'app_${table}_${id}_${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(0x7fffffff)}';
+    if (uuid.length > 100) uuid = uuid.substring(0, 100);
+    try {
+      final Database db = await database;
+      final changed = await db.update(
+        table,
+        {'client_uuid': uuid},
+        where: "id = ? AND (client_uuid IS NULL OR client_uuid = '')",
+        whereArgs: [id],
+      );
+      if (changed == 0) {
+        // Another path filled it in first — use the stored value.
+        final stored = await db.query(table,
+            columns: ['client_uuid'], where: 'id = ?', whereArgs: [id], limit: 1);
+        final storedUuid = stored.isNotEmpty
+            ? (stored.first['client_uuid']?.toString().trim() ?? '')
+            : '';
+        if (storedUuid.isNotEmpty) {
+          row['client_uuid'] = storedUuid;
+          return storedUuid;
+        }
+        return null;
+      }
+    } catch (e) {
+      debugPrint("ensureClientUuidPersisted error ($table, $id): $e");
+      return null;
+    }
+    row['client_uuid'] = uuid;
+    return uuid;
   }
 
   Future<void> markAsSynced(String table, int id) async {

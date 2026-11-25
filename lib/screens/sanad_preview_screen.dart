@@ -1027,7 +1027,9 @@ class _SanadPreviewScreenState extends State<SanadPreviewScreen> {
       final madrasaName =
           _settings['madrasa_name']?.toString().isNotEmpty == true
               ? _settings['madrasa_name'].toString()
-              : (isUrdu ? 'جامعہ اشرف المدارس' : 'Madrasa Management System');
+              : ((currentTenantName.value ?? '').trim().isNotEmpty
+                  ? currentTenantName.value!.trim()
+                  : (isUrdu ? 'مدرسہ مینجمنٹ سسٹم' : 'Madrasa Management System'));
       final tagline = _settings['tagline']?.toString().isNotEmpty == true
           ? _settings['tagline'].toString()
           : (isUrdu ? 'العلم نور - تعلیم و تربیت کا گہوارہ' : '');
@@ -1630,7 +1632,9 @@ class _SanadPreviewScreenState extends State<SanadPreviewScreen> {
     final isUrdu = isUrduGlobal.value;
     final madrasaName = _settings['madrasa_name']?.toString().isNotEmpty == true
         ? _settings['madrasa_name'].toString()
-        : (isUrdu ? 'جامعہ اشرف المدارس' : 'Madrasa Management System');
+        : ((currentTenantName.value ?? '').trim().isNotEmpty
+            ? currentTenantName.value!.trim()
+            : (isUrdu ? 'مدرسہ مینجمنٹ سسٹم' : 'Madrasa Management System'));
     final tagline = _settings['tagline']?.toString().isNotEmpty == true
         ? _settings['tagline'].toString()
         : (isUrdu ? 'العلم نور - تعلیم و تربیت کا گہوارہ' : '');

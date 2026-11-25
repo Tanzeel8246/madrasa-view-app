@@ -61,6 +61,8 @@ import '../screens/student_course_enrollment.dart';
 import '../screens/subject_results_entry.dart';
 import '../screens/student_promotion.dart';
 import '../screens/academic_reports_view.dart';
+import '../screens/salary_status.dart';
+import '../utils/database_backup_service.dart';
 import '../utils/system_type_global.dart';
 import '../utils/globals.dart';
 import '../utils/session.dart';
@@ -382,6 +384,24 @@ class AppDrawer extends StatelessWidget {
                             const SubscriptionStatusPage(),
                             iconColor: Colors.amber.shade800,
                           ),
+                          ListTile(
+                            leading: Icon(Icons.backup_rounded,
+                                color: primaryGreen, size: 22),
+                            title: Text(
+                              isUrdu
+                                  ? 'ڈیٹا بیس بیک اپ و شیئر'
+                                  : 'Database Backup & Share',
+                              style: TextStyle(
+                                color: textDark,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                              ),
+                            ),
+                            onTap: () {
+                              Navigator.pop(context);
+                              DatabaseBackupService.showBackupDialog(context);
+                            },
+                          ),
                         ],
                       ],
                     ] else ...[
@@ -517,6 +537,24 @@ class AppDrawer extends StatelessWidget {
                       Icons.workspace_premium,
                       const SubscriptionStatusPage(),
                       iconColor: Colors.amber.shade800,
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.backup_rounded,
+                          color: primaryGreen, size: 22),
+                      title: Text(
+                        isUrdu
+                            ? 'ڈیٹا بیس بیک اپ و شیئر'
+                            : 'Database Backup & Share',
+                        style: TextStyle(
+                          color: textDark,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        DatabaseBackupService.showBackupDialog(context);
+                      },
                     ),
                   ],
                 ],
@@ -838,6 +876,12 @@ class AppDrawer extends StatelessWidget {
                 ),
                 _buildSubDrawerItem(
                   context,
+                  isUrdu ? 'تنخواہ اسٹیٹس' : 'Salary Status',
+                  Icons.wallet,
+                  const SalaryStatusPage(),
+                ),
+                _buildSubDrawerItem(
+                  context,
                   isUrdu ? 'ایڈوانس و قرض' : 'Loans & Advance',
                   Icons.request_quote,
                   const LoansManagementPage(),
@@ -891,6 +935,12 @@ class AppDrawer extends StatelessWidget {
                   isUrdu ? 'وظائف عملہ و پے رول' : 'Staff Stipends & Payroll',
                   Icons.payments,
                   const AccPayrollPage(),
+                ),
+                _buildSubDrawerItem(
+                  context,
+                  isUrdu ? 'تنخواہ اسٹیٹس' : 'Staff Salary Status',
+                  Icons.wallet,
+                  const SalaryStatusPage(),
                 ),
                 _buildSubDrawerItem(
                   context,

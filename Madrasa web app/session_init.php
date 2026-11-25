@@ -62,17 +62,19 @@ if (!function_exists('madrasa_safe_session_start')) {
             return true;
         }
 
-        $validPath = madrasa_resolve_valid_session_path();
-        if (!empty($validPath)) {
-            @ini_set('session.save_path', $validPath);
-            @session_save_path($validPath);
-        }
-
         $isHttps = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ||
                    (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
                    (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
 
+        @ini_set('expose_php', 'off');
         if (!headers_sent()) {
+            @header_remove('X-Powered-By');
+            header('X-Content-Type-Options: nosniff');
+            header('X-Frame-Options: SAMEORIGIN');
+            header('Referrer-Policy: strict-origin-when-cross-origin');
+            if ($isHttps) {
+                header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+            }
             if (PHP_VERSION_ID >= 70300) {
                 @session_set_cookie_params([
                     'lifetime' => 86400 * 30,
@@ -87,14 +89,34 @@ if (!function_exists('madrasa_safe_session_start')) {
             }
         }
 
-        return @session_start();
-    }
-}
+        // 1. First, attempt standard session start without overriding system path
+        $started = (@session_start() && session_status() === PHP_SESSION_ACTIVE);
 
-// Auto-initialize safe session path immediately
-madrasa_resolve_valid_session_path();
-$validSessionPath = madrasa_resolve_valid_session_path();
-if (!empty($validSessionPath)) {
-    @ini_set('session.save_path', $validSessionPath);
-    @session_save_path($validSessionPath);
+        // 2. Fallback only if default session start failed
+        if (!$started) {
+            $validPath = madrasa_resolve_valid_session_path();
+            if (!empty($validPath) && session_status() === PHP_SESSION_NONE) {
+                @ini_set('session.save_path', $validPath);
+                @session_save_path($validPath);
+                $started = (@session_start() && session_status() === PHP_SESSION_ACTIVE);
+            }
+        }
+
+        if ($started && isset($_SESSION['user_id'])) {
+            $timeout_mins = (int)($_SESSION['session_timeout_minutes'] ?? 60);
+            if ($timeout_mins <= 0) $timeout_mins = 60;
+            $timeout_sec = $timeout_mins * 60;
+            if (isset($_SESSION['last_activity']) && (time() - (int)$_SESSION['last_activity'] > $timeout_sec)) {
+                @session_unset();
+                @session_destroy();
+                if (!headers_sent() && php_sapi_name() !== 'cli') {
+                    header("Location: login.php?msg=timeout");
+                    exit;
+                }
+            }
+            $_SESSION['last_activity'] = time();
+        }
+
+        return (session_status() === PHP_SESSION_ACTIVE);
+    }
 }

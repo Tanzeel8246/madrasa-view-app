@@ -143,7 +143,7 @@ class SyncDownAttendance {
 
         try {
             if (function_exists('ensure_phase1_tables')) ensure_phase1_tables($pdo);
-            $data['activity_logs'] = $ctx->fetchAll("SELECT * FROM activity_logs ORDER BY id DESC LIMIT 100");
+            $data['activity_logs'] = $ctx->fetchAll("SELECT * FROM activity_logs WHERE $tCond" . ($ctx->since_dt ? " AND created_at >= '{$ctx->since_dt}'" : "") . " ORDER BY id DESC LIMIT 100");
         } catch (Throwable $e) {}
     }
 }

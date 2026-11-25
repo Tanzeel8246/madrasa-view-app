@@ -685,6 +685,45 @@ class SyncUpCore {
             }
         }
 
+        // Phase 4: Masjid Itikaf
+        if (!empty($input['masjid_itikaf']) && is_array($input['masjid_itikaf'])) {
+            $tCondItikaf = ($tId === 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $tId";
+            foreach ($input['masjid_itikaf'] as $item) {
+                $localId = to_int_or_null($item['id'] ?? null);
+                try {
+                    $serverId = to_int_or_null($item['server_id'] ?? $item['id'] ?? null);
+                    $existingId = null;
+                    if ($serverId) {
+                        $check = $pdo->prepare("SELECT id FROM masjid_itikaf WHERE id = ? AND $tCondItikaf LIMIT 1");
+                        $check->execute([$serverId]);
+                        $existingId = $check->fetchColumn();
+                    }
+
+                    if ($existingId) {
+                        $stmt = $pdo->prepare("UPDATE masjid_itikaf SET name=?, phone=?, year=?, status=?, is_deleted=?, updated_at=NOW() WHERE id=? AND $tCondItikaf");
+                        $stmt->execute([
+                            $item['name'] ?? '', $item['phone'] ?? '',
+                            $item['year'] ?? date('Y'), $item['status'] ?? 'منظور شدہ',
+                            intval($item['is_deleted'] ?? 0), $existingId
+                        ]);
+                        $savedItikafId = (int)$existingId;
+                    } else {
+                        $stmt = $pdo->prepare("INSERT INTO masjid_itikaf (name, phone, year, status, tenant_id, is_deleted, is_synced, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, NOW(), NOW())");
+                        $stmt->execute([
+                            $item['name'] ?? '', $item['phone'] ?? '',
+                            $item['year'] ?? date('Y'), $item['status'] ?? 'منظور شدہ',
+                            $tId, intval($item['is_deleted'] ?? 0)
+                        ]);
+                        $savedItikafId = (int)$pdo->lastInsertId();
+                    }
+                    if ($localId !== null) {
+                        $syncedIds['masjid_itikaf'][] = $localId;
+                        $serverIds['masjid_itikaf'][(string)$localId] = $savedItikafId;
+                    }
+                } catch (Exception $e) { $syncErrors[] = "masjid_itikaf: " . $e->getMessage(); }
+            }
+        }
+
         // Phase 4: Web Pages
         if (!empty($input['web_pages']) && is_array($input['web_pages'])) {
             foreach ($input['web_pages'] as $item) {

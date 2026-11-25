@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import '../../db_helper.dart';
+import '../../utils/data_refresh_bus.dart';
 
 class AttendanceRepository {
   final DBHelper _dbHelper;
@@ -18,11 +19,11 @@ class AttendanceRepository {
         : "(s.system_type = 'Madrasa' OR s.system_type IS NULL OR s.system_type = '')";
 
     return await db.rawQuery('''
-      SELECT a.*, s.name, s.father_name, s.class_name, s.roll_no
+      SELECT a.*, s.name, s.father_name, s.class_name, s.roll_number
       FROM attendance a
       JOIN students s ON a.student_id = s.id
       WHERE a.date = ? AND (a.is_deleted = 0 OR a.is_deleted IS NULL) AND $sysCond
-      ORDER BY s.roll_no ASC, s.name ASC
+      ORDER BY s.roll_number ASC, s.name ASC
     ''', [date]);
   }
 
@@ -64,11 +65,15 @@ class AttendanceRepository {
     final db = await _db;
     final values = Map<String, dynamic>.from(data);
     values['is_synced'] = 0;
-    return await db.insert(
+    final id = await db.insert(
       'attendance',
       values,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    DataRefreshBus.notify(DataDomain.attendance,
+        action: 'mark_student', entityId: values['student_id']);
+    return id;
   }
 
   Future<List<Map<String, dynamic>>> getTeacherAttendance(
@@ -93,10 +98,14 @@ class AttendanceRepository {
     final db = await _db;
     final values = Map<String, dynamic>.from(data);
     values['is_synced'] = 0;
-    return await db.insert(
+    final id = await db.insert(
       'attendance_teachers',
       values,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    DataRefreshBus.notify(DataDomain.attendance,
+        action: 'mark_teacher', entityId: values['teacher_id']);
+    return id;
   }
 }

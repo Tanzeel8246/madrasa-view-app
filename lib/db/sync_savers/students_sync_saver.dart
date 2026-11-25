@@ -497,10 +497,14 @@ class StudentsSyncSaver {
               'total_years': int.tryParse(item['total_years']?.toString() ?? '8') ?? 8,
               'gender': item['gender']?.toString() ?? 'بنین',
               'description': item['description']?.toString() ?? '',
+              'system_type': (item['system_type']?.toString().isNotEmpty == true)
+                  ? item['system_type'].toString()
+                  : 'Madrasa',
               'is_active': int.tryParse(item['is_active']?.toString() ?? '1') ?? 1,
               'is_deleted': int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
               'is_synced': 1,
               'created_at': item['created_at']?.toString(),
+              'updated_at': item['updated_at']?.toString(),
             },
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
@@ -515,13 +519,17 @@ class StudentsSyncSaver {
       try {
         for (var item in data['course_subjects']) {
           final serverId = int.tryParse(item['id']?.toString() ?? '') ?? 0;
+          final resolvedYearName = (item['year_name']?.toString().isNotEmpty == true)
+              ? item['year_name'].toString()
+              : (item['year_title']?.toString() ?? '');
           batch.insert(
             'course_subjects',
             {
               'id': serverId > 0 ? serverId : null,
               'course_id': int.tryParse(item['course_id']?.toString() ?? '0') ?? 0,
               'year_no': int.tryParse(item['year_no']?.toString() ?? '1') ?? 1,
-              'year_title': item['year_title']?.toString() ?? '',
+              'year_title': resolvedYearName,
+              'year_name': resolvedYearName,
               'subject_name': item['subject_name']?.toString() ?? '',
               'book_name': item['book_name']?.toString() ?? '',
               'max_marks': double.tryParse(item['max_marks']?.toString() ?? '100') ?? 100.0,
@@ -531,6 +539,7 @@ class StudentsSyncSaver {
               'is_deleted': int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
               'is_synced': 1,
               'created_at': item['created_at']?.toString(),
+              'updated_at': item['updated_at']?.toString(),
             },
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
@@ -554,10 +563,14 @@ class StudentsSyncSaver {
               'current_year': int.tryParse(item['current_year']?.toString() ?? '1') ?? 1,
               'academic_session': item['academic_session']?.toString() ?? '',
               'enrollment_date': item['enrollment_date']?.toString() ?? '',
-              'status': item['status']?.toString() ?? 'active',
+              'expected_completion_year': item['expected_completion_year']?.toString() ?? '',
+              'roll_number': item['roll_number']?.toString() ?? '',
+              'status': item['status']?.toString() ?? 'Active',
+              'remarks': item['remarks']?.toString() ?? '',
               'is_deleted': int.tryParse(item['is_deleted']?.toString() ?? '0') ?? 0,
               'is_synced': 1,
               'created_at': item['created_at']?.toString(),
+              'updated_at': item['updated_at']?.toString(),
             },
             conflictAlgorithm: ConflictAlgorithm.replace,
           );

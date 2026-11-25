@@ -32,7 +32,7 @@ $entries = [];
 $opening_balance = 0;
 $selected_account = null;
 
-$acc_list_stmt = $pdo->prepare("SELECT id, code, name FROM acc_chart_of_accounts WHERE (is_deleted = 0 OR is_deleted IS NULL) AND (is_active = 1 OR is_active IS NULL) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) AND code NOT IN ('1101', '1201', '1301', '2101', '2102', '2103', '5010', '5011') ORDER BY CAST(code AS UNSIGNED) ASC, code ASC");
+$acc_list_stmt = $pdo->prepare("SELECT id, code, name FROM acc_chart_of_accounts WHERE (is_deleted = 0 OR is_deleted IS NULL) AND (is_active = 1 OR is_active IS NULL) AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)  ORDER BY CAST(code AS UNSIGNED) ASC, code ASC");
 $acc_list_stmt->execute([$cur_tenant_id]);
 $accounts_list = $acc_list_stmt->fetchAll(PDO::FETCH_ASSOC);
 

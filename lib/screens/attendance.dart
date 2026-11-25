@@ -37,7 +37,7 @@ class AttendancePage extends StatefulWidget {
 
 class _AttendancePageState extends State<AttendancePage>
 
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
 
   final Color bgColor = const Color(0xFFF1EFE7);
 
@@ -532,31 +532,38 @@ class _AttendancePageState extends State<AttendancePage>
 
 
   void _rebuildTabsForClass(String? className) {
-
     final nextPeriods = _buildPeriodsForClass(className);
+    if (nextPeriods.isEmpty) return;
+
+    bool samePeriods = _periods.length == nextPeriods.length;
+    if (samePeriods) {
+      for (int i = 0; i < _periods.length; i++) {
+        if (_periods[i].key != nextPeriods[i].key) {
+          samePeriods = false;
+          break;
+        }
+      }
+    }
+    if (samePeriods) return;
 
     final oldIndex = _tabController.index;
-
-    _tabController.dispose();
+    final oldController = _tabController;
 
     _periods = nextPeriods;
-
     _tabController = TabController(
-
       length: _periods.length,
-
       vsync: this,
-
       initialIndex: oldIndex.clamp(0, _periods.length - 1),
-
     );
-
     _tabController.addListener(() {
-
       if (!_tabController.indexIsChanging) _reloadTeacherAssignments();
-
     });
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        oldController.dispose();
+      } catch (_) {}
+    });
   }
 
 
@@ -783,16 +790,15 @@ class _AttendancePageState extends State<AttendancePage>
 
 
 
-    final filteredStudents = _selectedClass == null
-
+    final filteredStudents = (_selectedClass == null ||
+            _selectedClass!.trim().isEmpty ||
+            _selectedClass == 'تمام کلاسز' ||
+            _selectedClass == 'All Classes')
         ? _students
-
         : _students
-
             .where((s) =>
-
-                (s['class_name'] ?? s['class'])?.toString() == _selectedClass)
-
+                (s['class_name'] ?? s['class'])?.toString().trim() ==
+                _selectedClass!.trim())
             .toList();
 
 
@@ -946,8 +952,11 @@ class _AttendancePageState extends State<AttendancePage>
       }
     }
 
+    final instName = (currentTenantName.value ?? '').trim().isNotEmpty
+        ? currentTenantName.value!.trim()
+        : 'مدرسہ مینجمنٹ سسٹم';
     final buffer = StringBuffer();
-    buffer.writeln('📋 *مدرسہ اشرف المدارس - روزانہ حاضری رپورٹ*');
+    buffer.writeln('📋 *$instName - روزانہ حاضری رپورٹ*');
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
     buffer.writeln('📅 *تاریخ:* $dateStr');
     if (className.isNotEmpty) {
@@ -976,7 +985,7 @@ class _AttendancePageState extends State<AttendancePage>
       }
     }
 
-    buffer.writeln('\n_اشرف المدارس مینجمنٹ سسٹم_');
+    buffer.writeln('\n_$instName مینجمنٹ سسٹم_');
 
     Share.share(buffer.toString(), subject: 'حاضری رپورٹ - $dateStr');
   }
@@ -1243,11 +1252,12 @@ class _AttendancePageState extends State<AttendancePage>
                               onChanged: (val) async {
 
                                 setState(() {
-
-                                  _selectedClass = val;
-
-                                  _rebuildTabsForClass(val);
-
+                                  var nextClass = val;
+                                  if (currentUserRole.value == 'teacher' && (nextClass == null || nextClass.isEmpty)) {
+                                    nextClass = _classes.isNotEmpty ? _classes.first : null;
+                                  }
+                                  _selectedClass = nextClass;
+                                  _rebuildTabsForClass(nextClass);
                                 });
 
                                 await _reloadTeacherAssignments();
@@ -1284,6 +1294,7 @@ class _AttendancePageState extends State<AttendancePage>
                       ],
                     ),
                     child: TabBar(
+                      key: ValueKey('tabbar_${_tabController.hashCode}'),
                       controller: _tabController,
                       isScrollable: true,
                       labelColor: Colors.white,
@@ -1307,7 +1318,7 @@ class _AttendancePageState extends State<AttendancePage>
                   ),
                   Expanded(
                     child: TabBarView(
-
+                      key: ValueKey('tabbarview_${_tabController.hashCode}'),
                       controller: _tabController,
 
                       children: _periods
@@ -1430,16 +1441,15 @@ class _AttendancePageState extends State<AttendancePage>
 
 
 
-    final filteredStudents = _selectedClass == null
-
+    final filteredStudents = (_selectedClass == null ||
+            _selectedClass!.trim().isEmpty ||
+            _selectedClass == 'تمام کلاسز' ||
+            _selectedClass == 'All Classes')
         ? _students
-
         : _students
-
             .where((s) =>
-
-                (s['class_name'] ?? s['class'])?.toString() == _selectedClass)
-
+                (s['class_name'] ?? s['class'])?.toString().trim() ==
+                _selectedClass!.trim())
             .toList();
 
 

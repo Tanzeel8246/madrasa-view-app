@@ -291,7 +291,7 @@ function get_category_name_ur($cat) {
 <!-- Hidden Header for Printing -->
 <div class="print-only printable-register" dir="rtl">
     <div class="text-center mb-4">
-        <h1 style="font-size: 28px; font-weight: bold;">مدرسہ اشرف المدارس فروکہ</h1>
+        <h1 style="font-size: 28px; font-weight: bold;"><?php echo htmlspecialchars(!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : t('app_name')); ?></h1>
         <h3 style="border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px;">
             رجسٹر فارغ التحصیل طلباء (<?php echo ($selected_cat === 'all') ? 'تمام کیٹیگریز' : get_category_name_ur($selected_cat); ?>)
         </h3>

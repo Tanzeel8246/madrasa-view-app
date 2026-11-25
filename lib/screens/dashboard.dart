@@ -1,4 +1,5 @@
 // ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously, deprecated_member_use
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' as intl;
@@ -6,12 +7,15 @@ import 'package:intl/intl.dart' as intl;
 import '../db_helper.dart';
 import '../utils/system_type_global.dart';
 import '../utils/globals.dart';
+import '../utils/data_refresh_bus.dart';
+import '../utils/database_backup_service.dart';
 import '../utils/session.dart';
 import '../utils/sync_service.dart';
 import '../utils/sync_ui_helper.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_brand_logo.dart';
 import '../widgets/neo_box.dart';
+import '../widgets/omni_search_dialog.dart';
 import '../widgets/blinking_trial_beacon.dart';
 import 'academic_entry_dashboard.dart';
 import 'apply_leave.dart';
@@ -105,6 +109,7 @@ class _DashboardPageState extends State<DashboardPage> {
   int _teacherAbsentCount = 0;
   List<Map<String, dynamic>> _topStudents = [];
   List<Map<String, dynamic>> _recentActivities = [];
+  StreamSubscription<DataRefreshEvent>? _dataRefreshSub;
 
   @override
   void initState() {
@@ -114,12 +119,16 @@ class _DashboardPageState extends State<DashboardPage> {
       SystemTypeGlobal.currentSystemType.value = 'Madrasa';
     }
     SystemTypeGlobal.currentSystemType.addListener(_loadRealData);
+    _dataRefreshSub = DataRefreshBus.stream.listen((_) {
+      if (mounted) _loadRealData();
+    });
     _loadRealData();
     _checkInitialAutoSync();
   }
 
   @override
   void dispose() {
+    _dataRefreshSub?.cancel();
     SystemTypeGlobal.currentSystemType.removeListener(_loadRealData);
     super.dispose();
   }
@@ -296,9 +305,7 @@ class _DashboardPageState extends State<DashboardPage> {
               : ((sMap['masjid_name'] != null &&
                       sMap['masjid_name'].toString().trim().isNotEmpty)
                   ? sMap['masjid_name'].toString().trim()
-                  : (isUrduGlobal.value
-                      ? 'مسجد اشرف المدارس'
-                      : 'Masjid Ashraf-ul-Madaris'));
+                  : (isUrduGlobal.value ? 'جامع مسجد' : 'Masjid & Maktab'));
         } else {
           institutionName = (currentTenantName.value != null &&
                   currentTenantName.value!.trim().isNotEmpty)
@@ -307,19 +314,17 @@ class _DashboardPageState extends State<DashboardPage> {
                       sMap['madrasa_name'].toString().trim().isNotEmpty)
                   ? sMap['madrasa_name'].toString().trim()
                   : (isUrduGlobal.value
-                      ? 'مدرسہ اشرف المدارس'
-                      : 'Madrasa Ashraf-ul-Madaris'));
+                      ? 'مدرسہ مینجمنٹ سسٹم'
+                      : 'Madrasa Management System'));
         }
       } catch (_) {
         institutionName = isMasjid
             ? (currentTenantMasjidName.value ??
-                (isUrduGlobal.value
-                    ? 'مسجد اشرف المدارس'
-                    : 'Masjid Ashraf-ul-Madaris'))
+                (isUrduGlobal.value ? 'جامع مسجد' : 'Masjid & Maktab'))
             : (currentTenantName.value ??
                 (isUrduGlobal.value
-                    ? 'مدرسہ اشرف المدارس'
-                    : 'Madrasa Ashraf-ul-Madaris'));
+                    ? 'مدرسہ مینجمنٹ سسٹم'
+                    : 'Madrasa Management System'));
       }
 
       if (mounted) {
@@ -1168,17 +1173,20 @@ class _DashboardPageState extends State<DashboardPage> {
                           children: [
                             const AppBrandLogo(size: 28),
                             const SizedBox(width: 8),
-                            Text(
-                              isUrdu
-                                  ? (isMasjid
-                                      ? 'مسجد ڈیش بورڈ'
-                                      : 'مدرسہ ڈیش بورڈ')
-                                  : (isMasjid
-                                      ? 'Masjid Dashboard'
-                                      : 'Madrasa Dashboard'),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 17,
+                            Flexible(
+                              child: Text(
+                                isUrdu
+                                    ? (isMasjid
+                                        ? 'مسجد ڈیش بورڈ'
+                                        : 'مدرسہ ڈیش بورڈ')
+                                    : (isMasjid
+                                        ? 'Masjid Dashboard'
+                                        : 'Madrasa Dashboard'),
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
                               ),
                             ),
                           ],
@@ -1242,6 +1250,24 @@ class _DashboardPageState extends State<DashboardPage> {
                         },
                       ),
                       const BlinkingTrialBeacon(),
+                      IconButton(
+                        icon: const Icon(Icons.manage_search_rounded,
+                            color: Colors.white),
+                        tooltip:
+                            isUrdu ? 'اومنی سرچ (360° تلاش)' : 'Omni Search',
+                        onPressed: () => OmniSearchDialog.show(context),
+                      ),
+                      if (currentUserRole.value == 'admin' ||
+                          currentUserRole.value == 'superadmin')
+                        IconButton(
+                          icon: const Icon(Icons.backup_rounded,
+                              color: Colors.white),
+                          tooltip: isUrdu
+                              ? 'ڈیٹا بیس بیک اپ و شیئر'
+                              : 'Database Backup',
+                          onPressed: () =>
+                              DatabaseBackupService.showBackupDialog(context),
+                        ),
                       IconButton(
                         icon: Badge(
                           isLabelVisible: _smartAlertsCount > 0,

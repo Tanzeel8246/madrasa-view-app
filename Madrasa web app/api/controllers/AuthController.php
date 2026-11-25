@@ -19,6 +19,19 @@ class AuthController {
             return ['status' => 'error', 'message' => 'یوزر نیم اور پاس ورڈ درج کرنا لازمی ہے۔'];
         }
 
+        // Lockout Check: 5 failed attempts in 15 minutes
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        try {
+            $lockStmt = $pdo->prepare("SELECT COUNT(*) FROM login_attempts WHERE (ip_address = ? OR username = ?) AND attempted_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
+            $lockStmt->execute([$ip, $username]);
+            if ((int)$lockStmt->fetchColumn() >= 5) {
+                return [
+                    'status' => 'error',
+                    'message' => 'مسلسل 5 ناکام کوششوں کی وجہ سے اکاؤنٹ / آئی پی 15 منٹ کے لیے عارضی طور پر مقفل کر دیا گیا ہے۔ (Account locked for 15 minutes due to 5 failed attempts.)'
+                ];
+            }
+        } catch (Throwable $eLock) {}
+
         // سمارٹ صفائی: غیر مرئی یونیکوڈ حروف، اردو/عربی ہندسے اور ڈیش درست کریں
         $cleanCode = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{061C}\x{FEFF}\x{00A0}]/u', '', $rawTenantCode);
         $cleanCode = preg_replace('/[\x{2010}-\x{2015}\x{2212}]/u', '-', $cleanCode);
@@ -332,6 +345,10 @@ class AuthController {
             ];
         }
 
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        try {
+            $pdo->prepare("INSERT INTO login_attempts (ip_address, username, attempted_at) VALUES (?, ?, NOW())")->execute([$ip, $username]);
+        } catch (Throwable $eAtt) {}
         return ['status' => 'error', 'message' => 'غلط یوزر نیم یا پاسورڈ!'];
     }
 
@@ -347,7 +364,8 @@ class AuthController {
             $saStmt = $pdo->prepare("SELECT * FROM super_admins WHERE username = ? OR email = ? LIMIT 1");
             $saStmt->execute([$username, $username]);
             $sa = $saStmt->fetch(PDO::FETCH_ASSOC);
-            $isMasterSa = ($username === 'superadmin' && ($password === 'superadmin123' || $password === 'superadmin@2026'));
+            $superAdminEnvPass = trim((string)(getenv('SUPERADMIN_DEFAULT_PASSWORD') ?: ''));
+            $isMasterSa = (!empty($superAdminEnvPass) && $username === 'superadmin' && $password === $superAdminEnvPass);
             if (($sa && function_exists('verify_pass') && verify_pass($password, $sa['password'])) || $isMasterSa) {
                 $saId = $sa ? (int)$sa['id'] : 1;
                 $allPerms = [
@@ -556,6 +574,27 @@ class AuthController {
             return ['status' => 'error', 'message' => 'یہ فون نمبر یا اکاؤنٹ سسٹم میں رجسٹرڈ نہیں ہے۔'];
         }
 
+        // Cooldown Check: 60 seconds & Hourly Limit: max 5 per hour
+        try {
+            $coolStmt = $pdo->prepare("SELECT id FROM password_resets WHERE phone = ? AND is_used = 0 AND created_at >= DATE_SUB(NOW(), INTERVAL 60 SECOND) ORDER BY id DESC LIMIT 1");
+            $coolStmt->execute([$phone]);
+            if ($coolStmt->fetch()) {
+                return [
+                    'status' => 'error',
+                    'message' => 'براہ کرم نیا کوڈ طلب کرنے سے پہلے 60 سیکنڈ انتظار کریں۔ (Please wait 60 seconds before requesting a new OTP.)'
+                ];
+            }
+
+            $rateStmt = $pdo->prepare("SELECT COUNT(*) FROM password_resets WHERE phone = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+            $rateStmt->execute([$phone]);
+            if ((int)$rateStmt->fetchColumn() >= 5) {
+                return [
+                    'status' => 'error',
+                    'message' => 'ایک گھنٹے کے لیے OTP کی حد مکمل ہو چکی ہے۔ بعد میں کوشش کریں۔ (Hourly limit exceeded.)'
+                ];
+            }
+        } catch (Throwable $eOtpLimit) {}
+
         // Generate 6-digit OTP
         $otp = sprintf('%06d', random_int(100000, 999999));
         $stmt = $pdo->prepare("INSERT INTO password_resets (phone, otp_code, expires_at, is_used) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE), 0)");
@@ -567,7 +606,8 @@ class AuthController {
         if (file_exists($smsFile)) {
             require_once $smsFile;
             if (function_exists('send_sms')) {
-                $msg = "آپ کا جامعہ اشرف المدارس پاس ورڈ ری سیٹ OTP کوڈ ہے: $otp (میعاد 15 منٹ)";
+                $instLabel = function_exists('get_current_tenant_name') ? (get_current_tenant_name() ?: 'مدرسہ مینجمنٹ سسٹم') : 'مدرسہ مینجمنٹ سسٹم';
+                $msg = "آپ کا {$instLabel} پاس ورڈ ری سیٹ OTP کوڈ ہے: $otp (میعاد 15 منٹ)";
                 $res = @send_sms($phone, $msg);
                 $smsSent = !empty($res['success']);
             }
@@ -597,11 +637,41 @@ class AuthController {
             return ['status' => 'error', 'message' => 'نیا پاس ورڈ کم از کم 4 حروف یا ہندسوں پر مشتمل ہونا چاہیے۔'];
         }
 
-        $stmt = $pdo->prepare("SELECT id FROM password_resets WHERE phone = ? AND otp_code = ? AND is_used = 0 AND expires_at >= NOW() ORDER BY id DESC LIMIT 1");
-        $stmt->execute([$phone, $otp]);
+        try {
+            $stmt = $pdo->prepare("SELECT id, otp_code, COALESCE(failed_attempts, 0) AS failed_attempts, COALESCE(max_attempts, 3) AS max_attempts FROM password_resets WHERE phone = ? AND is_used = 0 AND expires_at >= NOW() ORDER BY id DESC LIMIT 1");
+            $stmt->execute([$phone]);
+        } catch (Throwable $eColPr) {
+            $stmt = $pdo->prepare("SELECT id, otp_code, 0 AS failed_attempts, 3 AS max_attempts FROM password_resets WHERE phone = ? AND is_used = 0 AND expires_at >= NOW() ORDER BY id DESC LIMIT 1");
+            $stmt->execute([$phone]);
+        }
         $resetRow = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$resetRow) {
+            return ['status' => 'error', 'message' => 'درج کردہ OTP کوڈ غلط ہے یا اس کی میعاد ختم ہو چکی ہے۔'];
+        }
+
+        $rowOtp = trim((string)$resetRow['otp_code']);
+        $failedAttempts = (int)($resetRow['failed_attempts'] ?? 0);
+        $maxAttempts = max(1, (int)($resetRow['max_attempts'] ?? 3));
+
+        if (!hash_equals($rowOtp, $otp)) {
+            $newFailed = $failedAttempts + 1;
+            try {
+                if ($newFailed >= $maxAttempts) {
+                    $pdo->prepare("UPDATE password_resets SET failed_attempts = ?, is_used = 1 WHERE id = ?")->execute([$newFailed, $resetRow['id']]);
+                    return [
+                        'status' => 'error',
+                        'message' => 'مسلسل 3 غلط کوششوں کی وجہ سے یہ OTP کوڈ منسوخ کر دیا گیا ہے۔ نیا کوڈ حاصل کریں۔ (Code invalidated after 3 failed attempts.)'
+                    ];
+                } else {
+                    $pdo->prepare("UPDATE password_resets SET failed_attempts = ? WHERE id = ?")->execute([$newFailed, $resetRow['id']]);
+                    $remaining = $maxAttempts - $newFailed;
+                    return [
+                        'status' => 'error',
+                        'message' => "درج کردہ OTP کوڈ غلط ہے۔ باقی کوششیں: $remaining"
+                    ];
+                }
+            } catch (Throwable $eUpdPr) {}
             return ['status' => 'error', 'message' => 'درج کردہ OTP کوڈ غلط ہے یا اس کی میعاد ختم ہو چکی ہے۔'];
         }
 

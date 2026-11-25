@@ -164,13 +164,29 @@ try {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        if (function_exists('verify_csrf_token') && !verify_csrf_token()) {
+            $error = ($lang == 'en') ? "Security verification failed (CSRF token missing). Please refresh and try again." : "سیکیورٹی تصدیق ناکام ہو گئی۔ براہِ کرم صفحہ ریفریش کر کے دوبارہ کوشش کریں۔";
+        } else {
         $tenant_input = trim($_POST['tenant_code'] ?? '');
         $username = trim($_POST['username'] ?? '');
         $password = trim($_POST['password'] ?? '');
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
 
         if ($username === '' || $password === '') {
             $error = "براہِ کرم یوزر نیم اور پاسورڈ درج کریں۔";
         } else {
+            // Rate-limit / brute-force lockout check (5 failed attempts within 15 minutes)
+            try {
+                $lockStmt = $pdo->prepare("SELECT COUNT(*) FROM login_attempts WHERE (ip_address = ? OR username = ?) AND attempted_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
+                $lockStmt->execute([$ip, $username]);
+                if ((int)$lockStmt->fetchColumn() >= 5) {
+                    $error = ($lang == 'en')
+                        ? "Account / IP is temporarily locked for 15 minutes due to 5 failed login attempts. Please try again later."
+                        : "مسلسل 5 ناکام کوششوں کی وجہ سے اکاؤنٹ / آئی پی 15 منٹ کے لیے عارضی طور پر مقفل کر دیا گیا ہے۔ برائے مہربانی بعد میں کوشش کریں۔";
+                }
+            } catch (Throwable $eLock) {}
+        }
+        if (empty($error)) {
             // 0. سپر ایڈمن چیک (Super Admin Account)
             try {
                 $saStmt = $pdo->prepare("SELECT * FROM super_admins WHERE (LOWER(username) = LOWER(?) OR email = ?) LIMIT 1");
@@ -739,7 +755,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (empty($error)) {
                 $error = "غلط یوزر نیم یا پاسورڈ درج کیا گیا ہے۔ براہِ کرم درست معلومات درج کریں۔";
+                try {
+                    $pdo->prepare("INSERT INTO login_attempts (ip_address, username, attempted_at) VALUES (?, ?, NOW())")->execute([$ip, $username]);
+                } catch (Throwable $eAtt) {}
             }
+        }
         }
     } catch(PDOException $e) {
         $error = "لاگ ان میں تکنیکی خرابی: " . htmlspecialchars($e->getMessage());
@@ -779,6 +799,8 @@ if (!empty($tenant_code)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" href="favicon.ico">
     <title><?php echo ($lang=='ur')?'لاگ ان':'Login'; ?> - <?php echo htmlspecialchars($portal_name); ?></title>
     
     <script>
@@ -861,8 +883,8 @@ if (!empty($tenant_code)) {
                 <img src="<?php echo htmlspecialchars($portal_logo); ?>" alt="Mindcrafts AI Logo" style="width: 88px; height: 88px; border-radius: 22px; border: 2px solid rgba(16, 185, 129, 0.4); background: #061814; object-fit: contain; box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25); padding: 4px;">
             </div>
             
-            <h3 class="mb-1 text-success fw-bold urdu-font"><?php echo htmlspecialchars($portal_name); ?></h3>
-            <p class="text-muted small mb-2 urdu-font"><?php echo htmlspecialchars($portal_sub); ?></p>
+            <h3 class="mb-2 text-success fw-bold urdu-font" style="line-height: 2.1 !important;"><?php echo htmlspecialchars($portal_name); ?></h3>
+            <p class="text-muted small mb-3 urdu-font" style="line-height: 1.8 !important;"><?php echo htmlspecialchars($portal_sub); ?></p>
             <div class="badge px-3 py-1 mb-2" style="background: rgba(6, 182, 212, 0.15); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 50px; font-size: 11px;">
                 <i class="fas fa-brain me-1"></i> <?php echo ($lang=='en') ? 'By Mindcrafts AI Cloud ERP' : 'بائے مائنڈ کرافٹس اے آئی (Mindcrafts AI)'; ?>
             </div>
@@ -887,6 +909,7 @@ if (!empty($tenant_code)) {
         <?php endif; ?>
         
         <form method="POST" action="login.php">
+            <?php if (function_exists('csrf_field')) echo csrf_field(); ?>
             <div class="mb-3 text-start">
                 <label class="form-label text-success fw-bold small"><?php echo ($lang=='en') ? 'Institute Code (Optional)' : 'ادارہ کوڈ (Institute Code) — اختیاری'; ?></label>
                 <div class="input-group">
@@ -938,7 +961,7 @@ if (!empty($tenant_code)) {
                 <a href="super_admin.php" class="small text-info text-opacity-75 text-decoration-none"><i class="fas fa-shield-alt me-1"></i> <?php echo ($lang=='en') ? 'Super Admin Portal' : 'سپر ایڈمن پورٹل'; ?></a>
             </div>
             <div class="text-center mt-3 pt-2 border-top border-secondary border-opacity-10">
-                <span class="badge bg-secondary bg-opacity-25 text-secondary border font-monospace" style="font-size: 11px;">v5.7.134 (SaaS Edition)</span>
+                <span class="badge bg-secondary bg-opacity-25 text-secondary border font-monospace" style="font-size: 11px;">v<?php echo htmlspecialchars(defined('APP_VERSION') ? APP_VERSION : '5.7.161'); ?> (SaaS Edition)</span>
             </div>
         </div>
     </div>

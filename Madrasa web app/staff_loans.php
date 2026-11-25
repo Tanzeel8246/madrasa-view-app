@@ -14,6 +14,10 @@ if (!$is_admin && !app_has_perm('manage_loans') && !app_has_perm('manage_masjid_
 
 $msg = '';
 $uid = $_SESSION['user_id'];
+// BUGFIX B-01: this legacy page also never scoped by tenant.
+$cur_tenant_id = (int)get_current_tenant_id();
+try { $pdo->exec("ALTER TABLE staff_loans ADD COLUMN tenant_id INT DEFAULT 1"); } catch (Exception $e) {}
+try { $pdo->exec("UPDATE staff_loans l JOIN teachers t ON l.teacher_id = t.id SET l.tenant_id = t.tenant_id WHERE (l.tenant_id IS NULL OR l.tenant_id = 1) AND t.tenant_id IS NOT NULL AND t.tenant_id <> 0 AND t.tenant_id <> 1"); } catch (Exception $e) {}
 $is_en = (isset($_SESSION['lang']) && $_SESSION['lang'] === 'en');
 $txt = [
     'title' => $is_en ? 'Staff Loans & Advances' : 'عملہ کے قرض اور ایڈوانس',
@@ -35,9 +39,9 @@ $txt = [
 // Ensure "Staff Loans" head exists
 $sal_head_id = 0;
 try {
-    $sh = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-001' LIMIT 1")->fetchColumn();
+    $sh = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-001' AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0) ORDER BY (tenant_id = $cur_tenant_id) DESC LIMIT 1")->fetchColumn();
     if (!$sh) {
-        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type) VALUES ('LOAN-001', ?, 'Asset', 0, '$system_type')")->execute([$txt['sal_head']]);
+        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type, tenant_id) VALUES ('LOAN-001', ?, 'Asset', 0, '$system_type', $cur_tenant_id)")->execute([$txt['sal_head']]);
         $sal_head_id = (int)$pdo->lastInsertId();
     } else {
         $sal_head_id = (int)$sh;
@@ -51,13 +55,13 @@ if (isset($_POST['issue_loan'])) {
     $date = $_POST['date_issued'] ?? date('Y-m-d');
     $desc = trim($_POST['description'] ?? '');
     
-    $staff = $pdo->prepare("SELECT name FROM teachers WHERE id = ?");
-    $staff->execute([$teacher_id]);
+    $staff = $pdo->prepare("SELECT name FROM teachers WHERE id = ? AND tenant_id = ?");
+    $staff->execute([$teacher_id, $cur_tenant_id]);
     $staff_name = $staff->fetchColumn();
 
     $fin_desc = "{$txt['title']}: $staff_name - " . $desc;
     
-    $pdo->prepare("INSERT INTO staff_loans (teacher_id, loan_amount, installment_amount, remaining_amount, date_issued, description, status, system_type) VALUES (?, ?, ?, ?, ?, ?, 'Active', '$system_type')")
+    $pdo->prepare("INSERT INTO staff_loans (teacher_id, loan_amount, installment_amount, remaining_amount, date_issued, description, status, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?, 'Active', '$system_type', $cur_tenant_id)")
         ->execute([$teacher_id, $amt, $inst, $amt, $date, $desc]);
         
     $fin_stmt = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, system_type) VALUES (?, ?, 'Expense', ?, ?, ?, ?, ?, 0, '$system_type')");
@@ -66,8 +70,8 @@ if (isset($_POST['issue_loan'])) {
     $msg = "<div class='alert alert-success fw-bold'>✅ {$txt['msg_saved']}</div>";
 }
 
-$loans = $pdo->query("SELECT l.*, t.name as staff_name FROM staff_loans l JOIN teachers t ON l.teacher_id = t.id WHERE l.is_deleted = 0 AND l.system_type = '$system_type' ORDER BY l.id DESC")->fetchAll(PDO::FETCH_ASSOC);
-$teachers = $pdo->query("SELECT id, name FROM teachers WHERE status = 'Active' AND (is_deleted = 0 OR is_deleted IS NULL) AND system_type = '$system_type' ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$loans = $pdo->query("SELECT l.*, t.name as staff_name FROM staff_loans l JOIN teachers t ON l.teacher_id = t.id WHERE l.is_deleted = 0 AND l.tenant_id = $cur_tenant_id AND t.tenant_id = $cur_tenant_id AND l.system_type = '$system_type' ORDER BY l.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$teachers = $pdo->query("SELECT id, name FROM teachers WHERE tenant_id = $cur_tenant_id AND status = 'Active' AND (is_deleted = 0 OR is_deleted IS NULL) AND system_type = '$system_type' ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 $title = $txt['title'];
 include 'header.php';

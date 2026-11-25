@@ -187,12 +187,39 @@ if ($selected_class && $selected_subject) {
     foreach($reports as $r) {
         $existing_reports[$r['student_id']] = $r;
     }
+
+    // 5. حاضری ریکارڈ لانا اور خودکار اسٹیٹس میپ کرنا
+    $att_status_map = [];
+    try {
+        $stmt_att = $pdo->prepare("SELECT student_id, status, shift FROM attendance WHERE date = ? AND tenant_id = ?");
+        $stmt_att->execute([$selected_date, $cur_tenant_id]);
+        $atts = $stmt_att->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($atts as $a) {
+            $sid = (int)$a['student_id'];
+            $st = trim((string)$a['status']);
+            $st_lower = strtolower($st);
+            if ($st === 'A' || strpos($st_lower, 'absent') !== false || strpos($st, 'غیر حاضر') !== false || strpos($st, 'غائب') !== false) {
+                $att_status_map[$sid] = 'غیر حاضر';
+            } elseif ($st === 'L' || strpos($st_lower, 'leave') !== false || strpos($st, 'رخصت') !== false || strpos($st, 'چھٹی') !== false) {
+                if (!isset($att_status_map[$sid]) || $att_status_map[$sid] !== 'غیر حاضر') {
+                    $att_status_map[$sid] = 'رخصت';
+                }
+            } elseif ($st === 'P' || strpos($st_lower, 'present') !== false || strpos($st, 'حاضر') !== false) {
+                if (!isset($att_status_map[$sid])) {
+                    $att_status_map[$sid] = 'حاضر';
+                }
+            }
+        }
+    } catch (Exception $eAtt) {}
 }
 ?>
 
 <style>
     .table-responsive { width: 100% !important; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .table th, .table td { word-break: break-word !important; white-space: normal !important; }
+    .grade-absent { color: #dc3545 !important; font-weight: bold; background-color: #fff5f5; border-color: #dc3545 !important; }
+    .grade-leave { color: #fd7e14 !important; font-weight: bold; background-color: #fff9f2; border-color: #fd7e14 !important; }
+    .grade-present { color: #198754 !important; font-weight: bold; }
 </style>
 
 <div class="container py-3 text-end" dir="rtl">
@@ -248,15 +275,33 @@ if ($selected_class && $selected_subject) {
                     </span>
                     <span class="badge bg-primary fs-6">کل طلباء: <?php echo count($students); ?></span>
                 </div>
+
+                <!-- فوری بیچ اندراج برائے اگلا سبق -->
+                <div class="card p-3 mb-3 bg-light border">
+                    <div class="row align-items-center g-2">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white fw-bold"><i class="fas fa-bolt text-warning me-1"></i> تمام حاضر طلبہ کے لیے اگلا سبق:</span>
+                                <input type="text" id="batch_next_lesson" class="form-control" placeholder="مثلاً: صفحہ 10 تا 12 یا درس نمبر 3">
+                                <button type="button" class="btn btn-outline-success fw-bold" onclick="applyBatchLesson()">
+                                    <i class="fas fa-check me-1"></i> تمام حاضرین پر لاگو کریں
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-start text-muted small">
+                            <i class="fas fa-info-circle me-1"></i> غیر حاضر اور رخصت طلبہ کو خودکار استثناء دیا جائے گا۔
+                        </div>
+                    </div>
+                </div>
                 
                 <div class="table-responsive">
                     <table class="table table-bordered table-hover align-middle bg-white">
                         <thead class="table-light text-center">
                             <tr>
                                 <th style="width:5%;">#</th>
-                                <th style="width:25%;">نام طالب علم</th>
-                                <th style="width:45%;">سبق کی تفصیل (صفحہ / ٹاپک)</th>
-                                <th style="width:25%;">کیفیت / درجہ</th>
+                                <th style="width:25%;">نام طالب علم و حاضری</th>
+                                <th style="width:35%;">پچھلا سبق / کیفیت</th>
+                                <th style="width:35%;">اگلا سبق (مقدار / عنوان)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -265,25 +310,52 @@ if ($selected_class && $selected_subject) {
                                 $rep = $existing_reports[$sid] ?? null;
                                 $lesson = $rep['lesson_details'] ?? '';
                                 $grade = $rep['grade'] ?? '';
+
+                                // اگر پہلے سے گریڈ موجود نہ ہو تو حاضری کی بنیاد پر خودکار ڈیفالٹ لاگو کریں
+                                $att_status = $att_status_map[$sid] ?? 'حاضر';
+                                if ($grade === '') {
+                                    if ($att_status === 'غیر حاضر') {
+                                        $grade = 'غیر حاضر';
+                                    } elseif ($att_status === 'رخصت') {
+                                        $grade = 'رخصت';
+                                    } else {
+                                        $grade = 'یاد ہے';
+                                    }
+                                }
+
+                                $grade_class = ($grade === 'غیر حاضر') ? 'grade-absent' : (($grade === 'رخصت') ? 'grade-leave' : 'grade-present');
                             ?>
-                            <tr>
+                            <tr id="row_<?php echo $sid; ?>">
                                 <td class="text-center fw-bold text-muted"><?php echo $sr++; ?></td>
                                 <td class="fw-bold text-primary">
-                                    <?php echo htmlspecialchars($s['name']); ?>
-                                    <div class="small text-muted fw-normal">ولد <?php echo htmlspecialchars($s['father_name']); ?></div>
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <span><?php echo htmlspecialchars($s['name']); ?></span>
+                                        <?php if ($att_status === 'غیر حاضر'): ?>
+                                            <span class="badge bg-danger ms-1">غیر حاضر</span>
+                                        <?php elseif ($att_status === 'رخصت'): ?>
+                                            <span class="badge bg-warning text-dark ms-1">رخصت</span>
+                                        <?php else: ?>
+                                            <span class="badge bg-success ms-1">حاضر</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="small text-muted fw-normal">ولد <?php echo htmlspecialchars($s['father_name']); ?> | رول: <?php echo htmlspecialchars($s['admission_number'] ?? '-'); ?></div>
                                     <input type="hidden" name="std_ids[]" value="<?php echo $sid; ?>">
                                 </td>
                                 <td>
-                                    <textarea name="lessons[<?php echo $sid; ?>]" class="form-control" rows="1" placeholder="آج کا سبق..."><?php echo htmlspecialchars($lesson); ?></textarea>
-                                </td>
-                                <td>
-                                    <select name="grades[<?php echo $sid; ?>]" class="form-select fw-bold <?php echo ($grade == 'غیر حاضر') ? 'text-danger' : ''; ?>">
-                                        <option value="" class="text-dark">-- درجہ منتخب کریں --</option>
+                                    <select name="grades[<?php echo $sid; ?>]" class="form-select fw-bold grade-select <?php echo $grade_class; ?>" onchange="updateGradeStyle(this)">
+                                        <option value="یاد ہے" <?php echo $grade == 'یاد ہے' ? 'selected' : ''; ?>>یاد ہے</option>
+                                        <option value="یاد نہیں" <?php echo $grade == 'یاد نہیں' ? 'selected' : ''; ?>>یاد نہیں</option>
+                                        <option value="کچا پکا" <?php echo $grade == 'کچا پکا' ? 'selected' : ''; ?>>کچا پکا</option>
+                                        <option value="غیر حاضر" <?php echo $grade == 'غیر حاضر' ? 'selected' : ''; ?>>غیر حاضر</option>
+                                        <option value="رخصت" <?php echo $grade == 'رخصت' ? 'selected' : ''; ?>>رخصت</option>
                                         <option value="بہترین" <?php echo $grade == 'بہترین' ? 'selected' : ''; ?>>بہترین</option>
                                         <option value="بہتر" <?php echo $grade == 'بہتر' ? 'selected' : ''; ?>>بہتر</option>
                                         <option value="رعایتی پاس" <?php echo $grade == 'رعایتی پاس' ? 'selected' : ''; ?>>رعایتی پاس</option>
                                         <option value="کچا" <?php echo $grade == 'کچا' ? 'selected' : ''; ?>>کچا</option>
                                     </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="lessons[<?php echo $sid; ?>]" class="form-control lesson-input" placeholder="اگلا سبق درج کریں..." value="<?php echo htmlspecialchars($lesson); ?>">
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -294,7 +366,7 @@ if ($selected_class && $selected_subject) {
                 <div class="row mt-3">
                     <div class="col-12">
                         <button type="submit" name="save_academic" class="btn btn-primary w-100 py-3 fw-bold shadow fs-5">
-                            <i class="fas fa-save me-2"></i> مکمل کلاس کا رزلٹ محفوظ کریں
+                            <i class="fas fa-save me-2"></i> مکمل کلاس کا تعلیمی ریکارڈ محفوظ کریں
                         </button>
                     </div>
                 </div>
@@ -311,16 +383,34 @@ if ($selected_class && $selected_subject) {
 </div>
 
 <script>
-    // To maintain dropdown colors dynamically if changed
-    document.querySelectorAll('select[name^="grades"]').forEach(function(select) {
-        select.addEventListener('change', function() {
-            if(this.value === 'غیر حاضر') {
-                this.classList.add('text-danger');
-            } else {
-                this.classList.remove('text-danger');
+    function updateGradeStyle(select) {
+        select.classList.remove('grade-absent', 'grade-leave', 'grade-present');
+        if (select.value === 'غیر حاضر') {
+            select.classList.add('grade-absent');
+        } else if (select.value === 'رخصت') {
+            select.classList.add('grade-leave');
+        } else {
+            select.classList.add('grade-present');
+        }
+    }
+
+    function applyBatchLesson() {
+        const val = document.getElementById('batch_next_lesson').value.trim();
+        if (!val) {
+            alert('براہِ کرم پہلے اگلا سبق درج کریں!');
+            return;
+        }
+        document.querySelectorAll('tbody tr').forEach(tr => {
+            const gradeSelect = tr.querySelector('.grade-select');
+            const lessonInput = tr.querySelector('.lesson-input');
+            if (gradeSelect && lessonInput) {
+                // غیر حاضر اور رخصت والوں کو چھوڑ کر باقی سب پر لاگو کریں
+                if (gradeSelect.value !== 'غیر حاضر' && gradeSelect.value !== 'رخصت') {
+                    lessonInput.value = val;
+                }
             }
         });
-    });
+    }
 </script>
 
 <?php include 'footer.php'; ?>

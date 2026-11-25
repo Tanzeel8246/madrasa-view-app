@@ -149,15 +149,15 @@ class SyncUpMaktab {
                     $periodNum = (int)($item['period_num'] ?? 1);
                     if ($studentId && $dateVal) {
                         $isDeleted = (int)($item['is_deleted'] ?? 0);
-                        $check = $pdo->prepare("SELECT id FROM period_attendance WHERE student_id = ? AND date = ? AND period_num = ? LIMIT 1");
-                        $check->execute([$studentId, $dateVal, $periodNum]);
+                        $check = $pdo->prepare("SELECT id FROM maktab_attendance WHERE student_id = ? AND date = ? AND period_num = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1");
+                        $check->execute([$studentId, $dateVal, $periodNum, $tId]);
                         $existingId = $check->fetchColumn();
                         if ($existingId) {
-                            $pdo->prepare("UPDATE period_attendance SET status=?, remarks=? WHERE id=?")
-                                ->execute([$item['status'] ?? 'Present', $item['remarks'] ?? '', $existingId]);
+                            $pdo->prepare("UPDATE maktab_attendance SET status=?, remarks=?, is_deleted=?, tenant_id=? WHERE id=?")
+                                ->execute([$item['status'] ?? 'Present', $item['remarks'] ?? '', $isDeleted, $tId, $existingId]);
                         } else {
-                            $pdo->prepare("INSERT INTO period_attendance (student_id, date, period_num, status, remarks, tenant_id) VALUES (?, ?, ?, ?, ?, ?)")
-                                ->execute([$studentId, $dateVal, $periodNum, $item['status'] ?? 'Present', $item['remarks'] ?? '', $tId]);
+                            $pdo->prepare("INSERT INTO maktab_attendance (student_id, date, period_num, status, remarks, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                                ->execute([$studentId, $dateVal, $periodNum, $item['status'] ?? 'Present', $item['remarks'] ?? '', $isDeleted, $tId]);
                         }
                     }
                     if ($localId !== null) $syncedIds['maktab_attendance'][] = $localId;

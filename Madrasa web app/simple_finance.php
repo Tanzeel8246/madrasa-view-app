@@ -2886,12 +2886,16 @@ include 'header.php';
                             <div class="col-md-6">
                                 <label class="fw-bold form-label"><?php echo __('کہاں جمع ہوئی؟ (وصولی کھاتہ)', 'Deposit To (Account)'); ?></label>
                                 <select name="account_id" class="form-select" style="color: #212529 !important; background-color: #ffffff !important;">
-                                    <?php foreach($income_payment_accounts as $pa): ?>
+                                    <?php $__cash_selected = false; foreach($income_payment_accounts as $pa): ?>
                                         <option value="<?php echo $pa['id']; ?>" <?php 
                                             if (!$is_admin) {
                                                 echo ((int)$pa['id'] === $my_col_aid || (int)$pa['id'] === $selected_col_aid || $is_my_collection_account($pa['name'] ?? '')) ? 'selected' : '';
                                             } else {
-                                                echo ($pa['code'] == '1001') ? 'selected' : '';
+                                                // BUGFIX B-09: EVERY account coded 1001 (global + tenant
+                                                // duplicates) was marked selected, so the browser submitted
+                                                // the LAST one — donations landed in a per-user advance
+                                                // account instead of Cash in Hand. Select only the first.
+                                                if ($pa['code'] == '1001' && !$__cash_selected) { echo 'selected'; $__cash_selected = true; }
                                             }
                                         ?>>
                                             <?php echo htmlspecialchars($pa['name'] . ' (' . $pa['code'] . ')'); ?>
@@ -3322,7 +3326,7 @@ include 'header.php';
                             <?php foreach($all_payment_accounts as $pa): 
                                 if (!$is_admin && ($is_other_advance_account($pa['name'] ?? '') || $is_other_collection_account($pa['name'] ?? ''))) continue;
                             ?>
-                                <option value="<?php echo $pa['id']; ?>" <?php echo ($is_admin && $pa['code'] == '1001') ? 'selected' : ''; ?>>
+                                <option value="<?php echo $pa['id']; ?>" <?php if ($is_admin && $pa['code'] == '1001' && empty($GLOBALS['__sf_cash_sel_3329'])) { echo 'selected'; $GLOBALS['__sf_cash_sel_3329'] = true; } ?>>
                                     <?php echo htmlspecialchars($pa['name'] . ' (' . $pa['code'] . ')'); ?>
                                 </option>
                             <?php endforeach; ?>
@@ -3355,7 +3359,7 @@ include 'header.php';
                             <?php foreach($all_payment_accounts as $pa): 
                                 if (!$is_admin && ($is_other_advance_account($pa['name'] ?? '') || $is_other_collection_account($pa['name'] ?? ''))) continue;
                             ?>
-                                <option value="<?php echo $pa['id']; ?>" <?php echo ($pa['code'] == '1001') ? 'selected' : ''; ?>>
+                                <option value="<?php echo $pa['id']; ?>" <?php if ($pa['code'] == '1001' && empty($GLOBALS['__sf_cash_sel_3362'])) { echo 'selected'; $GLOBALS['__sf_cash_sel_3362'] = true; } ?>>
                                     <?php echo htmlspecialchars($pa['name'] . ' (' . $pa['code'] . ')'); ?>
                                 </option>
                             <?php endforeach; ?>

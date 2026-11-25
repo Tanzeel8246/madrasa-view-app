@@ -30,12 +30,28 @@ class NotificationBadgeService {
         ];
 
         try {
-            $counts['pending_fee'] = (int)$pdo->query("SELECT COUNT(*) FROM fee_submissions WHERE status = 'Pending' AND (is_deleted = 0 OR is_deleted IS NULL) $tCond")->fetchColumn();
-            $counts['pending_leave'] = (int)$pdo->query("SELECT COUNT(*) FROM leave_applications WHERE status = 'Pending' AND (is_deleted = 0 OR is_deleted IS NULL) $tCond")->fetchColumn();
-            $counts['pending_complaints'] = (int)$pdo->query("SELECT COUNT(*) FROM parent_complaints WHERE status = 'Pending' AND (is_deleted = 0 OR is_deleted IS NULL) $tCond")->fetchColumn();
-            
+            // BUGFIX B-13: each count is guarded separately — previously the
+            // first three ran unguarded inside one try, so a single failing
+            // query (e.g. a missing column) zeroed the WHOLE badge.
             try {
+                $counts['pending_fee'] = (int)$pdo->query("SELECT COUNT(*) FROM fee_submissions WHERE status = 'Pending' AND (is_deleted = 0 OR is_deleted IS NULL) $tCond")->fetchColumn();
+            } catch (Throwable $e) {}
+            try {
+                $counts['pending_leave'] = (int)$pdo->query("SELECT COUNT(*) FROM leave_applications WHERE status = 'Pending' AND (is_deleted = 0 OR is_deleted IS NULL) $tCond")->fetchColumn();
+            } catch (Throwable $e) {}
+            try {
+                // parent portal complaints (Pending) + staff-filed complaints
+                // from the web `complaints` table in the last 7 days — the web
+                // form writes that table, which the badge never read (B-13).
+                $counts['pending_complaints'] = (int)$pdo->query("SELECT COUNT(*) FROM parent_complaints WHERE status = 'Pending' AND (is_deleted = 0 OR is_deleted IS NULL) $tCond")->fetchColumn();
+                $recentFrom = date('Y-m-d', strtotime('-7 days'));
+                $counts['pending_complaints'] += (int)$pdo->query("SELECT COUNT(*) FROM complaints WHERE date >= '$recentFrom' $tCond")->fetchColumn();
+            } catch (Throwable $e) {}
+
+            try {
+                // BUGFIX B-12: count pipeline inquiries as well as website applications.
                 $counts['pending_admissions'] = (int)$pdo->query("SELECT COUNT(*) FROM admission_applications WHERE LOWER(status) = 'pending' $tCond")->fetchColumn();
+                $counts['pending_admissions'] += (int)$pdo->query("SELECT COUNT(*) FROM admission_inquiries WHERE LOWER(status) = 'pending' AND (is_deleted = 0 OR is_deleted IS NULL) $tCond")->fetchColumn();
             } catch (Throwable $e) {}
 
             try {

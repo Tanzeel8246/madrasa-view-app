@@ -42,6 +42,10 @@ class DBHelper {
   AcademicRepository get academics => AcademicRepository(this);
   MasjidRepository get masjid => MasjidRepository(this);
   SettingsRepository get settingsRepo => SettingsRepository(this);
+  InventoryRepository get inventory => InventoryRepository(this);
+  LibraryRepository get library => LibraryRepository(this);
+  HostelRepository get hostel => HostelRepository(this);
+  AdminRepository get admin => AdminRepository(this);
 
   Future<Database> get database async {
     if (_database != null) {
@@ -3686,11 +3690,11 @@ class DBHelper {
         : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
     final rows = await db.rawQuery('''
       SELECT a.id, a.code, a.name, a.type,
-             COALESCE(SUM(CASE WHEN (v.status IS NULL OR v.status != 'Rejected') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $sysCond AND v.date <= ? THEN e.debit ELSE 0 END), 0) AS total_debit,
-             COALESCE(SUM(CASE WHEN (v.status IS NULL OR v.status != 'Rejected') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $sysCond AND v.date <= ? THEN e.credit ELSE 0 END), 0) AS total_credit
+             COALESCE(SUM(CASE WHEN v.id IS NOT NULL AND v.date <= ? THEN e.debit ELSE 0 END), 0) AS total_debit,
+             COALESCE(SUM(CASE WHEN v.id IS NOT NULL AND v.date <= ? THEN e.credit ELSE 0 END), 0) AS total_credit
       FROM acc_chart_of_accounts a
       LEFT JOIN acc_ledger_entries e ON a.id = e.account_id
-      LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $sysCond
+      LEFT JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $sysCond
       WHERE (a.is_deleted = 0 OR a.is_deleted IS NULL)
       GROUP BY a.id, a.code, a.name, a.type
       ORDER BY a.type ASC, a.code ASC
@@ -3747,7 +3751,7 @@ class DBHelper {
              COALESCE(SUM(e.credit), 0) AS total_credit
       FROM acc_chart_of_accounts a
       JOIN acc_ledger_entries e ON a.id = e.account_id
-      JOIN acc_vouchers v ON e.voucher_id = v.id AND (v.status IS NULL OR v.status != 'Rejected') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $sysCond
+      JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $sysCond
       WHERE a.type IN ('Revenue', 'Expense')
         AND v.date BETWEEN ? AND ?
         $deptWhere
@@ -6771,7 +6775,18 @@ class DBHelper {
     Database db = await database;
     var data = Map<String, dynamic>.from(row);
     data['is_synced'] = 0;
-    return await db.insert('acc_payroll', data);
+    try {
+      return await db.insert('acc_payroll', data);
+    } catch (_) {
+      try {
+        await _addColumnIfNotExists(db, 'acc_payroll', 'created_by', 'INTEGER DEFAULT 1');
+        await _addColumnIfNotExists(db, 'acc_payroll', 'system_type', "TEXT DEFAULT 'Madrasa'");
+        return await db.insert('acc_payroll', data);
+      } catch (_) {
+        data.remove('created_by');
+        return await db.insert('acc_payroll', data);
+      }
+    }
   }
 
   Future<int> updateAccPayroll(int id, Map<String, dynamic> row) async {
@@ -7859,6 +7874,7 @@ class DBHelper {
         total_years INTEGER DEFAULT 8,
         gender TEXT DEFAULT 'بنین',
         description TEXT,
+        system_type TEXT DEFAULT 'Madrasa',
         is_active INTEGER DEFAULT 1,
         is_deleted INTEGER DEFAULT 0,
         is_synced INTEGER DEFAULT 0,
@@ -7874,6 +7890,7 @@ class DBHelper {
         course_id INTEGER NOT NULL,
         year_no INTEGER DEFAULT 1,
         year_title TEXT,
+        year_name TEXT DEFAULT '',
         subject_name TEXT NOT NULL,
         book_name TEXT,
         max_marks REAL DEFAULT 100.0,
@@ -7882,7 +7899,8 @@ class DBHelper {
         is_optional INTEGER DEFAULT 0,
         is_deleted INTEGER DEFAULT 0,
         is_synced INTEGER DEFAULT 0,
-        created_at TEXT
+        created_at TEXT,
+        updated_at TEXT
       )
     ''');
 
@@ -7895,10 +7913,14 @@ class DBHelper {
         current_year INTEGER DEFAULT 1,
         academic_session TEXT,
         enrollment_date TEXT,
-        status TEXT DEFAULT 'active',
+        expected_completion_year TEXT DEFAULT '',
+        roll_number TEXT DEFAULT '',
+        status TEXT DEFAULT 'Active',
+        remarks TEXT,
         is_deleted INTEGER DEFAULT 0,
         is_synced INTEGER DEFAULT 0,
-        created_at TEXT
+        created_at TEXT,
+        updated_at TEXT
       )
     ''');
 
@@ -7917,9 +7939,11 @@ class DBHelper {
         is_absent INTEGER DEFAULT 0,
         grade TEXT DEFAULT 'مقبول',
         remarks TEXT,
+        system_type TEXT DEFAULT 'Madrasa',
         is_deleted INTEGER DEFAULT 0,
         is_synced INTEGER DEFAULT 0,
-        created_at TEXT
+        created_at TEXT,
+        updated_at TEXT
       )
     ''');
 
@@ -7954,6 +7978,75 @@ class DBHelper {
         await db.execute(q);
       } catch (_) {}
     }
+
+    // Ensure compatibility columns exist on upgraded local DBs (ST <-> PHP parity)
+    const upgradeCols = <List<String>>[
+      ['students', 'admission_number', "TEXT DEFAULT ''"],
+      ['students', 'class', "TEXT DEFAULT ''"],
+      ['fee_submissions', 'is_deleted', 'INTEGER DEFAULT 0'],
+      ['course_structure', 'system_type', "TEXT DEFAULT 'Madrasa'"],
+      ['course_subjects', 'year_name', "TEXT DEFAULT ''"],
+      ['course_subjects', 'updated_at', 'TEXT'],
+      ['student_course_enrollment', 'roll_number', "TEXT DEFAULT ''"],
+      ['student_course_enrollment', 'expected_completion_year', "TEXT DEFAULT ''"],
+      ['student_course_enrollment', 'remarks', 'TEXT'],
+      ['student_course_enrollment', 'updated_at', 'TEXT'],
+      ['exam_subject_results', 'system_type', "TEXT DEFAULT 'Madrasa'"],
+      ['exam_subject_results', 'updated_at', 'TEXT'],
+    ];
+    for (final col in upgradeCols) {
+      try {
+        await db.execute('ALTER TABLE ${col[0]} ADD COLUMN ${col[1]} ${col[2]}');
+      } catch (_) {}
+    }
+  }
+
+  // --- ACADEMIC COURSE STRUCTURES (ST/PHP Parity) ---
+  Future<List<Map<String, dynamic>>> getCourseStructures(
+      {String? systemType}) async {
+    final db = await database;
+    final sys = systemType ?? SystemTypeGlobal.currentSystemType.value;
+    String where = '(is_deleted = 0 OR is_deleted IS NULL)';
+    if (sys == 'Masjid') {
+      where += " AND system_type = 'Masjid'";
+    } else {
+      where +=
+          " AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+    }
+    return await db.query('course_structure', where: where, orderBy: 'id ASC');
+  }
+
+  Future<int> insertCourseStructure(Map<String, dynamic> row) async {
+    final db = await database;
+    final data = Map<String, dynamic>.from(row);
+    data['system_type'] ??= SystemTypeGlobal.currentSystemType.value;
+    data['created_at'] ??= DateTime.now().toIso8601String();
+    data['is_deleted'] = 0;
+    data['is_synced'] = 0;
+    return await db.insert('course_structure', data);
+  }
+
+  Future<int> updateCourseStructure(int id, Map<String, dynamic> row) async {
+    final db = await database;
+    final data = Map<String, dynamic>.from(row);
+    data['updated_at'] = DateTime.now().toIso8601String();
+    data['is_synced'] = 0;
+    return await db.update('course_structure', data,
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> deleteCourseStructure(int id) async {
+    final db = await database;
+    return await db.update(
+      'course_structure',
+      {
+        'is_deleted': 1,
+        'is_synced': 0,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   // --- ACADEMIC METHODS: COURSES ---
@@ -8012,6 +8105,13 @@ class DBHelper {
   Future<int> insertCourseSubject(Map<String, dynamic> row) async {
     final db = await database;
     final data = Map<String, dynamic>.from(row);
+    final resolvedYear = (data['year_name']?.toString().isNotEmpty == true)
+        ? data['year_name']
+        : data['year_title'];
+    if (resolvedYear != null) {
+      data['year_name'] = resolvedYear;
+      data['year_title'] = resolvedYear;
+    }
     data['is_deleted'] = 0;
     data['is_synced'] = 0;
     data['created_at'] ??= DateTime.now().toIso8601String();
@@ -8140,7 +8240,7 @@ class DBHelper {
              sub.max_marks as subject_max_marks, sub.pass_marks as subject_pass_marks,
              sub.book_name
       FROM exam_subject_results r
-      JOIN students s ON s.id = r.student_id
+      LEFT JOIN students s ON s.id = r.student_id
       LEFT JOIN course_subjects sub ON sub.id = r.subject_id
       WHERE $where
       ORDER BY s.roll_number ASC, s.name ASC, r.subject_id ASC
@@ -8210,6 +8310,173 @@ class DBHelper {
         await txn.insert('exam_subject_results', data);
       }
     });
+  }
+
+  Future<List<Map<String, dynamic>>> getStudentCourseEnrollments({
+    int? courseId,
+    int? studentId,
+    int? yearNo,
+  }) async {
+    final db = await database;
+    String where = '(is_deleted = 0 OR is_deleted IS NULL)';
+    final List<dynamic> args = [];
+    if (courseId != null) {
+      where += ' AND course_id = ?';
+      args.add(courseId);
+    }
+    if (studentId != null) {
+      where += ' AND student_id = ?';
+      args.add(studentId);
+    }
+    if (yearNo != null) {
+      where += ' AND current_year = ?';
+      args.add(yearNo);
+    }
+    return await db.query(
+      'student_course_enrollment',
+      where: where,
+      whereArgs: args.isNotEmpty ? args : null,
+      orderBy: 'id DESC',
+    );
+  }
+
+  Future<int> saveStudentCourseEnrollment(Map<String, dynamic> row) async {
+    final db = await database;
+    final data = Map<String, dynamic>.from(row);
+    data['updated_at'] = DateTime.now().toIso8601String();
+    data['is_deleted'] = 0;
+    data['is_synced'] = 0;
+    final sId = data['student_id'];
+    final cId = data['course_id'];
+    if (sId != null && cId != null) {
+      final existing = await db.query(
+        'student_course_enrollment',
+        where:
+            'student_id = ? AND course_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)',
+        whereArgs: [sId, cId],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) {
+        final id = existing.first['id'] as int;
+        await db.update('student_course_enrollment', data,
+            where: 'id = ?', whereArgs: [id]);
+        return id;
+      }
+    }
+    data['created_at'] ??= DateTime.now().toIso8601String();
+    return await db.insert('student_course_enrollment', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getEnrolledStudentsWithDetails(
+    int courseId, {
+    int? yearNo,
+  }) async {
+    final db = await database;
+    String where =
+        "e.course_id = ? AND (e.is_deleted = 0 OR e.is_deleted IS NULL) AND LOWER(COALESCE(e.status, 'active')) = 'active'";
+    final List<dynamic> args = [courseId];
+    if (yearNo != null) {
+      where += ' AND e.current_year = ?';
+      args.add(yearNo);
+    }
+    final enrolled = await db.rawQuery('''
+      SELECT e.*, st.name as student_name, st.father_name, st.admission_number, st.class, st.class_name, st.roll_number as std_roll
+      FROM student_course_enrollment e
+      JOIN students st ON e.student_id = st.id
+      WHERE $where AND (st.is_deleted = 0 OR st.is_deleted IS NULL)
+      ORDER BY e.current_year ASC, st.name ASC
+    ''', args);
+
+    final Set<int> existingStudentIds =
+        enrolled.map((e) => (e['student_id'] as int)).toSet();
+    final List<Map<String, dynamic>> combined =
+        List<Map<String, dynamic>>.from(enrolled);
+
+    if (yearNo != null) {
+      const Map<int, List<String>> yearKeywords = {
+        1: ['اولی', 'اول', '1st', 'نہم'],
+        2: ['ثانیہ', 'دوم', '2nd', 'دہم'],
+        3: ['ثالثہ', 'سوم', '3rd'],
+        4: ['رابعہ', 'چہارم', '4th'],
+        5: ['خامسہ', 'پنجم', '5th'],
+        6: ['سادسہ', 'ششم', '6th'],
+        7: ['سابعہ', 'ہفتم', '7th'],
+        8: ['حدیث', 'دورہ', 'ہشتم', '8th'],
+      };
+      final keywords = yearKeywords[yearNo] ?? [];
+      if (keywords.isNotEmpty) {
+        final sys = SystemTypeGlobal.currentSystemType.value;
+        final sysCond = (sys == 'Masjid')
+            ? "system_type = 'Masjid'"
+            : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
+        final allActive = await db.rawQuery('''
+          SELECT id, name, father_name, admission_number, class, class_name, roll_number as std_roll
+          FROM students
+          WHERE (is_deleted = 0 OR is_deleted IS NULL)
+            AND $sysCond
+            AND (status = 'Active' OR status = 'حاضر' OR status IS NULL OR status = '')
+        ''');
+
+        for (final st in allActive) {
+          final sId = st['id'] as int;
+          if (existingStudentIds.contains(sId)) continue;
+          final cName = '${st['class_name'] ?? ''} ${st['class'] ?? ''}'.trim();
+          if (keywords.any((k) => cName.contains(k))) {
+            existingStudentIds.add(sId);
+            combined.add({
+              'id': 0,
+              'course_id': courseId,
+              'student_id': sId,
+              'current_year': yearNo,
+              'status': 'Active',
+              'student_name': st['name'],
+              'father_name': st['father_name'],
+              'admission_number': st['admission_number'],
+              'class': st['class_name'] ?? st['class'],
+              'std_roll': st['std_roll'],
+            });
+          }
+        }
+      }
+    }
+
+    combined.sort((a, b) => (a['student_name']?.toString() ?? '')
+        .compareTo(b['student_name']?.toString() ?? ''));
+    return combined;
+  }
+
+  Future<void> saveBatchExamSubjectResults(
+      List<Map<String, dynamic>> records) async {
+    final db = await database;
+    final batch = db.batch();
+    final now = DateTime.now().toIso8601String();
+    for (final r in records) {
+      final data = Map<String, dynamic>.from(r);
+      data['updated_at'] = now;
+      data['is_deleted'] = 0;
+      data['is_synced'] = 0;
+      final eId = data['exam_id'];
+      final sId = data['student_id'];
+      final subId = data['subject_id'];
+      if (eId != null && sId != null && subId != null) {
+        final existing = await db.query(
+          'exam_subject_results',
+          where:
+              'exam_id = ? AND student_id = ? AND subject_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)',
+          whereArgs: [eId, sId, subId],
+          limit: 1,
+        );
+        if (existing.isNotEmpty) {
+          final id = existing.first['id'] as int;
+          batch.update('exam_subject_results', data,
+              where: 'id = ?', whereArgs: [id]);
+          continue;
+        }
+      }
+      data['created_at'] ??= now;
+      batch.insert('exam_subject_results', data);
+    }
+    await batch.commit(noResult: true);
   }
 
   // --- ACADEMIC METHODS: PROMOTION ---

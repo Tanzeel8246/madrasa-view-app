@@ -7,8 +7,8 @@
  */
 
 require_once __DIR__ . '/../env_loader.php';
-require_once __DIR__ . '/../session_init.php';
-require_once __DIR__ . '/../csrf.php';
+if (file_exists(__DIR__ . '/../session_init.php')) { require_once __DIR__ . '/../session_init.php'; }
+if (file_exists(__DIR__ . '/../csrf.php')) { require_once __DIR__ . '/../csrf.php'; }
 
 // Global Production Flag
 if (!defined('IS_PRODUCTION')) {
@@ -69,19 +69,22 @@ set_exception_handler(function($e) use ($logDir) {
     exit;
 });
 
-$host     = function_exists('get_env_val') ? get_env_val('MADRASA_DB_HOST', 'localhost') : (getenv('MADRASA_DB_HOST') ?: 'localhost');
-$port     = function_exists('get_env_val') ? get_env_val('MADRASA_DB_PORT', '')          : (getenv('MADRASA_DB_PORT') ?: '');
-$dbname   = function_exists('get_env_val') ? get_env_val('MADRASA_DB_NAME', '')          : (getenv('MADRASA_DB_NAME') ?: '');
-$username = function_exists('get_env_val') ? get_env_val('MADRASA_DB_USER', '')          : (getenv('MADRASA_DB_USER') ?: '');
-$password = function_exists('get_env_val') ? get_env_val('MADRASA_DB_PASSWORD', '')      : (getenv('MADRASA_DB_PASSWORD') ?: '');
+$host     = function_exists('get_env_val') ? get_env_val('MADRASA_DB_HOST', '') : (getenv('MADRASA_DB_HOST') ?: '');
+$port     = function_exists('get_env_val') ? get_env_val('MADRASA_DB_PORT', '') : (getenv('MADRASA_DB_PORT') ?: '');
+$dbname   = function_exists('get_env_val') ? get_env_val('MADRASA_DB_NAME', '') : (getenv('MADRASA_DB_NAME') ?: '');
+$username = function_exists('get_env_val') ? get_env_val('MADRASA_DB_USER', '') : (getenv('MADRASA_DB_USER') ?: '');
+$password = function_exists('get_env_val') ? (get_env_val('MADRASA_DB_PASSWORD', '') ?: get_env_val('MADRASA_DB_PASS', '')) : (getenv('MADRASA_DB_PASSWORD') ?: (getenv('MADRASA_DB_PASS') ?: ''));
 
-// اگر .env سے credentials نہ ملیں تو واضح error دیں
-if (empty($dbname) || empty($username)) {
-    if (strpos($_SERVER['REQUEST_URI'] ?? '', 'api.php') !== false) {
-        header('Content-Type: application/json');
-        die(json_encode(['status' => 'error', 'message' => 'Server configuration error: DB credentials missing in environment.']));
+// اگر .env سے credentials نہ ملیں تو بغیر paths اور بغیر exception text کے fail closed ہوں
+if (empty($host) || empty($dbname) || empty($username)) {
+    $isApi = (strpos($_SERVER['REQUEST_URI'] ?? '', 'api.php') !== false) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
+    http_response_code(500);
+    if ($isApi) {
+        header('Content-Type: application/json; charset=utf-8');
+        die(json_encode(['status' => 'error', 'message' => 'سرور کنفیگریشن کی خرابی۔ برائے مہربانی ایڈمن سے رابطہ کریں۔']));
     }
-    die('Server configuration error: DB credentials not configured. Please contact administrator.');
+    header('Content-Type: text/html; charset=utf-8');
+    die("<!DOCTYPE html><html dir='rtl' lang='ur'><head><meta charset='utf-8'><title>عارضی تکنیکی معذرت</title><link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css' rel='stylesheet'></head><body class='bg-light d-flex align-items-center justify-content-center min-vh-100 p-3'><div class='card shadow-sm border-0 text-center p-4' style='max-width:480px;border-radius:16px;'><div class='mb-3'><span style='font-size:3rem;'>⚙️</span></div><h4 class='fw-bold text-dark mb-2'>عارضی تکنیکی معذرت</h4><p class='text-muted mb-4'>سسٹم کنفیگریشن دستیاب نہیں ہے۔ برائے مہربانی ایڈمن سے رابطہ کریں۔</p><button onclick='window.location.reload()' class='btn btn-primary px-4 py-2 fw-bold'>دوبارہ کوشش کریں</button></div></body></html>");
 }
 
 $options = [
@@ -97,27 +100,17 @@ try {
     $pdo = new PDO($dsn, $username, $password, $options);
     $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
 } catch (PDOException $e) {
-    // Fallback 1: Try alternate database name/user if host is localhost/cPanel
     $altDb = ($dbname === 'u349923428_madrasa') ? 'mamfss_madrasa' : 'u349923428_madrasa';
     $altUser = ($username === 'u349923428_madrasa') ? 'mamfss_madrasa' : 'u349923428_madrasa';
-    try {
-        $pdo = new PDO("mysql:host=$host;" . ($port !== '' ? "port=$port;" : '') . "dbname=$altDb;charset=utf8mb4", $altUser, $password, $options);
-        $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-    } catch (PDOException $eAlt) {
-        // Fallback 2: Local development attempt (root with no password)
-        if (($host === 'localhost' || $host === '127.0.0.1') && $username !== 'root') {
-            try {
-                $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", 'root', '', $options);
-                $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-            } catch (PDOException $e2) {
-                try {
-                    $pdo = new PDO("mysql:host=$host;dbname=$altDb;charset=utf8mb4", 'root', '', $options);
-                    $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-                } catch (PDOException $e3) {
-                    // Ignore local fallback error
-                }
-            }
+    if ($dbname === 'u349923428_madrasa' || $dbname === 'mamfss_madrasa') {
+        try {
+            $pdo = new PDO("mysql:host=$host;" . ($port !== '' ? "port=$port;" : '') . "dbname=$altDb;charset=utf8mb4", $altUser, $password, $options);
+            $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+        } catch (PDOException $eAlt) {
+            @file_put_contents($logDir . '/php_errors.log', date('[Y-m-d H:i:s] ') . "Database Connection Error: " . $eAlt->getMessage() . PHP_EOL, FILE_APPEND);
         }
+    } else {
+        @file_put_contents($logDir . '/php_errors.log', date('[Y-m-d H:i:s] ') . "Database Connection Error: " . $e->getMessage() . PHP_EOL, FILE_APPEND);
     }
 }    
 

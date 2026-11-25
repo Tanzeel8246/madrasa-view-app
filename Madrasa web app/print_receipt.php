@@ -1,14 +1,90 @@
-<?php 
+<?php
+require_once __DIR__ . '/session_init.php';
+if (session_status() === PHP_SESSION_NONE) {
+    if (function_exists('madrasa_safe_session_start')) {
+        madrasa_safe_session_start();
+    } else {
+        @session_start();
+    }
+}
 require_once 'db.php';
 
-if (!isset($_GET['id'])) { die('Invalid Request'); }
+// Authentication Guard (Audit B1, B2, C1, C2)
+if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
+    http_response_code(401);
+    if (!headers_sent()) {
+        header("Location: login.php");
+    }
+    die("<div style='font-family:sans-serif;padding:40px;text-align:center;direction:rtl;'><h2>براہ کرم پہلے لاگ ان کریں</h2><p><a href='login.php'>لاگ ان صفحہ پر جائیں</a></p></div>");
+}
+
+if (!isset($_GET['id'])) {
+    http_response_code(404);
+    die("<div style='font-family:sans-serif;padding:40px;text-align:center;direction:rtl;'><h2>رسید نہیں ملی (Receipt not found)</h2></div>");
+}
 
 $id = (int)$_GET['id'];
-$row = $pdo->prepare("SELECT f.*, h.name AS head_name FROM finance f LEFT JOIN acc_chart_of_accounts h ON h.id = f.head_id WHERE f.id = ? LIMIT 1");
-$row->execute([$id]);
-$data = $row->fetch(PDO::FETCH_ASSOC);
+$session_tenant_id = max(1, (int)($_SESSION['tenant_id'] ?? 1));
+$t_cond_f = ($session_tenant_id === 1) ? "(f.tenant_id = 1 OR f.tenant_id IS NULL OR f.tenant_id = 0)" : "f.tenant_id = :tenant_id";
+$curRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$user_id = (int)$_SESSION['user_id'];
+$perms = $_SESSION['permissions'] ?? [];
+if (!is_array($perms)) { $perms = json_decode((string)$perms, true) ?: []; }
 
-if (!$data || strtolower((string)$data['type']) !== 'income') { die('Receipt not found or not an income entry.'); }
+$canManageFinance = in_array($curRole, ['admin', 'superadmin', 'super_admin', 'administrator'], true)
+                 || in_array('manage_finance', $perms, true)
+                 || in_array('manage_finance_entry', $perms, true)
+                 || in_array('manage_finance_report', $perms, true)
+                 || in_array('manage_erp', $perms, true)
+                 || in_array('manage_masjid_finance', $perms, true)
+                 || in_array('manage_masjid_finance_entry', $perms, true);
+
+$sql = "SELECT f.*, h.name AS head_name
+        FROM finance f
+        LEFT JOIN acc_chart_of_accounts h ON h.id = f.head_id ";
+$params = ['id' => $id];
+if ($session_tenant_id !== 1) {
+    $params['tenant_id'] = $session_tenant_id;
+}
+
+if ($canManageFinance) {
+    $sql .= "WHERE f.id = :id AND $t_cond_f AND LOWER(f.type) = 'income' LIMIT 1";
+} elseif ($curRole === 'student') {
+    $sql .= "INNER JOIN fee_submissions fs ON fs.finance_id = f.id
+             WHERE f.id = :id AND $t_cond_f AND fs.student_id = :student_id AND LOWER(f.type) = 'income' LIMIT 1";
+    $params['student_id'] = $user_id;
+} elseif ($curRole === 'parent') {
+    $sql .= "INNER JOIN fee_submissions fs ON fs.finance_id = f.id
+             INNER JOIN student_parents sp ON sp.student_id = fs.student_id
+             WHERE f.id = :id AND $t_cond_f AND sp.parent_id = :parent_id AND LOWER(f.type) = 'income' LIMIT 1";
+    $params['parent_id'] = $user_id;
+} else {
+    http_response_code(404);
+    die("<div style='font-family:sans-serif;padding:40px;text-align:center;direction:rtl;'><h2>رسید نہیں ملی (Receipt not found)</h2></div>");
+}
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$data = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$data) {
+    http_response_code(404);
+    die("<div style='font-family:sans-serif;padding:40px;text-align:center;direction:rtl;'><h2>رسید نہیں ملی (Receipt not found)</h2></div>");
+}
+
+$inst_name = 'مدرسہ';
+try {
+    $cur_t = max(1, (int)(function_exists('get_current_tenant_id') ? get_current_tenant_id($pdo) : $session_tenant_id));
+    $sysRec = trim((string)($data['system_type'] ?? ($_SESSION['system_type'] ?? 'Madrasa')));
+    $setRow = function_exists('get_tenant_settings') ? get_tenant_settings($pdo, $cur_t) : [];
+    if ($sysRec === 'Masjid' && !empty($setRow['masjid_name'])) {
+        $inst_name = $setRow['masjid_name'];
+    } elseif (!empty($setRow['madrasa_name'])) {
+        $inst_name = $setRow['madrasa_name'];
+    } elseif (!empty($_SESSION['tenant_name'])) {
+        $inst_name = $_SESSION['tenant_name'];
+    }
+} catch (Throwable $e) {}
 
 function numberToUrduWordsLess100($n) {
     $units = [
@@ -375,12 +451,13 @@ function numberToUrdu($num) {
         }
 
         function getShareText() {
+            const instName = "<?php echo addslashes((string)$inst_name); ?>";
             const donor = "<?php echo addslashes((string)$data['donor_name']); ?>";
             const amount = "<?php echo number_format((float)$data['amount']); ?>";
             const head = "<?php echo addslashes((string)($data['head_name'] ?: $data['description'])); ?>";
             const receiptNo = "<?php echo htmlspecialchars((string)$data['computer_receipt_no']); ?>";
             
-            return `*مدرسہ اشرف المدارس — رسید* \n` +
+            return `*${instName} — رسید* \n` +
                    `نام: ${donor}\n` +
                    `رقم: ${amount} روپے\n` +
                    `مد: ${head}\n` +
@@ -391,6 +468,7 @@ function numberToUrdu($num) {
         function shareDirectly() {
             if (!window.currentReceiptCanvas) return;
             const text = getShareText();
+            const instName = "<?php echo addslashes((string)$inst_name); ?>";
             const receiptNo = "<?php echo htmlspecialchars((string)$data['computer_receipt_no']); ?>";
                          
             window.currentReceiptCanvas.toBlob(blob => {
@@ -399,7 +477,7 @@ function numberToUrdu($num) {
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     navigator.share({
                         files: [file],
-                        title: 'مدرسہ اشرف المدارس - رسید',
+                        title: `${instName} - رسید`,
                         text: text
                     }).then(() => {
                         closeModal();

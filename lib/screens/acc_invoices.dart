@@ -175,12 +175,16 @@ class _AccInvoicesPageState extends State<AccInvoicesPage> {
                             Image.asset('assets/logo.png', width: 50, height: 50,
                               errorBuilder: (_, __, ___) => const Icon(Icons.school, size: 50, color: Color(0xFF284D3D))),
                             const SizedBox(width: 12),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("مدرسہ اشرف المدارس", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'JameelNooriNastaleeq')),
-                                  Text("فاروقہ، ضلع سرگودھا", style: TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'JameelNooriNastaleeq')),
+                                  Text(
+                                      (currentTenantName.value ?? '').trim().isNotEmpty
+                                          ? currentTenantName.value!.trim()
+                                          : 'مدرسہ مینجمنٹ سسٹم',
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'JameelNooriNastaleeq')),
+                                  const Text("فیس مینجمنٹ سسٹم", style: TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'JameelNooriNastaleeq')),
                                 ],
                               ),
                             ),

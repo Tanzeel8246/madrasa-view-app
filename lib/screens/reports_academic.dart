@@ -2205,7 +2205,9 @@ class _ReportsAcademicPageState extends State<ReportsAcademicPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  isUrduGlobal.value ? "جامعہ اشرف المدارس — جنرل اکیڈمک رپورٹ" : "Jamia Ashraf-ul-Madaris — Academic Report",
+                  isUrduGlobal.value
+                      ? "${(currentTenantName.value ?? '').trim().isNotEmpty ? currentTenantName.value!.trim() : 'مدرسہ مینجمنٹ سسٹم'} — جنرل اکیڈمک رپورٹ"
+                      : "${(currentTenantName.value ?? '').trim().isNotEmpty ? currentTenantName.value!.trim() : 'Madrasa Management System'} — Academic Report",
                   style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 Text(

@@ -92,3 +92,8 @@ Madrasa web app/sessions/
 Madrasa web app/.*_done
 php/
 
+# Local legacy/recovery artifacts (keep local, do not push to GitHub)
+Old flutter/
+*.apk
+*.original_backup
+

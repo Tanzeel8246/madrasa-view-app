@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart' as intl;
 import '../db_helper.dart';
+import '../utils/globals.dart';
 import '../widgets/app_drawer.dart';
 
 class BalanceSheetPage extends StatefulWidget {
@@ -78,9 +79,12 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
         
         if (type == 'Asset') {
           double bal = dr - cr;
-          if (bal != 0) {
+          if (bal > 0) {
             _assets.add({...acc, 'balance': bal});
             _totalAssets += bal;
+          } else if (bal < 0) {
+            _liabilities.add({...acc, 'balance': -bal});
+            _totalLiabilities += -bal;
           }
         } else if (type == 'Liability') {
           double bal = cr - dr;
@@ -99,8 +103,8 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
 
       if (_retainedEarnings != 0) {
         _equity.add({
-          'code': '3999', 
-          'name': 'Retained Earnings (خالص منافع/نقصان)', 
+          'code': '30002', 
+          'name': 'Retained Surplus / Deficit (خالص فاضل / خسارہ فنڈ)', 
           'balance': _retainedEarnings
         });
         _totalEquity += _retainedEarnings;
@@ -158,7 +162,12 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
             return pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Center(child: pw.Text('مدرسہ اشرف المدارس', style: bold.copyWith(fontSize: 24))),
+                pw.Center(
+                    child: pw.Text(
+                        (currentTenantName.value ?? '').trim().isNotEmpty
+                            ? currentTenantName.value!.trim()
+                            : 'مدرسہ مینجمنٹ سسٹم',
+                        style: bold.copyWith(fontSize: 24))),
                 pw.Center(child: pw.Text('بیلنس شیٹ (Balance Sheet)', style: bold.copyWith(fontSize: 18))),
                 pw.Center(child: pw.Text('As of: \${_asOfDateController.text}', style: normal.copyWith(fontSize: 12))),
                 pw.SizedBox(height: 20),

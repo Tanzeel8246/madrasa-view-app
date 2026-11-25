@@ -243,7 +243,10 @@ if (isset($_POST['pay_salary'])) {
         if (!empty($pr['loan_id']) && $pr['loan_deduction'] > 0) {
             $lid = (int)$pr['loan_id'];
             $lded = (float)$pr['loan_deduction'];
-            $pdo->prepare("UPDATE staff_loans SET remaining_amount = remaining_amount - ? WHERE id = ?")->execute([$lded, $lid]);
+            // BUGFIX B-10: also increment repaid_amount — decrementing only
+            // remaining_amount left repaid/remaining inconsistent, which made
+            // the loans summary totals contradict each other.
+            $pdo->prepare("UPDATE staff_loans SET remaining_amount = GREATEST(remaining_amount - ?, 0), repaid_amount = repaid_amount + ? WHERE id = ?")->execute([$lded, $lded, $lid]);
             $pdo->prepare("UPDATE staff_loans SET status = 'Paid' WHERE id = ? AND remaining_amount <= 0")->execute([$lid]);
         }
 

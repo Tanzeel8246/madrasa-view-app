@@ -3,9 +3,11 @@
         <div class="container small">
             <?php 
             $footer_org_name = !empty($header_current_name) ? $header_current_name : (!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : 'نظامِ مدارس و مساجد');
+            require_once __DIR__ . '/version.php';
+            $appVerDisplay = defined('APP_VERSION') ? APP_VERSION : '5.7.161';
             ?>
             <span class="text-muted">© <?php echo date('Y'); ?> <?php echo htmlspecialchars($footer_org_name); ?>. <?php echo (isset($lang) && $lang === 'en') ? 'All rights reserved.' : 'جملہ حقوق محفوظ ہیں۔'; ?></span>
-            <span class="text-muted ms-2 badge bg-secondary bg-opacity-10 text-secondary border font-monospace">v5.7.134 (SaaS Edition)</span>
+            <span class="badge bg-dark ms-2" style="font-family:monospace;font-size:11px;" title="System Version">v<?php echo htmlspecialchars($appVerDisplay); ?> (SaaS)</span>
             <div class="mt-2">
                 <a href="privacy.php" class="text-decoration-none text-secondary mx-2"><?php echo (isset($lang) && $lang === 'en') ? 'Privacy Policy' : 'پرائیویسی پالیسی'; ?></a> |
                 <a href="terms.php" class="text-decoration-none text-secondary mx-2"><?php echo (isset($lang) && $lang === 'en') ? 'Terms & Conditions' : 'شرائط و ضوابط'; ?></a> |
@@ -76,7 +78,13 @@
 
     // سلیکٹ 2 (سرچ ایبل ڈراپ ڈاؤن) اور خودکار ٹیبل موبائل رسپانسو ریپر
     $(document).ready(function() {
-        $('.select2').select2({ width: '100%' });
+        // BUGFIX B-14: selects inside Bootstrap modals were initialised without
+        // a dropdownParent, so their dropdown rendered behind/clipped by the
+        // modal (e.g. the account picker in the New Voucher modal was unusable).
+        $('.select2').each(function() {
+            var $modal = $(this).closest('.modal');
+            $(this).select2({ width: '100%', dropdownParent: $modal.length ? $modal : $(document.body) });
+        });
 
         // تمام ٹیبلز کو موبائل پر کٹنے سے بچانے کے لیے خودکار رسپانسو ریپر
         $('table').each(function() {

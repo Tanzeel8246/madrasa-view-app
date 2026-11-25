@@ -35,6 +35,16 @@ if ($action === 'export_csv') {
     $stmt = $pdo->query("SELECT * FROM `$table` WHERE $tCond $delCond");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // BUGFIX B-19: exports used to dump every column verbatim — including the
+    // students table's password column. Strip credential/secret columns from
+    // every export.
+    $rows = array_map(function ($r) {
+        foreach (array_keys($r) as $k) {
+            if (preg_match('/password|passwd|secret|token|api_key|otp/i', (string)$k)) unset($r[$k]);
+        }
+        return $r;
+    }, $rows);
+
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename=tenant_' . $cur_tenant_id . '_' . $table . '_' . date('Y-m-d') . '.csv');
 
@@ -62,6 +72,13 @@ if ($action === 'export_sql') {
         try {
             $stmt = $pdo->query("SELECT * FROM `$tbl` WHERE $tCond");
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // BUGFIX B-19: strip credential/secret columns from SQL snapshots too.
+            $rows = array_map(function ($r) {
+                foreach (array_keys($r) as $k) {
+                    if (preg_match('/password|passwd|secret|token|api_key|otp/i', (string)$k)) unset($r[$k]);
+                }
+                return $r;
+            }, $rows);
             if (!empty($rows)) {
                 $sqlDump .= "-- Table: $tbl\n";
                 foreach ($rows as $r) {

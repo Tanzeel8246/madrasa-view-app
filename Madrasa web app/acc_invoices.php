@@ -95,11 +95,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['generate_invoices'])) 
                 // Cr Fee Income
                 $eIns->execute([$v_id, $fee_acc_id, 0, $final_amount, $cur_tenant_id]);
 
+                $pdo->commit();
+
+                // BUGFIX B-06: audit AFTER commit. acc_log_audit() performs
+                // schema DDL on first use, which implicitly commits any open
+                // transaction; calling it before commit() made commit() throw
+                // "no active transaction" — the invoice was saved but the user
+                // saw the generic error page.
                 acc_log_audit($pdo, $cur_tenant_id, 'acc_invoices', $inv_id, 'GENERATE_INVOICE_WITH_VOUCHER', null, [
                     'invoice_no' => $inv_no, 'student_id' => $st['id'], 'amount' => $final_amount, 'voucher_id' => $v_id
                 ], $uid, $_SESSION['name'] ?? 'Admin', 'Web');
 
-                $pdo->commit();
                 $generated_count++;
             }
         }
@@ -133,12 +139,60 @@ if (isset($_GET['mark_paid']) && is_numeric($_GET['mark_paid'])) {
         // Cr Student Fees Receivable (1101) - Settles the due!
         $eIns->execute([$v_id, $rec_acc_id, 0, (float)$inv['amount'], $cur_tenant_id]);
 
+        $pdo->commit();
+
+        // BUGFIX B-06: audit after commit (see generate flow above).
         acc_log_audit($pdo, $cur_tenant_id, 'acc_invoices', $inv_id, 'MARK_PAID_WITH_RECEIPT_VOUCHER', ['status' => 'Unpaid'], [
             'status' => 'Paid', 'voucher_id' => $v_id, 'amount' => $inv['amount']
         ], $user['id'], $_SESSION['name'] ?? 'Admin', 'Web');
-
-        $pdo->commit();
         $msg = "فیس وصولی کامیابی سے درج ہو گئی۔ نقد کیش ڈیبٹ اور طالب علم کا کھاتہ واجب الوصول کریڈٹ ہو گیا۔";
+    }
+}
+
+// BUGFIX B-18: single-student invoice (previously only bulk generation existed).
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['generate_single_invoice'])) {
+    $s_student_id = (int)($_POST['student_id'] ?? 0);
+    $s_month = $_POST['month_year'] ?? date('Y-m');
+    $s_amount = (float)($_POST['amount'] ?? 0);
+    $uid = $_SESSION['user_id'];
+    if ($s_student_id > 0 && $s_amount > 0) {
+        $st_stmt = $pdo->prepare("SELECT id, name FROM students WHERE id = ? AND tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+        $st_stmt->execute([$s_student_id, $cur_tenant_id]);
+        $st = $st_stmt->fetch(PDO::FETCH_ASSOC);
+        if ($st) {
+            $check = $pdo->prepare("SELECT id FROM acc_invoices WHERE student_id = ? AND month_year = ? AND tenant_id = ?");
+            $check->execute([$s_student_id, $s_month, $cur_tenant_id]);
+            if ($check->rowCount() == 0) {
+                $hostel_fee = 0.0;
+                try {
+                    $hStmt = $pdo->prepare("SELECT a.*, r.monthly_fee FROM hostel_allocations a JOIN hostel_rooms r ON a.room_id = r.id WHERE a.student_id = ? AND a.tenant_id = ? AND a.status = 'Occupied' AND (a.is_deleted = 0 OR a.is_deleted IS NULL) LIMIT 1");
+                    $hStmt->execute([$s_student_id, $cur_tenant_id]);
+                    $hRoom = $hStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($hRoom && !empty($hRoom['monthly_fee'])) $hostel_fee = (float)$hRoom['monthly_fee'];
+                } catch (Exception $e) {}
+                $final_amount = $s_amount + $hostel_fee;
+                $inv_no = "INV-" . date('ym') . "-" . rand(1000, 9999);
+                $pdo->beginTransaction();
+                $stmt = $pdo->prepare("INSERT INTO acc_invoices (student_id, invoice_no, month_year, amount, status, created_by, tenant_id) VALUES (?, ?, ?, ?, 'Unpaid', ?, ?)");
+                $stmt->execute([$s_student_id, $inv_no, $s_month, $final_amount, $uid, $cur_tenant_id]);
+                $inv_id = (int)$pdo->lastInsertId();
+                $v_no = "INV-V-" . str_pad($inv_id, 5, '0', STR_PAD_LEFT);
+                $desc = "فیس انوائس # $inv_no - طالب علم: {$st['name']} (ماہ $s_month)";
+                $vIns = $pdo->prepare("INSERT INTO acc_vouchers (voucher_no, date, type, reference, description, status, created_by, system_type, tenant_id, is_deleted) VALUES (?, ?, 'Journal', ?, ?, 'Approved', ?, ?, ?, 0)");
+                $vIns->execute([$v_no, date('Y-m-d'), $inv_no, $desc, $uid, $sys, $cur_tenant_id]);
+                $v_id = (int)$pdo->lastInsertId();
+                $eIns = $pdo->prepare("INSERT INTO acc_ledger_entries (voucher_id, account_id, debit, credit, tenant_id) VALUES (?, ?, ?, ?, ?)");
+                $eIns->execute([$v_id, $rec_acc_id, $final_amount, 0, $cur_tenant_id]);
+                $eIns->execute([$v_id, $fee_acc_id, 0, $final_amount, $cur_tenant_id]);
+                $pdo->commit();
+                acc_log_audit($pdo, $cur_tenant_id, 'acc_invoices', $inv_id, 'GENERATE_SINGLE_INVOICE_WITH_VOUCHER', null, [
+                    'invoice_no' => $inv_no, 'student_id' => $s_student_id, 'amount' => $final_amount, 'voucher_id' => $v_id
+                ], $uid, $_SESSION['name'] ?? 'Admin', 'Web');
+                $msg = "کامیابی: {$st['name']} کے نام انفرادی فیس انوائس $inv_no جاری ہو گئی اور ریسیویبل واؤچر لیجر میں درج کر دیا گیا۔";
+            } else {
+                $msg = "اس طالب علم کی اس مہینے کی انوائس پہلے سے موجود ہے۔";
+            }
+        }
     }
 }
 
@@ -157,6 +211,13 @@ $inv_stmt = $pdo->prepare("
 $inv_stmt->execute([$cur_tenant_id, $cur_tenant_id]);
 $invoices = $inv_stmt->fetchAll(PDO::FETCH_ASSOC);
 
+$single_students = [];
+try {
+    $ss = $pdo->prepare("SELECT id, name, admission_number, class FROM students WHERE status = 'Active' AND (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? ORDER BY name ASC");
+    $ss->execute([$cur_tenant_id]);
+    $single_students = $ss->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
+
 $title = "Fee Invoices - ERP Accounting";
 include 'header.php';
 ?>
@@ -167,9 +228,14 @@ include 'header.php';
             <h3 class="fw-bold text-primary m-0"><i class="fas fa-file-invoice me-2"></i> تعلیمی فیس انوائسز (Fee Invoices & Receivables)</h3>
             <small class="text-muted">ڈبل انٹری فیس ریسیویبل کنٹرول کھاتہ (<?php echo htmlspecialchars($rec_code); ?> Student Fees Receivable)</small>
         </div>
-        <button class="btn btn-warning fw-bold text-dark shadow" data-bs-toggle="modal" data-bs-target="#generateModal">
-            <i class="fas fa-magic me-1"></i> اجتماعی فیس انوائسز جاری کریں
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-warning fw-bold text-dark shadow" data-bs-toggle="modal" data-bs-target="#generateModal">
+                <i class="fas fa-magic me-1"></i> اجتماعی فیس انوائسز جاری کریں
+            </button>
+            <button class="btn btn-info fw-bold text-white shadow" data-bs-toggle="modal" data-bs-target="#singleModal">
+                <i class="fas fa-user-plus me-1"></i> انفرادی انوائس
+            </button>
+        </div>
     </div>
 
     <!-- D9 KPI Cards tying invoices directly to the General Ledger -->
@@ -252,6 +318,43 @@ include 'header.php';
 </div>
 
 <!-- Generate Modal -->
+<div class="modal fade" id="singleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content urdu-text" style="font-family: 'Noto Nastaliq Urdu', serif;">
+            <form method="POST">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-user-plus me-2"></i> انفرادی فیس انوائس جاری کریں</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="fw-bold mb-1">طالب علم منتخب کریں</label>
+                        <select name="student_id" class="form-select" required>
+                            <option value="">-- منتخب کریں --</option>
+                            <?php foreach ($single_students as $ssrow): ?>
+                                <option value="<?php echo (int)$ssrow['id']; ?>"><?php echo htmlspecialchars($ssrow['name'] . ' (' . ($ssrow['admission_number'] ?? '') . ' - ' . ($ssrow['class'] ?? '') . ')'); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="fw-bold mb-1">انوائس کا مہینہ و سال</label>
+                        <input type="month" name="month_year" class="form-control" value="<?php echo date('Y-m'); ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="fw-bold mb-1">فیس کی رقم (روپے)</label>
+                        <input type="number" step="0.01" name="amount" class="form-control" required placeholder="مثلاً 1500">
+                        <small class="text-muted">ہاسٹل چارجز (اگر لاگو ہوں) خودکار شامل ہو جائیں گے۔</small>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ کریں</button>
+                    <button type="submit" name="generate_single_invoice" class="btn btn-info fw-bold text-white"><i class="fas fa-file-invoice me-1"></i> انوائس جاری کریں</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="generateModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content urdu-text" style="font-family: 'Noto Nastaliq Urdu', serif;">

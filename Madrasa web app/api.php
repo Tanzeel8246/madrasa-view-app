@@ -56,7 +56,7 @@ if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
     exit;
 }
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization, X-API-KEY, X-USER-TOKEN");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-API-KEY, X-USER-TOKEN, X-TENANT-ID, X-TENANT-CODE, X-CLIENT-PLATFORM");
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 header("Content-Type: application/json; charset=UTF-8");
@@ -66,9 +66,15 @@ header("X-XSS-Protection: 1; mode=block");
 
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
-// سیکیورٹی کی (Security Key Configuration) - No Hardcoded Fallback
-$envSecret = trim(function_exists('get_env_val') ? (string)get_env_val('MADRASA_API_SECRET', '') : (string)(getenv('MADRASA_API_SECRET') ?: ''));
-if ($envSecret === '' || strlen($envSecret) < 16) {
+// سیکیورٹی کیز کی علیحدگی (Separated Token Signing Key & Client Request API Key - Audit A8)
+$tokenSigningSecret = trim(function_exists('get_env_val') ? (string)get_env_val('MADRASA_TOKEN_SIGNING_SECRET', '') : (string)(getenv('MADRASA_TOKEN_SIGNING_SECRET') ?: ''));
+if ($tokenSigningSecret === '') {
+    $tokenSigningSecret = trim(function_exists('get_env_val') ? (string)get_env_val('MADRASA_AUTH_SECRET', '') : (string)(getenv('MADRASA_AUTH_SECRET') ?: ''));
+}
+if ($tokenSigningSecret === '') {
+    $tokenSigningSecret = trim(function_exists('get_env_val') ? (string)get_env_val('MADRASA_API_SECRET', '') : (string)(getenv('MADRASA_API_SECRET') ?: ''));
+}
+if ($tokenSigningSecret === '' || strlen($tokenSigningSecret) < 16) {
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
@@ -76,7 +82,14 @@ if ($envSecret === '' || strlen($envSecret) < 16) {
     ]);
     exit;
 }
-define('API_SECRET_KEY', $envSecret);
+define('TOKEN_SIGNING_SECRET', $tokenSigningSecret);
+define('API_SECRET_KEY', $tokenSigningSecret);
+
+$clientApiKey = trim(function_exists('get_env_val') ? (string)get_env_val('MADRASA_CLIENT_API_KEY', '') : (string)(getenv('MADRASA_CLIENT_API_KEY') ?: ''));
+if ($clientApiKey === '') {
+    $clientApiKey = trim(function_exists('get_env_val') ? (string)get_env_val('MADRASA_API_SECRET', '') : (string)(getenv('MADRASA_API_SECRET') ?: ''));
+}
+define('CLIENT_API_KEY', $clientApiKey);
 
 /**
  * getallheaders() کا متبادل (ہوسٹنگ اور Nginx/FastCGI کے لیے)
@@ -405,6 +418,10 @@ function filter_sync_payload_for_user($input, $user) {
             $filtered[$table] = $rows;
         } elseif ($table === 'acc_payroll' && (has_permission($user['role'], $user['permissions'], 'manage_finance') || has_permission($user['role'], $user['permissions'], 'manage_erp') || has_permission($user['role'], $user['permissions'], 'manage_stipends') || has_permission($user['role'], $user['permissions'], 'manage_masjid_stipends'))) {
             $filtered[$table] = $rows;
+        } elseif (($table === 'job_postings' || $table === 'job_applicants') && (has_permission($user['role'], $user['permissions'], 'manage_recruitment') || has_permission($user['role'], $user['permissions'], 'manage_teachers'))) {
+            $filtered[$table] = $rows;
+        } elseif (($table === 'staff_loans' || $table === 'loan_transactions') && (has_permission($user['role'], $user['permissions'], 'manage_loans') || has_permission($user['role'], $user['permissions'], 'manage_finance') || has_permission($user['role'], $user['permissions'], 'manage_stipends'))) {
+            $filtered[$table] = $rows;
         } elseif ($permission !== null && has_permission($user['role'], $user['permissions'], $permission)) {
             $filtered[$table] = $rows;
         }
@@ -473,10 +490,11 @@ function authenticate() {
                ($_SERVER['REDIRECT_HTTP_X_API_KEY'] ?? 
                ($_SERVER['X-API-KEY'] ?? ''))));
     
-    $expectedBearer = 'Bearer ' . API_SECRET_KEY;
-    
-    if (hash_equals($expectedBearer, $authHeader) || hash_equals(API_SECRET_KEY, $xApiKey)) {
-        return true;
+    if (defined('CLIENT_API_KEY') && CLIENT_API_KEY !== '') {
+        $expectedBearer = 'Bearer ' . CLIENT_API_KEY;
+        if (hash_equals($expectedBearer, $authHeader) || hash_equals(CLIENT_API_KEY, $xApiKey)) {
+            return true;
+        }
     }
 
     if (user_token_signature_is_valid()) {
@@ -1106,18 +1124,20 @@ try {
         $sys = $user['system_type'] ?? ($input['system_type'] ?? 'Madrasa');
 
         if (!empty($title)) {
+            $tIdNotice = (int)($user['tenant_id'] ?? get_current_tenant_id());
             $pdo->exec("CREATE TABLE IF NOT EXISTS notices (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
                 message TEXT,
                 date DATE,
                 system_type VARCHAR(50) DEFAULT 'Madrasa',
+                tenant_id INT NOT NULL DEFAULT 1,
                 is_deleted TINYINT(1) DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-            $stmt = $pdo->prepare("INSERT INTO notices (title, message, date, system_type) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$title, $message, $date, $sys]);
+            $stmt = $pdo->prepare("INSERT INTO notices (title, message, date, system_type, tenant_id) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$title, $message, $date, $sys, $tIdNotice]);
 
             // FCM: تمام اساتذہ اور admins کو نوٹیفیکیشن
             $noticeTitle = $title ?: 'نیا اعلان';
@@ -1130,15 +1150,17 @@ try {
         }
     } elseif ($action == 'update_fcm_token') {
         $user = require_user();
-        $token = trim((string)($input['token'] ?? ($input['fcm_token'] ?? '')));
-        $userId = intval($input['user_id'] ?? $user['id']);
-        $role = strtolower(trim((string)($input['role'] ?? $user['role'])));
+        $tIdFcm = (int)($user['tenant_id'] ?? get_current_tenant_id());
+        $token = trim((string)($input['token'] ?? ($input['fcm_token'] ?? ($_POST['token'] ?? ($_GET['token'] ?? '')))));
+        $isAdminFcm = in_array(strtolower($user['role'] ?? ''), ['admin', 'superadmin', 'super_admin', 'administrator'], true);
+        $userId = $isAdminFcm ? intval($input['user_id'] ?? ($_POST['user_id'] ?? ($_GET['user_id'] ?? $user['id']))) : (int)$user['id'];
+        $role = $isAdminFcm ? strtolower(trim((string)($input['role'] ?? ($_POST['role'] ?? ($_GET['role'] ?? $user['role']))))) : (string)$user['role'];
 
         if (!empty($token) && $userId > 0) {
             $table = in_array($role, ['admin', 'nazim', 'superadmin'], true) ? 'admins' : ($role === 'teacher' ? 'teachers' : 'students');
             ensure_column($pdo, $table, 'fcm_token', 'VARCHAR(255) DEFAULT NULL');
-            $stmt = $pdo->prepare("UPDATE {$table} SET fcm_token = ? WHERE id = ?");
-            $stmt->execute([$token, $userId]);
+            $stmt = $pdo->prepare("UPDATE {$table} SET fcm_token = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+            $stmt->execute([$token, $userId, $tIdFcm]);
 
             try {
                 $pdo->exec("CREATE TABLE IF NOT EXISTS user_fcm_tokens (
@@ -1146,11 +1168,12 @@ try {
                     user_id INT NOT NULL,
                     role VARCHAR(50) NOT NULL,
                     fcm_token VARCHAR(255) NOT NULL,
+                    tenant_id INT NOT NULL DEFAULT 1,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     UNIQUE KEY user_role_token_unique (user_id, role, fcm_token)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-                $stmtToken = $pdo->prepare("INSERT INTO user_fcm_tokens (user_id, role, fcm_token) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP");
-                $stmtToken->execute([$userId, $role, $token]);
+                $stmtToken = $pdo->prepare("INSERT INTO user_fcm_tokens (user_id, role, fcm_token, tenant_id) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP, tenant_id = VALUES(tenant_id)");
+                $stmtToken->execute([$userId, $role, $token, $tIdFcm]);
             } catch (Exception $e) {}
 
             $response = ['status' => 'success', 'message' => 'FCM token updated successfully'];
@@ -1407,11 +1430,15 @@ try {
             }
         }
     } elseif ($action == 'get_users') {
-        require_user('admin');
-        $users = $pdo->query("SELECT id, username, name, role, permissions, allowed_classes, created_at FROM admins ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+        $user = require_user('admin');
+        $tIdUsers = (int)($user['tenant_id'] ?? get_current_tenant_id());
+        $uStmt = $pdo->prepare("SELECT id, username, name, role, permissions, allowed_classes, created_at FROM admins WHERE (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) ORDER BY id");
+        $uStmt->execute([$tIdUsers]);
+        $users = $uStmt->fetchAll(PDO::FETCH_ASSOC);
         $response = ['status' => 'success', 'users' => $users];
     } elseif ($action == 'save_user') {
-        require_user('admin');
+        $user = require_user('admin');
+        $tIdUsers = (int)($user['tenant_id'] ?? get_current_tenant_id());
         $input = json_decode(file_get_contents("php://input"), true) ?: $_POST;
         $id = $input['id'] ?? '';
         $name = trim($input['name'] ?? '');
@@ -1421,76 +1448,48 @@ try {
         $permissions = isset($input['permissions']) && is_array($input['permissions']) ? json_encode($input['permissions']) : '[]';
         $allowed_classes = isset($input['allowed_classes']) && is_array($input['allowed_classes']) ? json_encode($input['allowed_classes']) : (isset($input['allowed_classes']) && is_string($input['allowed_classes']) ? $input['allowed_classes'] : '[]');
 
-        if ($id) { // update
+        if ($id) { // update (tenant-scoped)
             if (!empty($password)) {
                 $hashed = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("UPDATE admins SET name=?, username=?, role=?, permissions=?, allowed_classes=?, password=? WHERE id=?");
-                $stmt->execute([$name, $username, $role, $permissions, $allowed_classes, $hashed, $id]);
+                $stmt = $pdo->prepare("UPDATE admins SET name=?, username=?, role=?, permissions=?, allowed_classes=?, password=? WHERE id=? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                $stmt->execute([$name, $username, $role, $permissions, $allowed_classes, $hashed, $id, $tIdUsers]);
             } else {
-                $stmt = $pdo->prepare("UPDATE admins SET name=?, username=?, role=?, permissions=?, allowed_classes=? WHERE id=?");
-                $stmt->execute([$name, $username, $role, $permissions, $allowed_classes, $id]);
+                $stmt = $pdo->prepare("UPDATE admins SET name=?, username=?, role=?, permissions=?, allowed_classes=? WHERE id=? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                $stmt->execute([$name, $username, $role, $permissions, $allowed_classes, $id, $tIdUsers]);
             }
             if (function_exists('finance_ensure_user_canonical_accounts')) {
-                finance_ensure_user_canonical_accounts($pdo, $id, $name, $username, 1);
+                finance_ensure_user_canonical_accounts($pdo, $id, $name, $username, $tIdUsers);
             }
             $response = ['status' => 'success', 'message' => "User updated successfully"];
-        } else { // insert
+        } else { // insert (tenant-scoped)
             $hashed = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("INSERT INTO admins (name, username, password, role, permissions, allowed_classes) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$name, $username, $hashed, $role, $permissions, $allowed_classes]);
+            $stmt = $pdo->prepare("INSERT INTO admins (name, username, password, role, permissions, allowed_classes, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $username, $hashed, $role, $permissions, $allowed_classes, $tIdUsers]);
             $newUid = (int)$pdo->lastInsertId();
             if (function_exists('finance_ensure_user_canonical_accounts')) {
-                finance_ensure_user_canonical_accounts($pdo, $newUid, $name, $username, 1);
+                finance_ensure_user_canonical_accounts($pdo, $newUid, $name, $username, $tIdUsers);
             }
             $response = ['status' => 'success', 'message' => "User added successfully with canonical accounts"];
         }
     } elseif ($action == 'delete_user') {
-        require_user('admin');
+        $user = require_user('admin');
+        $tIdUsers = (int)($user['tenant_id'] ?? get_current_tenant_id());
         $id = intval($_GET['id'] ?? 0);
-        if ($id === 1) {
-            $response = ['status' => 'error', 'message' => 'مرکزی ایڈمن اکاؤنٹ (تنزیل الرحمن) کو حذف نہیں کیا جا سکتا۔'];
+        if ($id === 1 && $tIdUsers === 1) {
+            $response = ['status' => 'error', 'message' => 'مرکزی ایڈمن اکاؤنٹ کو حذف نہیں کیا جا سکتا۔'];
+        } elseif ($id === (int)$user['id']) {
+            $response = ['status' => 'error', 'message' => 'آپ اپنا فعال اکاؤنٹ خود حذف نہیں کر سکتے۔'];
         } elseif ($id > 0) {
-            $pdo->prepare("DELETE FROM admins WHERE id=?")->execute([$id]);
+            $pdo->prepare("DELETE FROM admins WHERE id=? AND tenant_id=?")->execute([$id, $tIdUsers]);
             $response = ['status' => 'success', 'message' => 'User deleted successfully'];
         } else {
             $response = ['status' => 'error', 'message' => 'Invalid ID'];
         }
-    } elseif ($action == 'update_fcm_token') {
-        $token = trim((string)($input['fcm_token'] ?? ($input['token'] ?? ($_POST['token'] ?? ($_GET['token'] ?? '')))));
-        $currentUser = current_user();
-        $userId = intval($input['user_id'] ?? ($_POST['user_id'] ?? ($_GET['user_id'] ?? ($currentUser['id'] ?? 0))));
-        $role = trim((string)($input['role'] ?? ($_POST['role'] ?? ($_GET['role'] ?? ($currentUser['role'] ?? 'admin')))));
-
-        if (!empty($token) && $userId > 0) {
-            try {
-                $pdo->exec("CREATE TABLE IF NOT EXISTS user_fcm_tokens (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT NOT NULL,
-                    role VARCHAR(50) NOT NULL,
-                    fcm_token VARCHAR(255) NOT NULL,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    UNIQUE KEY unique_user_role (user_id, role)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-                $stmt = $pdo->prepare("INSERT INTO user_fcm_tokens (user_id, role, fcm_token) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE fcm_token = VALUES(fcm_token)");
-                $stmt->execute([$userId, $role, $token]);
-
-                $table = in_array($role, ['admin', 'teacher', 'nazim']) ? 'admins' : 'students';
-                ensure_column($pdo, $table, 'fcm_token', 'VARCHAR(255) DEFAULT NULL');
-                $pdo->prepare("UPDATE {$table} SET fcm_token = ? WHERE id = ?")->execute([$token, $userId]);
-            } catch (Exception $e) {
-                write_log("update_fcm_token error: " . $e->getMessage());
-            }
-
-            $response = ['status' => 'success', 'message' => 'FCM token updated'];
-        } else {
-            $response = ['status' => 'error', 'message' => 'Token or user missing'];
-        }
     } elseif ($action == 'toggle_smart_alert_read') {
-        require_user();
+        $user = require_user();
         $alert_id = trim($_POST['alert_id'] ?? '');
         $status = trim($_POST['status'] ?? ''); // 'read' or 'unread'
-        $user_id = $_SESSION['user_id'];
+        $user_id = (int)$user['id'];
         
         if (empty($alert_id) || !in_array($status, ['read', 'unread'])) {
             $response = ['status' => 'error', 'message' => 'Invalid parameters'];
@@ -1516,80 +1515,16 @@ try {
         sendPushNotificationFCM($pdo, $title, $body, $type, $targetUserId, $targetRole);
         $response = ['status' => 'success', 'message' => 'Push notification dispatched'];
     } elseif ($action == 'request_finance_edit_otp') {
-        $user = current_user();
-        if (!$user) {
-            $uId = (int)($input['user_id'] ?? ($_POST['user_id'] ?? 0));
-            $tId = (int)($input['tenant_id'] ?? ($_POST['tenant_id'] ?? 1));
-            if ($uId > 0) {
-                $uStmt = $pdo->prepare("SELECT id, username, name, role FROM admins WHERE id = ? LIMIT 1");
-                $uStmt->execute([$uId]);
-                $uRow = $uStmt->fetch(PDO::FETCH_ASSOC);
-                if (!$uRow) {
-                    $uStmt = $pdo->prepare("SELECT id, name, username FROM teachers WHERE id = ? LIMIT 1");
-                    $uStmt->execute([$uId]);
-                    $uRow = $uStmt->fetch(PDO::FETCH_ASSOC);
-                    if ($uRow) $uRow['role'] = 'teacher';
-                }
-                if ($uRow) {
-                    $user = [
-                        'id' => (int)$uRow['id'],
-                        'name' => $uRow['name'] ?? $uRow['username'],
-                        'username' => $uRow['username'] ?? '',
-                        'role' => $uRow['role'] ?? 'teacher',
-                        'tenant_id' => $tId,
-                    ];
-                }
-            }
-        }
-        if (!$user) {
-            $user = require_user();
-        }
+        $user = require_user();
         $response = FinanceController::requestEditOtp($pdo, $user, $input);
     } elseif ($action == 'verify_finance_edit_otp') {
-        $user = current_user();
-        if (!$user) {
-            $uId = (int)($input['user_id'] ?? ($_POST['user_id'] ?? 0));
-            $tId = (int)($input['tenant_id'] ?? ($_POST['tenant_id'] ?? 1));
-            if ($uId > 0) {
-                $user = ['id' => $uId, 'tenant_id' => $tId];
-            }
-        }
-        if (!$user) {
-            $user = require_user();
-        }
+        $user = require_user();
         $response = FinanceController::verifyEditOtp($pdo, $user, $input);
     } elseif ($action == 'check_finance_edit_permission') {
-        $user = current_user();
-        if (!$user) {
-            $uId = (int)($input['user_id'] ?? ($_POST['user_id'] ?? 0));
-            if ($uId > 0) {
-                $uStmt = $pdo->prepare("SELECT id, role FROM admins WHERE id = ? LIMIT 1");
-                $uStmt->execute([$uId]);
-                $uRow = $uStmt->fetch(PDO::FETCH_ASSOC);
-                $user = ['id' => $uId, 'role' => $uRow['role'] ?? 'staff', 'tenant_id' => (int)($input['tenant_id'] ?? 1)];
-            }
-        }
-        if (!$user) {
-            $user = require_user();
-        }
+        $user = require_user();
         $response = FinanceController::checkEditPermission($pdo, $user, $input);
     } elseif ($action == 'get_admin_pending_otps') {
-        $user = current_user();
-        if (!$user) {
-            $uId = (int)($_GET['user_id'] ?? ($input['user_id'] ?? 0));
-            $tId = (int)($_GET['tenant_id'] ?? ($input['tenant_id'] ?? 1));
-            if ($uId > 0) {
-                $aStmt = $pdo->prepare("SELECT id, role FROM admins WHERE id = ? LIMIT 1");
-                $aStmt->execute([$uId]);
-                $aRow = $aStmt->fetch(PDO::FETCH_ASSOC);
-                if ($aRow && in_array(strtolower($aRow['role']), ['admin', 'superadmin', 'super_admin', 'administrator'])) {
-                    $user = ['id' => $uId, 'role' => 'admin', 'tenant_id' => $tId];
-                }
-            }
-        }
-        if (!$user) {
-            $user = require_user(['admin', 'superadmin', 'super_admin', 'administrator']);
-        }
+        $user = require_user(['admin', 'superadmin', 'super_admin', 'administrator']);
         $response = FinanceController::getPendingOtps($pdo, $user, $input);
     } elseif ($action == 'upload_finance_bill') {
         $user = require_user();

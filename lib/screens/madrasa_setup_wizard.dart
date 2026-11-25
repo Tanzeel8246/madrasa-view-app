@@ -19,7 +19,10 @@ class _MadrasaSetupWizardScreenState extends State<MadrasaSetupWizardScreen> {
   bool _isSaving = false;
 
   // Step 1: معلومات ادارہ
-  final _nameController = TextEditingController(text: 'جامعہ اشرف المدارس');
+  final _nameController = TextEditingController(
+      text: (currentTenantName.value ?? '').trim().isNotEmpty
+          ? currentTenantName.value!.trim()
+          : 'نیا دینی ادارہ');
   final _taglineController =
       TextEditingController(text: 'مرکز علوم دینیہ و عصریہ');
   final _phoneController = TextEditingController(text: '03001234567');

@@ -54,6 +54,7 @@ if (!file_exists($clsMigrateFlag)) {
 
 // Auto-seed default classes for Madrasa if empty for this tenant (respecting plan limits & system_type)
 try {
+    if (function_exists('ensure_column')) { try { ensure_column($pdo, 'classes', 'is_default', 'TINYINT(1) DEFAULT 0'); } catch (Throwable $e) {} }
     $cur_tenant_id = (int)get_current_tenant_id();
     $tenant_sys = $_SESSION['tenant_system_type'] ?? 'Madrasa';
     $is_madrasa_allowed = ($tenant_sys === 'Madrasa' || $tenant_sys === 'Both' || $cur_tenant_id <= 1);
@@ -69,7 +70,7 @@ try {
                 ['name' => 'درجہ اولیٰ', 'class_type' => 'Darse Nizami / Other']
             ];
             $maxToSeed = min(count($default_classes), (int)($limits['max_classes'] ?? 3));
-            $stmt_seed_m = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id) VALUES (?, ?, 'Madrasa', ?)");
+            $stmt_seed_m = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id, is_default) VALUES (?, ?, 'Madrasa', ?, 1)");
             for ($k = 0; $k < $maxToSeed; $k++) {
                 $stmt_seed_m->execute([$default_classes[$k]['name'], $default_classes[$k]['class_type'], $cur_tenant_id]);
             }
@@ -92,7 +93,7 @@ try {
                 ['name' => 'قاعدہ', 'class_type' => 'Qaida']
             ];
             $maxToSeed = min(count($quran_classes), (int)($limits['max_classes'] ?? 3));
-            $stmt_seed = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id) VALUES (?, ?, 'Masjid', ?)");
+            $stmt_seed = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id, is_default) VALUES (?, ?, 'Masjid', ?, 1)");
             for ($k = 0; $k < $maxToSeed; $k++) {
                 $stmt_seed->execute([$quran_classes[$k]['name'], $quran_classes[$k]['class_type'], $cur_tenant_id]);
             }

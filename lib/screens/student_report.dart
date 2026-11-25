@@ -676,7 +676,7 @@ class _StudentReportPageState extends State<StudentReportPage> {
       buffer.writeln('💰 *فیس سٹیٹس :* $feeStatus');
     }
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
-    buffer.writeln('_منجانب: ادارہ اشرف المدارس فروکہ_');
+    buffer.writeln('_منجانب: ${(currentTenantName.value ?? '').trim().isNotEmpty ? currentTenantName.value!.trim() : 'ادارہ مینجمنٹ سسٹم'}_');
 
     await Share.share(buffer.toString(), subject: 'مجموعی رپورٹ - $studentName');
   }
@@ -759,7 +759,7 @@ class _StudentReportPageState extends State<StudentReportPage> {
 
     final buffer = StringBuffer();
     final classSuffix = className.isNotEmpty ? ' ($className)' : '';
-    buffer.writeln('مدرسہ اشرف المدارس: $studentFullName$classSuffix کی رپورٹ ($fromDateStr تا $toDateStr)۔');
+    buffer.writeln('${(currentTenantName.value ?? '').trim().isNotEmpty ? currentTenantName.value!.trim() : 'مدرسہ مینجمنٹ سسٹم'}: $studentFullName$classSuffix کی رپورٹ ($fromDateStr تا $toDateStr)۔');
     buffer.writeln('حاضری: $attendancePerc%۔');
     if (_hifzRecords.isNotEmpty) {
       buffer.writeln('سبق لائنیں: $totalSabaqLines (ناغے: $sabaqNagha)۔ سبقی دن: $sabqiDaysRecited (ناغے: $sabqiNagha)۔ منزل پارے: ${manzilParasRecited.toStringAsFixed(1)} (ناغے: $manzilNagha)۔');
@@ -3125,13 +3125,16 @@ class _StudentReportPageState extends State<StudentReportPage> {
                     Expanded(
                       child: Column(
                         children: [
-                          Text("مدرسہ اشرف المدارس",
+                          Text(
+                              (currentTenantName.value ?? '').trim().isNotEmpty
+                                  ? currentTenantName.value!.trim()
+                                  : "مدرسہ مینجمنٹ سسٹم",
                               style: _urdu.copyWith(
                                   fontSize: 26,
                                   fontWeight: FontWeight.bold,
                                   color: _primary)),
                           const SizedBox(height: 2),
-                          Text("فاروقہ، ضلع سرگودھا | فون: 0300-1234567",
+                          Text("تعلیمی و انتظامی رپورٹ",
                               style: _urdu.copyWith(
                                   fontSize: 11,
                                   color: _primary,

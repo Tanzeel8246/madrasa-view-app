@@ -387,7 +387,8 @@ try {
 // Build formatted WhatsApp message
 $std_full_name = ($student['name'] ?? 'طالب علم') . (!empty($student['father_name']) ? (" ولد " . $student['father_name']) : "");
 $complaints_cnt = count($list ?? []);
-$wa_msg = "📋 *مجموعی رپورٹ مدرسہ اشرف المدارس فروکہ*\n";
+$inst_title = trim((string)(!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : t('app_name')));
+$wa_msg = "📋 *مجموعی رپورٹ " . $inst_title . "*\n";
 $wa_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
 $wa_msg .= "👤 *برائے :* " . $std_full_name . "\n";
 if (!empty($student['class'])) {
@@ -406,7 +407,7 @@ if (!empty($fee_status_str)) {
     $wa_msg .= "💰 *فیس سٹیٹس :* " . $fee_status_str . "\n";
 }
 $wa_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-$wa_msg .= "_منجانب: ادارہ اشرف المدارس فروکہ_";
+$wa_msg .= "_منجانب: " . $inst_title . "_";
 
 // Fetch Monthly Attendance Data for Chart.js
 $att_labels = [];

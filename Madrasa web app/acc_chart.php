@@ -83,8 +83,18 @@ try {
     if (function_exists('acc_ensure_standard_chart_and_orphans_repaired')) {
         acc_ensure_standard_chart_and_orphans_repaired($pdo, $cur_tenant_id);
     }
+    // D-08 Fix: Auto-heal blank/null account types (tenant-scoped) so all accounts are categorized
+    try {
+        $tCondHeal = ($cur_tenant_id == 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = " . (int)$cur_tenant_id;
+        $pdo->exec("UPDATE acc_chart_of_accounts SET type = 'Asset' WHERE $tCondHeal AND (type IS NULL OR TRIM(type) = '') AND (code LIKE '1%' OR code = '' OR code IS NULL)");
+        $pdo->exec("UPDATE acc_chart_of_accounts SET type = 'Liability' WHERE $tCondHeal AND (type IS NULL OR TRIM(type) = '') AND code LIKE '2%'");
+        $pdo->exec("UPDATE acc_chart_of_accounts SET type = 'Equity' WHERE $tCondHeal AND (type IS NULL OR TRIM(type) = '') AND code LIKE '3%'");
+        $pdo->exec("UPDATE acc_chart_of_accounts SET type = 'Revenue' WHERE $tCondHeal AND (type IS NULL OR TRIM(type) = '') AND code LIKE '4%'");
+        $pdo->exec("UPDATE acc_chart_of_accounts SET type = 'Expense' WHERE $tCondHeal AND (type IS NULL OR TRIM(type) = '') AND code LIKE '5%'");
+    } catch (Throwable $eHeal) {}
+
     sync_all_heads_with_chart_and_departments($pdo, $cur_tenant_id);
-    $acc_stmt = $pdo->prepare("SELECT a.*, p.name as parent_name FROM acc_chart_of_accounts a LEFT JOIN acc_chart_of_accounts p ON a.parent_id = p.id WHERE (a.is_deleted = 0 OR a.is_deleted IS NULL) AND (a.is_active = 1 OR a.is_active IS NULL) AND (a.tenant_id = ? OR a.tenant_id IS NULL OR a.tenant_id = 0) AND a.code NOT IN ('1101', '1201', '1301', '2101', '2102', '2103', '5010', '5011') ORDER BY CAST(a.code AS UNSIGNED) ASC, a.code ASC");
+    $acc_stmt = $pdo->prepare("SELECT a.*, p.name as parent_name FROM acc_chart_of_accounts a LEFT JOIN acc_chart_of_accounts p ON a.parent_id = p.id WHERE (a.is_deleted = 0 OR a.is_deleted IS NULL) AND (a.is_active = 1 OR a.is_active IS NULL) AND (a.tenant_id = ? OR a.tenant_id IS NULL OR a.tenant_id = 0)  ORDER BY CAST(a.code AS UNSIGNED) ASC, a.code ASC");
     $acc_stmt->execute([$cur_tenant_id]);
     $accounts = $acc_stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -92,15 +102,25 @@ try {
     $accounts = [];
 }
 
-// Categorize accounts
+// Categorize accounts (with strict fallback to prevent dropping accounts)
 $rev_accounts = [];
 $exp_accounts = [];
 $asset_accounts = [];
 $liab_accounts = [];
 $eq_accounts = [];
 
-foreach ($accounts as $acc) {
-    $t = $acc['type'] ?? '';
+foreach ($accounts as &$acc) {
+    $t = trim((string)($acc['type'] ?? ''));
+    if (empty($t)) {
+        $c = trim((string)($acc['code'] ?? ''));
+        $first = substr($c, 0, 1);
+        if ($first === '2') $t = 'Liability';
+        elseif ($first === '3') $t = 'Equity';
+        elseif ($first === '4') $t = 'Revenue';
+        elseif ($first === '5') $t = 'Expense';
+        else $t = 'Asset';
+        $acc['type'] = $t;
+    }
     if ($t === 'Revenue' || $t === 'Income') {
         $rev_accounts[] = $acc;
     } elseif ($t === 'Expense') {
@@ -113,6 +133,7 @@ foreach ($accounts as $acc) {
         $eq_accounts[] = $acc;
     }
 }
+unset($acc);
 
 $next_codes = [
     'Asset' => function_exists('get_next_chart_code') ? get_next_chart_code($pdo, 'Asset', $cur_tenant_id) : '1001',

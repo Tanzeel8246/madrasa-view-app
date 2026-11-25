@@ -364,7 +364,7 @@ $isEn = ($lang === 'en');
                     <div class="p-3 border rounded-3 text-center bg-white shadow-sm">
                         <i class="fas fa-mobile-screen <?php echo !empty($sub['has_mobile_app']) ? 'text-info' : 'text-muted'; ?> fs-3 mb-2"></i>
                         <div class="small fw-bold" style="color: #0f172a;"><?php echo $isEn ? 'Android App' : 'اینڈرائڈ ایپ'; ?></div>
-                        <?php if (!empty($sub['has_mobile_app']) || $sub['plan_code'] !== 'free' || (isset($isTrial) && $isTrial)): ?>
+                        <?php if (!empty($sub['has_mobile_app'])): // BUGFIX B-20: badge must follow the plan flag (trial = web only, as the landing page states) ?>
                             <span class="badge bg-success px-2 py-1 small"><?php echo $isEn ? 'Active' : 'فعال'; ?></span>
                         <?php else: ?>
                             <span class="badge bg-danger px-2 py-1 small"><?php echo $isEn ? 'Inactive' : 'غیر فعال'; ?></span>
@@ -375,7 +375,7 @@ $isEn = ($lang === 'en');
                     <div class="p-3 border rounded-3 text-center bg-white shadow-sm">
                         <i class="fas fa-desktop <?php echo !empty($sub['has_desktop_app']) ? 'text-warning' : 'text-muted'; ?> fs-3 mb-2"></i>
                         <div class="small fw-bold" style="color: #0f172a;"><?php echo $isEn ? 'Windows Desktop' : 'ونڈوز ڈیسک ٹاپ'; ?></div>
-                        <?php if (!empty($sub['has_desktop_app']) || $sub['plan_code'] !== 'free' || (isset($isTrial) && $isTrial)): ?>
+                        <?php if (!empty($sub['has_desktop_app'])): // BUGFIX B-20 ?>
                             <span class="badge bg-success px-2 py-1 small"><?php echo $isEn ? 'Active' : 'فعال'; ?></span>
                         <?php else: ?>
                             <span class="badge bg-danger px-2 py-1 small"><?php echo $isEn ? 'Inactive' : 'غیر فعال'; ?></span>

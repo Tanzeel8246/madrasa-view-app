@@ -34,6 +34,8 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
   bool _isObscure = true;
   String _errorMessage = '';
+  int _consecutiveFailures = 0;
+  DateTime? _lockoutUntil;
 
   @override
   void initState() {
@@ -97,6 +99,21 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _login() async {
+    if (_lockoutUntil != null) {
+      final remaining = _lockoutUntil!.difference(DateTime.now()).inSeconds;
+      if (remaining > 0) {
+        setState(() {
+          _errorMessage = isUrduGlobal.value
+              ? 'مسلسل 5 بار غلط لاگ ان کے باعث رسائی عارضی معطل ہے۔ براہ کرم $remaining سیکنڈ انتظار فرمائیں۔'
+              : 'Too many failed login attempts. Please wait $remaining seconds.';
+        });
+        return;
+      } else {
+        _lockoutUntil = null;
+        _consecutiveFailures = 0;
+      }
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -145,6 +162,8 @@ class _LoginPageState extends State<LoginPage> {
       );
       final uniBody = _decodeResponseBody(uniRes.body);
       if (uniRes.statusCode == 200 && uniBody['status'] == 'success') {
+        _consecutiveFailures = 0;
+        _lockoutUntil = null;
         final role = uniBody['role']?.toString() ?? 'admin';
         final newUserId = int.tryParse((uniBody['user_id'] ??
                 uniBody['admin_id'] ??
@@ -362,6 +381,8 @@ class _LoginPageState extends State<LoginPage> {
           currentUserRole.value ?? 'admin',
         );
 
+        _consecutiveFailures = 0;
+        _lockoutUntil = null;
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -406,6 +427,8 @@ class _LoginPageState extends State<LoginPage> {
           'student',
         );
 
+        _consecutiveFailures = 0;
+        _lockoutUntil = null;
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -457,6 +480,8 @@ class _LoginPageState extends State<LoginPage> {
           'parent',
         );
 
+        _consecutiveFailures = 0;
+        _lockoutUntil = null;
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -473,8 +498,18 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     if (!mounted) return;
+    if (!hasNetworkException) {
+      _consecutiveFailures++;
+      if (_consecutiveFailures >= 5) {
+        _lockoutUntil = DateTime.now().add(const Duration(seconds: 30));
+      }
+    }
     setState(() {
-      if (serverMessage.isNotEmpty) {
+      if (_consecutiveFailures >= 5) {
+        _errorMessage = isUrduGlobal.value
+            ? 'مسلسل 5 بار غلط لاگ ان کے باعث رسائی 30 سیکنڈ کے لیے معطل کر دی گئی ہے۔'
+            : '5 consecutive failed attempts. Access locked for 30 seconds.';
+      } else if (serverMessage.isNotEmpty) {
         _errorMessage = serverMessage;
       } else if (hasNetworkException && caughtError != null) {
         _errorMessage = _networkErrorText(caughtError);

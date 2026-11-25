@@ -525,11 +525,13 @@ if (!function_exists('get_tenant_live_usage')) {
             $delCls = $hasIsDel ? " AND (is_deleted = 0 OR is_deleted IS NULL)" : "";
             $hasStatus = $hasCol('classes', 'status');
             $actCls = $hasStatus ? " AND (status = 'Active' OR status = '' OR status IS NULL)" : "";
+            // BUGFIX B-11: auto-seeded default classes must not consume the plan quota.
+            $defCls = $hasCol('classes', 'is_default') ? " AND (is_default = 0 OR is_default IS NULL)" : "";
             $hasSys = $hasCol('classes', 'system_type');
 
             if ($sys === 'Masjid') {
                 if ($hasSys) {
-                    $usedClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes WHERE $tCond AND system_type = 'Masjid' $delCls $actCls")->fetchColumn();
+                    $usedClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes WHERE $tCond AND system_type = 'Masjid' $delCls $actCls $defCls")->fetchColumn();
                 } else {
                     try {
                         $usedClasses = (int)$pdo->query("SELECT COUNT(*) FROM maktab_classes WHERE $tCond $delCls $actCls")->fetchColumn();
@@ -537,7 +539,7 @@ if (!function_exists('get_tenant_live_usage')) {
                 }
             } else {
                 $sysCond = $hasSys ? " AND (system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')" : "";
-                $usedClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes WHERE $tCond $sysCond $delCls $actCls")->fetchColumn();
+                $usedClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes WHERE $tCond $sysCond $delCls $actCls $defCls")->fetchColumn();
             }
         } catch (Throwable $e) {}
 
@@ -894,6 +896,7 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                         `tenant_id` INT NOT NULL DEFAULT 1,
                         `course_id` INT NOT NULL,
                         `year_no` INT NOT NULL DEFAULT 1,
+                        `year_name` VARCHAR(100) DEFAULT '',
                         `year_title` VARCHAR(100) DEFAULT NULL,
                         `subject_name` VARCHAR(255) NOT NULL,
                         `book_name` VARCHAR(255) DEFAULT NULL,
@@ -901,7 +904,10 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                         `pass_marks` DECIMAL(6,2) NOT NULL DEFAULT 40.00,
                         `subject_order` INT DEFAULT 0,
                         `is_optional` TINYINT(1) DEFAULT 0,
+                        `is_deleted` TINYINT(1) DEFAULT 0,
+                        `is_synced` TINYINT(1) DEFAULT 0,
                         `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                         INDEX (`tenant_id`),
                         INDEX (`course_id`),
                         INDEX (`year_no`)
@@ -915,10 +921,14 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                         `student_id` INT NOT NULL,
                         `course_id` INT NOT NULL,
                         `current_year` INT NOT NULL DEFAULT 1,
+                        `roll_number` VARCHAR(50) DEFAULT '',
                         `academic_session` VARCHAR(50) DEFAULT NULL,
                         `enrollment_date` DATE DEFAULT NULL,
-                        `status` VARCHAR(20) DEFAULT 'active',
+                        `status` VARCHAR(20) DEFAULT 'Active',
+                        `is_deleted` TINYINT(1) DEFAULT 0,
+                        `is_synced` TINYINT(1) DEFAULT 0,
                         `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                         INDEX (`tenant_id`),
                         INDEX (`student_id`),
                         INDEX (`course_id`)
@@ -940,8 +950,11 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                         `is_absent` TINYINT(1) DEFAULT 0,
                         `grade` VARCHAR(20) DEFAULT 'مقبول',
                         `remarks` VARCHAR(255) DEFAULT NULL,
+                        `system_type` VARCHAR(20) DEFAULT 'Madrasa',
+                        `is_deleted` TINYINT(1) DEFAULT 0,
                         `is_synced` TINYINT(1) DEFAULT 0,
                         `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                         INDEX (`tenant_id`),
                         INDEX (`exam_id`),
                         INDEX (`student_id`),
@@ -982,7 +995,7 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                 'hostel_allocations', 'lib_books', 'lib_issues', 'web_pages', 'announcements',
                 'job_postings', 'job_applicants', 'settings', 'smart_notification_reads',
                 'acc_chart_of_accounts', 'acc_vouchers', 'acc_ledger_entries', 'acc_invoices',
-                'acc_payroll', 'acc_departments', 'maktab_classes', 'maktab_teachers',
+                'acc_payroll', 'acc_departments', 'maktab_classes', 'maktab_teachers', 'maktab_students',
                 'course_structure', 'course_subjects', 'student_course_enrollment', 'exam_subject_results', 'student_year_promotion'
             ];
 
@@ -1017,7 +1030,35 @@ if (!function_exists('ensure_tenant_isolation_schema')) {
                     'is_deleted' => "TINYINT DEFAULT 0"
                 ],
                 'admission_applications' => [
-                    'serial_no' => "INT DEFAULT NULL"
+                    'serial_no' => "INT DEFAULT NULL",
+                    'admission_number' => "VARCHAR(50) DEFAULT ''",
+                    'status' => "VARCHAR(50) DEFAULT 'Pending'",
+                    'rejection_reason' => "TEXT DEFAULT NULL"
+                ],
+                'admins' => [
+                    'preferred_language' => "VARCHAR(10) DEFAULT 'ur'"
+                ],
+                'masjid_finance' => [
+                    'client_uuid' => "VARCHAR(100) DEFAULT NULL",
+                    'tenant_id' => "INT NOT NULL DEFAULT 1"
+                ],
+                'course_structure' => [
+                    'system_type' => "VARCHAR(20) DEFAULT 'Madrasa'",
+                    'is_deleted' => "TINYINT(1) DEFAULT 0"
+                ],
+                'course_subjects' => [
+                    'year_name' => "VARCHAR(100) DEFAULT ''",
+                    'is_deleted' => "TINYINT(1) DEFAULT 0",
+                    'is_synced' => "TINYINT(1) DEFAULT 0"
+                ],
+                'student_course_enrollment' => [
+                    'roll_number' => "VARCHAR(50) DEFAULT ''",
+                    'is_deleted' => "TINYINT(1) DEFAULT 0",
+                    'is_synced' => "TINYINT(1) DEFAULT 0"
+                ],
+                'exam_subject_results' => [
+                    'system_type' => "VARCHAR(20) DEFAULT 'Madrasa'",
+                    'is_deleted' => "TINYINT(1) DEFAULT 0"
                 ],
                 'acc_chart_of_accounts' => [
                     'system_type' => "VARCHAR(50) DEFAULT 'Madrasa'",

@@ -6,6 +6,8 @@ require_once __DIR__ . '/finance_accounting_bridge.php';
 global $system_type;
 $system_type = $_SESSION['system_type'] ?? 'Madrasa';
 $uid = $_SESSION['user_id'] ?? 1;
+// BUGFIX B-01: this page never scoped anything by tenant (see fixes below).
+$cur_tenant_id = (int)get_current_tenant_id();
 $is_en = (isset($_SESSION['lang']) && $_SESSION['lang'] === 'en');
 $msg = '';
 
@@ -51,10 +53,12 @@ try {
         description TEXT NULL,
         status VARCHAR(50) DEFAULT 'Active',
         system_type VARCHAR(50) DEFAULT 'Madrasa',
+        tenant_id INT DEFAULT 1,
         is_deleted TINYINT(1) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
     try { $pdo->exec("ALTER TABLE staff_loans MODIFY teacher_id INT NULL DEFAULT NULL"); } catch (Exception $e) {}
+    ensure_column($pdo, 'staff_loans', 'tenant_id', "INT DEFAULT 1");
     ensure_column($pdo, 'staff_loans', 'loan_direction', "VARCHAR(20) DEFAULT 'Given'");
     ensure_column($pdo, 'staff_loans', 'borrower_name', "VARCHAR(255) DEFAULT NULL");
     ensure_column($pdo, 'staff_loans', 'repaid_amount', "DECIMAL(15,2) DEFAULT 0");
@@ -78,15 +82,27 @@ try {
         payment_method VARCHAR(50) DEFAULT 'Cash',
         remarks TEXT NULL,
         system_type VARCHAR(50) DEFAULT 'Madrasa',
+        tenant_id INT DEFAULT 1,
         created_by INT DEFAULT 1,
         is_deleted TINYINT(1) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    ensure_column($pdo, 'loan_transactions', 'tenant_id', "INT DEFAULT 1");
     ensure_column($pdo, 'loan_transactions', 'system_type', "VARCHAR(50) DEFAULT 'Madrasa'");
     ensure_column($pdo, 'loan_transactions', 'created_by', "INT DEFAULT 1");
     ensure_column($pdo, 'loan_transactions', 'is_deleted', "TINYINT(1) DEFAULT 0");
     ensure_column($pdo, 'loan_transactions', 'account_id', "INT NULL DEFAULT NULL");
 } catch (Exception $e) {}
+
+// BUGFIX B-01/B-10 data repair (idempotent, only touches mismatched rows):
+// legacy loans were stamped tenant_id = 1 by default regardless of the owning
+// institute; re-attribute them through their teacher, repair the transactions
+// through their loan, and recompute remaining_amount = loan_amount - repaid_amount
+// (the stored column had inconsistent writers, e.g. salary deductions that never
+// incremented repaid_amount, so the summary totals contradicted each other).
+try { $pdo->exec("UPDATE staff_loans l JOIN teachers t ON l.teacher_id = t.id SET l.tenant_id = t.tenant_id WHERE (l.tenant_id IS NULL OR l.tenant_id = 1) AND t.tenant_id IS NOT NULL AND t.tenant_id <> 0 AND t.tenant_id <> 1"); } catch (Exception $e) {}
+try { $pdo->exec("UPDATE loan_transactions lt JOIN staff_loans l ON lt.loan_id = l.id SET lt.tenant_id = l.tenant_id WHERE (lt.tenant_id IS NULL OR lt.tenant_id = 1) AND l.tenant_id IS NOT NULL AND l.tenant_id <> 1"); } catch (Exception $e) {}
+try { $pdo->exec("UPDATE staff_loans SET remaining_amount = GREATEST(loan_amount - repaid_amount, 0) WHERE loan_amount > 0 AND ABS(remaining_amount - (loan_amount - repaid_amount)) > 0.01"); } catch (Exception $e) {}
 
 // 3. Ensure chart of accounts heads exist for loans
 $head_given_id = 0;
@@ -95,27 +111,27 @@ $head_taken_id = 0;
 $head_repay_id = 0;
 
 try {
-    $h1 = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-GIV' LIMIT 1")->fetchColumn();
+    $h1 = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-GIV' AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0) ORDER BY (tenant_id = $cur_tenant_id) DESC LIMIT 1")->fetchColumn();
     if (!$h1) {
-        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type) VALUES ('LOAN-GIV', 'دیے گئے قرض و پیشگی', 'Asset', 0, '$system_type')")->execute();
+        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type, tenant_id) VALUES ('LOAN-GIV', 'دیے گئے قرض و پیشگی', 'Asset', 0, '$system_type', $cur_tenant_id)")->execute();
         $head_given_id = (int)$pdo->lastInsertId();
     } else { $head_given_id = (int)$h1; }
 
-    $h2 = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-REC' LIMIT 1")->fetchColumn();
+    $h2 = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-REC' AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0) ORDER BY (tenant_id = $cur_tenant_id) DESC LIMIT 1")->fetchColumn();
     if (!$h2) {
-        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type) VALUES ('LOAN-REC', 'قرض واپسی وصولی', 'Income', 0, '$system_type')")->execute();
+        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type, tenant_id) VALUES ('LOAN-REC', 'قرض واپسی وصولی', 'Income', 0, '$system_type', $cur_tenant_id)")->execute();
         $head_recovery_id = (int)$pdo->lastInsertId();
     } else { $head_recovery_id = (int)$h2; }
 
-    $h3 = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-TAK' LIMIT 1")->fetchColumn();
+    $h3 = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-TAK' AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0) ORDER BY (tenant_id = $cur_tenant_id) DESC LIMIT 1")->fetchColumn();
     if (!$h3) {
-        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type) VALUES ('LOAN-TAK', 'لیے ہوئے قرض', 'Liability', 0, '$system_type')")->execute();
+        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type, tenant_id) VALUES ('LOAN-TAK', 'لیے ہوئے قرض', 'Liability', 0, '$system_type', $cur_tenant_id)")->execute();
         $head_taken_id = (int)$pdo->lastInsertId();
     } else { $head_taken_id = (int)$h3; }
 
-    $h4 = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-REP' LIMIT 1")->fetchColumn();
+    $h4 = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'LOAN-REP' AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0) ORDER BY (tenant_id = $cur_tenant_id) DESC LIMIT 1")->fetchColumn();
     if (!$h4) {
-        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type) VALUES ('LOAN-REP', 'قرض واپسی ادائیگی', 'Expense', 0, '$system_type')")->execute();
+        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, system_type, tenant_id) VALUES ('LOAN-REP', 'قرض واپسی ادائیگی', 'Expense', 0, '$system_type', $cur_tenant_id)")->execute();
         $head_repay_id = (int)$pdo->lastInsertId();
     } else { $head_repay_id = (int)$h4; }
 } catch (Exception $e) {}
@@ -125,7 +141,8 @@ try {
     if (!empty($head_given_id) || !empty($head_taken_id) || !empty($head_recovery_id) || !empty($head_repay_id)) {
         $head_ids_str = implode(',', array_filter([(int)$head_given_id, (int)$head_taken_id, (int)$head_recovery_id, (int)$head_repay_id]));
         if (!empty($head_ids_str)) {
-            $pdo->exec("UPDATE finance SET is_loan = 1 WHERE (is_loan = 0 OR is_loan IS NULL) AND (head_id IN ($head_ids_str) OR description LIKE '%قرض%' OR description LIKE '%loan%')");
+            ensure_column($pdo, 'finance', 'tenant_id', "INT DEFAULT 1");
+            $pdo->exec("UPDATE finance SET is_loan = 1 WHERE (is_loan = 0 OR is_loan IS NULL) AND tenant_id = $cur_tenant_id AND head_id IN ($head_ids_str)");
         }
     }
 } catch (Exception $e) {}
@@ -133,7 +150,7 @@ try {
 // Fetch payment asset accounts (Cash in Hand, Bank, etc.)
 $payment_accounts = [];
 try {
-    $payment_accounts = $pdo->query("SELECT id, code, name FROM acc_chart_of_accounts WHERE type = 'Asset' AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY code ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $payment_accounts = $pdo->query("SELECT id, code, name FROM acc_chart_of_accounts WHERE type = 'Asset' AND (is_deleted = 0 OR is_deleted IS NULL) AND (tenant_id = $cur_tenant_id OR tenant_id IS NULL OR tenant_id = 0) ORDER BY code ASC")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {}
 if (empty($payment_accounts)) {
     $cid = finance_accounting_ensure_account($pdo, '1001', 'Cash in Hand', 'Asset');
@@ -159,8 +176,8 @@ if (isset($_POST['issue_loan_given'])) {
     $account_id = !empty($_POST['account_id']) ? (int)$_POST['account_id'] : null;
 
     if ($teacher_id) {
-        $t_stmt = $pdo->prepare("SELECT name, phone FROM teachers WHERE id = ?");
-        $t_stmt->execute([$teacher_id]);
+        $t_stmt = $pdo->prepare("SELECT name, phone FROM teachers WHERE id = ? AND tenant_id = ?");
+        $t_stmt->execute([$teacher_id, $cur_tenant_id]);
         $t_row = $t_stmt->fetch(PDO::FETCH_ASSOC);
         if ($t_row) {
             $borrower_name = $t_row['name'];
@@ -169,13 +186,13 @@ if (isset($_POST['issue_loan_given'])) {
     }
 
     if ($amount > 0 && !empty($borrower_name)) {
-        $stmt = $pdo->prepare("INSERT INTO staff_loans (teacher_id, borrower_name, phone, loan_direction, loan_amount, installment_amount, repaid_amount, remaining_amount, date_issued, due_date, description, status, system_type, is_deleted, account_id) VALUES (?, ?, ?, 'Given', ?, ?, 0, ?, ?, ?, ?, 'Active', '$system_type', 0, ?)");
+        $stmt = $pdo->prepare("INSERT INTO staff_loans (teacher_id, borrower_name, phone, loan_direction, loan_amount, installment_amount, repaid_amount, remaining_amount, date_issued, due_date, description, status, system_type, is_deleted, account_id, tenant_id) VALUES (?, ?, ?, 'Given', ?, ?, 0, ?, ?, ?, ?, 'Active', '$system_type', 0, ?, $cur_tenant_id)");
         $stmt->execute([$teacher_id, $borrower_name, $phone, $amount, $inst, $amount, $date_issued, $due_date, $desc, $account_id]);
         $loan_id = (int)$pdo->lastInsertId();
 
         // Post Expense in Finance (Marked as is_loan = 1 so it's not counted in operating deficit)
         $f_desc = "قرض/پیشگی رقم جاری کی گئی: $borrower_name - $desc";
-        $stmt_fin = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, system_type, account_id, is_loan) VALUES (?, ?, 'Expense', ?, ?, ?, ?, ?, 0, '$system_type', ?, 1)");
+        $stmt_fin = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, system_type, account_id, is_loan, tenant_id) VALUES (?, ?, 'Expense', ?, ?, ?, ?, ?, 0, '$system_type', ?, 1, $cur_tenant_id)");
         $stmt_fin->execute([$uid, $_SESSION['name'] ?? 'Admin', $head_given_id, $amount, $date_issued, $borrower_name, $f_desc, $account_id]);
         $last_fin_id = (int)$pdo->lastInsertId();
         try { finance_accounting_post($pdo, $last_fin_id); } catch (Throwable $e) {}
@@ -195,12 +212,12 @@ if (isset($_POST['record_loan_taken'])) {
     $account_id = !empty($_POST['account_id']) ? (int)$_POST['account_id'] : null;
 
     if ($amount > 0 && !empty($lender_name)) {
-        $stmt = $pdo->prepare("INSERT INTO staff_loans (teacher_id, borrower_name, phone, loan_direction, loan_amount, installment_amount, repaid_amount, remaining_amount, date_issued, due_date, description, status, system_type, is_deleted, account_id) VALUES (NULL, ?, ?, 'Taken', ?, 0, 0, ?, ?, ?, ?, 'Active', '$system_type', 0, ?)");
+        $stmt = $pdo->prepare("INSERT INTO staff_loans (teacher_id, borrower_name, phone, loan_direction, loan_amount, installment_amount, repaid_amount, remaining_amount, date_issued, due_date, description, status, system_type, is_deleted, account_id, tenant_id) VALUES (NULL, ?, ?, 'Taken', ?, 0, 0, ?, ?, ?, ?, 'Active', '$system_type', 0, ?, $cur_tenant_id)");
         $stmt->execute([$lender_name, $phone, $amount, $amount, $date_issued, $due_date, $desc, $account_id]);
 
         // Record Cash Inflow (Loan Inflow) in Finance (Marked as is_loan = 1 so it's not counted in operating donations)
         $f_desc = "ادارہ نے قرض حسنہ حاصل کیا: $lender_name - $desc";
-        $stmt_fin = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, system_type, account_id, is_loan) VALUES (?, ?, 'Income', ?, ?, ?, ?, ?, 0, '$system_type', ?, 1)");
+        $stmt_fin = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, system_type, account_id, is_loan, tenant_id) VALUES (?, ?, 'Income', ?, ?, ?, ?, ?, 0, '$system_type', ?, 1, $cur_tenant_id)");
         $stmt_fin->execute([$uid, $_SESSION['name'] ?? 'Admin', $head_taken_id, $amount, $date_issued, $lender_name, $f_desc, $account_id]);
         $last_fin_id = (int)$pdo->lastInsertId();
         try { finance_accounting_post($pdo, $last_fin_id); } catch (Throwable $e) {}
@@ -218,8 +235,8 @@ if (isset($_POST['receive_repayment'])) {
     $remarks = trim($_POST['remarks'] ?? '');
     $account_id = !empty($_POST['account_id']) ? (int)$_POST['account_id'] : null;
 
-    $l_stmt = $pdo->prepare("SELECT * FROM staff_loans WHERE id = ? AND is_deleted = 0");
-    $l_stmt->execute([$loan_id]);
+    $l_stmt = $pdo->prepare("SELECT * FROM staff_loans WHERE id = ? AND is_deleted = 0 AND tenant_id = ?");
+    $l_stmt->execute([$loan_id, $cur_tenant_id]);
     $loan = $l_stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($loan && $repay_amount > 0) {
@@ -228,18 +245,18 @@ if (isset($_POST['receive_repayment'])) {
         if ($new_remaining < 0) $new_remaining = 0;
         $status = ($new_remaining <= 0) ? 'Paid' : 'Active';
 
-        $pdo->prepare("UPDATE staff_loans SET repaid_amount = ?, remaining_amount = ?, status = ? WHERE id = ?")
-            ->execute([$new_repaid, $new_remaining, $status, $loan_id]);
+        $pdo->prepare("UPDATE staff_loans SET repaid_amount = ?, remaining_amount = ?, status = ? WHERE id = ? AND tenant_id = ?")
+            ->execute([$new_repaid, $new_remaining, $status, $loan_id, $cur_tenant_id]);
 
         $b_name = $loan['borrower_name'] ?: 'Borrower';
 
         // Insert into loan_transactions table
-        $pdo->prepare("INSERT INTO loan_transactions (loan_id, type, borrower_lender_name, amount, date, payment_method, remarks, system_type, created_by, is_deleted, account_id) VALUES (?, 'Recovery', ?, ?, ?, ?, ?, '$system_type', ?, 0, ?)")
+        $pdo->prepare("INSERT INTO loan_transactions (loan_id, type, borrower_lender_name, amount, date, payment_method, remarks, system_type, created_by, is_deleted, account_id, tenant_id) VALUES (?, 'Recovery', ?, ?, ?, ?, ?, '$system_type', ?, 0, ?, $cur_tenant_id)")
             ->execute([$loan_id, $b_name, $repay_amount, $repay_date, $method, $remarks, $uid, $account_id]);
 
         // Record Income (Loan Recovery Inflow) in Finance (Marked as is_loan = 1)
         $f_desc = "قرض قسط واپسی وصول ہوئی: $b_name - $remarks ($method)";
-        $stmt_fin = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, system_type, account_id, payment_method, is_loan) VALUES (?, ?, 'Income', ?, ?, ?, ?, ?, 0, '$system_type', ?, ?, 1)");
+        $stmt_fin = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, system_type, account_id, payment_method, is_loan, tenant_id) VALUES (?, ?, 'Income', ?, ?, ?, ?, ?, 0, '$system_type', ?, ?, 1, $cur_tenant_id)");
         $stmt_fin->execute([$uid, $_SESSION['name'] ?? 'Admin', $head_recovery_id, $repay_amount, $repay_date, $b_name, $f_desc, $account_id, $method]);
         $last_fin_id = (int)$pdo->lastInsertId();
         try { finance_accounting_post($pdo, $last_fin_id); } catch (Throwable $e) {}
@@ -257,8 +274,8 @@ if (isset($_POST['repay_loan_taken'])) {
     $remarks = trim($_POST['remarks'] ?? '');
     $account_id = !empty($_POST['account_id']) ? (int)$_POST['account_id'] : null;
 
-    $l_stmt = $pdo->prepare("SELECT * FROM staff_loans WHERE id = ? AND is_deleted = 0");
-    $l_stmt->execute([$loan_id]);
+    $l_stmt = $pdo->prepare("SELECT * FROM staff_loans WHERE id = ? AND is_deleted = 0 AND tenant_id = ?");
+    $l_stmt->execute([$loan_id, $cur_tenant_id]);
     $loan = $l_stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($loan && $repay_amount > 0) {
@@ -267,18 +284,18 @@ if (isset($_POST['repay_loan_taken'])) {
         if ($new_remaining < 0) $new_remaining = 0;
         $status = ($new_remaining <= 0) ? 'Paid' : 'Active';
 
-        $pdo->prepare("UPDATE staff_loans SET repaid_amount = ?, remaining_amount = ?, status = ? WHERE id = ?")
-            ->execute([$new_repaid, $new_remaining, $status, $loan_id]);
+        $pdo->prepare("UPDATE staff_loans SET repaid_amount = ?, remaining_amount = ?, status = ? WHERE id = ? AND tenant_id = ?")
+            ->execute([$new_repaid, $new_remaining, $status, $loan_id, $cur_tenant_id]);
 
         $l_name = $loan['borrower_name'] ?: 'Lender';
 
         // Insert into loan_transactions table
-        $pdo->prepare("INSERT INTO loan_transactions (loan_id, type, borrower_lender_name, amount, date, payment_method, remarks, system_type, created_by, is_deleted, account_id) VALUES (?, 'Repayment', ?, ?, ?, ?, ?, '$system_type', ?, 0, ?)")
+        $pdo->prepare("INSERT INTO loan_transactions (loan_id, type, borrower_lender_name, amount, date, payment_method, remarks, system_type, created_by, is_deleted, account_id, tenant_id) VALUES (?, 'Repayment', ?, ?, ?, ?, ?, '$system_type', ?, 0, ?, $cur_tenant_id)")
             ->execute([$loan_id, $l_name, $repay_amount, $repay_date, $method, $remarks, $uid, $account_id]);
 
         // Record Cash Outflow (Loan Repayment) in Finance (Marked as is_loan = 1)
         $f_desc = "ادارہ کی طرف سے قرض واپس ادا کیا گیا: $l_name - $remarks ($method)";
-        $stmt_fin = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, system_type, account_id, payment_method, is_loan) VALUES (?, ?, 'Expense', ?, ?, ?, ?, ?, 0, '$system_type', ?, ?, 1)");
+        $stmt_fin = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, system_type, account_id, payment_method, is_loan, tenant_id) VALUES (?, ?, 'Expense', ?, ?, ?, ?, ?, 0, '$system_type', ?, ?, 1, $cur_tenant_id)");
         $stmt_fin->execute([$uid, $_SESSION['name'] ?? 'Admin', $head_repay_id, $repay_amount, $repay_date, $l_name, $f_desc, $account_id, $method]);
         $last_fin_id = (int)$pdo->lastInsertId();
         try { finance_accounting_post($pdo, $last_fin_id); } catch (Throwable $e) {}
@@ -290,28 +307,28 @@ if (isset($_POST['repay_loan_taken'])) {
 // 5. Delete Loan Record
 if (isset($_POST['delete_loan'])) {
     $loan_id = (int)$_POST['loan_id'];
-    $pdo->prepare("UPDATE staff_loans SET is_deleted = 1 WHERE id = ?")->execute([$loan_id]);
+    $pdo->prepare("UPDATE staff_loans SET is_deleted = 1 WHERE id = ? AND tenant_id = ?")->execute([$loan_id, $cur_tenant_id]);
     $msg = "<div class='alert alert-warning fw-bold shadow-sm'><i class='fas fa-trash me-1'></i> " . ($is_en ? "Loan record deleted." : "قرض کا ریکارڈ حذف کر دیا گیا۔") . "</div>";
 }
 
 // 6. Delete Transaction Record
 if (isset($_POST['delete_transaction'])) {
     $tx_id = (int)$_POST['tx_id'];
-    $t_stmt = $pdo->prepare("SELECT * FROM loan_transactions WHERE id = ?");
-    $t_stmt->execute([$tx_id]);
+    $t_stmt = $pdo->prepare("SELECT * FROM loan_transactions WHERE id = ? AND tenant_id = ?");
+    $t_stmt->execute([$tx_id, $cur_tenant_id]);
     $tx = $t_stmt->fetch(PDO::FETCH_ASSOC);
     if ($tx) {
-        $pdo->prepare("UPDATE loan_transactions SET is_deleted = 1 WHERE id = ?")->execute([$tx_id]);
+        $pdo->prepare("UPDATE loan_transactions SET is_deleted = 1 WHERE id = ? AND tenant_id = ?")->execute([$tx_id, $cur_tenant_id]);
         if (!empty($tx['loan_id'])) {
-            $l_stmt = $pdo->prepare("SELECT * FROM staff_loans WHERE id = ?");
-            $l_stmt->execute([$tx['loan_id']]);
+            $l_stmt = $pdo->prepare("SELECT * FROM staff_loans WHERE id = ? AND tenant_id = ?");
+            $l_stmt->execute([$tx['loan_id'], $cur_tenant_id]);
             $loan = $l_stmt->fetch(PDO::FETCH_ASSOC);
             if ($loan) {
                 $cur_repaid = max(0, (float)$loan['repaid_amount'] - (float)$tx['amount']);
                 $cur_rem = (float)$loan['remaining_amount'] + (float)$tx['amount'];
                 $status = ($cur_rem <= 0) ? 'Paid' : 'Active';
-                $pdo->prepare("UPDATE staff_loans SET repaid_amount = ?, remaining_amount = ?, status = ? WHERE id = ?")
-                    ->execute([$cur_repaid, $cur_rem, $status, $loan['id']]);
+                $pdo->prepare("UPDATE staff_loans SET repaid_amount = ?, remaining_amount = ?, status = ? WHERE id = ? AND tenant_id = ?")
+                    ->execute([$cur_repaid, $cur_rem, $status, $loan['id'], $cur_tenant_id]);
             }
         }
         $msg = "<div class='alert alert-warning fw-bold shadow-sm'><i class='fas fa-trash me-1'></i> " . ($is_en ? "Transaction deleted and balance adjusted." : "ٹرانزیکشن حذف کر دی گئی اور قرض کا بیلنس درست کر دیا گیا۔") . "</div>";
@@ -324,19 +341,19 @@ $active_tab = $_GET['tab'] ?? 'given'; // 'given', 'taken', 'recoveries', 'repay
 // --- Data Queries ---
 
 // 1. Loans Given Query
-$loans_given = $pdo->query("SELECT l.*, t.name as teacher_name FROM staff_loans l LEFT JOIN teachers t ON l.teacher_id = t.id WHERE l.is_deleted = 0 AND (l.loan_direction = 'Given' OR l.loan_direction IS NULL OR l.loan_direction = '') AND (l.system_type = '$system_type' OR l.system_type IS NULL OR l.system_type = '') ORDER BY l.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$loans_given = $pdo->query("SELECT l.*, t.name as teacher_name FROM staff_loans l LEFT JOIN teachers t ON l.teacher_id = t.id WHERE l.is_deleted = 0 AND l.tenant_id = $cur_tenant_id AND (l.loan_direction = 'Given' OR l.loan_direction IS NULL OR l.loan_direction = '') AND (l.system_type = '$system_type' OR l.system_type IS NULL OR l.system_type = '') ORDER BY l.id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
 // 2. Loans Taken Query
-$loans_taken = $pdo->query("SELECT * FROM staff_loans WHERE is_deleted = 0 AND loan_direction = 'Taken' AND (system_type = '$system_type' OR system_type IS NULL OR system_type = '') ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$loans_taken = $pdo->query("SELECT * FROM staff_loans WHERE is_deleted = 0 AND tenant_id = $cur_tenant_id AND loan_direction = 'Taken' AND (system_type = '$system_type' OR system_type IS NULL OR system_type = '') ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
 // 3. Recoveries Query (قرض وصولی)
-$recoveries = $pdo->query("SELECT t.*, l.loan_amount, l.remaining_amount as current_remaining FROM loan_transactions t LEFT JOIN staff_loans l ON t.loan_id = l.id WHERE t.type = 'Recovery' AND t.is_deleted = 0 AND (t.system_type = '$system_type' OR t.system_type IS NULL OR t.system_type = '') ORDER BY t.date DESC, t.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$recoveries = $pdo->query("SELECT t.*, l.loan_amount, l.remaining_amount as current_remaining FROM loan_transactions t LEFT JOIN staff_loans l ON t.loan_id = l.id WHERE t.type = 'Recovery' AND t.is_deleted = 0 AND t.tenant_id = $cur_tenant_id AND (t.system_type = '$system_type' OR t.system_type IS NULL OR t.system_type = '') ORDER BY t.date DESC, t.id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
 // 4. Repayments Query (قرض واپسی / ادائیگی)
-$repayments = $pdo->query("SELECT t.*, l.loan_amount, l.remaining_amount as current_remaining FROM loan_transactions t LEFT JOIN staff_loans l ON t.loan_id = l.id WHERE t.type = 'Repayment' AND t.is_deleted = 0 AND (t.system_type = '$system_type' OR t.system_type IS NULL OR t.system_type = '') ORDER BY t.date DESC, t.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$repayments = $pdo->query("SELECT t.*, l.loan_amount, l.remaining_amount as current_remaining FROM loan_transactions t LEFT JOIN staff_loans l ON t.loan_id = l.id WHERE t.type = 'Repayment' AND t.is_deleted = 0 AND t.tenant_id = $cur_tenant_id AND (t.system_type = '$system_type' OR t.system_type IS NULL OR t.system_type = '') ORDER BY t.date DESC, t.id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Active Teachers for Dropdown
-$teachers = $pdo->query("SELECT id, name, phone FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND (system_type = '$system_type' OR system_type IS NULL OR system_type = '') ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$teachers = $pdo->query("SELECT id, name, phone FROM teachers WHERE tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL) AND (system_type = '$system_type' OR system_type IS NULL OR system_type = '') ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Calculate Summary Totals
 $tot_given_amount = 0;
@@ -345,7 +362,7 @@ $tot_given_remaining = 0;
 foreach ($loans_given as $lg) {
     $tot_given_amount += (float)$lg['loan_amount'];
     $tot_given_repaid += (float)$lg['repaid_amount'];
-    $tot_given_remaining += (float)$lg['remaining_amount'];
+    $tot_given_remaining += max(0, (float)$lg['loan_amount'] - (float)$lg['repaid_amount']); // BUGFIX B-10: derive, don't trust stored remaining_amount
 }
 
 $tot_taken_amount = 0;
@@ -354,7 +371,7 @@ $tot_taken_remaining = 0;
 foreach ($loans_taken as $lt) {
     $tot_taken_amount += (float)$lt['loan_amount'];
     $tot_taken_repaid += (float)$lt['repaid_amount'];
-    $tot_taken_remaining += (float)$lt['remaining_amount'];
+    $tot_taken_remaining += max(0, (float)$lt['loan_amount'] - (float)$lt['repaid_amount']); // BUGFIX B-10
 }
 
 $tot_recoveries_count = count($recoveries);

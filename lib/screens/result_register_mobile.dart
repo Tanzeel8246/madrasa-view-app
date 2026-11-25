@@ -605,13 +605,16 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
                     Expanded(
                       child: Column(
                         children: [
-                          Text("مدرسہ اشرف المدارس",
+                          Text(
+                              (currentTenantName.value ?? '').trim().isNotEmpty
+                                  ? currentTenantName.value!.trim()
+                                  : "مدرسہ مینجمنٹ سسٹم",
                               style: urdu.copyWith(
                                   fontSize: 26,
                                   fontWeight: FontWeight.bold,
                                   color: primary)),
                           const SizedBox(height: 2),
-                          Text("فاروقہ، ضلع سرگودھا | فون: 0300-1234567",
+                          Text("امتحانی رزلٹ کارڈ",
                               style: urdu.copyWith(
                                   fontSize: 11,
                                   color: primary,
@@ -1120,7 +1123,11 @@ class _ResultRegisterMobilePageState extends State<ResultRegisterMobilePage> {
                       Image.asset('assets/logo.png', height: 45, width: 45, errorBuilder: (_,__,___)=>Icon(Icons.school, color: Colors.white, size: 45)),
                       Column(
                         children: [
-                          Text("مدرسہ اشرف المدارس — فاروقہ، سرگودھا", style: urduFont.copyWith(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
+                          Text(
+                              (currentTenantName.value ?? '').trim().isNotEmpty
+                                  ? currentTenantName.value!.trim()
+                                  : "مدرسہ مینجمنٹ سسٹم",
+                              style: urduFont.copyWith(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
                           Text("اجتماعی رزلٹ رجسٹر — ${widget.exam['exam_name'] ?? ''}", style: urduFont.copyWith(fontSize: 14, color: gold)),
                         ],
                       ),

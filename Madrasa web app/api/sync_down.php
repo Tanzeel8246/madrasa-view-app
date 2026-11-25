@@ -40,7 +40,28 @@ function handle_sync_down($pdo, $user) {
     // 5. Staff & Attendance (Attendance, Teacher Attendance, Period Attendance, Teachers with mapped periods)
     SyncDownAttendance::process($ctx, $data, $sharedContext);
 
+    // Freshly query user's actual permissions from database so client auto-sync immediately corrects any stale/cached permissions
+    try {
+        $uRole = strtolower(trim((string)($user['role'] ?? '')));
+        $uId = (int)($user['id'] ?? 0);
+        $tId = (int)$ctx->tenantId;
+        if ($uId > 0 && !in_array($uRole, ['admin', 'superadmin', 'super_admin', 'administrator'], true)) {
+            $uStmt = $pdo->prepare("SELECT permissions FROM admins WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+            $uStmt->execute([$uId, $tId]);
+            $userRow = $uStmt->fetch(PDO::FETCH_ASSOC);
+            require_once __DIR__ . '/controllers/AuthController.php';
+            $rawPerms = [];
+            if ($userRow && !empty($userRow['permissions'])) {
+                $decoded = json_decode($userRow['permissions'], true);
+                if (is_array($decoded)) {
+                    $rawPerms = $decoded;
+                }
+            }
+            $data['current_user_permissions'] = AuthController::resolveUserPermissions($uRole, $rawPerms);
+        }
+    } catch (Throwable $ePermSync) {}
+
     write_log("Sync Down Finished");
-    return ['status' => 'success', 'data' => $data];
+    return ['status' => 'success', 'server_time' => date('c'), 'data' => $data];
 }
 

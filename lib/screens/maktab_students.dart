@@ -35,6 +35,7 @@ class _MaktabStudentsPageState extends State<MaktabStudentsPage> {
   String? _selectedClass;
   String? _selectedResidenceStatus;
   String _selectedAlumniCategory = 'all';
+  String _selectedHifzSection = 'all';
 
   // پیجینیشن متغیرات (Pagination)
   static const int _pageSize = 100;
@@ -934,31 +935,39 @@ class _MaktabStudentsPageState extends State<MaktabStudentsPage> {
       child: DataTable(
         headingRowColor:
             WidgetStateProperty.resolveWith((states) => Colors.grey.shade200),
+        headingRowHeight: 48,
+        headingTextStyle: TextStyle(
+          fontFamily: isUrdu ? 'JameelNooriNastaleeq' : null,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+          height: 1.1,
+          color: const Color(0xFF284D3D),
+        ),
         dataRowMinHeight: 40,
         dataRowMaxHeight: 55,
         columnSpacing: 20,
         columns: [
           DataColumn(
               label: Text(isUrdu ? 'نمبرشمار' : 'S.No',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
+                  style: TextStyle(fontFamily: isUrdu ? 'JameelNooriNastaleeq' : null, fontWeight: FontWeight.bold, fontSize: 12, height: 1.1))),
           DataColumn(
               label: Text(isUrdu ? 'رول نمبر' : 'Roll No',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
+                  style: TextStyle(fontFamily: isUrdu ? 'JameelNooriNastaleeq' : null, fontWeight: FontWeight.bold, fontSize: 12, height: 1.1))),
           DataColumn(
               label: Text(isUrdu ? 'تصویر' : 'Photo',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
+                  style: TextStyle(fontFamily: isUrdu ? 'JameelNooriNastaleeq' : null, fontWeight: FontWeight.bold, fontSize: 12, height: 1.1))),
           DataColumn(
               label: Text(isUrdu ? 'نام طالب علم' : 'Name',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
+                  style: TextStyle(fontFamily: isUrdu ? 'JameelNooriNastaleeq' : null, fontWeight: FontWeight.bold, fontSize: 12, height: 1.1))),
           DataColumn(
               label: Text(isUrdu ? 'ولدیت' : 'Father',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
+                  style: TextStyle(fontFamily: isUrdu ? 'JameelNooriNastaleeq' : null, fontWeight: FontWeight.bold, fontSize: 12, height: 1.1))),
           DataColumn(
               label: Text(isUrdu ? 'رابطہ' : 'Contact',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
+                  style: TextStyle(fontFamily: isUrdu ? 'JameelNooriNastaleeq' : null, fontWeight: FontWeight.bold, fontSize: 12, height: 1.1))),
           DataColumn(
               label: Text(isUrdu ? 'ایکشن' : 'Action',
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
+                  style: TextStyle(fontFamily: isUrdu ? 'JameelNooriNastaleeq' : null, fontWeight: FontWeight.bold, fontSize: 12, height: 1.1))),
         ],
         rows: students.map((s) {
           return DataRow(
@@ -1071,6 +1080,74 @@ class _MaktabStudentsPageState extends State<MaktabStudentsPage> {
     );
   }
 
+  Widget _buildHifzSectionSegment(bool isUrdu) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _buildHifzChip(
+              label: isUrdu ? 'تمام طلباء' : 'All Students',
+              value: 'all',
+              isSelected: _selectedHifzSection == 'all',
+            ),
+            const SizedBox(width: 8),
+            _buildHifzChip(
+              label: isUrdu ? 'باقاعدہ حفظ' : 'Regular Hifz',
+              value: 'regular',
+              isSelected: _selectedHifzSection == 'regular',
+            ),
+            const SizedBox(width: 8),
+            _buildHifzChip(
+              label: isUrdu ? 'منزل / گردان' : 'Manzil / Gardan',
+              value: 'manzil_gardan',
+              isSelected: _selectedHifzSection == 'manzil_gardan',
+              badgeColor: Colors.amber.shade800,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHifzChip({
+    required String label,
+    required String value,
+    required bool isSelected,
+    Color? badgeColor,
+  }) {
+    return FilterChip(
+      selected: isSelected,
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected
+              ? Colors.white
+              : (badgeColor ?? const Color(0xFF284D3D)),
+        ),
+      ),
+      selectedColor: badgeColor ?? const Color(0xFF284D3D),
+      backgroundColor: Colors.white,
+      checkmarkColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: isSelected
+              ? (badgeColor ?? const Color(0xFF284D3D))
+              : Colors.grey.shade300,
+        ),
+      ),
+      onSelected: (bool selected) {
+        setState(() {
+          _selectedHifzSection = selected ? value : 'all';
+        });
+      },
+    );
+  }
+
   Widget _buildGroupedList(bool isUrdu, String filterType) {
     List<Map<String, dynamic>> activeList = [];
     List<Map<String, dynamic>> alumniList = [];
@@ -1089,6 +1166,14 @@ class _MaktabStudentsPageState extends State<MaktabStudentsPage> {
       activeList = _foundActive
           .where((s) => (s['residence_status']?.toString() ?? '') == filterType)
           .toList();
+    }
+
+    if (filterType != 'alumni' && _selectedHifzSection != 'all') {
+      activeList = activeList.where((s) {
+        final sec = (s['hifz_section'] ?? 'regular').toString().trim();
+        final normSec = sec.isEmpty ? 'regular' : sec;
+        return normSec == _selectedHifzSection;
+      }).toList();
     }
 
     if (activeList.isEmpty && alumniList.isEmpty) {
@@ -1153,7 +1238,19 @@ class _MaktabStudentsPageState extends State<MaktabStudentsPage> {
       }
     }
 
+    for (var list in classGroups.values) {
+      list.sort((a, b) {
+        final aIsManzil = (a['hifz_section'] ?? '').toString().trim() == 'manzil_gardan';
+        final bIsManzil = (b['hifz_section'] ?? '').toString().trim() == 'manzil_gardan';
+        if (aIsManzil != bIsManzil) return aIsManzil ? 1 : -1;
+        return 0;
+      });
+    }
+
     List<Widget> listWidgets = [];
+    if (filterType != 'alumni') {
+      listWidgets.add(_buildHifzSectionSegment(isUrdu));
+    }
 
     // Add active classes sections
     for (String cName in orderedClasses) {
@@ -2444,9 +2541,11 @@ class _MaktabStudentsPageState extends State<MaktabStudentsPage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          isUrdu
-                              ? "مکتب اشرف المدارس فروکہ"
-                              : "Maktab Ashraf-ul-Madaris",
+                          (currentTenantMasjidName.value ?? '').trim().isNotEmpty
+                              ? currentTenantMasjidName.value!.trim()
+                              : (isUrdu
+                                  ? "جامع مسجد و مکتب"
+                                  : "Masjid & Maktab"),
                           style: const TextStyle(
                             fontFamily: 'JameelNooriNastaleeq',
                             fontSize: 22,

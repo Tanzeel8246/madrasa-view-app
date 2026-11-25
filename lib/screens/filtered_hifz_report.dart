@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../utils/globals.dart';
 
 class FilteredHifzReportPage extends StatelessWidget {
   final String title;
@@ -169,7 +170,11 @@ class FilteredHifzReportPage extends StatelessWidget {
           header: (ctx) => pw.Column(
             children: [
               pw.Center(
-                child: pw.Text("جامعہ اشرف المدارس — فاروقہ، سرگودھا", style: boldStyle.copyWith(fontSize: 16, color: PdfColors.green800)),
+                child: pw.Text(
+                    (currentTenantName.value ?? '').trim().isNotEmpty
+                        ? currentTenantName.value!.trim()
+                        : "مدرسہ مینجمنٹ سسٹم",
+                    style: boldStyle.copyWith(fontSize: 16, color: PdfColors.green800)),
               ),
               pw.SizedBox(height: 4),
               pw.Center(

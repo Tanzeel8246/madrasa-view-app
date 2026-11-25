@@ -88,9 +88,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_voucher'])) {
                 'header' => ['date' => $date, 'type' => $type, 'reference' => $ref, 'description' => $desc, 'department_id' => $department_id],
                 'lines' => $clean_lines
             ];
-            acc_log_audit($pdo, $cur_tenant_id, 'acc_vouchers', $v_id, 'EDIT_PENDING_VOUCHER', $before_data, $after_data, $user['id'], $_SESSION['name'] ?? 'Admin', 'Web');
-
             $pdo->commit();
+
+            // BUGFIX B-06 (same class): audit after commit — its first-use
+            // schema DDL would implicitly commit the open transaction.
+            acc_log_audit($pdo, $cur_tenant_id, 'acc_vouchers', $v_id, 'EDIT_PENDING_VOUCHER', $before_data, $after_data, $user['id'], $_SESSION['name'] ?? 'Admin', 'Web');
             header("Location: acc_vouchers.php?msg=" . urlencode("Voucher updated successfully!"));
             exit;
         } catch (Exception $e) {

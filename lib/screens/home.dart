@@ -348,7 +348,7 @@ class _HomePageState extends State<HomePage> {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 8,
       mainAxisSpacing: 8,
-      childAspectRatio: isSmall ? 1.4 : 1.25,
+      childAspectRatio: isSmall ? 1.35 : 0.95,
       children: [
         _statBox(
           Icons.groups,
@@ -955,7 +955,7 @@ class _HomePageState extends State<HomePage> {
                   builder: (context, tName, _) {
                     final fName = (tName != null && tName.trim().isNotEmpty)
                         ? tName.trim()
-                        : (isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris');
+                        : (isUrdu ? 'مدرسہ مینجمنٹ سسٹم' : 'Madrasa Management System');
                     return Text(
                       fName,
                       style: TextStyle(
@@ -988,7 +988,7 @@ class _HomePageState extends State<HomePage> {
             builder: (context, tName, _) {
               final cName = (tName != null && tName.trim().isNotEmpty)
                   ? tName.trim()
-                  : (isUrdu ? 'مدرسہ اشرف المدارس' : 'Madrasa Ashraf-ul-Madaris');
+                  : (isUrdu ? 'مدرسہ مینجمنٹ سسٹم' : 'Madrasa Management System');
               return Text(
                 isUrdu
                     ? 'کاپی رائٹ ${DateTime.now().year} $cName'
@@ -1017,32 +1017,31 @@ class _HomePageState extends State<HomePage> {
 
   Widget _statBox(IconData icon, String title, String value) {
     return NeoBox(
-      padding: 8,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: primaryGreen, size: 22),
-          const SizedBox(height: 5),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
+      padding: 4,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: primaryGreen, size: 20),
+            const SizedBox(height: 3),
+            Text(
               value,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 15,
+                fontSize: 14,
                 color: primaryGreen,
               ),
             ),
-          ),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
+            const SizedBox(height: 2),
+            Text(
               title,
               style: const TextStyle(fontSize: 10),
               textAlign: TextAlign.center,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -27,6 +27,13 @@ $cur_tenant_id = (int)get_current_tenant_id();
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $id        = intval($_POST['id']);
     $action    = $_POST['action'];
+    // BUGFIX B-12: applications exist in TWO tables — admission_applications
+    // (public website form) and admission_inquiries (admissions pipeline).
+    // This inbox used to read only the first, so pipeline applications never
+    // appeared here. The list below UNIONs both and every action now targets
+    // the table the record actually lives in (posted as `src`).
+    $src       = (($_POST['src'] ?? 'app') === 'inq') ? 'inq' : 'app';
+    $adm_tbl   = ($src === 'inq') ? 'admission_inquiries' : 'admission_applications';
     $sms_fired = false;
     $sms_msg   = '';
 
@@ -35,13 +42,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $test_time  = $_POST['test_time'] ?? null;
         $admin_note = trim($_POST['admin_note'] ?? '');
 
-        $stmt = $pdo->prepare("UPDATE admission_applications 
-            SET status='interview', test_date=?, test_time=?, admin_note=? WHERE id=? AND tenant_id=?");
-        $stmt->execute([$test_date, $test_time, $admin_note, $id, $cur_tenant_id]);
+        if ($src === 'inq') {
+            $stmt = $pdo->prepare("UPDATE admission_inquiries SET status='interview', interview_date=?, interview_notes=? WHERE id=? AND tenant_id=?");
+            $stmt->execute([$test_date, trim(($test_time ? "وقت: $test_time " : '') . $admin_note), $id, $cur_tenant_id]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE admission_applications 
+                SET status='interview', test_date=?, test_time=?, admin_note=? WHERE id=? AND tenant_id=?");
+            $stmt->execute([$test_date, $test_time, $admin_note, $id, $cur_tenant_id]);
+        }
 
-        $appStmt = $pdo->prepare("SELECT * FROM admission_applications WHERE id = ? AND tenant_id = ? LIMIT 1");
+        $appStmt = $pdo->prepare("SELECT * FROM $adm_tbl WHERE id = ? AND tenant_id = ? LIMIT 1");
         $appStmt->execute([$id, $cur_tenant_id]);
         $app = $appStmt->fetch(PDO::FETCH_ASSOC);
+        if ($app && $src === 'inq') { $app['mobile_no'] = $app['phone'] ?? ''; $app['department'] = $app['class_applied'] ?? ''; }
         $mobile = $app ? trim((string)($app['mobile_number'] ?? ($app['mobile_no'] ?? ''))) : '';
 
         if ($app && $mobile !== '') {
@@ -51,17 +64,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $sms_fired = $smsResult['success'] ?? false;
             $sms_msg   = $smsResult['message'] ?? '';
             try {
-                $hasSmsSentColumn = $pdo->query("SHOW COLUMNS FROM admission_applications LIKE 'sms_sent'")->fetch();
-                if ($hasSmsSentColumn) {
-                    $pdo->prepare("UPDATE admission_applications SET sms_sent = ? WHERE id = ? AND tenant_id = ?")
-                        ->execute([$sms_fired ? 1 : 0, $id, $cur_tenant_id]);
+                if ($src === 'app') {
+                    $hasSmsSentColumn = $pdo->query("SHOW COLUMNS FROM admission_applications LIKE 'sms_sent'")->fetch();
+                    if ($hasSmsSentColumn) {
+                        $pdo->prepare("UPDATE admission_applications SET sms_sent = ? WHERE id = ? AND tenant_id = ?")
+                            ->execute([$sms_fired ? 1 : 0, $id, $cur_tenant_id]);
+                    }
                 }
             } catch (Throwable $e) {}
         }
 
         $rawPhone = preg_replace('/[^0-9]/', '', $mobile);
         $cleanPhone = (substr($rawPhone, 0, 1) === '0') ? '92' . substr($rawPhone, 1) : $rawPhone;
-        $waMsg = "السلام علیکم ورحمۃ اللہ!\nمحترم " . ($app['student_name'] ?? '') . " ولد " . ($app['father_name'] ?? '') . " کی داخلہ درخواست برائے جامعہ اشرف المدارس پر ٹیسٹ و انٹرویو مقرر کیا گیا ہے۔\n📅 تاریخ: " . ($test_date ?: '-') . "\n⏰ وقت: " . ($test_time ?: '-') . "\n📍 ادارہ: جامعہ اشرف المدارس، فروکہ\nبراہ کرم مقررہ تاریخ اور وقت پر اصل اسناد و شناختی دستاویزات کے ہمراہ تشریف لائیں۔ شکریہ!";
+        $inst_adm_name = trim((string)(!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : t('app_name')));
+        $waMsg = "السلام علیکم ورحمۃ اللہ!\nمحترم " . ($app['student_name'] ?? '') . " ولد " . ($app['father_name'] ?? '') . " کی داخلہ درخواست برائے " . $inst_adm_name . " پر ٹیسٹ و انٹرویو مقرر کیا گیا ہے۔\n📅 تاریخ: " . ($test_date ?: '-') . "\n⏰ وقت: " . ($test_time ?: '-') . "\n📍 ادارہ: " . $inst_adm_name . "\nبراہ کرم مقررہ تاریخ اور وقت پر اصل اسناد و شناختی دستاویزات کے ہمراہ تشریف لائیں۔ شکریہ!";
         $waUrl = "https://wa.me/" . $cleanPhone . "?text=" . rawurlencode($waMsg);
 
         $_SESSION['flash'] = [
@@ -70,12 +86,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         ];
 
     } elseif ($action === 'approve') {
-        $stmt = $pdo->prepare("UPDATE admission_applications SET status='Approved' WHERE id=? AND tenant_id=?");
+        $stmt = $pdo->prepare("UPDATE $adm_tbl SET status='Approved' WHERE id=? AND tenant_id=?");
         $stmt->execute([$id, $cur_tenant_id]);
 
-        $appStmt = $pdo->prepare("SELECT * FROM admission_applications WHERE id = ? AND tenant_id = ? LIMIT 1");
+        $appStmt = $pdo->prepare("SELECT * FROM $adm_tbl WHERE id = ? AND tenant_id = ? LIMIT 1");
         $appStmt->execute([$id, $cur_tenant_id]);
         $app = $appStmt->fetch(PDO::FETCH_ASSOC);
+        if ($app && $src === 'inq') {
+            $app['mobile_no'] = $app['phone'] ?? '';
+            $app['department'] = $app['class_applied'] ?? '';
+            if (empty($app['hijri_year']) && !empty($app['admission_number']) && strpos($app['admission_number'], '-') !== false) {
+                $app['hijri_year'] = explode('-', $app['admission_number'])[0];
+            }
+        }
         $mobile = $app ? trim((string)($app['mobile_number'] ?? ($app['mobile_no'] ?? ''))) : '';
 
         // Auto-enroll into students or maktab_students
@@ -118,6 +141,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             $isMaktab ? 'Masjid' : 'Madrasa',
                             $cur_tenant_id
                         ]);
+                        if ($src === 'inq') {
+                            try { $pdo->prepare("UPDATE admission_inquiries SET converted_student_id = ? WHERE id = ? AND tenant_id = ?")->execute([(int)$pdo->lastInsertId(), $id, $cur_tenant_id]); } catch (Throwable $e) {}
+                        }
                     }
                 }
             } catch (Throwable $e) {}
@@ -125,15 +151,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($app && $mobile !== '') {
             require_once __DIR__ . '/send_sms.php';
-            $smsMessage = "محترم " . ($app['student_name'] ?? '') . "، آپ کا داخلہ باقاعدہ منظور ہو گیا ہے۔ جامعہ اشرف المدارس میں خوش آمدید۔";
+            $inst_adm_name = trim((string)(!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : t('app_name')));
+            $smsMessage = "محترم " . ($app['student_name'] ?? '') . "، آپ کا داخلہ باقاعدہ منظور ہو گیا ہے۔ " . $inst_adm_name . " میں خوش آمدید۔";
             $smsResult = send_sms($mobile, $smsMessage);
             $sms_fired = $smsResult['success'] ?? false;
             $sms_msg   = $smsResult['message'] ?? '';
             try {
-                $hasSmsSentColumn = $pdo->query("SHOW COLUMNS FROM admission_applications LIKE 'sms_sent'")->fetch();
-                if ($hasSmsSentColumn) {
-                    $pdo->prepare("UPDATE admission_applications SET sms_sent = ? WHERE id = ? AND tenant_id = ?")
-                        ->execute([$sms_fired ? 1 : 0, $id, $cur_tenant_id]);
+                if ($src === 'app') {
+                    $hasSmsSentColumn = $pdo->query("SHOW COLUMNS FROM admission_applications LIKE 'sms_sent'")->fetch();
+                    if ($hasSmsSentColumn) {
+                        $pdo->prepare("UPDATE admission_applications SET sms_sent = ? WHERE id = ? AND tenant_id = ?")
+                            ->execute([$sms_fired ? 1 : 0, $id, $cur_tenant_id]);
+                    }
                 }
             } catch (Throwable $e) {}
         }
@@ -144,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         ];
 
     } elseif ($action === 'reject') {
-        $stmt = $pdo->prepare("UPDATE admission_applications SET status='rejected' WHERE id=? AND tenant_id=?");
+        $stmt = $pdo->prepare("UPDATE $adm_tbl SET status='rejected' WHERE id=? AND tenant_id=?");
         $stmt->execute([$id, $cur_tenant_id]);
         $_SESSION['flash'] = ['type' => 'warning', 'msg' => "درخواست #$id مسترد کر دی گئی۔"];
     }
@@ -163,11 +192,34 @@ $whereClause = "WHERE tenant_id = $cur_tenant_id";
 if ($filter !== 'all') {
     $whereClause .= " AND LOWER(status) = " . $pdo->quote($filter);
 }
-$apps = $pdo->query("SELECT * FROM admission_applications $whereClause ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+// BUGFIX B-12: UNION both admission stores (see POST handler note above).
+$status_filter_sql = ($filter !== 'all') ? " AND LOWER(status) = " . $pdo->quote($filter) : "";
+// sms_sent is not guaranteed to exist on admission_applications (the action
+// handlers check for it dynamically) — pick it only when present.
+try { $sms_col = $pdo->query("SHOW COLUMNS FROM admission_applications LIKE 'sms_sent'")->fetch() ? "sms_sent" : "0 AS sms_sent"; } catch (Throwable $e) { $sms_col = "0 AS sms_sent"; }
+// The two tables were created in different eras and can carry different
+// utf8mb4 collations; a bare UNION then dies with error 1271 (illegal mix
+// of collations). Pinning every text column to one collation in both
+// branches makes the UNION valid on any install.
+$apps = $pdo->query("
+    SELECT * FROM (
+        SELECT id, 'app' AS src, student_name COLLATE utf8mb4_unicode_ci AS student_name, father_name COLLATE utf8mb4_unicode_ci AS father_name, address COLLATE utf8mb4_unicode_ci AS address, department COLLATE utf8mb4_unicode_ci AS department,
+               mobile_no COLLATE utf8mb4_unicode_ci AS mobile_no, photo COLLATE utf8mb4_unicode_ci AS photo, status COLLATE utf8mb4_unicode_ci AS status, test_date, test_time COLLATE utf8mb4_unicode_ci AS test_time, $sms_col, dob, created_at, application_date, hijri_year COLLATE utf8mb4_unicode_ci AS hijri_year
+        FROM admission_applications WHERE tenant_id = $cur_tenant_id $status_filter_sql
+        UNION ALL
+        SELECT id, 'inq' AS src, student_name COLLATE utf8mb4_unicode_ci, father_name COLLATE utf8mb4_unicode_ci, address COLLATE utf8mb4_unicode_ci, class_applied COLLATE utf8mb4_unicode_ci AS department,
+               phone COLLATE utf8mb4_unicode_ci AS mobile_no, photo COLLATE utf8mb4_unicode_ci, status COLLATE utf8mb4_unicode_ci, interview_date AS test_date, NULL AS test_time, 0 AS sms_sent, NULL AS dob, created_at, NULL AS application_date, NULL AS hijri_year
+        FROM admission_inquiries WHERE tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL) $status_filter_sql
+    ) u ORDER BY created_at DESC
+")->fetchAll(PDO::FETCH_ASSOC);
 
 // Counts
 $countMap = ['pending' => 0, 'interview' => 0, 'approved' => 0, 'rejected' => 0];
-$counts = $pdo->query("SELECT status, COUNT(*) as c FROM admission_applications WHERE tenant_id = $cur_tenant_id GROUP BY status")->fetchAll(PDO::FETCH_ASSOC);
+$counts = $pdo->query("SELECT LOWER(status) AS status, COUNT(*) as c FROM (
+    SELECT status COLLATE utf8mb4_unicode_ci AS status FROM admission_applications WHERE tenant_id = $cur_tenant_id
+    UNION ALL
+    SELECT status COLLATE utf8mb4_unicode_ci AS status FROM admission_inquiries WHERE tenant_id = $cur_tenant_id AND (is_deleted = 0 OR is_deleted IS NULL)
+) x GROUP BY LOWER(status)")->fetchAll(PDO::FETCH_ASSOC);
 foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
 ?>
 
@@ -280,7 +332,8 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                         $phoneNum = htmlspecialchars($app['mobile_number'] ?? $app['mobile_no'] ?? '');
                         $rawPhone = preg_replace('/[^0-9]/', '', (string)($app['mobile_number'] ?? $app['mobile_no'] ?? ''));
                         $cleanPhone = (substr($rawPhone, 0, 1) === '0') ? '92' . substr($rawPhone, 1) : $rawPhone;
-                        $waMsg = "السلام علیکم ورحمۃ اللہ!\nمحترم " . ($app['student_name'] ?? '') . " ولد " . ($app['father_name'] ?? '') . " کی داخلہ درخواست برائے جامعہ اشرف المدارس پر ٹیسٹ و انٹرویو مقرر کیا گیا ہے۔\n📅 تاریخ: " . ($app['test_date'] ?: '-') . "\n⏰ وقت: " . ($app['test_time'] ?: '-') . "\n📍 ادارہ: جامعہ اشرف المدارس، فروکہ\nبراہ کرم مقررہ تاریخ اور وقت پر اصل اسناد و شناختی دستاویزات کے ہمراہ تشریف لائیں۔ شکریہ!";
+                        $inst_adm_name_row = trim((string)(!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : t('app_name')));
+                        $waMsg = "السلام علیکم ورحمۃ اللہ!\nمحترم " . ($app['student_name'] ?? '') . " ولد " . ($app['father_name'] ?? '') . " کی داخلہ درخواست برائے " . $inst_adm_name_row . " پر ٹیسٹ و انٹرویو مقرر کیا گیا ہے۔\n📅 تاریخ: " . ($app['test_date'] ?: '-') . "\n⏰ وقت: " . ($app['test_time'] ?: '-') . "\n📍 ادارہ: " . $inst_adm_name_row . "\nبراہ کرم مقررہ تاریخ اور وقت پر اصل اسناد و شناختی دستاویزات کے ہمراہ تشریف لائیں۔ شکریہ!";
                         $waUrl = "https://wa.me/" . $cleanPhone . "?text=" . rawurlencode($waMsg);
                     ?>
                         <tr>
@@ -345,13 +398,13 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                                 <?php if($currentStatus === 'pending'): ?>
                                     <!-- Schedule Interview -->
                                     <button class="btn btn-sm rounded-pill mb-1 text-white fw-bold" style="background:#6f42c1;"
-                                        onclick="openScheduleModal(<?php echo $app['id']; ?>, '<?php echo htmlspecialchars(addslashes($app['student_name'])); ?>')">
+                                        onclick="openScheduleModal(<?php echo $app['id']; ?>, '<?php echo htmlspecialchars(addslashes($app['student_name'])); ?>', '<?php echo $app['src'] ?? 'app'; ?>')">
                                         <i class="fas fa-calendar-alt me-1"></i> <?php echo __('ٹیسٹ / انٹرویو', 'Test / Interview'); ?>
                                     </button>
                                     <!-- Direct Approve -->
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('کیا آپ واقعی یہ داخلہ براہ راست منظور کرنا چاہتے ہیں؟')">
                                         <input type="hidden" name="action" value="approve">
-                                        <input type="hidden" name="id" value="<?php echo $app['id']; ?>">
+                                        <input type="hidden" name="id" value="<?php echo $app['id']; ?>"><input type="hidden" name="src" value="<?php echo $app['src'] ?? 'app'; ?>">
                                         <button class="btn btn-success btn-sm rounded-pill mb-1" type="submit">
                                             <i class="fas fa-check me-1"></i> <?php echo __('منظور', 'Approve'); ?>
                                         </button>
@@ -359,7 +412,7 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                                     <!-- Reject Button -->
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('کیا آپ واقعی یہ درخواست مسترد کرنا چاہتے ہیں؟')">
                                         <input type="hidden" name="action" value="reject">
-                                        <input type="hidden" name="id" value="<?php echo $app['id']; ?>">
+                                        <input type="hidden" name="id" value="<?php echo $app['id']; ?>"><input type="hidden" name="src" value="<?php echo $app['src'] ?? 'app'; ?>">
                                         <button class="btn btn-danger btn-sm rounded-pill mb-1" type="submit">
                                             <i class="fas fa-times me-1"></i> <?php echo __('مسترد', 'Reject'); ?>
                                         </button>
@@ -372,13 +425,13 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                                     </a>
                                     <!-- Change Schedule -->
                                     <button class="btn btn-outline-primary btn-sm rounded-pill mb-1"
-                                        onclick="openScheduleModal(<?php echo $app['id']; ?>, '<?php echo htmlspecialchars(addslashes($app['student_name'])); ?>')">
+                                        onclick="openScheduleModal(<?php echo $app['id']; ?>, '<?php echo htmlspecialchars(addslashes($app['student_name'])); ?>', '<?php echo $app['src'] ?? 'app'; ?>')">
                                         <i class="fas fa-edit me-1"></i> <?php echo __('تاریخ تبدیل', 'Reschedule'); ?>
                                     </button>
                                     <!-- Approve & Enroll -->
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('کیا آپ واقعی ٹیسٹ و انٹرویو کے بعد یہ داخلہ باقاعدہ منظور کرنا چاہتے ہیں؟ باضابطہ داخلہ نمبر بن جائے گا۔')">
                                         <input type="hidden" name="action" value="approve">
-                                        <input type="hidden" name="id" value="<?php echo $app['id']; ?>">
+                                        <input type="hidden" name="id" value="<?php echo $app['id']; ?>"><input type="hidden" name="src" value="<?php echo $app['src'] ?? 'app'; ?>">
                                         <button class="btn btn-success btn-sm rounded-pill mb-1 fw-bold" type="submit">
                                             <i class="fas fa-user-check me-1"></i> <?php echo __('داخلہ منظور کریں', 'Approve Admission'); ?>
                                         </button>
@@ -386,7 +439,7 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
                                     <!-- Reject Button -->
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('کیا آپ واقعی یہ درخواست مسترد کرنا چاہتے ہیں؟')">
                                         <input type="hidden" name="action" value="reject">
-                                        <input type="hidden" name="id" value="<?php echo $app['id']; ?>">
+                                        <input type="hidden" name="id" value="<?php echo $app['id']; ?>"><input type="hidden" name="src" value="<?php echo $app['src'] ?? 'app'; ?>">
                                         <button class="btn btn-danger btn-sm rounded-pill mb-1" type="submit">
                                             <i class="fas fa-times me-1"></i> <?php echo __('مسترد', 'Reject'); ?>
                                         </button>
@@ -419,6 +472,7 @@ foreach($counts as $c) { $countMap[strtolower($c['status'])] = (int)$c['c']; }
             <form method="POST">
                 <input type="hidden" name="action" value="interview">
                 <input type="hidden" name="id" id="scheduleAppId">
+                <input type="hidden" name="src" id="scheduleAppSrc" value="app">
                 <div class="modal-body p-4">
                     <p>امیدوار: <strong id="scheduleStudentName" class="text-primary fs-5"></strong></p>
                     <hr>
@@ -519,8 +573,9 @@ function openViewModal(app) {
     new bootstrap.Modal(document.getElementById('viewModal')).show();
 }
 
-function openScheduleModal(id, name) {
+function openScheduleModal(id, name, src) {
     document.getElementById('scheduleAppId').value = id;
+    document.getElementById('scheduleAppSrc').value = src || 'app';
     document.getElementById('scheduleStudentName').textContent = name;
     new bootstrap.Modal(document.getElementById('scheduleModal')).show();
 }

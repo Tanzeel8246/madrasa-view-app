@@ -2,6 +2,16 @@
 <?php
 $cur_tenant_id = (int)get_current_tenant_id();
 
+// Strict authorization check for settings page (Audit Security)
+$curRoleSet = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$canManageSettings = in_array($curRoleSet, ['admin', 'superadmin', 'super_admin', 'administrator'], true)
+    || (function_exists('app_has_perm') && app_has_perm('manage_settings'))
+    || (function_exists('has_perm') && has_perm('manage_settings'));
+if (!isset($_SESSION['user_id']) || !$canManageSettings) {
+    http_response_code(403);
+    die("<div style='font-family:sans-serif;padding:40px;text-align:center;direction:rtl;'><h2>رسائی مسترد کر دی گئی (403 Forbidden)</h2><p>آپ کے پاس سسٹم سیٹنگز تبدیل کرنے کے اختیارات نہیں ہیں۔</p><a href='dashboard.php'>واپس جائیں</a></div>");
+}
+
 // Ensure database columns exist (cached with flag)
 if (!file_exists(__DIR__ . '/.settings_schema_done')) {
     try {
@@ -14,8 +24,10 @@ if (!file_exists(__DIR__ . '/.settings_schema_done')) {
         if (!in_array('id_card_bg', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN id_card_bg VARCHAR(255) DEFAULT NULL");
         if (!in_array('sanad_bg', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN sanad_bg VARCHAR(255) DEFAULT NULL");
         if (!in_array('signature_stamp_path', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN signature_stamp_path VARCHAR(255) DEFAULT NULL");
-        if (!in_array('masjid_name', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN masjid_name VARCHAR(255) DEFAULT 'مسجد اشرف المدارس'");
+        if (!in_array('masjid_name', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN masjid_name VARCHAR(255) DEFAULT 'مسجد'");
         if (!in_array('masjid_logo_path', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN masjid_logo_path VARCHAR(255) DEFAULT NULL");
+        if (!in_array('session_timeout_minutes', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN session_timeout_minutes INT DEFAULT 60");
+        if (!in_array('password_min_length', $cols)) $pdo->exec("ALTER TABLE settings ADD COLUMN password_min_length INT DEFAULT 6");
         @touch(__DIR__ . '/.settings_schema_done');
     } catch (Exception $e) {}
 }
@@ -46,6 +58,7 @@ function handleSettingsFileUpload($fileKey, $targetPrefix, $currentVal) {
 $set = get_tenant_settings($pdo, $cur_tenant_id);
 
 if (isset($_POST['update'])) {
+    if (function_exists('validate_csrf_or_abort')) validate_csrf_or_abort();
     $logo_path = handleSettingsFileUpload('logo_file', 'logo', $set['logo_path'] ?? 'logo.png');
     $receipt_bg = handleSettingsFileUpload('receipt_bg_file', 'receipt_bg', $set['receipt_bg'] ?? 'uploads/receipt_bg.webp');
     $masjid_receipt_bg = handleSettingsFileUpload('masjid_receipt_bg_file', 'masjid_receipt_bg', $set['masjid_receipt_bg'] ?? 'uploads/MAMFSS.webp');
@@ -53,7 +66,7 @@ if (isset($_POST['update'])) {
     $sanad_bg = handleSettingsFileUpload('sanad_bg_file', 'sanad_bg', $set['sanad_bg'] ?? null);
     $signature_stamp_path = handleSettingsFileUpload('signature_stamp_file', 'stamp', $set['signature_stamp_path'] ?? null);
     $masjid_logo_path = handleSettingsFileUpload('masjid_logo_file', 'masjid_logo', $set['masjid_logo_path'] ?? null);
-    $masjid_name = !empty($_POST['masjid_name']) ? trim($_POST['masjid_name']) : ($set['masjid_name'] ?? 'مسجد اشرف المدارس');
+    $masjid_name = !empty($_POST['masjid_name']) ? trim($_POST['masjid_name']) : ($set['masjid_name'] ?? 'مسجد');
 
     // Reset handlers if user requested reset
     if (isset($_POST['reset_logo'])) $logo_path = 'logo.png';
@@ -75,20 +88,30 @@ if (isset($_POST['update'])) {
         $setting_row_id = (int)$pdo->lastInsertId();
     }
 
+    // S5 FIX: Preserve existing API keys if blank (masked display, never exposed to client HTML)
+    $final_g_key = !empty(trim($_POST['g_key'] ?? '')) ? trim($_POST['g_key']) : ($set['gemini_api_key'] ?? '');
+    $final_groq_key = !empty(trim($_POST['groq_key'] ?? '')) ? trim($_POST['groq_key']) : ($set['groq_api_key'] ?? '');
+    $final_w_key = !empty(trim($_POST['w_key'] ?? '')) ? trim($_POST['w_key']) : ($set['whatsapp_api_key'] ?? '');
+    $final_s_key = !empty(trim($_POST['s_key'] ?? '')) ? trim($_POST['s_key']) : ($set['sms_api_key'] ?? '');
+
+    // D-31 FIX: Security Policy Bounds
+    $session_timeout = max(5, min(1440, (int)($_POST['session_timeout_minutes'] ?? ($set['session_timeout_minutes'] ?? 60))));
+    $password_min_len = max(4, min(32, (int)($_POST['password_min_length'] ?? ($set['password_min_length'] ?? 6))));
+
     $stmt = $pdo->prepare("UPDATE settings SET 
         madrasa_name=?, phone=?, address=?, tagline=?, current_hijri_year=?, week_start_day=?, 
         ai_provider=?, gemini_api_key=?, groq_api_key=?, whatsapp_api_key=?, sms_api_key=?, 
         auto_notify_day=?, auto_notify_time=?,
         logo_path=?, receipt_bg=?, masjid_receipt_bg=?, id_card_bg=?, sanad_bg=?, signature_stamp_path=?,
-        masjid_name=?, masjid_logo_path=?
+        masjid_name=?, masjid_logo_path=?, session_timeout_minutes=?, password_min_length=?
         WHERE id = ? AND tenant_id = ?");
     
     $stmt->execute([
         $_POST['m_name'], $_POST['phone'], $_POST['address'], $_POST['tagline'], $_POST['h_year'], $_POST['w_start'],
-        $_POST['ai_provider'], $_POST['g_key'], $_POST['groq_key'], $_POST['w_key'], $_POST['s_key'],
+        $_POST['ai_provider'], $final_g_key, $final_groq_key, $final_w_key, $final_s_key,
         $_POST['a_day'], $_POST['a_time'],
         $logo_path, $receipt_bg, $masjid_receipt_bg, $id_card_bg, $sanad_bg, $signature_stamp_path,
-        $masjid_name, $masjid_logo_path,
+        $masjid_name, $masjid_logo_path, $session_timeout, $password_min_len,
         $setting_row_id, $cur_tenant_id
     ]);
 
@@ -114,6 +137,7 @@ if (isset($_POST['update'])) {
     </div>
 
     <form method="POST" enctype="multipart/form-data">
+        <?php if (function_exists('csrf_field')) echo csrf_field(); ?>
         <div class="row g-4">
             
             <!-- کالم 1: بنیادی پروفائل اور برانڈنگ -->
@@ -390,25 +414,51 @@ if (isset($_POST['update'])) {
                             </div>
                         </div>
 
-                        <div class="mb-2">
-                            <label class="fw-bold mb-1">Gemini API Keys</label>
-                            <textarea name="g_key" class="form-control" rows="2" placeholder="One key per line"><?php echo htmlspecialchars($set['gemini_api_key'] ?? ''); ?></textarea>
+                        <div class="mb-3">
+                            <label class="fw-bold mb-1">Gemini API Key <?php if(!empty($set['gemini_api_key'])): ?><span class="badge bg-success ms-1"><i class="fas fa-lock me-1"></i><?php echo ($lang === 'ur') ? 'محفوظ / ماسک شدہ' : 'Secured / Masked'; ?></span><?php endif; ?></label>
+                            <input type="password" name="g_key" class="form-control" placeholder="<?php echo !empty($set['gemini_api_key']) ? '•••••••••••••••• (موجودہ کلید برقرار رکھنے کے لیے خالی چھوڑ دیں)' : 'AIzaSy... نئی API کی درج کریں'; ?>" autocomplete="new-password">
+                            <small class="text-muted"><?php echo ($lang === 'ur') ? 'اگر پہلے سے موجود کلید برقرار رکھنی ہو تو اسے خالی چھوڑ دیں۔' : 'Leave blank to preserve existing key.'; ?></small>
                         </div>
-                        <div class="mb-2">
-                            <label class="fw-bold mb-1">Groq API Keys</label>
-                            <textarea name="groq_key" class="form-control" rows="2" placeholder="One key per line"><?php echo htmlspecialchars($set['groq_api_key'] ?? ''); ?></textarea>
+                        <div class="mb-3">
+                            <label class="fw-bold mb-1">Groq API Key <?php if(!empty($set['groq_api_key'])): ?><span class="badge bg-success ms-1"><i class="fas fa-lock me-1"></i><?php echo ($lang === 'ur') ? 'محفوظ / ماسک شدہ' : 'Secured / Masked'; ?></span><?php endif; ?></label>
+                            <input type="password" name="groq_key" class="form-control" placeholder="<?php echo !empty($set['groq_api_key']) ? '•••••••••••••••• (موجودہ کلید برقرار رکھنے کے لیے خالی چھوڑ دیں)' : 'gsk_... نئی API کی درج کریں'; ?>" autocomplete="new-password">
+                            <small class="text-muted"><?php echo ($lang === 'ur') ? 'اگر پہلے سے موجود کلید برقرار رکھنی ہو تو اسے خالی چھوڑ دیں۔' : 'Leave blank to preserve existing key.'; ?></small>
                         </div>
                         <div class="row g-2">
                             <div class="col-md-6">
-                                <label class="fw-bold mb-1">WhatsApp API Key</label>
-                                <input type="password" name="w_key" class="form-control" value="<?php echo htmlspecialchars($set['whatsapp_api_key'] ?? ''); ?>">
+                                <label class="fw-bold mb-1">WhatsApp API Key <?php if(!empty($set['whatsapp_api_key'])): ?><span class="badge bg-success ms-1"><i class="fas fa-lock me-1"></i><?php echo ($lang === 'ur') ? 'محفوظ / ماسک شدہ' : 'Secured / Masked'; ?></span><?php endif; ?></label>
+                                <input type="password" name="w_key" class="form-control" placeholder="<?php echo !empty($set['whatsapp_api_key']) ? ('••••••••' . substr($set['whatsapp_api_key'], -4)) : 'نئی WhatsApp API کی درج کریں'; ?>" autocomplete="new-password">
+                                <small class="text-muted"><?php echo ($lang === 'ur') ? 'برقرار رکھنے کے لیے خالی چھوڑ دیں۔' : 'Leave blank to preserve existing key.'; ?></small>
                             </div>
                             <div class="col-md-6">
-                                <label class="fw-bold mb-1">SMS API Key</label>
-                                <input type="password" name="s_key" class="form-control" value="<?php echo htmlspecialchars($set['sms_api_key'] ?? ''); ?>">
+                                <label class="fw-bold mb-1">SMS API Key <?php if(!empty($set['sms_api_key'])): ?><span class="badge bg-success ms-1"><i class="fas fa-lock me-1"></i><?php echo ($lang === 'ur') ? 'محفوظ / ماسک شدہ' : 'Secured / Masked'; ?></span><?php endif; ?></label>
+                                <input type="password" name="s_key" class="form-control" placeholder="<?php echo !empty($set['sms_api_key']) ? ('••••••••' . substr($set['sms_api_key'], -4)) : 'نئی SMS API کی درج کریں'; ?>" autocomplete="new-password">
+                                <small class="text-muted"><?php echo ($lang === 'ur') ? 'برقرار رکھنے کے لیے خالی چھوڑ دیں۔' : 'Leave blank to preserve existing key.'; ?></small>
                             </div>
                         </div>
 
+                    </div>
+                </div>
+
+                <!-- کارڈ: سیکیورٹی پالیسی و سیشن ٹائم آؤٹ (D-31) -->
+                <div class="card shadow-sm border-0 mb-4" style="border-radius: 12px;">
+                    <div class="card-header bg-white border-0 pt-4 px-4 pb-0">
+                        <h5 class="text-danger fw-bold"><i class="fas fa-shield-alt me-2"></i> <?php echo ($lang === 'ur') ? 'سیکیورٹی پالیسی و سیشن کنٹرول (D-31)' : 'Security Policy & Session Control'; ?></h5>
+                        <p class="text-muted small"><?php echo ($lang === 'ur') ? 'غیر متحرک رہنے پر سیشن لاگ آؤٹ اور پاس ورڈ پالیسی کی ترتیبات' : 'Settings for inactivity session timeout and password complexity.'; ?></p>
+                    </div>
+                    <div class="card-body p-4 pt-2">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="fw-bold mb-1"><i class="fas fa-stopwatch me-1 text-danger"></i> <?php echo ($lang === 'ur') ? 'سیشن ٹائم آؤٹ (منٹ میں)' : 'Session Timeout (Minutes)'; ?></label>
+                                <input type="number" name="session_timeout_minutes" class="form-control" value="<?php echo htmlspecialchars((string)($set['session_timeout_minutes'] ?? 60)); ?>" min="5" max="1440" required>
+                                <small class="text-muted"><?php echo ($lang === 'ur') ? 'ڈیفالٹ: 60 منٹ (غیر متحرک رہنے پر خودکار لاگ آؤٹ)' : 'Default: 60 minutes.'; ?></small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold mb-1"><i class="fas fa-key me-1 text-danger"></i> <?php echo ($lang === 'ur') ? 'پاس ورڈ کی کم از کم لمبائی' : 'Minimum Password Length'; ?></label>
+                                <input type="number" name="password_min_length" class="form-control" value="<?php echo htmlspecialchars((string)($set['password_min_length'] ?? 6)); ?>" min="4" max="32" required>
+                                <small class="text-muted"><?php echo ($lang === 'ur') ? 'ڈیفالٹ: 6 حروف (نئے یا تبدیل شدہ پاس ورڈز پر لاگو)' : 'Default: 6 characters.'; ?></small>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

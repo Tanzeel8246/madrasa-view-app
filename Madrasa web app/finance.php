@@ -34,7 +34,8 @@ $total_expense = $truth['expense'];
 $net_balance = $truth['net_surplus'];
 
 $summary = [
-    'assets' => $truth['total_liquid_cash'] + $truth['receivables'],
+    // BUGFIX B-09: include other asset accounts so this total matches the Balance Sheet.
+    'assets' => $truth['total_liquid_cash'] + $truth['receivables'] + ($truth['other_assets'] ?? 0),
     'liabilities' => $truth['other_liabilities'] + $truth['zakat_fund'] + $truth['sadaqah_fund'],
     'equity' => $net_balance,
     'revenue' => $total_income,

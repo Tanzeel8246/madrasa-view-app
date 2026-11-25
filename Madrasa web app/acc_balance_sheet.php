@@ -16,8 +16,7 @@ if (!$is_admin && !app_has_perm('manage_erp')) {
 }
 
 $as_of_date = $_GET['as_of'] ?? date('Y-m-d');
-
-finance_accounting_backfill($pdo, null, $as_of_date);
+// Read-only report: no backfill mutation on GET
 
 $cur_tenant_id = (int)get_current_tenant_id($pdo);
 $tenant_settings = function_exists('get_tenant_settings') ? get_tenant_settings($pdo, $cur_tenant_id) : [];
@@ -98,8 +97,18 @@ foreach($accounts as $acc) {
     }
 }
 
-// D5 Fix: Replace hardcoded 3999 plug with standard 3002 Retained Surplus / Deficit
-if ($retained_earnings != 0) {
+// D5 Fix: Merge Net Surplus / Deficit into 3002/30002 Retained Surplus account if present
+$retained_merged = false;
+foreach ($equity as &$eqItem) {
+    if ($eqItem['code'] === '3002' || $eqItem['code'] === '30002') {
+        $eqItem['balance'] += $retained_earnings;
+        $total_equity += $retained_earnings;
+        $retained_merged = true;
+        break;
+    }
+}
+unset($eqItem);
+if (!$retained_merged && $retained_earnings != 0) {
     $equity[] = ['code' => '3002', 'name' => 'Accumulated Surplus / Deficit (مجموعی فاضل/خسارہ)', 'balance' => $retained_earnings];
     $total_equity += $retained_earnings;
 }

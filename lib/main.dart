@@ -74,17 +74,20 @@ void main() async {
     }
   } catch (_) {}
 
-  // Load Language Preference (Persistent across app exit and re-login)
+  // Load Language Preference (S25: supports both app_language and app_language_urdu)
   try {
     const storage = FlutterSecureStorage();
-    final savedLang = await storage.read(key: 'app_language_urdu');
+    final savedLang = await storage.read(key: 'app_language_urdu') ??
+        await storage.read(key: 'app_language');
     if (savedLang != null) {
-      isUrduGlobal.value = (savedLang == 'true');
+      isUrduGlobal.value = (savedLang == 'true' || savedLang == 'ur');
     }
-    // Listen for language changes and persist immediately
     isUrduGlobal.addListener(() async {
       try {
-        await storage.write(key: 'app_language_urdu', value: isUrduGlobal.value.toString());
+        await storage.write(
+            key: 'app_language_urdu', value: isUrduGlobal.value.toString());
+        await storage.write(
+            key: 'app_language', value: isUrduGlobal.value ? 'ur' : 'en');
       } catch (_) {}
     });
   } catch (_) {}
@@ -127,18 +130,28 @@ void main() async {
     } else {
       currentTenantAllowedModules.value = [];
     }
-    currentTenantIsTrial.value = session['isTrial'] == true || session['isTrial']?.toString().toLowerCase() == 'true';
+    currentTenantIsTrial.value = session['isTrial'] == true ||
+        session['isTrial']?.toString().toLowerCase() == 'true';
     currentTenantTrialDaysLeft.value = session['trialDaysLeft'] is int
         ? session['trialDaysLeft']
         : (int.tryParse(session['trialDaysLeft']?.toString() ?? '0') ?? 0);
-    currentTenantPlanName.value = session['planName']?.toString() ?? 'بنیادی پیکج (Basic)';
-    currentTenantPlanCode.value = session['planCode']?.toString() ?? 'basic';
-    currentTenantSubscriptionEndsAt.value = session['subscriptionEndsAt']?.toString() ?? '';
-    currentTenantSubscriptionStatus.value = session['subscriptionStatus']?.toString() ?? (currentTenantIsTrial.value ? 'trial' : 'active');
-    currentTenantSystemType.value = session['systemType']?.toString() ?? 'Both';
-    currentTenantMaxStudents.value = int.tryParse(session['maxStudents']?.toString() ?? '20') ?? 20;
-    currentTenantMaxClasses.value = int.tryParse(session['maxClasses']?.toString() ?? '1') ?? 1;
-    currentTenantMaxTeachers.value = int.tryParse(session['maxTeachers']?.toString() ?? '2') ?? 2;
+    currentTenantPlanName.value =
+        session['planName']?.toString() ?? 'بنیادی پیکج (Basic)';
+    currentTenantPlanCode.value =
+        session['planCode']?.toString() ?? 'basic';
+    currentTenantSubscriptionEndsAt.value =
+        session['subscriptionEndsAt']?.toString() ?? '';
+    currentTenantSubscriptionStatus.value =
+        session['subscriptionStatus']?.toString() ??
+            (currentTenantIsTrial.value ? 'trial' : 'active');
+    currentTenantSystemType.value =
+        session['systemType']?.toString() ?? 'Both';
+    currentTenantMaxStudents.value =
+        int.tryParse(session['maxStudents']?.toString() ?? '20') ?? 20;
+    currentTenantMaxClasses.value =
+        int.tryParse(session['maxClasses']?.toString() ?? '1') ?? 1;
+    currentTenantMaxTeachers.value =
+        int.tryParse(session['maxTeachers']?.toString() ?? '2') ?? 2;
     initialScreen = const DashboardPage();
   } else {
     currentUserRole.value = null;
@@ -158,25 +171,27 @@ void main() async {
     }
   }
 
-  // Load institution branding from local database
+  // Load institution branding from local database (strictly tenant-isolated)
   try {
     final s = await DBHelper().getSettings();
     if (s.isNotEmpty) {
       final mName = s['madrasa_name']?.toString().trim() ?? '';
-      if (mName.contains('اشرف المدارس') || mName.toLowerCase().contains('ashraf')) {
-        currentTenantName.value = 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)';
-      } else if ((currentTenantName.value == null || currentTenantName.value!.isEmpty) && mName.isNotEmpty) {
+      if ((currentTenantName.value == null || currentTenantName.value!.isEmpty) &&
+          mName.isNotEmpty) {
         currentTenantName.value = mName;
       }
       final lPath = s['logo_path']?.toString().trim() ?? '';
-      if (lPath.isNotEmpty && lPath != 'logo.png' && !lPath.contains('ashraf')) {
+      if (lPath.isNotEmpty && lPath != 'logo.png') {
         currentTenantLogoPath.value = lPath;
       }
-      if (s['masjid_name'] != null && s['masjid_name'].toString().trim().isNotEmpty) {
+      if (s['masjid_name'] != null &&
+          s['masjid_name'].toString().trim().isNotEmpty) {
         currentTenantMasjidName.value = s['masjid_name'].toString().trim();
       }
-      if (s['masjid_logo_path'] != null && s['masjid_logo_path'].toString().trim().isNotEmpty) {
-        currentTenantMasjidLogoPath.value = s['masjid_logo_path'].toString().trim();
+      if (s['masjid_logo_path'] != null &&
+          s['masjid_logo_path'].toString().trim().isNotEmpty) {
+        currentTenantMasjidLogoPath.value =
+            s['masjid_logo_path'].toString().trim();
       }
     }
   } catch (_) {}
@@ -202,15 +217,16 @@ class MyApp extends StatelessWidget {
               debugShowCheckedModeBanner: false,
               title: 'MC-MMS (مائنڈکرافٹ مدرسہ مینیجمنٹ سسٹم)',
               themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-              // 🌟 پوری ایپ کی ڈائریکشن (RTL/LTR)، کی بورڈ بیک شارٹ کٹس، اور ونڈوز فونٹ اسکیلنگ
               builder: (context, child) {
                 final Widget app = Directionality(
-                  textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
+                  textDirection:
+                      isUrdu ? TextDirection.rtl : TextDirection.ltr,
                   child: child!,
                 );
-                // Windows / Desktop Font Scaling for clear and comfortable reading
                 final bool isDesktop = !kIsWeb &&
-                    (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+                    (Platform.isWindows ||
+                        Platform.isLinux ||
+                        Platform.isMacOS);
                 final Widget scaledApp = isDesktop
                     ? MediaQuery(
                         data: MediaQuery.of(context).copyWith(
@@ -220,15 +236,19 @@ class MyApp extends StatelessWidget {
                       )
                     : app;
 
-                // 🌟 کی بورڈ بیک بٹن بی ہیوئر صرف اور صرف ڈیسک ٹاپ (ونڈوز/لینکس/میک) پر لاگو کریں تاکہ موبائل کی بورڈ کا بیک سپیس/ڈیلیٹ بٹن متاثر نہ ہو
                 if (isDesktop) {
                   return CallbackShortcuts(
                     bindings: <ShortcutActivator, VoidCallback>{
                       const SingleActivator(LogicalKeyboardKey.backspace): () {
-                        final primaryFocusContext = FocusManager.instance.primaryFocus?.context;
+                        final primaryFocusContext =
+                            FocusManager.instance.primaryFocus?.context;
                         final isEditing = primaryFocusContext != null &&
-                            primaryFocusContext.findAncestorWidgetOfExactType<EditableText>() != null;
-                        if (!isEditing && (rootNavigatorKey.currentState?.canPop() ?? false)) {
+                            primaryFocusContext
+                                    .findAncestorWidgetOfExactType<
+                                        EditableText>() !=
+                                null;
+                        if (!isEditing &&
+                            (rootNavigatorKey.currentState?.canPop() ?? false)) {
                           rootNavigatorKey.currentState?.maybePop();
                         }
                       },
@@ -237,12 +257,14 @@ class MyApp extends StatelessWidget {
                           rootNavigatorKey.currentState?.maybePop();
                         }
                       },
-                      const SingleActivator(LogicalKeyboardKey.browserBack): () {
+                      const SingleActivator(LogicalKeyboardKey.browserBack):
+                          () {
                         if (rootNavigatorKey.currentState?.canPop() ?? false) {
                           rootNavigatorKey.currentState?.maybePop();
                         }
                       },
-                      const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): () {
+                      const SingleActivator(LogicalKeyboardKey.arrowLeft,
+                          alt: true): () {
                         if (rootNavigatorKey.currentState?.canPop() ?? false) {
                           rootNavigatorKey.currentState?.maybePop();
                         }
@@ -255,7 +277,6 @@ class MyApp extends StatelessWidget {
                   );
                 }
 
-                // موبائل پر سادہ اور براہ راست ریٹرن تاکہ کی بورڈ کے تمام کیز (بیک سپیس، ڈیلیٹ، ایڈٹنگ) 100 فیصد روانی سے کام کریں
                 return scaledApp;
               },
               theme: ThemeData(
@@ -264,9 +285,8 @@ class MyApp extends StatelessWidget {
                     ? 'JameelNooriNastaleeq'
                     : GoogleFonts.poppins().fontFamily,
                 textTheme: _buildTextTheme(isUrdu, false),
-                primaryColor: AppColors.primary, // Classic Royal Emerald
-                scaffoldBackgroundColor:
-                    AppColors.backgroundLight, // Crisp Clean Light Background
+                primaryColor: AppColors.primary,
+                scaffoldBackgroundColor: AppColors.backgroundLight,
                 cardColor: AppColors.cardLight,
                 scrollbarTheme: ScrollbarThemeData(
                   thumbVisibility: const WidgetStatePropertyAll(true),
@@ -281,8 +301,10 @@ class MyApp extends StatelessWidget {
                     }
                     return AppColors.primary.withValues(alpha: 0.65);
                   }),
-                  trackColor: WidgetStatePropertyAll(Colors.black.withValues(alpha: 0.05)),
-                  trackBorderColor: WidgetStatePropertyAll(Colors.black.withValues(alpha: 0.08)),
+                  trackColor: WidgetStatePropertyAll(
+                      Colors.black.withValues(alpha: 0.05)),
+                  trackBorderColor: WidgetStatePropertyAll(
+                      Colors.black.withValues(alpha: 0.08)),
                 ),
                 appBarTheme: const AppBarTheme(
                   backgroundColor: AppColors.backgroundLight,
@@ -301,10 +323,9 @@ class MyApp extends StatelessWidget {
                     ? 'JameelNooriNastaleeq'
                     : GoogleFonts.poppins().fontFamily,
                 textTheme: _buildTextTheme(isUrdu, true),
-                primaryColor: AppColors.cyberAqua, // Obsidian Cyber Aqua
-                scaffoldBackgroundColor:
-                    AppColors.backgroundDark, // Deep Obsidian Dark
-                cardColor: AppColors.cardDark, // Obsidian Card Surface
+                primaryColor: AppColors.cyberAqua,
+                scaffoldBackgroundColor: AppColors.backgroundDark,
+                cardColor: AppColors.cardDark,
                 scrollbarTheme: ScrollbarThemeData(
                   thumbVisibility: const WidgetStatePropertyAll(true),
                   trackVisibility: const WidgetStatePropertyAll(true),
@@ -318,8 +339,10 @@ class MyApp extends StatelessWidget {
                     }
                     return AppColors.cyberAqua.withValues(alpha: 0.65);
                   }),
-                  trackColor: WidgetStatePropertyAll(Colors.white.withValues(alpha: 0.05)),
-                  trackBorderColor: WidgetStatePropertyAll(Colors.white.withValues(alpha: 0.08)),
+                  trackColor: WidgetStatePropertyAll(
+                      Colors.white.withValues(alpha: 0.05)),
+                  trackBorderColor: WidgetStatePropertyAll(
+                      Colors.white.withValues(alpha: 0.08)),
                 ),
                 appBarTheme: const AppBarTheme(
                   backgroundColor: AppColors.appBarDark,
@@ -352,8 +375,9 @@ class MyApp extends StatelessWidget {
 
       TextStyle? safeStyle(TextStyle? style) {
         if (style == null) return null;
-        final double? scaled =
-            style.fontSize != null ? style.fontSize! * 1.3 * desktopFactor : null;
+        final double? scaled = style.fontSize != null
+            ? style.fontSize! * 1.3 * desktopFactor
+            : null;
         return style.copyWith(
           fontFamily: 'JameelNooriNastaleeq',
           height: urduHeight,

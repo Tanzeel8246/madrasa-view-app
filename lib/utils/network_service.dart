@@ -130,14 +130,15 @@ class NetworkService {
     String fullUrl = baseUrl;
     if (!fullUrl.endsWith('/')) fullUrl += '/';
     if (!fullUrl.contains('api.php')) fullUrl += 'api.php';
-    final token = currentUserToken.value;
     final tCode = currentTenantCode.value;
     String actionWithToken = action;
-    if (token != null &&
-        token.isNotEmpty &&
-        !action.contains('user_token=')) {
-      actionWithToken += '&user_token=${Uri.encodeComponent(token)}';
-    }
+    // SECURITY (F-02): the user token is deliberately NOT appended to the
+    // URL any more. URLs are routinely written to server/proxy logs, which
+    // leaks the token. The token already travels in the X-USER-TOKEN
+    // header on every request (see authHeaders), and the server's
+    // read_user_token() checks headers before any request parameter, so
+    // authentication is unaffected. (POST bodies still carry the token as
+    // before — bodies are not logged like URLs.)
     if (tCode != null &&
         tCode.isNotEmpty &&
         !action.contains('tenant_code=')) {

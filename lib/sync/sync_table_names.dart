@@ -119,6 +119,18 @@ class SyncTableNames {
         return 'ویب سائٹ پیجز';
       case 'announcements':
         return 'خبریں و اعلانات';
+      case 'masjid_itikaf':
+        return 'مسجد اعتکاف';
+      case 'course_structure':
+        return 'کورسز (درس نظامی و عصری)';
+      case 'course_subjects':
+        return 'کورس کے مضامین و کتب';
+      case 'student_course_enrollment':
+        return 'طلبہ داخلہ / انرولمنٹ';
+      case 'exam_subject_results':
+        return 'مضامین وار امتحانی نتائج';
+      case 'student_year_promotion':
+        return 'سالانہ ترقی و نتیجہ ریکارڈ';
       case 'settings':
         return 'سسٹم ترتیبات';
       default:
@@ -128,6 +140,12 @@ class SyncTableNames {
 
   static IconData getTableIcon(String key) {
     switch (key.toLowerCase()) {
+      case 'course_structure':
+      case 'course_subjects':
+        return Icons.auto_stories;
+      case 'student_course_enrollment':
+      case 'student_year_promotion':
+        return Icons.how_to_reg;
       case 'students':
       case 'maktab_students':
         return Icons.school;

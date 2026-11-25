@@ -2274,13 +2274,18 @@ class _MaktabStudentReportPageState extends State<MaktabStudentReportPage> {
                     Expanded(
                       child: Column(
                         children: [
-                          Text("مدرسہ اشرف المدارس",
+                          Text(
+                              (currentTenantMasjidName.value ?? '').trim().isNotEmpty
+                                  ? currentTenantMasjidName.value!.trim()
+                                  : ((currentTenantName.value ?? '').trim().isNotEmpty
+                                      ? currentTenantName.value!.trim()
+                                      : "جامع مسجد و مکتب"),
                               style: _urdu.copyWith(
                                   fontSize: 26,
                                   fontWeight: FontWeight.bold,
                                   color: _primary)),
                           const SizedBox(height: 2),
-                          Text("فاروقہ، ضلع سرگودھا | فون: 0300-1234567",
+                          Text("تعلیمی و انتظامی رپورٹ",
                               style: _urdu.copyWith(
                                   fontSize: 11,
                                   color: _primary,

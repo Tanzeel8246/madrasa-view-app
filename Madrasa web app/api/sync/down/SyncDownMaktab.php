@@ -25,7 +25,7 @@ class SyncDownMaktab {
         $data['maktab_students'] = array_map('strip_sensitive_row', $ctx->fetchAll("SELECT * FROM maktab_students WHERE $tCond $maktabDateCond ORDER BY id DESC LIMIT 5000"));
         $data['maktab_teachers'] = array_map('strip_sensitive_row', $ctx->fetchAll("SELECT * FROM maktab_teachers WHERE $tCond $maktabDateCond ORDER BY id DESC LIMIT 1000"));
         $data['maktab_classes'] = $ctx->fetchAll("SELECT * FROM maktab_classes WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id ASC LIMIT 500");
-        $data['maktab_attendance'] = $ctx->fetchAll("SELECT * FROM period_attendance WHERE $tCond " . ($since_date ? "AND date >= '$since_date'" : "") . " ORDER BY date DESC, id DESC LIMIT 5000");
+        $data['maktab_attendance'] = $ctx->fetchAll("SELECT * FROM maktab_attendance WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) " . ($since_date ? "AND date >= '$since_date'" : "") . " ORDER BY date DESC, id DESC LIMIT 5000");
         $data['maktab_nazira_record'] = $ctx->fetchAll("SELECT * FROM maktab_nazira_record WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($since_date ? " AND date >= '$since_date'" : "") . " ORDER BY date DESC, id DESC LIMIT 5000");
         $data['maktab_hifz_record'] = $ctx->fetchAll("SELECT * FROM maktab_hifz_record WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($since_date ? " AND date >= '$since_date'" : "") . " ORDER BY date DESC, id DESC LIMIT 5000");
         $data['maktab_qaida_records'] = $ctx->fetchAll("SELECT * FROM maktab_qaida_records WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL)" . ($since_date ? " AND date >= '$since_date'" : "") . " ORDER BY date DESC, id DESC LIMIT 5000");

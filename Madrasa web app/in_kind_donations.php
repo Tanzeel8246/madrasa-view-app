@@ -25,6 +25,16 @@ try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN manual_receipt_no VAR
 try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN tenant_id INT DEFAULT 1"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {}
+// BUGFIX B-03: columns used by the INSERT/UPDATE below were never created by any
+// schema in the codebase (only the minimal seed fallback exists), so every save
+// threw "Unknown column 'user_id'" and hit the generic error page. Self-heal them.
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN user_id INT DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN user_name VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN donor_phone VARCHAR(50) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN donor_address VARCHAR(255) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN description TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+// The quantity form field is free text (e.g. "50 بوری"), it cannot stay INT under strict SQL mode.
+try { $pdo->exec("ALTER TABLE in_kind_donations MODIFY COLUMN quantity VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
 
 function next_in_kind_receipt_no(PDO $pdo, $userId, $systemType = 'Madrasa', $tenantId = null) {
     if ($tenantId === null) $tenantId = (int)get_current_tenant_id();

@@ -16,8 +16,7 @@ if (!$is_admin && !app_has_perm('manage_erp')) {
 }
 
 $as_of_date = $_GET['as_of'] ?? date('Y-m-d');
-
-finance_accounting_backfill($pdo, null, $as_of_date);
+// Read-only report: no backfill mutation on GET
 
 $cur_tenant_id = (int)get_current_tenant_id($pdo);
 $tenant_settings = function_exists('get_tenant_settings') ? get_tenant_settings($pdo, $cur_tenant_id) : [];

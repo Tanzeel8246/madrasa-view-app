@@ -20,82 +20,95 @@ $current_year = date('Y');
 $start_date = $_GET['from'] ?? "$current_year-01-01";
 $end_date = $_GET['to'] ?? "$current_year-12-31";
 
-// 1. Total Students & Teachers
+// 1. Total Students & Teachers (Tenant & System-Scoped)
 $total_students = 0;
 try {
-    $stmt_std = $pdo->prepare("SELECT COUNT(*) FROM students WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND $sys_cond_std");
+    $stmt_std = $pdo->prepare("SELECT COUNT(*) FROM students WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND $sys_cond_std AND (status = 'Active' OR status = '' OR status IS NULL OR status = 'حاضر')");
     $stmt_std->execute([$cur_tenant_id]);
     $total_students = (int)$stmt_std->fetchColumn();
 } catch (Throwable $e) {}
 
 $total_teachers = 0;
+$total_registered_teachers = 0;
+$total_teaching_staff = 0;
+$total_other_staff = 0;
 try {
-    $stmt_tch = $pdo->prepare("SELECT COUNT(*) FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND $sys_cond_std");
+    $stmt_tch = $pdo->prepare("SELECT COUNT(*) FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND $sys_cond_std AND (status = 'Active' OR status = '' OR status IS NULL OR status = 'حاضر' OR status = 'فعال')");
     $stmt_tch->execute([$cur_tenant_id]);
     $total_teachers = (int)$stmt_tch->fetchColumn();
+
+    $stmt_all_tch = $pdo->prepare("SELECT COUNT(*) FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND $sys_cond_std");
+    $stmt_all_tch->execute([$cur_tenant_id]);
+    $total_registered_teachers = (int)$stmt_all_tch->fetchColumn();
+
+    $stmt_teaching = $pdo->prepare("SELECT COUNT(*) FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND $sys_cond_std AND (status = 'Active' OR status = '' OR status IS NULL OR status = 'حاضر' OR status = 'فعال') AND (staff_type='Teacher' OR staff_type IS NULL OR staff_type='')");
+    $stmt_teaching->execute([$cur_tenant_id]);
+    $total_teaching_staff = (int)$stmt_teaching->fetchColumn();
+
+    $stmt_other = $pdo->prepare("SELECT COUNT(*) FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? AND $sys_cond_std AND (status = 'Active' OR status = '' OR status IS NULL OR status = 'حاضر' OR status = 'فعال') AND staff_type IS NOT NULL AND staff_type != '' AND staff_type != 'Teacher'");
+    $stmt_other->execute([$cur_tenant_id]);
+    $total_other_staff = (int)$stmt_other->fetchColumn();
 } catch (Throwable $e) {}
 
-// 2. Average Attendance
-$avg_attendance = 0;
-try {
-    $stmt_att = $pdo->prepare("
-        SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN (status_1='P' OR late_1 > 0 OR status_2='P' OR late_2 > 0) THEN 1 ELSE 0 END) as presents
-        FROM attendance 
-        WHERE tenant_id = ? AND date BETWEEN ? AND ?
-    ");
-    $stmt_att->execute([$cur_tenant_id, $start_date, $end_date]);
-    $att_data = $stmt_att->fetch();
-    $total_att_records = (int)($att_data['total'] ?? 0);
-    $present_att_records = (int)($att_data['presents'] ?? 0);
-    $avg_attendance = $total_att_records > 0 ? round(($present_att_records / $total_att_records) * 100, 1) : 0;
-} catch (Throwable $e) {}
+// 2. Average Attendance (Phase 4 / H-5 As-Of Unified Canonical Source)
+$canonical_att = get_canonical_attendance_stats($pdo, $start_date, $end_date, $cur_tenant_id, $sys);
+$total_att_records = $canonical_att['total_slots'];
+$present_att_records = $canonical_att['present_slots'];
+$avg_attendance = $canonical_att['percentage'];
 
-// 3. Financial Breakdown
-$fin_income = 0.0;
-$fin_expense = 0.0;
-try {
-    $stmt_fin = $pdo->prepare("
-        SELECT 
-            SUM(CASE WHEN LOWER(type) IN ('income', 'آمدن') THEN amount ELSE 0 END) as total_income,
-            SUM(CASE WHEN LOWER(type) IN ('expense', 'خرچ', 'اخراجات') THEN amount ELSE 0 END) as total_expense
-        FROM finance 
-        WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL) AND $sys_cond_fin AND date BETWEEN ? AND ?
-    ");
-    $stmt_fin->execute([$cur_tenant_id, $start_date, $end_date]);
-    $fin_data = $stmt_fin->fetch();
-    $fin_income = (float)($fin_data['total_income'] ?? 0);
-    $fin_expense = (float)($fin_data['total_expense'] ?? 0);
-} catch (Throwable $e) {}
+// 3. Financial Breakdown (D-09 Single Source of Truth from General Ledger - matches acc_income_statement.php & strictly tenant/system-isolated)
+$total_income = 0.0;
+$total_expense = 0.0;
+$v_sys_cond = $is_masjid ? "v.system_type = 'Masjid'" : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
+$t_cond_a = ($cur_tenant_id === 1) ? "(a.tenant_id = 1 OR a.tenant_id IS NULL OR a.tenant_id = 0)" : "a.tenant_id = " . (int)$cur_tenant_id;
+$t_cond_e = ($cur_tenant_id === 1) ? "(e.tenant_id = 1 OR e.tenant_id IS NULL OR e.tenant_id = 0)" : "e.tenant_id = " . (int)$cur_tenant_id;
+$t_cond_v = ($cur_tenant_id === 1) ? "(v.tenant_id = 1 OR v.tenant_id IS NULL OR v.tenant_id = 0)" : "v.tenant_id = " . (int)$cur_tenant_id;
 
-// Fee Submissions
-$fee_income = 0.0;
 try {
-    $stmt_fee = $pdo->prepare("
-        SELECT SUM(amount) FROM fee_submissions 
-        WHERE tenant_id = ? AND (LOWER(status) IN ('approved', 'paid', 'ادا شدہ') OR status IS NULL)
-        AND (
-            (date IS NOT NULL AND date BETWEEN ? AND ?) 
-            OR (submission_date IS NOT NULL AND submission_date BETWEEN ? AND ?)
-        )
+    $stmt_p_fin = $pdo->prepare("
+        SELECT a.type,
+               SUM(e.debit) as total_debit,
+               SUM(e.credit) as total_credit
+        FROM acc_chart_of_accounts a
+        JOIN acc_ledger_entries e ON a.id = e.account_id AND $t_cond_e
+        JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $t_cond_v AND $v_sys_cond
+        WHERE a.type IN ('Revenue', 'Income', 'Expense') AND v.date BETWEEN ? AND ? AND (a.is_deleted = 0 OR a.is_deleted IS NULL) AND $t_cond_a
+        GROUP BY a.type
     ");
-    $stmt_fee->execute([$cur_tenant_id, $start_date, $end_date, $start_date, $end_date]);
-    $fee_income = (float)$stmt_fee->fetchColumn();
-} catch (Throwable $e) {
-    try {
-        $stmt_fee = $pdo->prepare("
-            SELECT SUM(amount) FROM fee_submissions 
-            WHERE tenant_id = ? AND (LOWER(status) IN ('approved', 'paid', 'ادا شدہ') OR status IS NULL)
-        ");
-        $stmt_fee->execute([$cur_tenant_id]);
-        $fee_income = (float)$stmt_fee->fetchColumn();
-    } catch (Throwable $e2) {}
-}
-
-$total_income = $fin_income + $fee_income;
-$total_expense = $fin_expense;
+    $stmt_p_fin->execute([$start_date, $end_date]);
+    foreach ($stmt_p_fin->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        if ($r['type'] === 'Revenue' || $r['type'] === 'Income') {
+            $total_income += (float)$r['total_credit'] - (float)$r['total_debit'];
+        } elseif ($r['type'] === 'Expense') {
+            $total_expense += (float)$r['total_debit'] - (float)$r['total_credit'];
+        }
+    }
+} catch (Throwable $eFinP) {}
 $net_savings = $total_income - $total_expense;
+
+// Lifetime Financial Overview from General Ledger
+$lifetime_income = 0.0;
+$lifetime_expense = 0.0;
+try {
+    $stmt_lt_fin = $pdo->query("
+        SELECT a.type,
+               SUM(e.debit) as total_debit,
+               SUM(e.credit) as total_credit
+        FROM acc_chart_of_accounts a
+        JOIN acc_ledger_entries e ON a.id = e.account_id AND $t_cond_e
+        JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $t_cond_v AND $v_sys_cond
+        WHERE a.type IN ('Revenue', 'Income', 'Expense') AND (a.is_deleted = 0 OR a.is_deleted IS NULL) AND $t_cond_a
+        GROUP BY a.type
+    ");
+    foreach ($stmt_lt_fin->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        if ($r['type'] === 'Revenue' || $r['type'] === 'Income') {
+            $lifetime_income += (float)$r['total_credit'] - (float)$r['total_debit'];
+        } elseif ($r['type'] === 'Expense') {
+            $lifetime_expense += (float)$r['total_debit'] - (float)$r['total_credit'];
+        }
+    }
+} catch (Throwable $eFinLt) {}
+$lifetime_net = $lifetime_income - $lifetime_expense;
 
 // 4. Hifz & Qaida Records
 $total_hifz = 0;
@@ -112,22 +125,24 @@ try {
     $total_qaida = (int)$stmt_qaida->fetchColumn();
 } catch (Throwable $e) {}
 
-// 5. Monthly Breakdown for Table & Chart
+// 5. Monthly Breakdown for Table & Chart (D-09 GL Vouchers)
 $month_labels = [];
 $month_income_arr = [];
 $month_expense_arr = [];
 try {
     $stmt_monthly = $pdo->prepare("
-        SELECT 
-            DATE_FORMAT(date, '%Y-%m') as ym,
-            SUM(CASE WHEN LOWER(type) IN ('income', 'آمدن') THEN amount ELSE 0 END) as inc,
-            SUM(CASE WHEN LOWER(type) IN ('expense', 'خرچ', 'اخراجات') THEN amount ELSE 0 END) as exp
-        FROM finance 
-        WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL) AND $sys_cond_fin AND date BETWEEN ? AND ?
-        GROUP BY DATE_FORMAT(date, '%Y-%m')
+        SELECT
+            DATE_FORMAT(v.date, '%Y-%m') as ym,
+            SUM(CASE WHEN a.type IN ('Revenue', 'Income') THEN (e.credit - e.debit) ELSE 0 END) as inc,
+            SUM(CASE WHEN a.type = 'Expense' THEN (e.debit - e.credit) ELSE 0 END) as exp
+        FROM acc_chart_of_accounts a
+        JOIN acc_ledger_entries e ON a.id = e.account_id AND $t_cond_e
+        JOIN acc_vouchers v ON e.voucher_id = v.id AND v.status IN ('Approved', 'Reversed') AND (v.is_deleted = 0 OR v.is_deleted IS NULL) AND $t_cond_v AND $v_sys_cond
+        WHERE (a.is_deleted = 0 OR a.is_deleted IS NULL) AND $t_cond_a AND v.date BETWEEN ? AND ?
+        GROUP BY DATE_FORMAT(v.date, '%Y-%m')
         ORDER BY ym ASC
     ");
-    $stmt_monthly->execute([$cur_tenant_id, $start_date, $end_date]);
+    $stmt_monthly->execute([$start_date, $end_date]);
     $monthly_fin = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($monthly_fin as $mf) {
@@ -183,8 +198,9 @@ try {
             </div>
             <div class="col-md-3 col-6">
                 <div class="card p-3 border-start border-4 border-indigo shadow-sm bg-light text-center">
-                    <h6 class="text-muted small fw-bold mb-1">کل اساتذہ کرام</h6>
-                    <h3 class="fw-bold text-indigo mb-0"><?php echo number_format($total_teachers); ?></h3>
+                    <h6 class="text-muted small fw-bold mb-1">اساتذہ و عملہ</h6>
+                    <h3 class="fw-bold text-indigo mb-0"><?php echo number_format($total_teachers); ?><small class="text-muted" style="font-size: 0.85rem; font-weight: normal;"> / <?php echo number_format($total_registered_teachers); ?></small></h3>
+                    <small class="text-muted" style="font-size: 11px;">فعال عملہ: <?php echo $total_teachers; ?> (اساتذہ: <?php echo $total_teaching_staff; ?> + دیگر: <?php echo $total_other_staff; ?>) | کل رجسٹرڈ: <?php echo $total_registered_teachers; ?></small>
                 </div>
             </div>
             <div class="col-md-3 col-6">
@@ -204,14 +220,16 @@ try {
         <div class="row g-3 mb-4">
             <div class="col-md-3 col-6">
                 <div class="card p-3 border-start border-4 border-success shadow-sm bg-light text-center">
-                    <h6 class="text-muted small fw-bold mb-1">کل آمدن / فیس وصولی</h6>
+                    <h6 class="text-muted small fw-bold mb-1">آمدن (منتخب دورانیہ)</h6>
                     <h4 class="fw-bold text-success mb-0">Rs. <?php echo number_format($total_income); ?></h4>
+                    <small class="text-muted">لائف ٹائم: Rs. <?php echo number_format($lifetime_income); ?></small>
                 </div>
             </div>
             <div class="col-md-3 col-6">
                 <div class="card p-3 border-start border-4 border-danger shadow-sm bg-light text-center">
-                    <h6 class="text-muted small fw-bold mb-1">کل اخراجات</h6>
+                    <h6 class="text-muted small fw-bold mb-1">اخراجات (منتخب دورانیہ)</h6>
                     <h4 class="fw-bold text-danger mb-0">Rs. <?php echo number_format($total_expense); ?></h4>
+                    <small class="text-muted">لائف ٹائم: Rs. <?php echo number_format($lifetime_expense); ?></small>
                 </div>
             </div>
             <div class="col-md-3 col-6">

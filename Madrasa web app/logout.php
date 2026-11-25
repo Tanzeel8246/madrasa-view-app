@@ -31,6 +31,10 @@ if (PHP_VERSION_ID >= 70300) {
     @setcookie('tenant_id', '', $past, '/', '', $isHttps, false);
 }
 
+@setcookie('remember_token', '', time() - 3600, '/');
+@setcookie('remember_user', '', time() - 3600, '/');
+@setcookie('user_token', '', time() - 3600, '/');
+
 unset($_COOKIE[session_name()]);
 unset($_COOKIE['madrasa_auth_token']);
 unset($_COOKIE['last_tenant_code']);
@@ -41,5 +45,8 @@ if (session_status() === PHP_SESSION_ACTIVE) {
     session_destroy();
 }
 
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
 header("Location: login.php?logged_out=1");
 exit;

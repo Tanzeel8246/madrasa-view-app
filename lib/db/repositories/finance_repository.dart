@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import '../../db_helper.dart';
+import '../../utils/data_refresh_bus.dart';
 
 class FinanceRepository {
   final DBHelper _dbHelper;
@@ -56,7 +57,34 @@ class FinanceRepository {
     final db = await _db;
     final values = Map<String, dynamic>.from(data);
     values['is_synced'] = 0;
-    return await db.insert('finance', values);
+    final id = await db.insert('finance', values);
+
+    DataRefreshBus.notify(DataDomain.finance, action: 'insert', entityId: id);
+    return id;
+  }
+
+  Future<int> updateFinanceEntry(int id, Map<String, dynamic> data) async {
+    final db = await _db;
+    final values = Map<String, dynamic>.from(data);
+    values['is_synced'] = 0;
+    final count =
+        await db.update('finance', values, where: 'id = ?', whereArgs: [id]);
+
+    DataRefreshBus.notify(DataDomain.finance, action: 'update', entityId: id);
+    return count;
+  }
+
+  Future<int> deleteFinanceEntry(int id) async {
+    final db = await _db;
+    final count = await db.update(
+      'finance',
+      {'is_deleted': 1, 'is_synced': 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    DataRefreshBus.notify(DataDomain.finance, action: 'delete', entityId: id);
+    return count;
   }
 
   Future<Map<String, double>> getMonthlySummary(

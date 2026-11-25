@@ -1,19 +1,29 @@
 <?php
 // manage_users.php
-session_start();
+if (file_exists(__DIR__ . '/session_init.php')) { require_once __DIR__ . '/session_init.php'; }
+if (session_status() === PHP_SESSION_NONE) { @session_start(); }
 require_once 'db.php';
+if (file_exists(__DIR__ . '/csrf.php')) { require_once __DIR__ . '/csrf.php'; }
 require_once 'finance_accounting_bridge.php';
 
-if (!isset($_SESSION['user_id'])) {
+if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
+    http_response_code(401);
     header("Location: login.php");
     exit;
 }
 
-$u_role = strtolower(trim((string)($_SESSION['role'] ?? '')));
-$is_admin = in_array($u_role, ['admin', 'superadmin', 'super_admin', 'administrator'], true);
-if (!$is_admin) {
-    header("Location: dashboard.php");
-    exit;
+$curRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$perms = $_SESSION['permissions'] ?? [];
+if (!is_array($perms)) { $perms = json_decode((string)$perms, true) ?: []; }
+
+$canManageUsers = in_array($curRole, ['admin', 'superadmin', 'super_admin', 'administrator'], true)
+    || in_array('manage_users', $perms, true);
+if (!$canManageUsers) {
+    http_response_code(403);
+    if (!headers_sent()) {
+        header("Location: dashboard.php");
+    }
+    die("<div style='font-family:sans-serif;padding:40px;text-align:center;direction:rtl;'><h2>رسائی مسترد کر دی گئی (403 Forbidden)</h2><p>آپ کے پاس اس صفحے تک رسائی کی اجازت نہیں ہے۔</p></div>");
 }
 
 $cur_tenant_id = (int)get_current_tenant_id();
@@ -22,6 +32,7 @@ $err = '';
 
 // Handle add / edit
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (function_exists('validate_csrf_or_abort')) validate_csrf_or_abort();
     if (isset($_POST['save_user'])) {
         $id = $_POST['user_id'] ?? '';
         $name = trim($_POST['name'] ?? '');
@@ -52,6 +63,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $allowed_classes = isset($_POST['allowed_classes']) ? json_encode(array_values($_POST['allowed_classes'])) : '[]';
 
         try {
+            $settings_row = get_tenant_settings($pdo, $cur_tenant_id);
+            $min_pass_len = max(4, (int)($settings_row['password_min_length'] ?? 6));
+            if (!empty($password) && strlen($password) < $min_pass_len) {
+                throw new Exception("پاس ورڈ کم از کم {$min_pass_len} حروف پر مشتمل ہونا لازمی ہے!");
+            }
+            if (!$id && empty($password)) {
+                throw new Exception("نئے صارف کے لیے پاس ورڈ درج کرنا لازمی ہے!");
+            }
             if ($id) { // update
                 if (!empty($password)) {
                     $hashed = hash_pass($password);
@@ -75,13 +94,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $msg = "نیا یوزر شامل کر دیا گیا۔ اس صارف کے لیے خرچ کھاتہ اور نقد وصولی کھاتہ بھی خودکار و محفوظ طریقے سے تیار کر دیے گئے۔";
             }
-        } catch (PDOException $e) {
-            $err = "ڈیٹا بیس ایرر: " . $e->getMessage();
+        } catch (Throwable $e) {
+            $err = "خرابی: " . $e->getMessage();
         }
     } elseif (isset($_POST['delete_user'])) {
         $id = (int)$_POST['delete_user'];
-        if ($id === 1) {
-            $err = "مرکزی ایڈمن اکاؤنٹ (تنزیل الرحمن) کو کسی بھی صورت میں حذف نہیں کیا جا سکتا۔";
+        if ($id === 1 && $cur_tenant_id === 1) {
+            $err = "مرکزی ایڈمن اکاؤنٹ کو حذف نہیں کیا جا سکتا۔";
         } elseif ($id != $_SESSION['user_id']) { // Don't delete self
             $stmt = $pdo->prepare("DELETE FROM admins WHERE id=? AND tenant_id=?");
             $stmt->execute([$id, $cur_tenant_id]);
@@ -290,6 +309,7 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
     </div>
     <div class="card-body">
         <form method="POST" id="user_form">
+            <?php if (function_exists('csrf_field')) echo csrf_field(); ?>
             <input type="hidden" name="user_id" id="form_user_id" value="">
             <div id="edit_alert" class="alert alert-warning d-none py-2 mb-3">
                 <i class="fas fa-pen me-1"></i> <strong><?php echo __('ترمیم موڈ', 'Edit Mode'); ?></strong> — <?php echo __('یوزر کی معلومات تبدیل کریں', 'Update user information'); ?>
@@ -508,6 +528,7 @@ $all_perms = array_merge($madrasa_perms, $masjid_perms);
                                     </span>
                                 <?php else: ?>
                                     <form method="POST" class="d-inline" onsubmit="return confirm('<?php echo __('کیا آپ واقعی اس یوزر کو ڈیلیٹ کرنا چاہتے ہیں؟', 'Are you sure you want to delete this user?'); ?>');">
+                                        <?php if (function_exists('csrf_field')) echo csrf_field(); ?>
                                         <input type="hidden" name="delete_user" value="<?php echo $u['id']; ?>">
                                         <button class="btn btn-sm btn-outline-danger" title="<?php echo __('حذف کریں', 'Delete'); ?>"><i class="fas fa-trash"></i></button>
                                     </form>

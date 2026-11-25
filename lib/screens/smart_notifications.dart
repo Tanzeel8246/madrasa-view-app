@@ -162,7 +162,10 @@ class _SmartNotificationsPageState extends State<SmartNotificationsPage> {
       );
       return;
     }
-    final msg = Uri.encodeComponent('محترم سرپرست، جامعہ اشرف المدارس سے آپ کے بچے $name کے متعلق اطلاع پیش خدمت ہے۔');
+    final instName = (currentTenantName.value ?? '').trim().isNotEmpty
+        ? currentTenantName.value!.trim()
+        : 'ادارہ';
+    final msg = Uri.encodeComponent('محترم سرپرست، $instName سے آپ کے بچے $name کے متعلق اطلاع پیش خدمت ہے۔');
     final webUri = Uri.parse('https://wa.me/$cleanPhone?text=$msg');
     final nativeUri = Uri.parse('whatsapp://send?phone=$cleanPhone&text=$msg');
 

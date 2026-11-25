@@ -1969,7 +1969,10 @@ class _ReportsAttendancePageState extends State<ReportsAttendancePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text("مدرسہ اشرف المدارس — فاروقہ، سرگودھا",
+            Text(
+                (currentTenantName.value ?? '').trim().isNotEmpty
+                    ? currentTenantName.value!.trim()
+                    : "مدرسہ مینجمنٹ سسٹم",
                 textAlign: TextAlign.center,
                 style:
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),

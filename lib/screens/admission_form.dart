@@ -220,7 +220,9 @@ class _AdmissionFormPageState extends State<AdmissionFormPage> {
             Expanded(
               child: Center(
                 child: Text(
-                  "مدرسہ اشرف المدارس فروکہ",
+                  (currentTenantName.value ?? '').trim().isNotEmpty
+                      ? currentTenantName.value!.trim()
+                      : "مدرسہ مینجمنٹ سسٹم",
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,

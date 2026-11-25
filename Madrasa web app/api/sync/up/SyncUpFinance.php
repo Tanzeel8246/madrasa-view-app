@@ -75,6 +75,16 @@ class SyncUpFinance {
                     $type = trim($f['type'] ?? '');
                     $amount = (float)($f['amount'] ?? 0);
                     $desc = $f['description'] ?? '';
+
+                    // Payroll Auto-Duplication Firewall (Condition 1 & 2):
+                    // Block client upload from inserting payroll-derived entries into finance or posting duplicate vouchers.
+                    if (mb_strpos($desc, 'وظیفہ/تنخواہ ادا کی گئی برائے ماہ') !== false || (mb_strpos($desc, 'وظائف عملہ') !== false && mb_strpos($desc, 'تنخواہ') !== false)) {
+                        if ($localId !== null) {
+                            $syncedIds['finance_entries'][] = $localId;
+                        }
+                        continue;
+                    }
+
                     $uid = to_int_or_null($f['user_id'] ?? null) ?: 1;
                     $headId = to_int_or_null($f['head_id'] ?? null);
                     if (!$headId && !empty($f['head_name'])) {
@@ -218,6 +228,16 @@ class SyncUpFinance {
                     $type = trim($f['type'] ?? '');
                     $amount = (float)($f['amount'] ?? 0);
                     $desc = $f['description'] ?? '';
+
+                    // Payroll Auto-Duplication Firewall (Condition 1 & 2):
+                    // Block client upload from inserting payroll-derived entries into finance or posting duplicate vouchers.
+                    if (mb_strpos($desc, 'وظیفہ/تنخواہ ادا کی گئی برائے ماہ') !== false || (mb_strpos($desc, 'وظائف عملہ') !== false && mb_strpos($desc, 'تنخواہ') !== false)) {
+                        if ($localId !== null) {
+                            $syncedIds['masjid_finance_entries'][] = $localId;
+                        }
+                        continue;
+                    }
+
                     $uid = to_int_or_null($f['user_id'] ?? null) ?: 1;
                     $headId = to_int_or_null($f['head_id'] ?? null);
                     if (!$headId) {
@@ -546,16 +566,22 @@ class SyncUpFinance {
         if (!empty($input['acc_invoices']) && is_array($input['acc_invoices'])) {
             foreach ($input['acc_invoices'] as $item) {
                 try {
-                    $check = $pdo->prepare("SELECT id FROM acc_invoices WHERE student_id = ? AND month_year = ?");
-                    $check->execute([$item['student_id'], $item['month_year']]);
+                    $check = $pdo->prepare("SELECT id FROM acc_invoices WHERE student_id = ? AND month_year = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                    $check->execute([$item['student_id'], $item['month_year'], $tId]);
+                    $itemStatus = trim($item['status'] ?? 'Unpaid');
+                    $invId = 0;
                     if ($check->rowCount() > 0) {
                         $existing = $check->fetch();
-                        $pdo->prepare("UPDATE acc_invoices SET amount = ?, status = ? WHERE id = ?")->execute([$item['amount'] ?? 0, $item['status'] ?? 'Unpaid', $existing['id']]);
-                        $syncedIds['acc_invoices'][] = $item['id'];
+                        $invId = (int)$existing['id'];
+                        $pdo->prepare("UPDATE acc_invoices SET amount = ?, status = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")->execute([$item['amount'] ?? 0, $itemStatus, $invId, $tId]);
                     } else {
-                        $pdo->prepare("INSERT INTO acc_invoices (student_id, invoice_no, month_year, amount, status) VALUES (?, ?, ?, ?, ?)")->execute([$item['student_id'], $item['invoice_no'] ?? '', $item['month_year'], $item['amount'] ?? 0, $item['status'] ?? 'Unpaid']);
-                        $syncedIds['acc_invoices'][] = $item['id'];
+                        $pdo->prepare("INSERT INTO acc_invoices (student_id, invoice_no, month_year, amount, status, tenant_id) VALUES (?, ?, ?, ?, ?, ?)")->execute([$item['student_id'], $item['invoice_no'] ?? '', $item['month_year'], $item['amount'] ?? 0, $itemStatus, $tId]);
+                        $invId = (int)$pdo->lastInsertId();
                     }
+                    if (strcasecmp($itemStatus, 'Paid') === 0 && $invId > 0 && function_exists('acc_invoice_process_payment')) {
+                        acc_invoice_process_payment($pdo, $invId, $tId, $user['id']);
+                    }
+                    $syncedIds['acc_invoices'][] = $item['id'];
                 } catch (Exception $e) { $syncErrors[] = "acc_invoices: " . $e->getMessage(); }
             }
         }
@@ -577,22 +603,22 @@ class SyncUpFinance {
                     $dDue = !empty($item['due_date']) ? normalize_date($item['due_date']) : null;
                     $desc = $item['description'] ?? '';
                     $status = $item['status'] ?? 'Active';
-                    $sys = $item['system_type'] ?? 'Madrasa';
+                    $sys = !empty($item['system_type']) ? trim((string)$item['system_type']) : ($ctx->requestedSys ?: 'Madrasa');
                     $isDel = (int)($item['is_deleted'] ?? 0);
 
                     if ($loanId) {
-                        $check = $pdo->prepare("SELECT id FROM staff_loans WHERE id = ?");
-                        $check->execute([$loanId]);
+                        $check = $pdo->prepare("SELECT id FROM staff_loans WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                        $check->execute([$loanId, $tId]);
                         if ($check->fetch()) {
-                            $pdo->prepare("UPDATE staff_loans SET teacher_id = ?, borrower_name = ?, phone = ?, loan_direction = ?, loan_amount = ?, installment_amount = ?, repaid_amount = ?, remaining_amount = ?, date_issued = ?, due_date = ?, description = ?, status = ?, system_type = ?, is_deleted = ? WHERE id = ?")
-                                ->execute([$teacherId, $bName, $phone, $dir, $lAmt, $instAmt, $repAmt, $remAmt, $dIssued, $dDue, $desc, $status, $sys, $isDel, $loanId]);
+                            $pdo->prepare("UPDATE staff_loans SET teacher_id = ?, borrower_name = ?, phone = ?, loan_direction = ?, loan_amount = ?, installment_amount = ?, repaid_amount = ?, remaining_amount = ?, date_issued = ?, due_date = ?, description = ?, status = ?, system_type = ?, is_deleted = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                                ->execute([$teacherId, $bName, $phone, $dir, $lAmt, $instAmt, $repAmt, $remAmt, $dIssued, $dDue, $desc, $status, $sys, $isDel, $loanId, $tId]);
                             $syncedIds['staff_loans'][] = $item['id'];
                             continue;
                         }
                     }
 
-                    $pdo->prepare("INSERT INTO staff_loans (teacher_id, borrower_name, phone, loan_direction, loan_amount, installment_amount, repaid_amount, remaining_amount, date_issued, due_date, description, status, system_type, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                        ->execute([$teacherId, $bName, $phone, $dir, $lAmt, $instAmt, $repAmt, $remAmt, $dIssued, $dDue, $desc, $status, $sys, $isDel]);
+                    $pdo->prepare("INSERT INTO staff_loans (teacher_id, borrower_name, phone, loan_direction, loan_amount, installment_amount, repaid_amount, remaining_amount, date_issued, due_date, description, status, system_type, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                        ->execute([$teacherId, $bName, $phone, $dir, $lAmt, $instAmt, $repAmt, $remAmt, $dIssued, $dDue, $desc, $status, $sys, $isDel, $tId]);
                     $syncedIds['staff_loans'][] = $item['id'];
                 } catch (Exception $e) { $syncErrors[] = "staff_loans: " . $e->getMessage(); }
             }
@@ -610,23 +636,23 @@ class SyncUpFinance {
                     $date = normalize_date($item['date'] ?? date('Y-m-d'));
                     $method = $item['payment_method'] ?? 'Cash';
                     $remarks = $item['remarks'] ?? '';
-                    $sys = $item['system_type'] ?? 'Madrasa';
+                    $sys = !empty($item['system_type']) ? trim((string)$item['system_type']) : ($ctx->requestedSys ?: 'Madrasa');
                     $createdBy = to_int_or_null($item['created_by'] ?? 1) ?: 1;
                     $isDel = (int)($item['is_deleted'] ?? 0);
 
                     if ($txId) {
-                        $check = $pdo->prepare("SELECT id FROM loan_transactions WHERE id = ?");
-                        $check->execute([$txId]);
+                        $check = $pdo->prepare("SELECT id FROM loan_transactions WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                        $check->execute([$txId, $tId]);
                         if ($check->fetch()) {
-                            $pdo->prepare("UPDATE loan_transactions SET loan_id = ?, type = ?, borrower_lender_name = ?, amount = ?, date = ?, payment_method = ?, remarks = ?, system_type = ?, created_by = ?, is_deleted = ? WHERE id = ?")
-                                ->execute([$loanId, $type, $blName, $amount, $date, $method, $remarks, $sys, $createdBy, $isDel, $txId]);
+                            $pdo->prepare("UPDATE loan_transactions SET loan_id = ?, type = ?, borrower_lender_name = ?, amount = ?, date = ?, payment_method = ?, remarks = ?, system_type = ?, created_by = ?, is_deleted = ? WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)")
+                                ->execute([$loanId, $type, $blName, $amount, $date, $method, $remarks, $sys, $createdBy, $isDel, $txId, $tId]);
                             $syncedIds['loan_transactions'][] = $item['id'];
                             continue;
                         }
                     }
 
-                    $pdo->prepare("INSERT INTO loan_transactions (loan_id, type, borrower_lender_name, amount, date, payment_method, remarks, system_type, created_by, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                        ->execute([$loanId, $type, $blName, $amount, $date, $method, $remarks, $sys, $createdBy, $isDel]);
+                    $pdo->prepare("INSERT INTO loan_transactions (loan_id, type, borrower_lender_name, amount, date, payment_method, remarks, system_type, created_by, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                        ->execute([$loanId, $type, $blName, $amount, $date, $method, $remarks, $sys, $createdBy, $isDel, $tId]);
                     $syncedIds['loan_transactions'][] = $item['id'];
                 } catch (Exception $e) { $syncErrors[] = "loan_transactions: " . $e->getMessage(); }
             }
@@ -634,6 +660,12 @@ class SyncUpFinance {
 
         // In-Kind Donations
         if (!empty($input['in_kind_donations']) && is_array($input['in_kind_donations'])) {
+            // BUGFIX B-03: same missing columns as the web page — self-heal so
+            // app-side in-kind donations sync even if the web page never opened.
+            foreach (["user_id INT DEFAULT NULL", "user_name VARCHAR(100) DEFAULT NULL", "donor_phone VARCHAR(50) DEFAULT NULL", "donor_address VARCHAR(255) DEFAULT NULL", "description TEXT DEFAULT NULL", "computer_receipt_no INT DEFAULT NULL", "manual_receipt_no VARCHAR(100) DEFAULT NULL", "tenant_id INT DEFAULT 1"] as $__col) {
+                try { $pdo->exec("ALTER TABLE in_kind_donations ADD COLUMN $__col"); } catch (Throwable $e) {}
+            }
+            try { $pdo->exec("ALTER TABLE in_kind_donations MODIFY COLUMN quantity VARCHAR(100) DEFAULT NULL"); } catch (Throwable $e) {}
             foreach ($input['in_kind_donations'] as $item) {
                 $localId = to_int_or_null($item['id'] ?? null);
                 try {
@@ -641,24 +673,24 @@ class SyncUpFinance {
                     if ($itemName !== '') {
                         $donorName = trim((string)($item['donor_name'] ?? ''));
                         $dateVal = normalize_date($item['date'] ?? '') ?: date('Y-m-d');
-                        $sysType = trim((string)($item['system_type'] ?? 'Masjid'));
+                        $sysType = !empty($item['system_type']) ? trim((string)$item['system_type']) : ($ctx->requestedSys ?: 'Madrasa');
                         if ($sysType === '') $sysType = 'Masjid';
 
                         $receiptNo = to_int_or_null($item['computer_receipt_no'] ?? null);
                         $isDeleted = (int)($item['is_deleted'] ?? 0);
                         $existingId = null;
                         if ($receiptNo) {
-                            $check = $pdo->prepare("SELECT id FROM in_kind_donations WHERE computer_receipt_no = ? LIMIT 1");
-                            $check->execute([$receiptNo]);
+                            $check = $pdo->prepare("SELECT id FROM in_kind_donations WHERE computer_receipt_no = ? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) LIMIT 1");
+                            $check->execute([$receiptNo, $tId]);
                             $existingId = $check->fetchColumn();
                         }
 
                         if ($existingId) {
-                            $stmt = $pdo->prepare("UPDATE in_kind_donations SET date=?, donor_name=?, donor_phone=?, donor_address=?, item_name=?, quantity=?, estimated_value=?, description=?, system_type=?, is_deleted=? WHERE id=?");
-                            $stmt->execute([$dateVal, $donorName, $item['donor_phone'] ?? '', $item['donor_address'] ?? '', $itemName, (int)($item['quantity'] ?? 1), (float)($item['estimated_value'] ?? 0), $item['description'] ?? '', $sysType, $isDeleted, $existingId]);
+                            $stmt = $pdo->prepare("UPDATE in_kind_donations SET date=?, donor_name=?, donor_phone=?, donor_address=?, item_name=?, quantity=?, estimated_value=?, description=?, system_type=?, is_deleted=? WHERE id=? AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0)");
+                            $stmt->execute([$dateVal, $donorName, $item['donor_phone'] ?? '', $item['donor_address'] ?? '', $itemName, (string)($item['quantity'] ?? '1'), (float)($item['estimated_value'] ?? 0), $item['description'] ?? '', $sysType, $isDeleted, $existingId, $tId]);
                         } else {
-                            $stmt = $pdo->prepare("INSERT INTO in_kind_donations (date, donor_name, donor_phone, donor_address, item_name, quantity, estimated_value, description, computer_receipt_no, system_type, user_id, user_name, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                            $stmt->execute([$dateVal, $donorName, $item['donor_phone'] ?? '', $item['donor_address'] ?? '', $itemName, (int)($item['quantity'] ?? 1), (float)($item['estimated_value'] ?? 0), $item['description'] ?? '', $receiptNo, $sysType, $user['id'] ?? 1, $user['name'] ?? 'Admin', $isDeleted]);
+                            $stmt = $pdo->prepare("INSERT INTO in_kind_donations (date, donor_name, donor_phone, donor_address, item_name, quantity, estimated_value, description, computer_receipt_no, system_type, user_id, user_name, is_deleted, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            $stmt->execute([$dateVal, $donorName, $item['donor_phone'] ?? '', $item['donor_address'] ?? '', $itemName, (string)($item['quantity'] ?? '1'), (float)($item['estimated_value'] ?? 0), $item['description'] ?? '', $receiptNo, $sysType, $user['id'] ?? 1, $user['name'] ?? 'Admin', $isDeleted, $tId]);
                         }
                     }
                     if ($localId !== null) $syncedIds['in_kind_donations'][] = $localId;

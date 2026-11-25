@@ -717,7 +717,7 @@ function printPaySlip(item) {
         <body>
             <div class="slip-box">
                 <div class="header">
-                    <h2 class="title">مدرسہ اشرف المدارس</h2>
+                    <h2 class="title"><?php echo htmlspecialchars(!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : t('app_name')); ?></h2>
                     <p style="margin: 3px 0; font-weight: bold;">تنخواہ / وظیفہ کی رسید (Salary Slip)</p>
                     <small>ماہ: ${item.month_year}</small>
                 </div>

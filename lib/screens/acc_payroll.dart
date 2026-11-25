@@ -1,5 +1,6 @@
 // ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously, deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' as intl;
 import '../utils/sync_service.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
@@ -60,11 +61,14 @@ class _AccPayrollPageState extends State<AccPayrollPage> {
       if (!isMasjid && pSys == 'Masjid') continue;
       final tid = p['teacher_id']?.toString() ?? '';
       final t = teacherMap[tid];
-      if (t == null) continue;
-      final tName = t['name'] ?? 'Staff';
+      final isOrphan = t == null;
+      final tName = t != null
+          ? (t['name']?.toString() ?? 'Staff')
+          : (isUrduGlobal.value ? 'حذف شدہ استاد (ID #$tid)' : 'Deleted Staff (ID #$tid)');
       enriched.add({
         ...p,
         'teacher_name': tName,
+        'is_orphan': isOrphan,
       });
     }
 
@@ -73,72 +77,6 @@ class _AccPayrollPageState extends State<AccPayrollPage> {
       _teachers = teachers;
       _isLoading = false;
     });
-
-    // Reconcile paid stipends to ensure they are recorded in Simple Finance
-    _reconcilePaidPayrolls(enriched);
-  }
-
-  Future<void> _reconcilePaidPayrolls(List<Map<String, dynamic>> payrolls) async {
-    try {
-      final db = DBHelper();
-      final sys = SystemTypeGlobal.currentSystemType.value;
-      final isMasjid = sys == 'Masjid';
-      final table = isMasjid ? 'masjid_finance' : 'finance';
-      final dbInst = await db.database;
-
-      for (var p in payrolls) {
-        if (p['status'] != 'Paid') continue;
-        final tName = (p['teacher_name'] ?? 'Staff').toString();
-        final mYear = (p['month_year'] ?? '').toString();
-        final netSalary = double.tryParse(p['net_salary']?.toString() ?? '0') ?? 0.0;
-        if (netSalary <= 0) continue;
-
-        final payDate = (p['payment_date']?.toString().isNotEmpty ?? false)
-            ? p['payment_date'].toString()
-            : DateTime.now().toIso8601String().substring(0, 10);
-        final payMethod = (p['payment_method']?.toString().isNotEmpty ?? false)
-            ? p['payment_method'].toString()
-            : 'Cash';
-        final payAccId = int.tryParse(p['payment_account_id']?.toString() ?? '');
-
-        // Check if already present in finance
-        final descPattern = "%ماہ $mYear: $tName%";
-        final existing = await dbInst.rawQuery(
-          "SELECT id FROM $table WHERE (is_deleted = 0 OR is_deleted IS NULL) AND type = 'Expense' AND description LIKE ?",
-          [descPattern],
-        );
-
-        if (existing.isEmpty) {
-          final financeEntry = {
-            'user_id': currentUserId.value ?? 1,
-            'user_name': currentUserName.value ?? currentUserRole.value ?? 'Admin',
-            'type': 'Expense',
-            'head_id': 0,
-            'head_name': isUrduGlobal.value ? 'وظائف عملہ' : 'Staff Stipends',
-            'account_id': payAccId,
-            'payment_method': payMethod,
-            'amount': netSalary,
-            'date': payDate,
-            'donor_name': tName,
-            'donor_address': '',
-            'spender_name': tName,
-            'manual_receipt_no': '',
-            'description':
-                "مد: وظائف عملہ | وظیفہ/تنخواہ ادا کی گئی برائے ماہ $mYear: $tName ($payMethod)",
-            'system_type': sys,
-            'is_deleted': 0,
-            'is_synced': 0,
-          };
-          if (isMasjid) {
-            await db.insertMasjidFinance(financeEntry);
-          } else {
-            await db.insertFinance(financeEntry);
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint("Error in _reconcilePaidPayrolls: $e");
-    }
   }
 
   List<String> _getAvailableMonths() {
@@ -181,13 +119,6 @@ class _AccPayrollPageState extends State<AccPayrollPage> {
 
   List<Map<String, String>> _getAvailableTeachers() {
     final Map<String, String> map = {};
-    for (var p in _payrolls) {
-      final tid = p['teacher_id']?.toString() ?? '';
-      final tname = p['teacher_name']?.toString() ?? 'Staff';
-      if (tid.isNotEmpty && tname.isNotEmpty && tname != 'Staff') {
-        map[tid] = tname;
-      }
-    }
     for (var t in _teachers) {
       final tid = t['id']?.toString() ?? '';
       final tname = t['name']?.toString() ?? '';
@@ -197,174 +128,660 @@ class _AccPayrollPageState extends State<AccPayrollPage> {
     }
     final list = map.entries.map((e) => {'id': e.key, 'name': e.value}).toList();
     list.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
+
+    final orphanCount = _payrolls.where((p) => p['is_orphan'] == true).length;
+    if (orphanCount > 0) {
+      list.add({
+        'id': '__orphans__',
+        'name': isUrduGlobal.value
+            ? 'یتیم ریکارڈ — حذف شدہ اساتذہ ($orphanCount قطاریں)'
+            : 'Orphan Records ($orphanCount rows)',
+      });
+    }
     return list;
   }
 
   Future<void> _generateBulkPayroll() async {
+    await _showSelectivePayrollModal();
+  }
+
+  Future<void> _showSelectivePayrollModal() async {
     DateTime targetDate = DateTime.now();
     final monthController = TextEditingController(
         text:
             "${targetDate.year}-${targetDate.month.toString().padLeft(2, '0')}");
 
-    final result = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          return StatefulBuilder(
-            builder: (context, setDlgState) {
-              return AlertDialog(
-                title: Row(
-                  children: [
-                    Icon(Icons.auto_awesome, color: primaryGreen),
-                    const SizedBox(width: 8),
-                    Text(isUrduGlobal.value ? 'ماہانہ وظائف تیار کریں' : 'Generate Staff Stipends'),
-                  ],
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isUrduGlobal.value 
-                          ? 'جس مہینے کے وظائف تیار کرنا چاہتے ہیں وہ منتخب کریں:' 
-                          : 'Select target month for staff stipends:',
-                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+    final db = DBHelper();
+    final sys = SystemTypeGlobal.currentSystemType.value;
+    final isMasjid = sys == 'Masjid';
+    final allTeachers =
+        isMasjid ? await db.getMaktabTeachers() : await db.getTeachers();
+
+    final Map<int, bool> selectedStaff = {};
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final month = monthController.text.trim();
+            final pStart = "$month-01";
+            final pEnd = "$month-31";
+
+            final eligibleList = <Map<String, dynamic>>[];
+            final alreadyGeneratedMap = <int, bool>{};
+
+            for (var t in allTeachers) {
+              if (t['is_deleted'] == 1) continue;
+              if (t['payroll_excluded'] == 1) continue;
+
+              final st =
+                  (t['status'] ?? 'Active').toString().trim().toLowerCase();
+              final isTerminal = st == 'inactive' ||
+                  st.contains('غیر فعال') ||
+                  st == 'terminated' ||
+                  st.contains('برطرف') ||
+                  st.contains('فارغ') ||
+                  st == 'resigned' ||
+                  st.contains('مستعفی') ||
+                  st.contains('استعفی') ||
+                  st.contains('علیحدہ') ||
+                  st.contains('چھوڑ') ||
+                  st == 'expelled' ||
+                  st.contains('خارج') ||
+                  st.contains('اخراج') ||
+                  st.contains('معطل');
+
+              final jDate = (t['joining_date'] ?? '').toString().trim();
+              final rDate = (t['resignation_date'] ?? '').toString().trim();
+
+              if (jDate.isNotEmpty && jDate.compareTo(pEnd) > 0) continue;
+              if (rDate.isNotEmpty && rDate.compareTo(pStart) < 0) continue;
+              if (isTerminal && rDate.isEmpty) continue;
+
+              final tid = int.tryParse(t['id']?.toString() ?? '') ?? 0;
+              if (tid == 0) continue;
+
+              final hasExisting = _payrolls.any((p) {
+                final pTid =
+                    int.tryParse(p['teacher_id']?.toString() ?? '') ?? 0;
+                final pMonth = (p['month_year'] ?? '').toString().trim();
+                final isDel =
+                    int.tryParse(p['is_deleted']?.toString() ?? '0') ?? 0;
+                return pTid == tid && pMonth == month && isDel == 0;
+              });
+
+              if (hasExisting) {
+                alreadyGeneratedMap[tid] = true;
+              } else if (!selectedStaff.containsKey(tid)) {
+                selectedStaff[tid] = true;
+              }
+
+              eligibleList.add(t);
+            }
+
+            int selectedCount = 0;
+            double selectedTotalSalary = 0.0;
+            for (var t in eligibleList) {
+              final tid = int.tryParse(t['id']?.toString() ?? '') ?? 0;
+              if (alreadyGeneratedMap[tid] != true &&
+                  selectedStaff[tid] == true) {
+                selectedCount++;
+                selectedTotalSalary +=
+                    double.tryParse(t['salary']?.toString() ?? '0') ?? 0.0;
+              }
+            }
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.88,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: primaryGreen,
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(20)),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: monthController,
-                      decoration: InputDecoration(
-                        labelText:
-                            isUrduGlobal.value ? 'مہینہ (YYYY-MM)' : 'Month (YYYY-MM)',
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.calendar_month),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
+                    child: Row(
                       children: [
+                        const Icon(Icons.auto_awesome, color: Colors.white),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              final prev = DateTime(targetDate.year, targetDate.month - 1, 1);
-                              targetDate = prev;
-                              monthController.text = "${prev.year}-${prev.month.toString().padLeft(2, '0')}";
-                              setDlgState(() {});
-                            },
-                            child: Text(isUrduGlobal.value ? 'پچھلا مہینہ' : 'Prev Month', style: const TextStyle(fontSize: 11)),
+                          child: Text(
+                            isUrduGlobal.value
+                                ? 'ماہانہ وظائف کی تیاری (انتخاب اساتذہ)'
+                                : 'Generate Staff Stipends',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              final curr = DateTime.now();
-                              targetDate = curr;
-                              monthController.text = "${curr.year}-${curr.month.toString().padLeft(2, '0')}";
-                              setDlgState(() {});
-                            },
-                            child: Text(isUrduGlobal.value ? 'رواں مہینہ' : 'Current', style: const TextStyle(fontSize: 11)),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              final next = DateTime(targetDate.year, targetDate.month + 1, 1);
-                              targetDate = next;
-                              monthController.text = "${next.year}-${next.month.toString().padLeft(2, '0')}";
-                              setDlgState(() {});
-                            },
-                            child: Text(isUrduGlobal.value ? 'اگلا مہینہ' : 'Next Month', style: const TextStyle(fontSize: 11)),
-                          ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
                         ),
                       ],
                     ),
-                  ],
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text(isUrduGlobal.value ? 'منسوخ کریں' : 'Cancel'),
                   ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryGreen,
-                        foregroundColor: Colors.white),
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text(isUrduGlobal.value ? 'وظائف تیار کریں' : 'Generate'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: monthController,
+                            decoration: InputDecoration(
+                              labelText: isUrduGlobal.value
+                                  ? 'ماہ و سال (YYYY-MM)'
+                                  : 'Month (YYYY-MM)',
+                              prefixIcon: const Icon(Icons.calendar_month),
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            onChanged: (_) => setModalState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: () {
+                            final prev = DateTime(
+                                targetDate.year, targetDate.month - 1, 1);
+                            targetDate = prev;
+                            monthController.text =
+                                "${prev.year}-${prev.month.toString().padLeft(2, '0')}";
+                            setModalState(() {});
+                          },
+                          child: Text(isUrduGlobal.value ? 'پچھلا' : 'Prev'),
+                        ),
+                        const SizedBox(width: 4),
+                        OutlinedButton(
+                          onPressed: () {
+                            final now = DateTime.now();
+                            targetDate = now;
+                            monthController.text =
+                                "${now.year}-${now.month.toString().padLeft(2, '0')}";
+                            setModalState(() {});
+                          },
+                          child:
+                              Text(isUrduGlobal.value ? 'رواں' : 'Current'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: Row(
+                      children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal.shade700,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                          ),
+                          icon: const Icon(Icons.select_all, size: 16),
+                          label: Text(
+                              isUrduGlobal.value ? 'سب منتخب' : 'Select All'),
+                          onPressed: () {
+                            setModalState(() {
+                              for (var t in eligibleList) {
+                                final tid =
+                                    int.tryParse(t['id']?.toString() ?? '') ??
+                                        0;
+                                if (alreadyGeneratedMap[tid] != true) {
+                                  selectedStaff[tid] = true;
+                                }
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                          ),
+                          icon: const Icon(Icons.deselect, size: 16),
+                          label: Text(
+                              isUrduGlobal.value ? 'سب خالی' : 'Clear All'),
+                          onPressed: () {
+                            setModalState(() {
+                              for (var t in eligibleList) {
+                                final tid =
+                                    int.tryParse(t['id']?.toString() ?? '') ??
+                                        0;
+                                selectedStaff[tid] = false;
+                              }
+                            });
+                          },
+                        ),
+                        const Spacer(),
+                        Text(
+                          isUrduGlobal.value
+                              ? 'اہل عملہ: ${eligibleList.length}'
+                              : 'Eligible: ${eligibleList.length}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: eligibleList.length,
+                      itemBuilder: (context, idx) {
+                        final t = eligibleList[idx];
+                        final tid =
+                            int.tryParse(t['id']?.toString() ?? '') ?? 0;
+                        final tName = (t['name'] ?? 'Staff').toString();
+                        final fName = (t['father_name'] ?? '').toString();
+                        final salary =
+                            double.tryParse(t['salary']?.toString() ?? '0') ??
+                                0.0;
+                        final isAlready = alreadyGeneratedMap[tid] == true;
+                        final isChecked =
+                            isAlready || (selectedStaff[tid] == true);
+
+                        return Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                                bottom:
+                                    BorderSide(color: Colors.grey.shade200)),
+                            color:
+                                isAlready ? Colors.grey.shade50 : Colors.white,
+                          ),
+                          child: CheckboxListTile(
+                            value: isChecked,
+                            enabled: !isAlready,
+                            activeColor: isAlready ? Colors.grey : primaryGreen,
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        tName,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: isAlready
+                                              ? Colors.grey.shade700
+                                              : Colors.black,
+                                        ),
+                                      ),
+                                      if (fName.isNotEmpty)
+                                        Text('ولد $fName',
+                                            style: const TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey)),
+                                    ],
+                                  ),
+                                ),
+                                if (isAlready)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade100,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                          color: Colors.amber.shade700,
+                                          width: 0.8),
+                                    ),
+                                    child: Text(
+                                      isUrduGlobal.value
+                                          ? 'اس مہینے کا پے رول بن چکا ہے'
+                                          : 'Already Generated',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.amber.shade900,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Text(
+                                    'Rs. ${intl.NumberFormat('#,##0').format(salary)}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: Colors.green.shade800,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            onChanged: isAlready
+                                ? null
+                                : (bool? val) {
+                                    setModalState(() {
+                                      selectedStaff[tid] = val ?? false;
+                                    });
+                                  },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, -2))
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                isUrduGlobal.value
+                                    ? 'منتخب اساتذہ: $selectedCount'
+                                    : 'Selected: $selectedCount',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              Text(
+                                'مجموعہ: Rs. ${intl.NumberFormat('#,##0').format(selectedTotalSalary)}',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.green.shade800,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryGreen,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                          ),
+                          icon: const Icon(Icons.bolt, size: 18),
+                          label: Text(
+                            isUrduGlobal.value
+                                ? 'پے رول جنریٹ کریں'
+                                : 'Generate Selected',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          onPressed: selectedCount == 0
+                              ? null
+                              : () async {
+                                  Navigator.pop(context);
+                                  await _executeSelectiveGeneration(
+                                    month: month,
+                                    eligibleList: eligibleList,
+                                    selectedStaff: selectedStaff,
+                                    alreadyGeneratedMap: alreadyGeneratedMap,
+                                  );
+                                },
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-              );
-            },
-          );
-        });
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
-    if (result == true) {
-      final month = monthController.text.trim();
-      if (month.isNotEmpty) {
-        final db = DBHelper();
-        final sys = SystemTypeGlobal.currentSystemType.value;
-        final isMasjid = sys == 'Masjid';
-        final teachers = isMasjid ? await db.getMaktabTeachers() : await db.getTeachers();
-        int createdCount = 0;
-        for (var t in teachers) {
-          if (t['is_deleted'] == 1) continue;
+  Future<void> _executeSelectiveGeneration({
+    required String month,
+    required List<Map<String, dynamic>> eligibleList,
+    required Map<int, bool> selectedStaff,
+    required Map<int, bool> alreadyGeneratedMap,
+  }) async {
+    setState(() => _isLoading = true);
+    final db = DBHelper();
+    final sys = SystemTypeGlobal.currentSystemType.value;
+    final database = await db.database;
 
-          final st = (t['status'] ?? 'Active').toString().trim().toLowerCase();
-          // Exclude explicitly resigned, left, expelled, terminated, inactive
-          if (st == 'inactive' ||
-              st.contains('غیر فعال') ||
-              st == 'terminated' ||
-              st.contains('برطرف') ||
-              st.contains('فارغ') ||
-              st == 'resigned' ||
-              st.contains('مستعفی') ||
-              st.contains('استعفی') ||
-              st.contains('علیحدہ') ||
-              st.contains('چھوڑ') ||
-              st == 'expelled' ||
-              st.contains('خارج') ||
-              st.contains('اخراج') ||
-              st.contains('معطل')) {
-            continue;
-          }
+    final pStart = "$month-01";
+    final pEnd = "$month-31";
 
-          final tId = t['id'];
-          final salaryStr = t['salary']?.toString() ?? '0';
-          final basicSalary = double.tryParse(salaryStr) ?? 0.0;
-          final allowances = (double.tryParse(t['house_rent']?.toString() ?? '0') ?? 0.0) +
-              (double.tryParse(t['medical_allowance']?.toString() ?? '0') ?? 0.0) +
-              (double.tryParse(t['travel_allowance']?.toString() ?? '0') ?? 0.0);
+    final generatedList = <Map<String, dynamic>>[];
+    final skippedAlreadyList = <Map<String, dynamic>>[];
+    final unselectedList = <Map<String, dynamic>>[];
 
-          final existing = _payrolls
-              .where((i) => i['teacher_id']?.toString() == tId?.toString() && i['month_year'] == month)
-              .toList();
-          if (existing.isEmpty) {
-            await db.insertAccPayroll({
-              'teacher_id': tId,
-              'month_year': month,
-              'basic_salary': basicSalary,
-              'allowances': allowances,
-              'deductions': 0.0,
-              'net_salary': basicSalary + allowances,
-              'status': 'Unpaid',
-              'system_type': sys,
-              'created_by': currentUserId.value ?? 1,
-            });
-            createdCount++;
-          }
-        }
-        await _loadPayrolls();
-        setState(() => _selectedMonth = month);
-        SyncService.runTwoWaySync().catchError((_) {});
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(isUrduGlobal.value
-                  ? '$createdCount اساتذہ کے وظائف تیار ہو گئے برائے ($month)'
-                  : 'Stipends generated for $createdCount staff ($month)')));
-        }
+    for (var t in eligibleList) {
+      final tid = int.tryParse(t['id']?.toString() ?? '') ?? 0;
+      final tName = (t['name'] ?? 'Staff').toString();
+      final fullSalary = double.tryParse(t['salary']?.toString() ?? '0') ?? 0.0;
+      final houseRent = double.tryParse(t['house_rent']?.toString() ?? '0') ?? 0.0;
+      final medical = double.tryParse(t['medical_allowance']?.toString() ?? '0') ?? 0.0;
+      final travel = double.tryParse(t['travel_allowance']?.toString() ?? '0') ?? 0.0;
+      final fullAllowances = houseRent + medical + travel;
+
+      if (alreadyGeneratedMap[tid] == true) {
+        skippedAlreadyList.add({'name': tName, 'salary': fullSalary});
+        continue;
       }
+
+      if (selectedStaff[tid] != true) {
+        unselectedList.add({'name': tName, 'salary': fullSalary});
+        continue;
+      }
+
+      final jDate = (t['joining_date'] ?? '').toString().trim();
+      final rDate = (t['resignation_date'] ?? '').toString().trim();
+
+      double salary = fullSalary;
+      double allowances = fullAllowances;
+
+      final bool isMidJoin = jDate.isNotEmpty && jDate.compareTo(pStart) > 0;
+      final bool isMidResign = rDate.isNotEmpty && rDate.compareTo(pEnd) < 0;
+
+      if (isMidJoin || isMidResign) {
+        try {
+          final effStart =
+              isMidJoin ? DateTime.parse(jDate) : DateTime.parse(pStart);
+          final effEnd =
+              isMidResign ? DateTime.parse(rDate) : DateTime.parse(pEnd);
+          int days = effEnd.difference(effStart).inDays + 1;
+          if (days < 0) days = 0;
+          if (days > 30) days = 30;
+
+          salary = double.parse(((fullSalary / 30) * days).toStringAsFixed(2));
+          allowances =
+              double.parse(((fullAllowances / 30) * days).toStringAsFixed(2));
+        } catch (_) {}
+      }
+
+      int absentDays = 0;
+      try {
+        final absRes = await database.rawQuery(
+          "SELECT COUNT(*) as count FROM attendance_teachers WHERE teacher_id = ? AND date LIKE ? AND (status = 'A' OR status = 'غیر حاضر')",
+          [tid, '$month%'],
+        );
+        absentDays = (absRes.first['count'] as num?)?.toInt() ?? 0;
+      } catch (_) {}
+
+      double deductionRate =
+          double.tryParse(t['daily_deduction_rate']?.toString() ?? '0') ?? 0.0;
+      if (deductionRate == 0 && fullSalary > 0) {
+        deductionRate = double.parse((fullSalary / 30).toStringAsFixed(2));
+      }
+      final double deductions = absentDays * deductionRate;
+      final double netSalary =
+          (salary + allowances - deductions).clamp(0.0, double.infinity);
+
+      await db.insertAccPayroll({
+        'teacher_id': tid,
+        'month_year': month,
+        'basic_salary': salary,
+        'allowances': allowances,
+        'deductions': deductions,
+        'net_salary': netSalary,
+        'status': 'Unpaid',
+        'system_type': sys,
+        'created_by': currentUserId.value ?? 1,
+      });
+
+      generatedList.add({
+        'name': tName,
+        'salary': salary,
+        'net': netSalary,
+      });
     }
+
+    await _loadPayrolls();
+    setState(() => _selectedMonth = month);
+    SyncService.runTwoWaySync().catchError((_) {});
+
+    if (mounted) {
+      _showGenerationResultDialog(
+        month: month,
+        generatedList: generatedList,
+        skippedAlreadyList: skippedAlreadyList,
+        unselectedList: unselectedList,
+      );
+    }
+  }
+
+  void _showGenerationResultDialog({
+    required String month,
+    required List<Map<String, dynamic>> generatedList,
+    required List<Map<String, dynamic>> skippedAlreadyList,
+    required List<Map<String, dynamic>> unselectedList,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.green, size: 24),
+              const SizedBox(width: 8),
+              Text(
+                isUrduGlobal.value
+                    ? 'پے رول جنریشن کا خلاصہ'
+                    : 'Payroll Generation Summary',
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'ماہ: $month',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                _buildResultSection(
+                  title: 'کامیابی سے تیار شدہ (${generatedList.length})',
+                  color: Colors.green.shade800,
+                  bgColor: Colors.green.shade50,
+                  items: generatedList,
+                ),
+                const SizedBox(height: 10),
+                if (skippedAlreadyList.isNotEmpty) ...[
+                  _buildResultSection(
+                    title:
+                        'پہلے سے موجود / نظر انداز (${skippedAlreadyList.length})',
+                    color: Colors.amber.shade900,
+                    bgColor: Colors.amber.shade50,
+                    items: skippedAlreadyList,
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                if (unselectedList.isNotEmpty)
+                  _buildResultSection(
+                    title: 'غیر منتخب (${unselectedList.length})',
+                    color: Colors.grey.shade700,
+                    bgColor: Colors.grey.shade100,
+                    items: unselectedList,
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryGreen,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(context),
+              child: Text(isUrduGlobal.value ? 'ٹھیک ہے' : 'OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildResultSection({
+    required String title,
+    required Color color,
+    required Color bgColor,
+    required List<Map<String, dynamic>> items,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+          const SizedBox(height: 6),
+          ...items.map((it) {
+            final net = it['net'] != null
+                ? ' (Rs. ${intl.NumberFormat('#,##0').format(it['net'])})'
+                : '';
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(Icons.arrow_right, size: 16, color: color),
+                  Text('${it['name']}$net',
+                      style: TextStyle(fontSize: 12, color: color)),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
   }
 
   Future<void> _editAllowances(Map<String, dynamic> p) async {
@@ -853,17 +1270,25 @@ class _AccPayrollPageState extends State<AccPayrollPage> {
                                     size: 50,
                                     color: Color(0xFF284D3D))),
                             const SizedBox(width: 12),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("مدرسہ اشرف المدارس",
-                                      style: TextStyle(
+                                  Text(
+                                      (currentTenantName.value ?? '').trim().isNotEmpty
+                                          ? currentTenantName.value!.trim()
+                                          : (isUrduGlobal.value
+                                              ? 'مدرسہ مینجمنٹ سسٹم'
+                                              : 'Madrasa Management System'),
+                                      style: const TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
                                           fontFamily: 'JameelNooriNastaleeq')),
-                                  Text("فاروقہ، ضلع سرگودھا",
-                                      style: TextStyle(
+                                  Text(
+                                      SystemTypeGlobal.currentSystemType.value == 'Masjid'
+                                          ? 'شعبہ مسجد و مکتب'
+                                          : 'پے رول و وظائف نظام',
+                                      style: const TextStyle(
                                           fontSize: 11,
                                           color: Colors.grey,
                                           fontFamily: 'JameelNooriNastaleeq')),
@@ -990,8 +1415,15 @@ class _AccPayrollPageState extends State<AccPayrollPage> {
     final availableMonths = _getAvailableMonths();
     final availableTeachers = _getAvailableTeachers();
     final filteredPayrolls = _payrolls.where((p) {
-      final matchMonth = _selectedMonth == null || _selectedMonth!.isEmpty || p['month_year'] == _selectedMonth;
-      final matchTeacher = _selectedTeacherId == null || _selectedTeacherId!.isEmpty || p['teacher_id']?.toString() == _selectedTeacherId;
+      final matchMonth = _selectedMonth == null ||
+          _selectedMonth!.isEmpty ||
+          p['month_year'] == _selectedMonth;
+      final matchTeacher = _selectedTeacherId == null ||
+          _selectedTeacherId!.isEmpty
+          ? true
+          : (_selectedTeacherId == '__orphans__'
+              ? p['is_orphan'] == true
+              : p['teacher_id']?.toString() == _selectedTeacherId);
       return matchMonth && matchTeacher;
     }).toList();
 
@@ -1000,10 +1432,21 @@ class _AccPayrollPageState extends State<AccPayrollPage> {
     double totalUnpaid = 0;
     int paidCount = 0;
     int unpaidCount = 0;
+    int regCount = 0;
+    double regNet = 0;
+    int orphanCount = 0;
+    double orphanNet = 0;
 
     for (var p in filteredPayrolls) {
       double net = double.tryParse(p['net_salary']?.toString() ?? '0') ?? 0;
       totalNet += net;
+      if (p['is_orphan'] == true) {
+        orphanCount++;
+        orphanNet += net;
+      } else {
+        regCount++;
+        regNet += net;
+      }
       if (p['status'] == 'Paid') {
         totalPaid += net;
         paidCount++;
@@ -1185,7 +1628,7 @@ class _AccPayrollPageState extends State<AccPayrollPage> {
                   ),
                 ),
 
-                // Month Summary Stats Card
+                // Month Summary Stats Card (Registered vs Orphan vs Total)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   padding: const EdgeInsets.all(10),
@@ -1195,28 +1638,43 @@ class _AccPayrollPageState extends State<AccPayrollPage> {
                     border: Border.all(color: Colors.grey.shade300),
                     boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  child: Column(
                     children: [
-                      _statColumn(
-                        isUrduGlobal.value ? 'کل اساتذہ' : 'Staff',
-                        '${filteredPayrolls.length}',
-                        Colors.blue.shade800,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _statColumn(
+                            isUrduGlobal.value ? 'مندرج عملہ ($regCount)' : 'Reg ($regCount)',
+                            'Rs. ${intl.NumberFormat('#,##0').format(regNet)}',
+                            Colors.teal.shade800,
+                          ),
+                          _statColumn(
+                            isUrduGlobal.value ? 'یتیم ریکارڈ ($orphanCount)' : 'Orphan ($orphanCount)',
+                            'Rs. ${intl.NumberFormat('#,##0').format(orphanNet)}',
+                            Colors.amber.shade900,
+                          ),
+                          _statColumn(
+                            isUrduGlobal.value ? 'کل میزان (${filteredPayrolls.length})' : 'Total (${filteredPayrolls.length})',
+                            'Rs. ${intl.NumberFormat('#,##0').format(totalNet)}',
+                            Colors.blue.shade900,
+                          ),
+                        ],
                       ),
-                      _statColumn(
-                        isUrduGlobal.value ? 'کل تنخواہ' : 'Total Net',
-                        'Rs. ${totalNet.toInt()}',
-                        Colors.black87,
-                      ),
-                      _statColumn(
-                        isUrduGlobal.value ? 'ادا شدہ ($paidCount)' : 'Paid ($paidCount)',
-                        'Rs. ${totalPaid.toInt()}',
-                        Colors.green.shade700,
-                      ),
-                      _statColumn(
-                        isUrduGlobal.value ? 'بقایا ($unpaidCount)' : 'Unpaid ($unpaidCount)',
-                        'Rs. ${totalUnpaid.toInt()}',
-                        Colors.red.shade700,
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _statColumn(
+                            isUrduGlobal.value ? 'ادا شدہ ($paidCount)' : 'Paid ($paidCount)',
+                            'Rs. ${intl.NumberFormat('#,##0').format(totalPaid)}',
+                            Colors.green.shade700,
+                          ),
+                          _statColumn(
+                            isUrduGlobal.value ? 'بقایا ($unpaidCount)' : 'Unpaid ($unpaidCount)',
+                            'Rs. ${intl.NumberFormat('#,##0').format(totalUnpaid)}',
+                            Colors.red.shade700,
+                          ),
+                        ],
                       ),
                     ],
                   ),

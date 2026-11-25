@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -7,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart';
 import '../db_helper.dart';
 import '../utils/globals.dart';
+import '../utils/system_type_global.dart';
 import '../widgets/app_drawer.dart';
 
 class AnnualReportPage extends StatefulWidget {
@@ -33,11 +35,18 @@ class _AnnualReportPageState extends State<AnnualReportPage> {
   double _netSavings = 0.0;
   int _totalHifzRecords = 0;
   int _totalQaidaRecords = 0;
+  List<Map<String, dynamic>> _monthlyBreakdown = [];
 
   @override
   void initState() {
     super.initState();
     _loadAnnualData();
+  }
+
+  String _institutionTitle() {
+    final name = (currentTenantName.value ?? '').trim();
+    if (name.isNotEmpty) return name;
+    return isUrduGlobal.value ? 'مدرسہ مینجمنٹ سسٹم' : 'Madrasa Management System';
   }
 
   Future<void> _loadAnnualData() async {
@@ -47,22 +56,32 @@ class _AnnualReportPageState extends State<AnnualReportPage> {
       final database = await db.database;
       final startStr = intl.DateFormat('yyyy-MM-dd').format(_startDate);
       final endStr = intl.DateFormat('yyyy-MM-dd').format(_endDate);
+      final sys = SystemTypeGlobal.currentSystemType.value;
+      final isMasjid = sys == 'Masjid';
+      final sysCond = isMasjid
+          ? "system_type = 'Masjid'"
+          : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
 
-      // 1. Students & Teachers
-      final students = await db.getStudents();
-      final teachers = await db.getTeachers();
-      _totalStudents = students.where((s) => (s['is_deleted'] ?? 0) == 0).length;
-      _totalTeachers = teachers.length;
+      // 1. Students & Teachers (real DB counts, system_type isolated)
+      final stdRes = await database.rawQuery(
+        "SELECT COUNT(*) as cnt FROM students WHERE (status IS NULL OR TRIM(status) = '' OR LOWER(TRIM(status)) NOT IN ('alumni', 'graduated', 'finished', 'فارغ', 'فارغ التحصیل', 'left', 'خارج', 'expelled', 'dropped', 'struck off', 'inactive', 'چھوڑ دیا', 'ترک تعلیم')) AND (is_deleted = 0 OR is_deleted IS NULL) AND $sysCond",
+      );
+      _totalStudents = (stdRes.first['cnt'] as num?)?.toInt() ?? 0;
+
+      final tRes = await database.rawQuery(
+        "SELECT COUNT(*) as cnt FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND $sysCond",
+      );
+      _totalTeachers = (tRes.first['cnt'] as num?)?.toInt() ?? 0;
 
       // 2. Attendance
       final attRows = await database.rawQuery(
-        "SELECT status_1, status FROM attendance WHERE date BETWEEN ? AND ?",
+        "SELECT status_1, status FROM attendance WHERE (date BETWEEN ? AND ?) AND (is_deleted = 0 OR is_deleted IS NULL) AND $sysCond",
         [startStr, endStr],
       );
       if (attRows.isNotEmpty) {
         int present = 0;
         for (var r in attRows) {
-          final st = (r['status_1'] ?? r['status'] ?? '').toString().toUpperCase();
+          final st = (r['status_1'] ?? r['status'] ?? '').toString().toUpperCase().trim();
           if (st == 'P' || st == 'PRESENT' || st == 'حاضر') present++;
         }
         _avgAttendance = (present / attRows.length) * 100;
@@ -70,32 +89,57 @@ class _AnnualReportPageState extends State<AnnualReportPage> {
         _avgAttendance = 0.0;
       }
 
-      // 3. Finance
-      final financeRows = await database.rawQuery(
-        "SELECT type, amount FROM finance WHERE date BETWEEN ? AND ?",
-        [startStr, endStr],
-      );
+      // 3. Authoritative General Ledger Financials (Approved & Reversed vouchers)
       double inc = 0.0;
       double exp = 0.0;
-      for (var f in financeRows) {
-        final amt = double.tryParse(f['amount']?.toString() ?? '0') ?? 0.0;
-        final type = (f['type'] ?? '').toString().toLowerCase();
-        if (type == 'income' || type == 'آمدن') {
-          inc += amt;
-        } else if (type == 'expense' || type == 'خرچ' || type == 'اخراجات') {
-          exp += amt;
-        }
-      }
+      final Map<String, Map<String, double>> monthlyMap = {};
+      try {
+        await db.ensureSimpleFinanceAccountingBackfill();
+      } catch (_) {}
 
-      // Add fee submissions to income if not in finance
-      final feeRows = await database.rawQuery(
-        "SELECT amount, status FROM fee_submissions WHERE date BETWEEN ? AND ?",
-        [startStr, endStr],
-      );
-      for (var f in feeRows) {
-        final st = (f['status'] ?? '').toString().toLowerCase();
-        if (st == 'approved' || st == 'paid' || st == 'ادا شدہ') {
-          inc += double.tryParse(f['amount']?.toString() ?? '0') ?? 0.0;
+      final vSysCond = isMasjid
+          ? "v.system_type = 'Masjid'"
+          : "(v.system_type = 'Madrasa' OR v.system_type IS NULL OR v.system_type = '')";
+
+      final glRows = await database.rawQuery('''
+        SELECT
+          substr(v.date, 1, 7) as ym,
+          c.type as account_type,
+          COALESCE(SUM(e.debit), 0) as total_debit,
+          COALESCE(SUM(e.credit), 0) as total_credit
+        FROM acc_ledger_entries e
+        JOIN acc_chart_of_accounts c ON e.account_id = c.id
+        JOIN acc_vouchers v ON e.voucher_id = v.id
+        WHERE (v.date BETWEEN ? AND ?)
+          AND v.status IN ('Approved', 'Reversed')
+          AND (v.is_deleted = 0 OR v.is_deleted IS NULL)
+          AND $vSysCond
+          AND c.type IN ('Revenue', 'Income', 'Expense')
+        GROUP BY ym, c.type
+      ''', [startStr, endStr]);
+
+      for (var r in glRows) {
+        final ym = (r['ym'] ?? '').toString();
+        final type = (r['account_type'] ?? '').toString();
+        final debit = (r['total_debit'] as num?)?.toDouble() ?? 0.0;
+        final credit = (r['total_credit'] as num?)?.toDouble() ?? 0.0;
+
+        if (ym.isNotEmpty) {
+          monthlyMap.putIfAbsent(ym, () => {'income': 0.0, 'expense': 0.0});
+        }
+
+        if (type == 'Revenue' || type == 'Income') {
+          final netIncome = credit - debit;
+          inc += netIncome;
+          if (ym.isNotEmpty) {
+            monthlyMap[ym]!['income'] = (monthlyMap[ym]!['income'] ?? 0.0) + netIncome;
+          }
+        } else if (type == 'Expense') {
+          final netExpense = debit - credit;
+          exp += netExpense;
+          if (ym.isNotEmpty) {
+            monthlyMap[ym]!['expense'] = (monthlyMap[ym]!['expense'] ?? 0.0) + netExpense;
+          }
         }
       }
 
@@ -103,18 +147,36 @@ class _AnnualReportPageState extends State<AnnualReportPage> {
       _totalExpense = exp;
       _netSavings = inc - exp;
 
-      // 4. Hifz & Qaida
-      final hifzRows = await database.rawQuery(
-        "SELECT COUNT(*) as cnt FROM daily_hifz WHERE date BETWEEN ? AND ?",
-        [startStr, endStr],
-      );
-      _totalHifzRecords = Sqflite.firstIntValue(hifzRows) ?? 0;
+      final sortedYm = monthlyMap.keys.toList()..sort();
+      _monthlyBreakdown = sortedYm.map((ym) {
+        return {
+          'month': ym,
+          'income': monthlyMap[ym]!['income'] ?? 0.0,
+          'expense': monthlyMap[ym]!['expense'] ?? 0.0,
+          'savings': (monthlyMap[ym]!['income'] ?? 0.0) - (monthlyMap[ym]!['expense'] ?? 0.0),
+        };
+      }).toList();
 
-      final qaidaRows = await database.rawQuery(
-        "SELECT COUNT(*) as cnt FROM qaida_progress WHERE date BETWEEN ? AND ?",
-        [startStr, endStr],
-      );
-      _totalQaidaRecords = Sqflite.firstIntValue(qaidaRows) ?? 0;
+      // 4. Hifz & Qaida (real SQLite tables)
+      try {
+        final hifzRes = await database.rawQuery(
+          "SELECT COUNT(*) as cnt FROM hifz_record WHERE (date BETWEEN ? AND ?) AND (is_deleted = 0 OR is_deleted IS NULL)",
+          [startStr, endStr],
+        );
+        _totalHifzRecords = Sqflite.firstIntValue(hifzRes) ?? 0;
+      } catch (_) {
+        _totalHifzRecords = 0;
+      }
+
+      try {
+        final qaidaRes = await database.rawQuery(
+          "SELECT COUNT(*) as cnt FROM qaida_records WHERE (date BETWEEN ? AND ?) AND (is_deleted = 0 OR is_deleted IS NULL)",
+          [startStr, endStr],
+        );
+        _totalQaidaRecords = Sqflite.firstIntValue(qaidaRes) ?? 0;
+      } catch (_) {
+        _totalQaidaRecords = 0;
+      }
     } catch (e) {
       debugPrint("Annual Report Load Error: $e");
     } finally {
@@ -140,74 +202,189 @@ class _AnnualReportPageState extends State<AnnualReportPage> {
 
   Future<void> _generateAndPrintPdf() async {
     final pdf = pw.Document();
-    final startStr = intl.DateFormat('yyyy-MM-dd').format(_startDate);
-    final endStr = intl.DateFormat('yyyy-MM-dd').format(_endDate);
+    final startStr = intl.DateFormat('dd-MM-yyyy').format(_startDate);
+    final endStr = intl.DateFormat('dd-MM-yyyy').format(_endDate);
+
+    pw.Font? font;
+    try {
+      final fontData =
+          await rootBundle.load('assets/fonts/NotoNaskhArabic-Regular.ttf');
+      font = pw.Font.ttf(fontData);
+    } catch (_) {
+      try {
+        final fontData =
+            await rootBundle.load('assets/fonts/JameelNooriNastaleeq.ttf');
+        font = pw.Font.ttf(fontData);
+      } catch (_) {
+        font = pw.Font.helvetica();
+      }
+    }
+
+    final institutionName = _institutionTitle();
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(base: font, bold: font),
+        header: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text(
+                institutionName,
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColor.fromHex('#284D3D'),
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'سالانہ جامع کارکردگی رپورٹ',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                'دورانیہ: $startStr تا $endStr',
+                style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Divider(thickness: 1.2, color: PdfColor.fromHex('#284D3D')),
+              pw.SizedBox(height: 10),
+            ],
+          );
+        },
+        footer: (pw.Context context) {
+          return pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'صفحہ ${context.pageNumber} از ${context.pagesCount}',
+                style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+              ),
+              pw.Text(
+                'تاریخ و وقت رپورٹ: ${intl.DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.now())}',
+                style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+              ),
+            ],
+          );
+        },
         build: (pw.Context context) {
-          return pw.Container(
-            padding: const pw.EdgeInsets.all(20),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+          return [
+            pw.Text(
+              'کلیدی اشاریے و خلاصہ:',
+              style: pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColor.fromHex('#284D3D')),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.8),
               children: [
-                pw.Header(
-                  level: 0,
-                  child: pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: PdfColor.fromHex('#284D3D')),
+                  children: [
+                    _buildPdfUrduTh('شمار'),
+                    _buildPdfUrduTh('عنوان / اشاریہ'),
+                    _buildPdfUrduTh('تفصیل / مقدار'),
+                  ],
+                ),
+                _buildPdfUrduRow('1', 'کل زیر تعلیم فعال طلبہ', '$_totalStudents طلبہ'),
+                _buildPdfUrduRow('2', 'کل فعال اساتذہ و عملہ', '$_totalTeachers اساتذہ'),
+                _buildPdfUrduRow('3', 'اوسط حاضری کی شرح', '${_avgAttendance.toStringAsFixed(1)}%'),
+                _buildPdfUrduRow('4', 'کل مالیاتی آمدن', 'Rs. ${intl.NumberFormat('#,##0').format(_totalIncome)}'),
+                _buildPdfUrduRow('5', 'کل مالیاتی اخراجات', 'Rs. ${intl.NumberFormat('#,##0').format(_totalExpense)}'),
+                _buildPdfUrduRow(
+                  '6',
+                  _netSavings >= 0 ? 'خالص بچت / سرپلس' : 'خالص خسارہ / شارٹ فال',
+                  'Rs. ${intl.NumberFormat('#,##0').format(_netSavings.abs())}',
+                  color: _netSavings >= 0
+                      ? PdfColor.fromHex('#0F5132')
+                      : PdfColor.fromHex('#842029'),
+                ),
+                _buildPdfUrduRow('7', 'حفظ سرگرمی کے اندراجات', '$_totalHifzRecords ریکارڈز'),
+                _buildPdfUrduRow('8', 'قاعدہ و ناظرہ کے اندراجات', '$_totalQaidaRecords ریکارڈز'),
+              ],
+            ),
+            pw.SizedBox(height: 16),
+            if (_monthlyBreakdown.isNotEmpty) ...[
+              pw.Text(
+                'ماہ بہ ماہ مالیاتی تجزیہ:',
+                style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColor.fromHex('#284D3D')),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.8),
+                children: [
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(color: PdfColors.grey300),
                     children: [
-                      pw.Text('Madrasa Ashraf-ul-Madaris Farooka',
-                          style: pw.TextStyle(
-                              fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Annual Report',
-                          style: pw.TextStyle(
-                              fontSize: 16, color: PdfColors.green800)),
+                      _buildPdfUrduTh('ماہ و سال', textColor: PdfColors.black),
+                      _buildPdfUrduTh('آمدن (روپے)', textColor: PdfColors.black),
+                      _buildPdfUrduTh('اخراجات (روپے)', textColor: PdfColors.black),
+                      _buildPdfUrduTh('خالص بچت / خسارہ', textColor: PdfColors.black),
+                    ],
+                  ),
+                  ..._monthlyBreakdown.map((m) {
+                    final double mInc = (m['income'] as num?)?.toDouble() ?? 0.0;
+                    final double mExp = (m['expense'] as num?)?.toDouble() ?? 0.0;
+                    final double sav = (m['savings'] as num?)?.toDouble() ?? 0.0;
+                    return pw.TableRow(
+                      children: [
+                        _buildPdfUrduTd(m['month']?.toString() ?? '',
+                            align: pw.TextAlign.center),
+                        _buildPdfUrduTd(intl.NumberFormat('#,##0').format(mInc),
+                            align: pw.TextAlign.center),
+                        _buildPdfUrduTd(intl.NumberFormat('#,##0').format(mExp),
+                            align: pw.TextAlign.center),
+                        _buildPdfUrduTd(
+                          intl.NumberFormat('#,##0').format(sav),
+                          align: pw.TextAlign.center,
+                          color: sav >= 0
+                              ? PdfColor.fromHex('#0F5132')
+                              : PdfColor.fromHex('#842029'),
+                          bold: true,
+                        ),
+                      ],
+                    );
+                  }),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+            ],
+            pw.SizedBox(height: 25),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.SizedBox(
+                  width: 150,
+                  child: pw.Column(
+                    children: [
+                      pw.Divider(thickness: 1, color: PdfColors.black),
+                      pw.Text('دستخط ناظمِ تعلیمات',
+                          style: const pw.TextStyle(fontSize: 10)),
                     ],
                   ),
                 ),
-                pw.SizedBox(height: 10),
-                pw.Text('Period: $startStr to $endStr',
-                    style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
-                pw.Divider(),
-                pw.SizedBox(height: 15),
-                pw.Table(
-                  border: pw.TableBorder.all(color: PdfColors.grey400),
-                  children: [
-                    pw.TableRow(
-                      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                      children: [
-                        pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('Metric',
-                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text('Value',
-                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                      ],
-                    ),
-                    _buildPdfRow('Total Active Students', '$_totalStudents'),
-                    _buildPdfRow('Total Teachers', '$_totalTeachers'),
-                    _buildPdfRow('Average Attendance', '${_avgAttendance.toStringAsFixed(1)}%'),
-                    _buildPdfRow('Total Revenue / Income', 'Rs. ${_totalIncome.toStringAsFixed(0)}'),
-                    _buildPdfRow('Total Expenditure', 'Rs. ${_totalExpense.toStringAsFixed(0)}'),
-                    _buildPdfRow(_netSavings >= 0 ? 'Net Savings / Balance' : 'Deficit / Loss', 'Rs. ${_netSavings.abs().toStringAsFixed(0)}'),
-                    _buildPdfRow('Hifz Activity Records', '$_totalHifzRecords entries'),
-                    _buildPdfRow('Qaida / Nazira Records', '$_totalQaidaRecords entries'),
-                  ],
+                pw.SizedBox(
+                  width: 150,
+                  child: pw.Column(
+                    children: [
+                      pw.Divider(thickness: 1, color: PdfColors.black),
+                      pw.Text('دستخط مہتمم / صدر',
+                          style: const pw.TextStyle(fontSize: 10)),
+                    ],
+                  ),
                 ),
-                pw.SizedBox(height: 40),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Principal Signature: __________________'),
-                    pw.Text('Date: ${intl.DateFormat('yyyy-MM-dd').format(DateTime.now())}'),
-                  ],
-                )
               ],
             ),
-          );
+          ];
         },
       ),
     );
@@ -218,23 +395,58 @@ class _AnnualReportPageState extends State<AnnualReportPage> {
     );
   }
 
-  pw.TableRow _buildPdfRow(String key, String value) {
+  pw.TableRow _buildPdfUrduRow(String sNo, String metric, String value,
+      {PdfColor? color}) {
     return pw.TableRow(
       children: [
-        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(key)),
-        pw.Padding(
-            padding: const pw.EdgeInsets.all(6),
-            child: pw.Text(value, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+        _buildPdfUrduTd(sNo, align: pw.TextAlign.center),
+        _buildPdfUrduTd(metric),
+        _buildPdfUrduTd(value,
+            align: pw.TextAlign.center, bold: true, color: color),
       ],
+    );
+  }
+
+  pw.Widget _buildPdfUrduTh(String text, {PdfColor? textColor}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          color: textColor ?? PdfColors.white,
+          fontWeight: pw.FontWeight.bold,
+          fontSize: 9.5,
+        ),
+        textAlign: pw.TextAlign.center,
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfUrduTd(String text,
+      {pw.TextAlign align = pw.TextAlign.right,
+      bool bold = false,
+      PdfColor? color}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 6),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: 9,
+          fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+          color: color ?? PdfColors.black,
+        ),
+        textAlign: align,
+      ),
     );
   }
 
   void _shareAnnualSummaryWhatsApp() {
     final startStr = intl.DateFormat('yyyy-MM-dd').format(_startDate);
     final endStr = intl.DateFormat('yyyy-MM-dd').format(_endDate);
+    final instName = _institutionTitle();
 
     final buffer = StringBuffer();
-    buffer.writeln('📋 *سالانہ رپورٹ - مدرسہ اشرف المدارس فروکہ*');
+    buffer.writeln('📋 *سالانہ رپورٹ - $instName*');
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
     buffer.writeln('📅 *دورانیہ:* $startStr تا $endStr');
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
@@ -247,7 +459,7 @@ class _AnnualReportPageState extends State<AnnualReportPage> {
     buffer.writeln('📖 *حفظ اندراجات:* $_totalHifzRecords');
     buffer.writeln('📚 *قاعدہ/ناظرہ اندراجات:* $_totalQaidaRecords');
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━');
-    buffer.writeln('_اشرف المدارس مینجمنٹ سسٹم_');
+    buffer.writeln('_$instName مینجمنٹ سسٹم_');
 
     Share.share(buffer.toString(), subject: 'سالانہ رپورٹ');
   }
@@ -412,7 +624,95 @@ class _AnnualReportPageState extends State<AnnualReportPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+
+                  // Monthly Financial Breakdown Table
+                  if (_monthlyBreakdown.isNotEmpty) ...[
+                    Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.table_chart, color: primaryGreen, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  isUrdu ? 'ماہانہ مالیاتی گوشوارہ' : 'Monthly Financial Breakdown',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: primaryGreen,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Divider(height: 16),
+                            Table(
+                              border: TableBorder.all(color: Colors.grey.shade300, width: 0.5),
+                              columnWidths: const {
+                                0: FlexColumnWidth(2),
+                                1: FlexColumnWidth(2.5),
+                                2: FlexColumnWidth(2.5),
+                                3: FlexColumnWidth(2.5),
+                              },
+                              children: [
+                                TableRow(
+                                  decoration: BoxDecoration(color: Colors.grey.shade200),
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                                      child: Text(isUrdu ? 'مہینہ' : 'Month', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                                      child: Text(isUrdu ? 'آمدن (Rs)' : 'Income', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.green.shade800)),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                                      child: Text(isUrdu ? 'خرچ (Rs)' : 'Expense', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.red.shade800)),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                                      child: Text(isUrdu ? 'بچت (Rs)' : 'Savings', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                    ),
+                                  ],
+                                ),
+                                ..._monthlyBreakdown.map((m) {
+                                  final double sav = (m['savings'] as num?)?.toDouble() ?? 0.0;
+                                  return TableRow(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                                        child: Text(m['month']?.toString() ?? '', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                                        child: Text((m['income'] as num?)?.toStringAsFixed(0) ?? '0', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.green.shade700)),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                                        child: Text((m['expense'] as num?)?.toStringAsFixed(0) ?? '0', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.red.shade700)),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                                        child: Text(sav.toStringAsFixed(0), textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: sav >= 0 ? Colors.green.shade800 : Colors.red.shade800)),
+                                      ),
+                                    ],
+                                  );
+                                }),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  const SizedBox(height: 4),
 
                   // Actions
                   SizedBox(

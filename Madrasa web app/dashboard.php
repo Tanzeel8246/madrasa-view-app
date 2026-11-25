@@ -59,32 +59,64 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
         
         $today = date('Y-m-d');
         // آج کی حاضری: خالص مدرسہ طلبہ بلحاظ پرائیویسی
-        $stmt_today = $pdo->prepare("
-            SELECT a.status_1, a.status_2, a.status_3, a.status_4, a.late_1, a.late_2, a.late_3, a.late_4
-            FROM attendance a
-            JOIN students s ON a.student_id = s.id
-            WHERE a.date = ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL)
-              AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
-              AND ($privacy_s_std_cond)
-        ");
-        $stmt_today->execute([$today, $tenant_id_dash, $tenant_id_dash]);
-        $today_rows = $stmt_today->fetchAll(PDO::FETCH_ASSOC);
-        $today_present = 0; $today_absent = 0; $today_leave = 0; $today_late = 0; $today_total = 0;
-        foreach ($today_rows as $att_row) {
-            for ($i = 1; $i <= 4; $i++) {
-                $status = strtoupper(trim((string)($att_row["status_$i"] ?? '')));
-                if ($status === '') continue;
-                $today_total++;
-                $late_minutes = (int)($att_row["late_$i"] ?? 0);
-                if ($late_minutes > 0 || $status === 'LATE') {
-                    $today_late++;
-                } elseif ($status === 'A' || $status === 'ABSENT') {
-                    $today_absent++;
-                } elseif ($status === 'L' || $status === 'LEAVE' || $status === 'R') {
-                    $today_leave++;
-                } elseif ($status === 'P' || $status === 'PRESENT') {
-                    $today_present++;
+        // BUGFIX B-07: the web register (attendance.php) writes ONLY to
+        // period_attendance, while this card used to read ONLY the legacy
+        // `attendance` table (QR app / mobile sync), so web-entered attendance
+        // showed 0% here. Merge both stores per student+period slot, exactly
+        // like attendance_report.php does.
+        $slot_map = []; // "studentId:slot" => ['status'=>..., 'late'=>...]
+        try {
+            $stmt_today = $pdo->prepare("
+                SELECT a.student_id, a.status_1, a.status_2, a.status_3, a.status_4, a.late_1, a.late_2, a.late_3, a.late_4
+                FROM attendance a
+                JOIN students s ON a.student_id = s.id
+                WHERE a.date = ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL)
+                  AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+                  AND ($privacy_s_std_cond)
+            ");
+            $stmt_today->execute([$today, $tenant_id_dash, $tenant_id_dash]);
+            foreach ($stmt_today->fetchAll(PDO::FETCH_ASSOC) as $att_row) {
+                for ($i = 1; $i <= 4; $i++) {
+                    $st = trim((string)($att_row["status_$i"] ?? ''));
+                    if ($st === '') continue;
+                    $slot_map[$att_row['student_id'] . ':' . $i] = ['status' => $st, 'late' => (int)($att_row["late_$i"] ?? 0)];
                 }
+            }
+        } catch (Throwable $e) { error_log('[dashboard today attendance] ' . $e->getMessage()); }
+        try {
+            $stmt_pa = $pdo->prepare("
+                SELECT pa.student_id, pa.period_num, pa.status
+                FROM period_attendance pa
+                JOIN students s ON pa.student_id = s.id
+                WHERE pa.date = ? AND pa.tenant_id = ? AND s.tenant_id = ?
+                  AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+                  AND ($privacy_s_std_cond)
+            ");
+            $stmt_pa->execute([$today, $tenant_id_dash, $tenant_id_dash]);
+            foreach ($stmt_pa->fetchAll(PDO::FETCH_ASSOC) as $pa_row) {
+                $slot = max(1, min(4, (int)$pa_row['period_num']));
+                $key = $pa_row['student_id'] . ':' . $slot;
+                if (!isset($slot_map[$key])) {
+                    $slot_map[$key] = ['status' => trim((string)$pa_row['status']), 'late' => 0];
+                }
+            }
+        } catch (Throwable $e) { error_log('[dashboard today period_attendance] ' . $e->getMessage()); }
+        $today_present = 0; $today_absent = 0; $today_leave = 0; $today_late = 0; $today_total = 0;
+        foreach ($slot_map as $slot) {
+            $status = strtoupper(trim((string)$slot['status']));
+            // period_attendance may store Urdu status words
+            if ($status === 'حاضر') $status = 'P';
+            elseif ($status === 'غیر حاضر') $status = 'A';
+            elseif ($status === 'رخصت') $status = 'L';
+            $today_total++;
+            if ((int)$slot['late'] > 0 || $status === 'LATE') {
+                $today_late++;
+            } elseif ($status === 'A' || $status === 'ABSENT') {
+                $today_absent++;
+            } elseif ($status === 'L' || $status === 'LEAVE' || $status === 'R') {
+                $today_leave++;
+            } elseif ($status === 'P' || $status === 'PRESENT') {
+                $today_present++;
             }
         }
         $pct = function($value) use ($today_total) {
@@ -97,26 +129,47 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
         
         // Monthly Attendance (Madrasa)
         $first_day = date('Y-m-01');
-        $stmt_pos = $pdo->prepare("
-            SELECT COUNT(*) FROM attendance a 
-            JOIN students s ON a.student_id = s.id 
-            WHERE a.date >= ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL)
-              AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
-              AND ($privacy_s_std_cond)
-        ");
-        $stmt_pos->execute([$first_day, $tenant_id_dash, $tenant_id_dash]);
-        $total_possible = (int)$stmt_pos->fetchColumn();
+        // BUGFIX B-07: count distinct student-days across BOTH attendance stores.
+        $total_possible = 0; $total_present = 0;
+        try {
+            $stmt_pos = $pdo->prepare("
+                SELECT COUNT(*) FROM (
+                    SELECT a.student_id, a.date FROM attendance a
+                    JOIN students s ON a.student_id = s.id
+                    WHERE a.date >= ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL)
+                      AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+                      AND ($privacy_s_std_cond)
+                    UNION
+                    SELECT pa.student_id, pa.date FROM period_attendance pa
+                    JOIN students s ON pa.student_id = s.id
+                    WHERE pa.date >= ? AND pa.tenant_id = ? AND s.tenant_id = ?
+                      AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+                      AND ($privacy_s_std_cond)
+                ) u
+            ");
+            $stmt_pos->execute([$first_day, $tenant_id_dash, $tenant_id_dash, $first_day, $tenant_id_dash, $tenant_id_dash]);
+            $total_possible = (int)$stmt_pos->fetchColumn();
 
-        $stmt_pres = $pdo->prepare("
-            SELECT COUNT(*) FROM attendance a
-            JOIN students s ON a.student_id = s.id
-            WHERE a.date >= ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL)
-              AND (a.status_1='P' OR a.status_2='P' OR a.status_3='P' OR a.status_4='P')
-              AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
-              AND ($privacy_s_std_cond)
-        ");
-        $stmt_pres->execute([$first_day, $tenant_id_dash, $tenant_id_dash]);
-        $total_present = (int)$stmt_pres->fetchColumn();
+            $stmt_pres = $pdo->prepare("
+                SELECT COUNT(*) FROM (
+                    SELECT a.student_id, a.date FROM attendance a
+                    JOIN students s ON a.student_id = s.id
+                    WHERE a.date >= ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL)
+                      AND (a.status_1 IN ('P','Present','حاضر') OR a.status_2 IN ('P','Present','حاضر') OR a.status_3 IN ('P','Present','حاضر') OR a.status_4 IN ('P','Present','حاضر'))
+                      AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+                      AND ($privacy_s_std_cond)
+                    UNION
+                    SELECT pa.student_id, pa.date FROM period_attendance pa
+                    JOIN students s ON pa.student_id = s.id
+                    WHERE pa.date >= ? AND pa.tenant_id = ? AND s.tenant_id = ?
+                      AND pa.status IN ('P','Present','حاضر')
+                      AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')
+                      AND ($privacy_s_std_cond)
+                ) u
+            ");
+            $stmt_pres->execute([$first_day, $tenant_id_dash, $tenant_id_dash, $first_day, $tenant_id_dash, $tenant_id_dash]);
+            $total_present = (int)$stmt_pres->fetchColumn();
+        } catch (Throwable $e) { error_log('[dashboard monthly attendance] ' . $e->getMessage()); }
         $monthly_att_percent = $total_possible > 0 ? round(($total_present / $total_possible) * 100, 1) : 0;
 
         // رواں ماہ کے خالص آپریشنل اخراجات (مدرسہ - قرضہ جات کی ادائیگی کو الگ رکھتے ہوئے)
@@ -135,18 +188,23 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
         // Phase 1: Today's Attendance Situation (صرف مجاز مدرسہ کلاسز کی حاضری صورتحال)
         $classes_all = $allowed_classes_list;
         $marked_class_names = [];
-        $remaining_classes = [];
+        // BUGFIX B-07: fail-safe defaults — if the marked-classes queries fail,
+        // classes count as UNMARKED, never as "all complete" (the old code left
+        // both arrays empty, so the badge showed 0/N next to the
+        // "all classes complete" message). Failures are now logged, not hidden.
+        $remaining_classes = $classes_all;
         $done_classes = [];
         try {
-            $stmt_m1 = $pdo->prepare("SELECT DISTINCT TRIM(s.class) FROM period_attendance pa JOIN students s ON pa.student_id = s.id WHERE pa.date = ? AND pa.tenant_id = ? AND s.tenant_id = ? AND s.class IS NOT NULL AND s.class != '' AND (s.system_type='Madrasa' OR s.system_type IS NULL OR system_type='')");
+            $stmt_m1 = $pdo->prepare("SELECT DISTINCT TRIM(s.class) FROM period_attendance pa JOIN students s ON pa.student_id = s.id WHERE pa.date = ? AND pa.tenant_id = ? AND s.tenant_id = ? AND s.class IS NOT NULL AND s.class != '' AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')");
             $stmt_m1->execute([$today, $tenant_id_dash, $tenant_id_dash]);
             $m1 = $stmt_m1->fetchAll(PDO::FETCH_COLUMN);
 
-            $stmt_m2 = $pdo->prepare("SELECT DISTINCT TRIM(s.class) FROM attendance a JOIN students s ON a.student_id = s.id WHERE a.date = ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL) AND s.class IS NOT NULL AND s.class != '' AND (s.system_type='Madrasa' OR s.system_type IS NULL OR system_type='')");
+            $stmt_m2 = $pdo->prepare("SELECT DISTINCT TRIM(s.class) FROM attendance a JOIN students s ON a.student_id = s.id WHERE a.date = ? AND a.tenant_id = ? AND s.tenant_id = ? AND (a.is_deleted=0 OR a.is_deleted IS NULL) AND s.class IS NOT NULL AND s.class != '' AND (s.system_type='Madrasa' OR s.system_type IS NULL OR s.system_type='')");
             $stmt_m2->execute([$today, $tenant_id_dash, $tenant_id_dash]);
             $m2 = $stmt_m2->fetchAll(PDO::FETCH_COLUMN);
 
             $marked_class_names = array_unique(array_filter(array_merge($m1, $m2)));
+            $remaining_classes = [];
             foreach ($classes_all as $c) {
                 if (in_array(trim($c['name']), $marked_class_names)) {
                     $done_classes[] = $c;
@@ -154,7 +212,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                     $remaining_classes[] = $c;
                 }
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) { error_log('[dashboard classes attendance] ' . $e->getMessage()); }
 
         // Phase 1: Today's Teacher Attendance (صرف مدرسہ اساتذہ)
         $t_today_present = 0; $t_today_leave = 0; $t_today_absent = 0;
@@ -362,7 +420,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                     <div class="p-3 bg-light rounded-3 h-100 border">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="fw-bold text-dark small"><i class="fas fa-chalkboard text-info me-1"></i> <?php echo ($lang=='en') ? 'Classes Attendance Progress:' : 'قرآنی و درسی کلاسز کی حاضری:'; ?></span>
-                            <span class="badge <?php echo empty($remaining_classes) ? 'bg-success' : 'bg-warning text-dark'; ?> rounded-pill">
+                            <span class="badge <?php echo (count($classes_all) > 0 && count($done_classes) === count($classes_all)) ? 'bg-success' : 'bg-warning text-dark'; ?> rounded-pill">
                                 <?php echo count($done_classes); ?> / <?php echo count($classes_all); ?> <?php echo ($lang=='en') ? 'Classes Marked' : 'کلاسز مکمل'; ?>
                             </span>
                         </div>
@@ -386,7 +444,7 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                                     <?php endforeach; ?>
                                 </div>
                             </div>
-                        <?php else: ?>
+                        <?php elseif (count($classes_all) > 0 && count($done_classes) === count($classes_all)): ?>
                             <div class="text-success small fw-bold mt-2">
                                 <i class="fas fa-check-circle me-1"></i> <?php echo ($lang=='en') ? 'Alhamdulillah! All classes attendance marked today.' : 'ماشاءاللہ! آج تمام کلاسز کی حاضری مکمل ہو چکی ہے۔'; ?>
                             </div>

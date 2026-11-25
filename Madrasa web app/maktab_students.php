@@ -1,12 +1,27 @@
 <?php 
 require_once 'db.php'; 
 include 'header.php'; 
+$cur_tenant_id = (int)get_current_tenant_id();
+
+$curRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin_maktab = in_array($curRole, ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim'], true);
+$has_explicit_maktab_perm = (function_exists('app_has_perm') && (app_has_perm('manage_masjid_students') || app_has_perm('manage_students')))
+    || (function_exists('has_perm') && (has_perm('manage_masjid_students') || has_perm('manage_students')));
+// Strict Invariant (G-3 / H-1 Parity for Masjid): Teachers NEVER mutate/manage maktab student records directly
+$can_manage_maktab_students = $is_admin_maktab || ($curRole !== 'teacher' && $curRole !== 'mudarris' && $has_explicit_maktab_perm);
+
+$is_restricted_maktab = isset($_GET['edit']) || isset($_POST['graduate_maktab_student']) || isset($_GET['restore']) || isset($_POST['restore_maktab_student']) || isset($_POST['promote_maktab_student']) || isset($_GET['delete']) || isset($_POST['delete_maktab_student']) || isset($_POST['save_maktab_student']);
+if ($is_restricted_maktab && !$can_manage_maktab_students) {
+    http_response_code(403);
+    die("<div style='text-align:center;padding:50px;font-family:sans-serif;' dir='rtl'><h2 style='color:#dc3545;'>غیر مجاز رسائی (403 Forbidden)</h2><p style='font-size:16px;color:#555;'>آپ کے پاس مکتب کے طلبہ کا ریکارڈ ترمیم کرنے، شامل کرنے یا تبدیل کرنے کے انتظامی اختیارات نہیں ہیں۔</p><a href='maktab_students.php' style='display:inline-block;padding:8px 20px;background:#0d6efd;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;'>واپس طلبہ لسٹ پر جائیں</a></div>");
+}
 
 // --- ایکشنز (Actions) ---
 
 // 1. فارغ التحصیل کرنا (Alumni)
 if (isset($_POST['graduate_maktab_student'])) {
-    $id = $_POST['maktab_student_id'];
+    if (function_exists('validate_csrf_or_abort')) validate_csrf_or_abort();
+    $id = (int)$_POST['maktab_student_id'];
     $g_date = !empty($_POST['graduation_date']) ? $_POST['graduation_date'] : null;
     $category = $_POST['alumni_category'] ?? 'completed';
     $reason = $_POST['reason'] ?? '';
@@ -15,43 +30,57 @@ if (isset($_POST['graduate_maktab_student'])) {
     $wifaq_marks = ($wifaq_exam && !empty($_POST['wifaq_marks'])) ? trim($_POST['wifaq_marks']) : null;
     $mehrab = !empty($_POST['mehrab_recitation']) ? trim($_POST['mehrab_recitation']) : null;
 
-    $stmt = $pdo->prepare("UPDATE maktab_students SET status = 'Alumni', alumni_category = ?, graduation_date = ?, leaving_reason = ?, duration = ?, wifaq_exam = ?, wifaq_marks = ?, mehrab_recitation = ? WHERE id = ?");
-    $stmt->execute([$category, $g_date, $reason, $duration, $wifaq_exam, $wifaq_marks, $mehrab, $id]);
+    $stmt = $pdo->prepare("UPDATE maktab_students SET status = 'Alumni', alumni_category = ?, graduation_date = ?, leaving_reason = ?, duration = ?, wifaq_exam = ?, wifaq_marks = ?, mehrab_recitation = ? WHERE id = ? AND tenant_id = ?");
+    $stmt->execute([$category, $g_date, $reason, $duration, $wifaq_exam, $wifaq_marks, $mehrab, $id, $cur_tenant_id]);
     echo "<script>window.location='maktab_students.php';</script>";
+    exit;
 }
 
-// 2. بحال کرنا (Restore - اگر غلطی سے فارغ ہو گیا ہو)
-if (isset($_GET['restore'])) {
-    $stmt = $pdo->prepare("UPDATE maktab_students SET status = 'Active' WHERE id = ?");
-    $stmt->execute([$_GET['restore']]);
+// 2. بحال کرنا (Restore - POST + CSRF Only)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ((isset($_POST['action']) && $_POST['action'] === 'restore_maktab_student') || isset($_POST['restore_maktab_student']))) {
+    if (function_exists('validate_csrf_or_abort')) validate_csrf_or_abort();
+    $r_id = (int)($_POST['student_id'] ?? ($_POST['restore_maktab_student'] ?? 0));
+    if ($r_id > 0) {
+        $stmt = $pdo->prepare("UPDATE maktab_students SET status = 'Active' WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$r_id, $cur_tenant_id]);
+    }
     echo "<script>window.location='maktab_students.php';</script>";
+    exit;
 }
 
 // 2.5 پروموٹ کرنا (Promote)
 if (isset($_POST['promote_maktab_student'])) {
-    $id = $_POST['maktab_student_id'];
+    if (function_exists('validate_csrf_or_abort')) validate_csrf_or_abort();
+    $id = (int)$_POST['maktab_student_id'];
     $new_class = $_POST['new_class'];
     $quran_edition = !empty($_POST['quran_edition']) ? trim($_POST['quran_edition']) : null;
     $is_quran_class = (mb_stripos($new_class, 'حفظ') !== false || mb_stripos($new_class, 'ناظرہ') !== false || mb_stripos($new_class, 'گردان') !== false);
     if ($is_quran_class && $quran_edition) {
-        $stmt = $pdo->prepare("UPDATE maktab_students SET class = ?, quran_edition = ? WHERE id = ?");
-        $stmt->execute([$new_class, $quran_edition, $id]);
+        $stmt = $pdo->prepare("UPDATE maktab_students SET class = ?, quran_edition = ? WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$new_class, $quran_edition, $id, $cur_tenant_id]);
     } else {
-        $stmt = $pdo->prepare("UPDATE maktab_students SET class = ? WHERE id = ?");
-        $stmt->execute([$new_class, $id]);
+        $stmt = $pdo->prepare("UPDATE maktab_students SET class = ? WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$new_class, $id, $cur_tenant_id]);
     }
     echo "<script>window.location='maktab_students.php';</script>";
+    exit;
 }
 
-// 3. ڈیلیٹ کرنا (Delete)
-if (isset($_GET['delete'])) {
-    $stmt = $pdo->prepare("UPDATE maktab_students SET is_deleted = 1 WHERE id = ?");
-    $stmt->execute([$_GET['delete']]);
+// 3. ڈیلیٹ کرنا (Delete - POST + CSRF Only)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ((isset($_POST['action']) && $_POST['action'] === 'delete_maktab_student') || isset($_POST['delete_maktab_student']))) {
+    if (function_exists('validate_csrf_or_abort')) validate_csrf_or_abort();
+    $d_id = (int)($_POST['student_id'] ?? ($_POST['delete_maktab_student'] ?? 0));
+    if ($d_id > 0) {
+        $stmt = $pdo->prepare("UPDATE maktab_students SET is_deleted = 1 WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$d_id, $cur_tenant_id]);
+    }
     echo "<script>window.location='maktab_students.php';</script>";
+    exit;
 }
 
 // 4. محفوظ کرنا (Save)
 if (isset($_POST['save_maktab_student'])) {
+    if (function_exists('validate_csrf_or_abort')) validate_csrf_or_abort();
     try {
         $name = $_POST['name'];
         $fname = $_POST['father_name'];
@@ -267,7 +296,7 @@ try {
 // --- ایڈٹ موڈ ---
 $edit_data = null;
 $show_form = false; 
-if(isset($_GET['edit'])) {
+if(isset($_GET['edit']) && $can_manage_maktab_students) {
     try {
         $stmt = $pdo->prepare("SELECT * FROM maktab_students WHERE id=? " . ($has_m_tenant ? " AND $tenant_cond" : ""));
         $stmt->execute([$_GET['edit']]);
@@ -281,6 +310,7 @@ if(isset($_GET['edit'])) {
 
 <div class="container-fluid">
     
+    <?php if ($can_manage_maktab_students): ?>
     <div class="sticky-top pt-2" style="z-index: 100;">
         <div class="card mb-3 bg-dark text-white shadow-lg border-0" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
             <div class="card-body text-center py-2">
@@ -296,22 +326,27 @@ if(isset($_GET['edit'])) {
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="text-primary fw-bold m-0"><i class="fas fa-users"></i> مکتب طلباء کا ریکارڈ</h3>
+        <?php if ($can_manage_maktab_students): ?>
         <button class="btn btn-success fw-bold shadow" onclick="toggleForm()">
             <i class="fas fa-user-plus me-2"></i> نیا طالب علم شامل کریں
         </button>
+        <?php endif; ?>
     </div>
 
     <?php if(isset($msg)) echo $msg; ?>
 
+    <?php if ($can_manage_maktab_students): ?>
     <div id="maktab_student_form_container" class="card shadow-sm mb-4 border-top border-5 border-primary" style="display: <?php echo $show_form ? 'block' : 'none'; ?>;">
         <div class="card-header bg-light">
             <h5 class="fw-bold m-0 text-primary"><?php echo $edit_data ? 'ریکارڈ اپڈیٹ کریں' : 'نیا اندراج'; ?></h5>
         </div>
         <div class="card-body">
             <form method="POST" enctype="multipart/form-data">
+                <?php if (function_exists('csrf_field')) echo csrf_field(); ?>
                 <input type="hidden" name="edit_id" value="<?php echo $edit_data['id']??''; ?>">
                 <input type="hidden" name="old_photo" value="<?php echo $edit_data['photo']??''; ?>">
                 <div class="row g-3">
@@ -415,6 +450,7 @@ if(isset($_GET['edit'])) {
             </form>
         </div>
     </div>
+    <?php endif; ?>
 
     <?php 
     $residence_tabs = [
@@ -508,10 +544,24 @@ if(isset($_GET['edit'])) {
                                             <i class="fas fa-certificate me-1"></i> سند
                                         </a>
                                     <?php endif; ?>
-                                    <a href="maktab_students.php?restore=<?php echo $s['id']; ?>" class="btn btn-sm btn-success" title="دوبارہ داخل (Restore)" onclick="return confirm('کیا اسے دوبارہ موجودہ لسٹ میں شامل کرنا ہے؟')">
-                                        <i class="fas fa-undo"></i>
-                                    </a>
-                                    <a href="maktab_students.php?delete=<?php echo $s['id']; ?>" class="btn btn-sm btn-outline-danger" title="ہمیشہ کے لیے ڈیلیٹ" onclick="return confirm('ڈیلیٹ؟')"><i class="fas fa-trash"></i></a>
+                                    <?php if ($can_manage_maktab_students): ?>
+                                    <form method="POST" action="maktab_students.php" class="d-inline" id="resMakStd_<?php echo $s['id']; ?>">
+                                        <?php if (function_exists('csrf_field')) echo csrf_field(); ?>
+                                        <input type="hidden" name="action" value="restore_maktab_student">
+                                        <input type="hidden" name="student_id" value="<?php echo (int)$s['id']; ?>">
+                                        <button type="button" class="btn btn-sm btn-success" title="دوبارہ داخل (Restore)" onclick="if(confirm('کیا اسے دوبارہ موجودہ لسٹ میں شامل کرنا ہے؟')) { document.getElementById('resMakStd_<?php echo $s['id']; ?>').submit(); }">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="maktab_students.php" class="d-inline" id="delMakStd_<?php echo $s['id']; ?>">
+                                        <?php if (function_exists('csrf_field')) echo csrf_field(); ?>
+                                        <input type="hidden" name="action" value="delete_maktab_student">
+                                        <input type="hidden" name="student_id" value="<?php echo (int)$s['id']; ?>">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" title="ہمیشہ کے لیے ڈیلیٹ" onclick="if(confirm('ڈیلیٹ؟')) { document.getElementById('delMakStd_<?php echo $s['id']; ?>').submit(); }">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -584,13 +634,22 @@ if(isset($_GET['edit'])) {
                                                         <a href="print_id_card.php?id=<?php echo $s['id']; ?>&type=maktab" class="btn btn-sm btn-success text-white" title="آئی ڈی کارڈ" target="_blank">
                                                             <i class="fas fa-id-card"></i>
                                                         </a>
+                                                        <?php if ($can_manage_maktab_students): ?>
                                                         <a href="maktab_students.php?edit=<?php echo $s['id']; ?>" class="btn btn-sm btn-primary" title="<?php echo t('btn_edit'); ?>"><i class="fas fa-edit"></i></a>
                                                         
                                                         <button type="button" class="btn btn-sm btn-dark text-warning" title="فارغ التحصیل کریں" onclick="openGraduateModal('<?php echo $s['id']; ?>', '<?php echo addslashes($s['name']); ?>', '<?php echo $s['admission_date']; ?>')">
                                                             <i class="fas fa-user-graduate"></i>
                                                         </button>
                                                         
-                                                        <a href="maktab_students.php?delete=<?php echo $s['id']; ?>" class="btn btn-sm btn-danger" title="ڈیلیٹ" onclick="return confirm('ریکارڈ ہمیشہ کے لیے ختم ہو جائے گا!')"><i class="fas fa-trash"></i></a>
+                                                        <form method="POST" action="maktab_students.php" class="d-inline" id="delMakStdMain_<?php echo $s['id']; ?>">
+                                                            <?php if (function_exists('csrf_field')) echo csrf_field(); ?>
+                                                            <input type="hidden" name="action" value="delete_maktab_student">
+                                                            <input type="hidden" name="student_id" value="<?php echo (int)$s['id']; ?>">
+                                                            <button type="button" class="btn btn-sm btn-danger" title="ڈیلیٹ" onclick="if(confirm('ریکارڈ ہمیشہ کے لیے ختم ہو جائے گا!')) { document.getElementById('delMakStdMain_<?php echo $s['id']; ?>').submit(); }">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </form>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </td>
                                             </tr>

@@ -263,17 +263,18 @@ if (in_array($role, ['admin', 'nazim', 'teacher', 'mudarris', 'superadmin', 'sup
                 $top_students = $pdo->query("
                     SELECT id, name, father_name, class_name as class, NULL as avg_marks, 0 as exams_count
                     FROM maktab_students
-                    WHERE (is_deleted=0 OR is_deleted IS NULL) AND (status='Active' OR status='' OR status IS NULL)
+                    WHERE (is_deleted=0 OR is_deleted IS NULL) AND (status='Active' OR status='' OR status IS NULL) $t_mas_cond
                     ORDER BY id DESC LIMIT 5
                 ")->fetchAll(PDO::FETCH_ASSOC);
             } catch (Throwable $e) {}
         }
 
-        // 10. Phase 1: Recent Activity Logs
+        // 10. Phase 1: Recent Activity Logs (strict tenant isolation)
         try {
             if (function_exists('ensure_phase1_tables')) ensure_phase1_tables($pdo);
-            $stmt_act = $pdo->prepare("SELECT * FROM activity_logs WHERE system_type='Masjid' AND (tenant_id = ? OR tenant_id IS NULL OR tenant_id = 0) ORDER BY id DESC LIMIT 8");
-            $stmt_act->execute([$masjid_tenant_id]);
+            $tCondAct = ($masjid_tenant_id == 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = " . (int)$masjid_tenant_id;
+            $stmt_act = $pdo->prepare("SELECT * FROM activity_logs WHERE system_type='Masjid' AND $tCondAct ORDER BY id DESC LIMIT 8");
+            $stmt_act->execute();
             $recent_activities = $stmt_act->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $e) {}
 

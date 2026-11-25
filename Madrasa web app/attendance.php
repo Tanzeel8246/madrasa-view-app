@@ -379,6 +379,23 @@ if (isset($_POST['save_attendance'])) {
                     $sql = "INSERT INTO period_attendance (student_id, date, period_num, status, remarks, tenant_id) VALUES (?, ?, ?, ?, ?, ?)";
                     $pdo->prepare($sql)->execute([$std_id, $date, $selected_period, $st, $rem, $cur_tenant_id]);
                 }
+
+                // D-07 Dual-write to attendance table for mobile sync parity
+                $pNum = (int)$selected_period;
+                if ($pNum >= 1 && $pNum <= 8) {
+                    try {
+                        $lateInt = (int)$rem;
+                        $sysAtt = $_SESSION['system_type'] ?? 'Madrasa';
+                        $chkAtt = $pdo->prepare("SELECT id FROM attendance WHERE student_id=? AND date=? AND tenant_id=? LIMIT 1");
+                        $chkAtt->execute([$std_id, $date, $cur_tenant_id]);
+                        $attRowId = $chkAtt->fetchColumn();
+                        if ($attRowId) {
+                            $pdo->prepare("UPDATE attendance SET status_{$pNum}=?, late_{$pNum}=?, updated_at=NOW() WHERE id=? AND tenant_id=?")->execute([$st, $lateInt, $attRowId, $cur_tenant_id]);
+                        } else {
+                            $pdo->prepare("INSERT INTO attendance (student_id, date, status_{$pNum}, late_{$pNum}, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?)")->execute([$std_id, $date, $st, $lateInt, $sysAtt, $cur_tenant_id]);
+                        }
+                    } catch (Throwable $eDual) {}
+                }
             }
         }
         echo "<div class='alert alert-success text-center fw-bold shadow'>✅ حاضری ریکارڈ (پیریڈ {$selected_period}) اپڈیٹ ہو گیا!</div>";
@@ -586,7 +603,23 @@ if ($selected_class && $selected_period) {
                                 $chk->execute([$s['id'], $date, $selected_period, $cur_tenant_id]);
                                 $res = $chk->fetch();
                                 
-                                $val       = $res['status']  ?? 'P'; // Default to Present
+                                $val = ($res && isset($res['status']) && $res['status'] !== '') ? $res['status'] : null;
+                                if ($val === null) {
+                                    $pNum = (int)$selected_period;
+                                    if ($pNum >= 1 && $pNum <= 8) {
+                                        try {
+                                            $chkAtt = $pdo->prepare("SELECT status_{$pNum} AS st, late_{$pNum} AS lt FROM attendance WHERE student_id=? AND date=? AND tenant_id=? LIMIT 1");
+                                            $chkAtt->execute([$s['id'], $date, $cur_tenant_id]);
+                                            $rowAtt = $chkAtt->fetch();
+                                            if ($rowAtt && !empty($rowAtt['st'])) {
+                                                $val = $rowAtt['st'];
+                                                if (!$res) $res = [];
+                                                $res['remarks'] = $rowAtt['lt'] ?? 0;
+                                            }
+                                        } catch (Throwable $ePre) {}
+                                    }
+                                }
+                                if ($val === null) { $val = 'P'; } // Default to Present
                                 $late_mins = (int)($res['remarks'] ?? 0); // remarks reused for late minutes
                                 
                                 $bg_class = 'bg-success text-white';
@@ -846,7 +879,8 @@ function openWhatsAppModal() {
         }
     });
 
-    var msg = "📋 *مدرسہ اشرف المدارس - روزانہ حاضری رپورٹ*\n";
+    var instNameAtt = <?php echo json_encode(!empty($_SESSION['tenant_name']) ? $_SESSION['tenant_name'] : t('app_name'), JSON_UNESCAPED_UNICODE); ?>;
+    var msg = "📋 *" + instNameAtt + " - روزانہ حاضری رپورٹ*\n";
     msg += "━━━━━━━━━━━━━━━━━━━━\n";
     msg += "📅 *تاریخ:* " + dateVal + "\n";
     if (className) msg += "🏫 *جماعت:* " + className + "\n";
@@ -871,7 +905,7 @@ function openWhatsAppModal() {
         });
     }
 
-    msg += "\n_اشرف المدارس مینجمنٹ سسٹم_";
+    msg += "\n_" + instNameAtt + "_";
 
     document.getElementById('wa_message_text').value = msg;
     var waUrl = "https://wa.me/?text=" + encodeURIComponent(msg);

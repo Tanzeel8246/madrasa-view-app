@@ -71,7 +71,7 @@ function handle_sync_up($pdo, $user, $input = null) {
         'maktab_qaida_records' => [], 'maktab_academic_reports' => [], 'maktab_exam_results' => [],
         'husn_saut_record' => [], 'admission_inquiries' => [], 'lib_books' => [], 'lib_issues' => [],
         'inventory_items' => [], 'inventory_sales' => [], 'hostel_rooms' => [], 'hostel_allocations' => [],
-        'job_postings' => [], 'job_applicants' => [], 'web_pages' => [], 'announcements' => [],
+        'job_postings' => [], 'job_applicants' => [], 'masjid_itikaf' => [], 'web_pages' => [], 'announcements' => [],
         'teacher_leaves' => [], 'course_structure' => [], 'course_subjects' => [],
         'student_course_enrollment' => [], 'exam_subject_results' => [],
         'student_year_promotion' => [], 'settings' => []

@@ -1164,6 +1164,13 @@ function applyHifzPeriodDates(val) {
 
                 if ($has_recitation) {
                     $p['parah'] = !empty($pa_val) ? cleanUrduStr($rec[$m_p] ?? '') : '-';
+                    if ($prefix === 'sabaq' && (!empty($rec['sabaq_surah']) || !empty($rec['surah_name']))) {
+                        $sSurah = trim((string)(!empty($rec['surah_name']) ? $rec['surah_name'] : $rec['sabaq_surah']));
+                        if ($sSurah !== '' && $p['parah'] !== '-') {
+                            $sSurahClean = preg_replace('/^سور[ہۃ]\s*/u', '', $sSurah);
+                            $p['parah'] .= " (سورۃ $sSurahClean)";
+                        }
+                    }
                     $p['amount'] = htmlspecialchars($rec[$m_a] ?? '-');
                     $p['status'] = !empty($st_val) ? translateStatusClean($rec[$prefix.'_status'] ?? '') : "<span class='badge bg-success'>سنایا</span>";
                     $p['time'] = !empty($rec[$prefix.'_time']) ? "<br><small class='text-muted' dir='ltr'>".date("h:i A", strtotime($rec[$prefix.'_time']))."</small>" : "";
@@ -1739,17 +1746,6 @@ function applyHifzPeriodDates(val) {
                             // Per-period process function that prioritizes actual recitation
                             $process_period = function($stat, $prefix) use (&$rec, &$summary_missed_sabaq, &$summary_missed_sabqi, &$summary_missed_manzil, &$freq_sabaq, &$freq_sabqi, &$freq_manzil, &$dates_sabaq_naaghah, &$dates_sabqi_naaghah, &$dates_manzil_naaghah, &$student_recited_sabaq_count, &$student_recited_sabqi_count, &$student_recited_manzil_count, $student_id, $date, $is_thursday, $is_friday, $is_present_cls) {
                                 $p = [];
-                                if ($is_friday) {
-                                    $b = "<span class='text-primary fw-bold'>جمعہ</span>";
-                                    $p['parah'] = $b; $p['status'] = $b; $p['amount'] = '-'; $p['time'] = ''; $p['listener'] = '-'; $p['type'] = 'friday';
-                                    return $p;
-                                }
-                                if ($is_thursday && $prefix === 'manzil') {
-                                    $b = "<span class='text-info fw-bold'>مشق</span>";
-                                    $p['parah'] = $b; $p['status'] = $b; $p['amount'] = '-'; $p['time'] = ''; $p['listener'] = '-'; $p['type'] = 'mashq';
-                                    return $p;
-                                }
-
                                 $m_p = $prefix == 'manzil' ? 'manzil_details' : ($prefix.'_parah');
                                 if ($prefix == 'manzil' && empty(trim($rec[$m_p] ?? ''))) {
                                     $m_p = 'manzil_parah';
@@ -1759,6 +1755,22 @@ function applyHifzPeriodDates(val) {
                                 $st_val = trim((string)($rec[$prefix.'_status'] ?? ''));
                                 $pa_val = trim((string)($rec[$m_p] ?? ''));
                                 $am_val = trim((string)($rec[$m_a] ?? ''));
+
+                                $has_actual_recitation = $rec && (!empty($st_val) || !empty($pa_val) || !empty($am_val))
+                                    && $st_val !== 'ناغہ' && $st_val !== '-' && $st_val !== 'غیر حاضر' && $st_val !== 'Absent' && $st_val !== 'رخصت' && $st_val !== 'Leave'
+                                    && $pa_val !== '-' && $pa_val !== 'غیر حاضر' && $pa_val !== 'رخصت' && $pa_val !== 'ناغہ';
+
+                                // S14 FIX: Prioritize actual recorded lesson over Friday/Mashq placeholder
+                                if ($is_friday && !$has_actual_recitation) {
+                                    $b = "<span class='text-primary fw-bold'>جمعہ</span>";
+                                    $p['parah'] = $b; $p['status'] = $b; $p['amount'] = '-'; $p['time'] = ''; $p['listener'] = '-'; $p['type'] = 'friday';
+                                    return $p;
+                                }
+                                if ($is_thursday && $prefix === 'manzil' && !$has_actual_recitation) {
+                                    $b = "<span class='text-info fw-bold'>مشق</span>";
+                                    $p['parah'] = $b; $p['status'] = $b; $p['amount'] = '-'; $p['time'] = ''; $p['listener'] = '-'; $p['type'] = 'mashq';
+                                    return $p;
+                                }
                                 
                                 $is_not_recited = (strpos($st_val, 'نہیں سنا') !== false || strpos($pa_val, 'نہیں سنا') !== false || strpos($st_val, 'نہیں سنائی') !== false || strpos($pa_val, 'نہیں سنائی') !== false);
 
@@ -1791,6 +1803,13 @@ function applyHifzPeriodDates(val) {
 
                                 if ($has_recitation) {
                                     $p['parah'] = !empty($pa_val) ? cleanUrduStr($rec[$m_p] ?? '') : '-';
+                                    if ($prefix === 'sabaq' && (!empty($rec['sabaq_surah']) || !empty($rec['surah_name']))) {
+                                        $sSurah = trim((string)(!empty($rec['surah_name']) ? $rec['surah_name'] : $rec['sabaq_surah']));
+                                        if ($sSurah !== '' && $p['parah'] !== '-') {
+                                            $sSurahClean = preg_replace('/^سور[ہۃ]\s*/u', '', $sSurah);
+                                            $p['parah'] .= " (سورۃ $sSurahClean)";
+                                        }
+                                    }
                                     $p['amount'] = htmlspecialchars($rec[$m_a] ?? '-');
                                     $p['status'] = !empty($st_val) ? translateStatusClean($rec[$prefix.'_status'] ?? '') : "<span class='badge bg-success'>سنایا</span>";
                                     $p['time'] = !empty($rec[$prefix.'_time']) ? "<br><small class='text-muted' dir='ltr'>".date("h:i A", strtotime($rec[$prefix.'_time']))."</small>" : "";

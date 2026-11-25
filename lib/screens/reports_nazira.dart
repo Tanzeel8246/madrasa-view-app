@@ -1311,7 +1311,10 @@ class _ReportsNaziraPageState extends State<ReportsNaziraPage> {
                   child: pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text("مدرسہ اشرف المدارس — فاروقہ، سرگودھا",
+                        pw.Text(
+                            (currentTenantName.value ?? '').trim().isNotEmpty
+                                ? currentTenantName.value!.trim()
+                                : "مدرسہ مینجمنٹ سسٹم",
                             style: bold.copyWith(fontSize: 12)),
                         pw.Text("ناظرہ رپورٹس",
                             style: bold.copyWith(fontSize: 14)),

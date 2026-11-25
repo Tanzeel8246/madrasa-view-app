@@ -132,16 +132,36 @@ if (isset($_POST['save_results'])) {
         $pdo->beginTransaction();
         foreach ($_POST['marks'] as $student_id => $marks_raw) {
             $marks = ($marks_raw === '') ? 0 : (float)$marks_raw;
-            $total = $_POST['total_marks'][$student_id] ?: ($is_hifz_class ? 100 : 600);
-            $status = $_POST['status'][$student_id] ?: 'Pass';
+            $configured_total = !empty($exam_data['total_marks']) ? (float)$exam_data['total_marks'] : 100;
+            $total = !empty($_POST['total_marks'][$student_id]) ? (float)$_POST['total_marks'][$student_id] : $configured_total;
+            $status = trim((string)($_POST['status'][$student_id] ?? ''));
             $remarks = $_POST['remarks'][$student_id] ?? '';
             $grade = $_POST['grade'][$student_id] ?? '';
             
             // غیر حاضر: نمبر صفر اور سٹیٹس Absent
-            if ($status === 'Absent') {
+            if ($status === 'Absent' || $grade === 'Absent') {
                 $marks = 0;
                 $grade = 'Absent';
-            };
+                $status = 'Absent';
+            } else {
+                $configured_passing = !empty($exam_data['passing_marks']) ? (float)$exam_data['passing_marks'] : ($total * ($is_hifz_class ? 0.33 : 0.40));
+                // سرور سائیڈ تصدیق (N-5): صفر نمبر یا پاسنگ مارکس سے کم پر لازمی فیل اور گریڈ F
+                if ($marks <= 0 || $marks < $configured_passing) {
+                    $status = 'Fail';
+                    $grade = 'F';
+                } else {
+                    $status = 'Pass';
+                    if (empty($grade) || $grade === 'F') {
+                        $pct = ($total > 0) ? ($marks / $total) * 100 : 0;
+                        if ($pct >= 80) $grade = 'A+';
+                        elseif ($pct >= 70) $grade = 'A';
+                        elseif ($pct >= 60) $grade = 'B';
+                        elseif ($pct >= 50) $grade = 'C';
+                        elseif ($pct >= 40) $grade = 'D';
+                        else $grade = 'F';
+                    }
+                }
+            }
             
             $pukhtagi = (int)($_POST['pukhtagi'][$student_id] ?? 0);
             $tajweed = (int)($_POST['tajweed'][$student_id] ?? 0);
@@ -192,7 +212,7 @@ if (isset($_POST['save_results'])) {
 // طلباء کی فہرست
 $sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
 $privacy_sql = get_student_class_privacy_sql($pdo, 'class');
-$student_query = "SELECT id, name, father_name, admission_number, serial_no, class FROM students WHERE (LOWER(TRIM(status)) IN ('active', 'present', 'حاضر', '') OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND $sys_cond AND tenant_id = $cur_tenant_id AND ($privacy_sql)";
+$student_query = "SELECT id, name, father_name, admission_number, serial_no, class FROM students WHERE (is_deleted=0 OR is_deleted IS NULL) AND $sys_cond AND tenant_id = $cur_tenant_id AND ($privacy_sql) AND (admission_date IS NULL OR admission_date <= " . $pdo->quote($e_date) . ") AND (exit_date IS NULL OR exit_date >= " . $pdo->quote($e_date) . ") AND (graduation_date IS NULL OR graduation_date >= " . $pdo->quote($e_date) . ") AND (LOWER(TRIM(COALESCE(status, ''))) IN ('active', 'present', 'حاضر', '') OR exit_date >= " . $pdo->quote($e_date) . " OR graduation_date >= " . $pdo->quote($e_date) . ")";
 if ($selected_class_name) {
     $student_query .= " AND class = " . $pdo->quote($selected_class_name);
 } elseif (!$is_admin) {
@@ -209,8 +229,18 @@ foreach ($results_raw->fetchAll() as $r) {
     $existing_results[$r['student_id']] = $r;
 }
 
-$total_marks_max = $is_hifz_class ? 100 : $total_dynamic_marks;
-$passing_pct = $is_hifz_class ? 33 : 40;
+$exam_total_configured = !empty($exam_data['total_marks']) ? (float)$exam_data['total_marks'] : 0;
+$exam_passing_configured = !empty($exam_data['passing_marks']) ? (float)$exam_data['passing_marks'] : 0;
+if ($exam_total_configured > 0) {
+    $total_marks_max = $exam_total_configured;
+} else {
+    $total_marks_max = $is_hifz_class ? 100 : ($total_dynamic_marks > 0 ? $total_dynamic_marks : 100);
+}
+if ($total_marks_max > 0 && $exam_passing_configured > 0) {
+    $passing_pct = ($exam_passing_configured <= 100 && $total_marks_max == 100) ? $exam_passing_configured : round(($exam_passing_configured / $total_marks_max) * 100, 2);
+} else {
+    $passing_pct = $is_hifz_class ? 33 : 40;
+}
 ?>
 
 <div class="container-fluid">

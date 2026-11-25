@@ -78,11 +78,16 @@ try { $studentCols = $pdo->query("SHOW COLUMNS FROM students")->fetchAll(PDO::FE
 $hasSys = in_array('system_type', $studentCols, true);
 $stdSysCond = $hasSys ? $sys_cond : "1=1";
 
+$tCond = ($cur_tenant_id === 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = " . (int)$cur_tenant_id;
+$classExpr = in_array('class_name', $studentCols, true)
+    ? "COALESCE(NULLIF(TRIM(class_name), ''), NULLIF(TRIM(class), ''), 'دیگر')"
+    : "COALESCE(NULLIF(TRIM(class), ''), 'دیگر')";
+
 $std_filter = (isset($_GET['std_id']) && $_GET['std_id'] != '') ? " AND id = " . (int)$_GET['std_id'] : "";
 
 $students = $pdo->query("
-    SELECT * FROM students 
-    WHERE tenant_id = $cur_tenant_id AND $stdSysCond AND ($class_condition) AND (is_deleted=0 OR is_deleted IS NULL)
+    SELECT *, $classExpr AS resolved_class FROM students 
+    WHERE $tCond AND $stdSysCond AND ($class_condition) AND (is_deleted=0 OR is_deleted IS NULL)
        AND (
            (
                (status='Active' OR status='Present' OR status='حاضر' OR status='' OR status IS NULL)
@@ -91,18 +96,18 @@ $students = $pdo->query("
                AND (alumni_category IS NULL OR alumni_category = '' OR LOWER(TRIM(alumni_category)) NOT IN ('completed', 'left', 'dropped', 'expelled'))
                AND (graduation_date IS NULL OR graduation_date = '' OR graduation_date = '0000-00-00' OR graduation_date >= '$start_date')
            )
-           OR (status='Alumni' AND graduation_date >= '$start_date')
-           OR (id IN (SELECT student_id FROM attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND tenant_id = $cur_tenant_id))
-           OR (id IN (SELECT student_id FROM period_attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND tenant_id = $cur_tenant_id))
+           OR (status='Alumni' AND (graduation_date IS NULL OR graduation_date = '' OR graduation_date = '0000-00-00' OR graduation_date >= '$start_date'))
+           OR (id IN (SELECT student_id FROM attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND $tCond))
+           OR (id IN (SELECT student_id FROM period_attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND $tCond))
        )
        $std_filter
-    ORDER BY class ASC, admission_number ASC
+    ORDER BY resolved_class ASC, admission_number ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 if (empty($students) && !empty($allowed_class_names)) {
     $students = $pdo->query("
-        SELECT * FROM students 
-        WHERE tenant_id = $cur_tenant_id AND ($class_condition) AND (is_deleted=0 OR is_deleted IS NULL)
+        SELECT *, $classExpr AS resolved_class FROM students 
+        WHERE $tCond AND ($class_condition) AND (is_deleted=0 OR is_deleted IS NULL)
            AND (
                (
                    (status='Active' OR status='Present' OR status='حاضر' OR status='' OR status IS NULL)
@@ -111,18 +116,45 @@ if (empty($students) && !empty($allowed_class_names)) {
                    AND (alumni_category IS NULL OR alumni_category = '' OR LOWER(TRIM(alumni_category)) NOT IN ('completed', 'left', 'dropped', 'expelled'))
                    AND (graduation_date IS NULL OR graduation_date = '' OR graduation_date = '0000-00-00' OR graduation_date >= '$start_date')
                )
-               OR (status='Alumni' AND graduation_date >= '$start_date')
-               OR (id IN (SELECT student_id FROM attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND tenant_id = $cur_tenant_id))
-               OR (id IN (SELECT student_id FROM period_attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND tenant_id = $cur_tenant_id))
+               OR (status='Alumni' AND (graduation_date IS NULL OR graduation_date = '' OR graduation_date = '0000-00-00' OR graduation_date >= '$start_date'))
+               OR (id IN (SELECT student_id FROM attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND $tCond))
+               OR (id IN (SELECT student_id FROM period_attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND $tCond))
            )
            $std_filter
-        ORDER BY class ASC, admission_number ASC
+        ORDER BY resolved_class ASC, admission_number ASC
     ")->fetchAll(PDO::FETCH_ASSOC);
+}
+
+if ($sys === 'Masjid') {
+    try {
+        $makCols = $pdo->query("SHOW COLUMNS FROM maktab_students")->fetchAll(PDO::FETCH_COLUMN);
+        $mClassExpr = in_array('class_name', $makCols, true)
+            ? "COALESCE(NULLIF(TRIM(class_name), ''), NULLIF(TRIM(class), ''), 'دیگر')"
+            : "COALESCE(NULLIF(TRIM(class), ''), 'دیگر')";
+        $m_students = $pdo->query("
+            SELECT *, $mClassExpr AS resolved_class FROM maktab_students 
+            WHERE $tCond AND (is_deleted=0 OR is_deleted IS NULL)
+               AND (
+                   (
+                       (status='Active' OR status='Present' OR status='حاضر' OR status='' OR status IS NULL)
+                       AND (LOWER(TRIM(COALESCE(status, ''))) NOT IN ('alumni', 'left', 'struck off', 'dropped', 'expelled', 'graduated', 'inactive', 'خارج', 'فارغ', 'فارغ التحصیل', 'چھوڑ دیا', 'ترک تعلیم'))
+                   )
+                   OR (id IN (SELECT student_id FROM attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND $tCond))
+                   OR (id IN (SELECT student_id FROM period_attendance WHERE date BETWEEN '$start_date' AND '$end_date' AND $tCond))
+               )
+               $std_filter
+            ORDER BY resolved_class ASC, admission_number ASC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+        if (!empty($m_students)) {
+            $students = array_merge($students, $m_students);
+        }
+    } catch(Exception $e) {}
 }
 
 $grouped_students = [];
 foreach ($students as $s) {
-    $c = empty($s['class']) ? 'دیگر' : $s['class'];
+    $c = trim((string)($s['resolved_class'] ?? (!empty($s['class_name']) ? $s['class_name'] : (!empty($s['class']) ? $s['class'] : 'دیگر'))));
+    if ($c === '') $c = 'دیگر';
     if (!isset($grouped_students[$c])) $grouped_students[$c] = [];
     $grouped_students[$c][] = $s;
 }
@@ -204,13 +236,26 @@ while($row = $stmt->fetch()) {
 $stmt = $pdo->prepare("SELECT student_id, date, period_num, status, remarks FROM period_attendance WHERE date BETWEEN ? AND ? AND tenant_id = ?");
 $stmt->execute([$start_date, $end_date, $cur_tenant_id]);
 while($row = $stmt->fetch()) {
-    $periodNo = (int)($row['period_num'] ?? 0);
-    if ($periodNo < 1 || $periodNo > 8) continue;
-    if (!isset($attendance_data[$row['student_id']][$row['date']])) {
-        $attendance_data[$row['student_id']][$row['date']] = [];
+    $rawPeriod = trim((string)($row['period_num'] ?? ''));
+    $periodNo = (int)$rawPeriod;
+    if ($periodNo < 1 || $periodNo > 8) {
+        $pMap = [
+            'hifz_morning' => 1, 'hifz_after_breakfast' => 2, 'hifz_noon' => 3, 'hifz_evening' => 4,
+            'nazira_morning' => 1, 'nazira_evening' => 2,
+            'صبح' => 1, 'ناشتہ کے بعد' => 2, 'دوپہر' => 3, 'شام' => 4,
+            'سبق 1' => 1, 'سبق 2' => 2, 'سبق 3' => 3, 'سبق 4' => 4,
+            'سبق 5' => 5, 'سبق 6' => 6, 'مطالعہ' => 7, 'تکرار' => 8,
+        ];
+        $periodNo = $pMap[$rawPeriod] ?? 0;
     }
-    $attendance_data[$row['student_id']][$row['date']]['s' . $periodNo] = $row['status'];
-    $attendance_data[$row['student_id']][$row['date']]['l' . $periodNo] = (int)($row['remarks'] ?? 0);
+    if ($periodNo < 1 || $periodNo > 8) continue;
+    $pSid = (int)$row['student_id'];
+    $pDt = substr(trim((string)$row['date']), 0, 10);
+    if (!isset($attendance_data[$pSid][$pDt])) {
+        $attendance_data[$pSid][$pDt] = [];
+    }
+    $attendance_data[$pSid][$pDt]['s' . $periodNo] = $row['status'];
+    $attendance_data[$pSid][$pDt]['l' . $periodNo] = (int)($row['remarks'] ?? 0);
 }
 
 // --- 3. اساتذہ اور ان کی حاضری لائیں (Teachers & their Attendance) ---
@@ -447,7 +492,8 @@ function att_period_display_name($pNo, $totalPeriods = 8) {
                             <option value=""><?php echo __('-- تمام طلبہ --', '-- All Students --'); ?></option>
                             <?php 
                             $st_id = $_GET['std_id'] ?? '';
-                            $all_sts = $pdo->query("SELECT id, name FROM students WHERE ($class_condition) AND status='Active' AND is_deleted=0 ORDER BY name ASC")->fetchAll();
+                            // BUGFIX B-01: this dropdown had no tenant filter and listed every institute's students.
+                            $all_sts = $pdo->query("SELECT id, name FROM students WHERE tenant_id = $cur_tenant_id AND ($class_condition) AND status='Active' AND (is_deleted=0 OR is_deleted IS NULL) ORDER BY name ASC")->fetchAll();
                             foreach($all_sts as $st) echo "<option value='{$st['id']}' ".($st_id==$st['id']?'selected':'').">{$st['name']}</option>";
                             ?>
                         </select>

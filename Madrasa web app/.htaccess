@@ -6,10 +6,14 @@ DirectoryIndex index.php index.html
     Options -Indexes
 </IfModule>
 
-# Protect sensitive file extensions and hidden files
-<FilesMatch "\.(log|txt|json|sql|db|sqlite|md|bak|env|ini)$|^\.">
+# Protect sensitive file extensions and hidden files (D-01 Data Safety)
+<FilesMatch "\.(log|txt|json|sql|db|sqlite|sqlite3|md|bak|env|ini|csv|xlsx|xls|tsv|tar|gz)$|^\.">
     <IfModule mod_authz_core.c>
         Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
     </IfModule>
 </FilesMatch>
 
@@ -21,7 +25,7 @@ DirectoryIndex index.php index.html
 </FilesMatch>
 
 # Block dangerous admin/diagnostic scripts from public access
-<FilesMatch "^(seed_demo_data|diagnose_sync|fix_admin|fix_schema|fix_all_issues|fix_null_system_type|fix_sync_timestamp|fix_urdu|run_backfill|run_migration|schema_inspect|show_tables|migrate_to_saas|db_migrate_tenant|erp_migration|import_students|update_db|update_masjid_assets_table)\.php$">
+<FilesMatch "^(run_migrations|run_migration|acc_merge_tool|seed_demo_data|diagnose_sync|fix_admin|fix_schema|fix_all_issues|fix_null_system_type|fix_sync_timestamp|fix_urdu|run_backfill|schema_inspect|show_tables|migrate_to_saas|db_migrate_tenant|erp_migration|import_students|update_db|update_masjid_assets_table)\.php$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -45,7 +49,36 @@ DirectoryIndex index.php index.html
     # Front Controller Routing
     RewriteBase /
     RewriteRule ^index\.php$ - [L]
+    # BUGFIX B-02: never rewrite app downloads to the landing page. A missing
+    # APK/EXE previously returned HTTP 200 with the landing-page HTML, so the
+    # "Download Android App" button delivered an HTML file instead of the app.
+    # Real files in /downloads/ are served directly; missing ones now 404.
+    RewriteCond %{REQUEST_URI} !^/downloads/ [NC]
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule . /index.php [L]
 </IfModule>
+
+<IfModule mod_headers.c>
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header unset X-Powered-By
+    Header always unset X-Powered-By
+</IfModule>
+
+# BEGIN cPanel-generated php ini directives, do not edit
+# Manual editing of this file may result in unexpected behavior.
+# To make changes to this file, use the cPanel MultiPHP INI Editor (Home >> Software >> MultiPHP INI Editor)
+# For more information, read our documentation (https://go.cpanel.net/EA4ModifyINI)
+<IfModule php8_module>
+   php_value session.cookie_httponly "1"
+   php_value session.cookie_samesite "Lax"
+</IfModule>
+<IfModule lsapi_module>
+   php_value session.cookie_httponly "1"
+   php_value session.cookie_samesite "Lax"
+</IfModule>
+# END cPanel-generated php ini directives, do not edit

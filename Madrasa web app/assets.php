@@ -5,9 +5,44 @@ require_once 'db.php';
 try {
     $pdo->exec("RENAME TABLE masjid_assets TO assets");
 } catch (Exception $e) {}
+// BUGFIX B-04: the page's INSERT/UPDATE use columns (condition_status, asset_type,
+// donor_*, is_synced) that only exist on the OLD masjid_assets table. When the
+// minimal seed `assets` table already exists the rename above fails silently and
+// every save threw "Unknown column 'condition_status'". Guarantee the full schema.
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS assets (
+        id INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        system_type VARCHAR(50) DEFAULT 'Madrasa',
+        category VARCHAR(100) DEFAULT NULL,
+        quantity INT DEFAULT 1,
+        value DECIMAL(12,2) DEFAULT 0.00,
+        condition_status VARCHAR(255) DEFAULT NULL,
+        asset_type VARCHAR(255) DEFAULT 'Purchased',
+        donor_name VARCHAR(255) DEFAULT NULL,
+        donor_father VARCHAR(255) DEFAULT NULL,
+        donor_address VARCHAR(255) DEFAULT NULL,
+        donor_phone VARCHAR(255) DEFAULT NULL,
+        tenant_id INT DEFAULT 1,
+        is_synced INT DEFAULT 0,
+        is_deleted TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (Exception $e) {}
 try {
     $pdo->exec("ALTER TABLE assets ADD COLUMN system_type VARCHAR(50) DEFAULT 'Masjid' AFTER name");
 } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN condition_status VARCHAR(255) DEFAULT NULL"); } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN asset_type VARCHAR(255) DEFAULT 'Purchased'"); } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN donor_name VARCHAR(255) DEFAULT NULL"); } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN donor_father VARCHAR(255) DEFAULT NULL"); } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN donor_address VARCHAR(255) DEFAULT NULL"); } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN donor_phone VARCHAR(255) DEFAULT NULL"); } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN value DECIMAL(12,2) DEFAULT 0.00"); } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN is_synced INT DEFAULT 0"); } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN tenant_id INT DEFAULT 1"); } catch (Exception $e) {}
+try { $pdo->exec("ALTER TABLE assets ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Exception $e) {}
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -31,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = $_POST["name"] ?? "";
         $category = $_POST["category"] ?? "";
         $quantity = (int)($_POST["quantity"] ?? 0);
+        $value = (float)($_POST["value"] ?? 0);
         $condition_status = $_POST["condition_status"] ?? "";
         $asset_type = $_POST["asset_type"] ?? "Purchased";
         
@@ -48,11 +84,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (isset($_POST['id']) && !empty($_POST['id'])) {
             $id = (int)$_POST['id'];
-            $stmt = $pdo->prepare("UPDATE assets SET name=?, category=?, quantity=?, condition_status=?, asset_type=?, donor_name=?, donor_father=?, donor_address=?, donor_phone=?, is_synced=0 WHERE id=? AND system_type=? AND tenant_id=?");
-            $stmt->execute([$name, $category, $quantity, $condition_status, $asset_type, $donor_name, $donor_father, $donor_address, $donor_phone, $id, $system_type, $cur_tenant_id]);
+            $stmt = $pdo->prepare("UPDATE assets SET name=?, category=?, quantity=?, value=?, condition_status=?, asset_type=?, donor_name=?, donor_father=?, donor_address=?, donor_phone=?, is_synced=0 WHERE id=? AND system_type=? AND tenant_id=?");
+            $stmt->execute([$name, $category, $quantity, $value, $condition_status, $asset_type, $donor_name, $donor_father, $donor_address, $donor_phone, $id, $system_type, $cur_tenant_id]);
         } else {
-            $stmt = $pdo->prepare("INSERT INTO assets (name, system_type, category, quantity, condition_status, asset_type, donor_name, donor_father, donor_address, donor_phone, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$name, $system_type, $category, $quantity, $condition_status, $asset_type, $donor_name, $donor_father, $donor_address, $donor_phone, $cur_tenant_id]);
+            $stmt = $pdo->prepare("INSERT INTO assets (name, system_type, category, quantity, value, condition_status, asset_type, donor_name, donor_father, donor_address, donor_phone, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $system_type, $category, $quantity, $value, $condition_status, $asset_type, $donor_name, $donor_father, $donor_address, $donor_phone, $cur_tenant_id]);
         }
     }
     header("Location: assets.php");
@@ -158,6 +194,10 @@ include 'header.php';
                     <input type="number" name="quantity" id="asset_qty" class="form-control" required min="1" value="1">
                 </div>
                 <div class="col-md-6">
+                    <label class="form-label fw-bold"><?php echo __('قیمت / مالیت (Rs.)', 'Value (Rs.)'); ?></label>
+                    <input type="number" step="0.01" name="value" id="asset_value" class="form-control" min="0" value="0">
+                </div>
+                <div class="col-md-6">
                     <label class="form-label fw-bold"><?php echo __('حالت (Condition)', 'Condition'); ?></label>
                     <select name="condition_status" id="asset_condition" class="form-select" required>
                         <option value=" (New)"> (New)</option>
@@ -241,6 +281,7 @@ function editRecord(row) {
     document.getElementById('asset_name').value = row.name || '';
     document.getElementById('asset_category').value = row.category || '';
     document.getElementById('asset_qty').value = row.quantity || '1';
+    document.getElementById('asset_value').value = row.value || '0';
     
     // Set condition if exists
     let conditionSelect = document.getElementById('asset_condition');

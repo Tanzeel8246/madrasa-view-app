@@ -75,15 +75,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_inquiry'])) {
     }
 }
 
-// 2. اسٹیٹس کی تبدیلی
+// 2. اسٹیٹس کی تبدیلی (بشمول لازمی وجہِ مسترد D-05)
 if (isset($_POST['update_status'])) {
     try {
         $inq_id = (int)$_POST['inquiry_id'];
         $new_status = $_POST['new_status'];
         $allowed = ['Pending', 'Interviewed', 'Accepted', 'Rejected'];
         if (in_array($new_status, $allowed, true)) {
-            $pdo->prepare("UPDATE admission_inquiries SET status = ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?")->execute([$new_status, $inq_id, $cur_tenant_id]);
-            log_activity($pdo, 'admissions', "داخلہ درخواست #$inq_id کا مرحلہ تبدیل کیا گیا: $new_status");
+            $rej_reason = trim($_POST['rejection_reason'] ?? '');
+            if ($new_status === 'Rejected') {
+                if (empty($rej_reason)) {
+                    throw new Exception("درخواست مسترد کرنے کے لیے ٹھوس وجہ درج کرنا لازمی ہے!");
+                }
+                if (function_exists('ensure_column')) { try { ensure_column($pdo, 'admission_inquiries', 'rejection_reason', 'TEXT DEFAULT NULL'); } catch (Throwable $eCol) {} }
+                $pdo->prepare("UPDATE admission_inquiries SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?")
+                    ->execute([$new_status, $rej_reason, $inq_id, $cur_tenant_id]);
+            } else {
+                $pdo->prepare("UPDATE admission_inquiries SET status = ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?")
+                    ->execute([$new_status, $inq_id, $cur_tenant_id]);
+            }
+
+            // Sync status to source admission_applications if linked (tenant-isolated)
+            try {
+                $srcStmt = $pdo->prepare("SELECT source_application_id FROM admission_inquiries WHERE id = ? AND tenant_id = ?");
+                $srcStmt->execute([$inq_id, $cur_tenant_id]);
+                $srcId = $srcStmt->fetchColumn();
+                if ($srcId) {
+                    $appStatus = ($new_status === 'Accepted') ? 'Approved' : (($new_status === 'Interviewed') ? 'interview' : strtolower($new_status));
+                    $pdo->prepare("UPDATE admission_applications SET status = ?, rejection_reason = ? WHERE id = ? AND tenant_id = ?")
+                        ->execute([$appStatus, $rej_reason ?: null, $srcId, $cur_tenant_id]);
+                }
+            } catch (Throwable $eSyncApp) {}
+
+            log_activity($pdo, 'admissions', "داخلہ درخواست #$inq_id کا مرحلہ تبدیل کیا گیا: $new_status" . ($rej_reason ? " (وجہ: $rej_reason)" : ""));
             $success_msg = "مرحلہ کامیابی سے تبدیل کر دیا گیا!";
         }
     } catch (Throwable $e) {
@@ -122,18 +146,22 @@ if (isset($_POST['convert_to_student'])) {
         $target_class = trim($_POST['enroll_class'] ?? ($inq['class_applied'] ?: ''));
         if (empty($target_class)) throw new Exception("کلاس کا انتخاب لازمی ہے!");
 
-        $h_stmt = $pdo->prepare("SELECT current_hijri_year FROM settings WHERE tenant_id = ? LIMIT 1");
-        $h_stmt->execute([$cur_tenant_id]);
-        $current_hijri = $h_stmt->fetchColumn() ?: '1447';
         $target_table = $is_masjid ? 'maktab_students' : 'students';
 
-        $s_stmt = $pdo->prepare("SELECT MAX(serial_no) FROM (SELECT serial_no FROM $target_table WHERE tenant_id = ? UNION SELECT serial_no FROM admission_applications WHERE tenant_id = ?) as cb");
-        $s_stmt->execute([$cur_tenant_id, $cur_tenant_id]);
-        $last_serial = $s_stmt->fetchColumn() ?: 0;
-        $next_serial = (int)$last_serial + 1;
+        // Canonical ID Sequence Generator (D-04)
         $adm_no = trim($_POST['admission_number'] ?? '');
         if (empty($adm_no)) {
-            $adm_no = !empty($inq['admission_number']) ? $inq['admission_number'] : ($current_hijri . "-" . sprintf("%02d", $next_serial));
+            $adm_no = !empty($inq['admission_number']) ? $inq['admission_number'] : '';
+        }
+        if (empty($adm_no)) {
+            $seq = get_next_admission_number($pdo, $active_sys, $cur_tenant_id, true);
+            $adm_no = $seq['admission_number'];
+            $s_no = (int)$seq['serial_no'];
+            $h_year = $seq['hijri_year'];
+        } else {
+            $parts = explode('-', $adm_no);
+            $h_year = ($parts[0] === 'M') ? (int)($parts[1] ?? 1447) : (int)$parts[0];
+            $s_no = (int)end($parts);
         }
 
         $res_status = $_POST['residence_status'] ?? ($inq['residence_status'] ?: '');
@@ -144,6 +172,18 @@ if (isset($_POST['convert_to_student'])) {
         if (empty($photo_path) && !empty($inq['photo'])) {
             $photo_path = $inq['photo'];
         }
+
+        // سرپرست اور سابقہ تعلیمی کوائف (D-05 Preserve All Fields)
+        $guardian_name = trim($_POST['guardian_name'] ?? ($inq['guardian_name'] ?? ''));
+        $guardian_cnic = trim($_POST['guardian_cnic'] ?? ($inq['guardian_cnic'] ?? ''));
+        $guardian_rel  = trim($_POST['guardian_relation'] ?? ($inq['guardian_relation'] ?? ''));
+        $guardian_addr = trim($_POST['guardian_address'] ?? ($inq['guardian_address'] ?? ''));
+        $prev_madaris  = trim($_POST['prev_madaris'] ?? ($inq['prev_madaris'] ?? ''));
+        $qualification = trim($_POST['qualification'] ?? ($inq['qualification'] ?? ''));
+        $last_studied  = trim($_POST['last_studied'] ?? ($inq['last_studied'] ?? ''));
+        $leave_reason  = trim($_POST['leave_reason'] ?? ($inq['leave_reason'] ?? ''));
+        $dob           = !empty($_POST['dob']) ? $_POST['dob'] : (!empty($inq['dob']) ? $inq['dob'] : null);
+        $email         = trim($_POST['email'] ?? ($inq['email'] ?? ''));
 
         // Drop legacy single-column unique index on target table(admission_number) if still present
         try {
@@ -170,13 +210,14 @@ if (isset($_POST['convert_to_student'])) {
         $dup->execute([$adm_no, $cur_tenant_id]);
         if ($dup->fetch()) throw new Exception("داخلہ نمبر '$adm_no' پہلے سے موجود ہے!");
 
-        $parts = explode('-', $adm_no);
-        $h_year = (int)$parts[0];
-        $s_no = isset($parts[1]) ? (int)$parts[1] : $next_serial;
+        $stdCols = ['guardian_name' => "VARCHAR(150) DEFAULT ''", 'guardian_cnic' => "VARCHAR(30) DEFAULT ''", 'guardian_relation' => "VARCHAR(50) DEFAULT ''", 'guardian_address' => "TEXT DEFAULT NULL", 'prev_madaris' => "TEXT DEFAULT NULL", 'qualification' => "VARCHAR(100) DEFAULT ''", 'last_studied' => "VARCHAR(150) DEFAULT ''", 'leave_reason' => "TEXT DEFAULT NULL", 'dob' => "DATE DEFAULT NULL", 'email' => "VARCHAR(100) DEFAULT ''", 'quran_edition' => "VARCHAR(50) DEFAULT '16 سطری'"];
+        foreach ($stdCols as $cName => $cDef) {
+            try { ensure_column($pdo, $target_table, $cName, $cDef); } catch (Throwable $eC) {}
+        }
 
         if ($is_masjid) {
-            $sql = "INSERT INTO maktab_students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, duration, photo, residence_status, quran_edition, tenant_id) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?)";
+            $sql = "INSERT INTO maktab_students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, duration, photo, residence_status, quran_edition, guardian_name, guardian_cnic, guardian_relation, guardian_address, prev_madaris, qualification, last_studied, leave_reason, dob, email, tenant_id) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $pdo->prepare($sql)->execute([
                 $inq['student_name'],
                 $inq['father_name'],
@@ -191,11 +232,21 @@ if (isset($_POST['convert_to_student'])) {
                 $photo_path,
                 $res_status,
                 $quran_edition,
+                $guardian_name,
+                $guardian_cnic,
+                $guardian_rel,
+                $guardian_addr,
+                $prev_madaris,
+                $qualification,
+                $last_studied,
+                $leave_reason,
+                $dob,
+                $email,
                 $cur_tenant_id
             ]);
         } else {
-            $sql = "INSERT INTO students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, duration, photo, residence_status, quran_edition, system_type, tenant_id) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?)";
+            $sql = "INSERT INTO students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, duration, photo, residence_status, quran_edition, guardian_name, guardian_cnic, guardian_relation, guardian_address, prev_madaris, qualification, last_studied, leave_reason, dob, email, system_type, tenant_id) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $pdo->prepare($sql)->execute([
                 $inq['student_name'],
                 $inq['father_name'],
@@ -210,6 +261,16 @@ if (isset($_POST['convert_to_student'])) {
                 $photo_path,
                 $res_status,
                 $quran_edition,
+                $guardian_name,
+                $guardian_cnic,
+                $guardian_rel,
+                $guardian_addr,
+                $prev_madaris,
+                $qualification,
+                $last_studied,
+                $leave_reason,
+                $dob,
+                $email,
                 $active_sys,
                 $cur_tenant_id
             ]);
@@ -254,17 +315,18 @@ if (isset($_POST['direct_enroll_student'])) {
             throw new Exception("کلاس منتخب کرنا لازمی ہے!");
         }
 
-        $h_stmt = $pdo->prepare("SELECT current_hijri_year FROM settings WHERE tenant_id = ? LIMIT 1");
-        $h_stmt->execute([$cur_tenant_id]);
-        $current_hijri = $h_stmt->fetchColumn() ?: '1447';
         $target_table = $is_masjid ? 'maktab_students' : 'students';
 
-        $s_stmt = $pdo->prepare("SELECT MAX(serial_no) FROM (SELECT serial_no FROM $target_table WHERE tenant_id = ? UNION SELECT serial_no FROM admission_applications WHERE tenant_id = ?) as cb");
-        $s_stmt->execute([$cur_tenant_id, $cur_tenant_id]);
-        $last_serial = $s_stmt->fetchColumn() ?: 0;
-        $next_serial = (int)$last_serial + 1;
+        // Canonical ID Sequence Generator (D-04)
         if (empty($adm_no)) {
-            $adm_no = $current_hijri . "-" . sprintf("%02d", $next_serial);
+            $seq = get_next_admission_number($pdo, $active_sys, $cur_tenant_id, true);
+            $adm_no = $seq['admission_number'];
+            $s_no = (int)$seq['serial_no'];
+            $h_year = $seq['hijri_year'];
+        } else {
+            $parts = explode('-', $adm_no);
+            $h_year = ($parts[0] === 'M') ? (int)($parts[1] ?? 1447) : (int)$parts[0];
+            $s_no = (int)end($parts);
         }
 
         // Duplicate check
@@ -272,25 +334,36 @@ if (isset($_POST['direct_enroll_student'])) {
         $dup->execute([$adm_no, $cur_tenant_id]);
         if ($dup->fetch()) throw new Exception("داخلہ نمبر '$adm_no' پہلے سے موجود ہے!");
 
-        $parts = explode('-', $adm_no);
-        $h_year = (int)$parts[0];
-        $s_no = isset($parts[1]) ? (int)$parts[1] : $next_serial;
+        $guardian_name = trim($_POST['guardian_name'] ?? '');
+        $guardian_cnic = trim($_POST['guardian_cnic'] ?? '');
+        $guardian_rel  = trim($_POST['guardian_relation'] ?? '');
+        $guardian_addr = trim($_POST['guardian_address'] ?? '');
+        $prev_madaris  = trim($_POST['prev_madaris'] ?? '');
+        $last_studied  = trim($_POST['last_studied'] ?? '');
+        $leave_reason  = trim($_POST['leave_reason'] ?? '');
+        $dob           = !empty($_POST['dob']) ? $_POST['dob'] : null;
+        $email         = trim($_POST['email'] ?? '');
+
+        $stdCols = ['guardian_name' => "VARCHAR(150) DEFAULT ''", 'guardian_cnic' => "VARCHAR(30) DEFAULT ''", 'guardian_relation' => "VARCHAR(50) DEFAULT ''", 'guardian_address' => "TEXT DEFAULT NULL", 'prev_madaris' => "TEXT DEFAULT NULL", 'last_studied' => "VARCHAR(150) DEFAULT ''", 'leave_reason' => "TEXT DEFAULT NULL", 'dob' => "DATE DEFAULT NULL", 'email' => "VARCHAR(100) DEFAULT ''", 'quran_edition' => "VARCHAR(50) DEFAULT '16 سطری'"];
+        foreach ($stdCols as $cName => $cDef) {
+            try { ensure_column($pdo, $target_table, $cName, $cDef); } catch (Throwable $eC) {}
+        }
 
         if ($is_masjid) {
-            $sql = "INSERT INTO maktab_students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, graduation_date, duration, photo, residence_status, quran_edition, tenant_id) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?)";
-            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $s_no, $h_year, $cls, $phone, $addr, $adm_date, $grad_date, $duration, $photo_path, $res_status, $quran_edition, $cur_tenant_id]);
+            $sql = "INSERT INTO maktab_students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, graduation_date, duration, photo, residence_status, quran_edition, guardian_name, guardian_cnic, guardian_relation, guardian_address, prev_madaris, last_studied, leave_reason, dob, email, tenant_id) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $s_no, $h_year, $cls, $phone, $addr, $adm_date, $grad_date, $duration, $photo_path, $res_status, $quran_edition, $guardian_name, $guardian_cnic, $guardian_rel, $guardian_addr, $prev_madaris, $last_studied, $leave_reason, $dob, $email, $cur_tenant_id]);
         } else {
-            $sql = "INSERT INTO students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, graduation_date, duration, photo, residence_status, quran_edition, system_type, tenant_id) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?)";
-            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $s_no, $h_year, $cls, $phone, $addr, $adm_date, $grad_date, $duration, $photo_path, $res_status, $quran_edition, $active_sys, $cur_tenant_id]);
+            $sql = "INSERT INTO students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, graduation_date, duration, photo, residence_status, quran_edition, guardian_name, guardian_cnic, guardian_relation, guardian_address, prev_madaris, last_studied, leave_reason, dob, email, system_type, tenant_id) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $s_no, $h_year, $cls, $phone, $addr, $adm_date, $grad_date, $duration, $photo_path, $res_status, $quran_edition, $guardian_name, $guardian_cnic, $guardian_rel, $guardian_addr, $prev_madaris, $last_studied, $leave_reason, $dob, $email, $active_sys, $cur_tenant_id]);
         }
         $new_std_id = $pdo->lastInsertId();
 
         // Also create inquiry entry marked as Accepted & Converted so it displays in pipeline
-        $pdo->prepare("INSERT INTO admission_inquiries (student_name, father_name, admission_number, phone, class_applied, quran_edition, residence_status, admission_date, graduation_date, duration, address, photo, admin_notes, status, system_type, converted_student_id, tenant_id, created_at, updated_at) 
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Accepted', ?, ?, ?, NOW(), NOW())")
-            ->execute([$name, $fname, $adm_no, $phone, $cls, $quran_edition, $res_status, $adm_date, $grad_date, $duration, $addr, $photo_path, $admin_notes, $active_sys, $new_std_id, $cur_tenant_id]);
+        $pdo->prepare("INSERT INTO admission_inquiries (student_name, father_name, admission_number, phone, class_applied, quran_edition, residence_status, admission_date, graduation_date, duration, address, photo, admin_notes, guardian_name, guardian_cnic, guardian_relation, guardian_address, prev_madaris, last_studied, leave_reason, dob, email, status, system_type, converted_student_id, tenant_id, created_at, updated_at) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Accepted', ?, ?, ?, NOW(), NOW())")
+            ->execute([$name, $fname, $adm_no, $phone, $cls, $quran_edition, $res_status, $adm_date, $grad_date, $duration, $addr, $photo_path, $admin_notes, $guardian_name, $guardian_cnic, $guardian_rel, $guardian_addr, $prev_madaris, $last_studied, $leave_reason, $dob, $email, $active_sys, $new_std_id, $cur_tenant_id]);
 
         log_activity($pdo, 'admissions', "ڈائریکٹ طالب علم داخل کیا گیا: $name (داخلہ نمبر: $adm_no, کلاس: $cls, ٹیبل: $target_table)");
         $success_msg = "طالب علم '$name' کامیابی سے داخل کر لیا گیا! (داخلہ نمبر: $adm_no)";
@@ -311,17 +384,11 @@ if (isset($_GET['del_id']) && $role === 'admin') {
     }
 }
 
-// رجسٹریشن نمبر لاجک
-$h_stmt = $pdo->prepare("SELECT current_hijri_year FROM settings WHERE tenant_id = ? LIMIT 1");
-$h_stmt->execute([$cur_tenant_id]);
-$current_hijri_year = $h_stmt->fetchColumn() ?: '1447';
-
-$target_table = $is_masjid ? 'maktab_students' : 'students';
-$s_stmt = $pdo->prepare("SELECT MAX(serial_no) FROM (SELECT serial_no FROM $target_table WHERE tenant_id = ? UNION SELECT serial_no FROM admission_applications WHERE tenant_id = ?) as combined_serials");
-$s_stmt->execute([$cur_tenant_id, $cur_tenant_id]);
-$last_serial = $s_stmt->fetchColumn() ?: 0;
-$next_serial = (int)$last_serial + 1;
-$suggested_adm_no = $current_hijri_year . "-" . sprintf("%02d", $next_serial);
+// رجسٹریشن نمبر لاجک (کینونیکل و اٹامک جنریٹر D-04)
+$seq = get_next_admission_number($pdo, $active_sys, $cur_tenant_id, false);
+$suggested_adm_no = $seq['admission_number'];
+$next_serial = (int)$seq['serial_no'];
+$current_hijri_year = $seq['hijri_year'];
 
 // کلاسز لسٹ برائے ڈراپ ڈاؤن
 $class_table = $is_masjid ? 'maktab_classes' : 'classes';
@@ -346,7 +413,8 @@ if (empty($classes)) {
             ['name' => 'قاعدہ', 'class_type' => 'Qaida'],
             ['name' => 'درجہ اولیٰ', 'class_type' => 'Darse Nizami / Other']
         ];
-        $stmt_seed_m = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id) VALUES (?, ?, 'Madrasa', ?)");
+        if (function_exists('ensure_column')) { try { ensure_column($pdo, 'classes', 'is_default', 'TINYINT(1) DEFAULT 0'); } catch (Throwable $e) {} }
+        $stmt_seed_m = $pdo->prepare("INSERT INTO classes (name, class_type, system_type, tenant_id, is_default) VALUES (?, ?, 'Madrasa', ?, 1)");
         foreach ($default_classes as $dc) {
             try { $stmt_seed_m->execute([$dc['name'], $dc['class_type'], $cur_tenant_id]); } catch (Throwable $eSeed) {}
         }
@@ -355,6 +423,80 @@ if (empty($classes)) {
         $classes = ['قاعدہ', 'ناظرہ', 'حفظ', 'ترجمہ'];
     }
 }
+
+// خودکار ہم آہنگی: عوامی آن لائن داخلہ درخواستوں کو پائپ لائن میں شامل کرنا (G-1)
+try {
+    $unsyncedStmt = $pdo->prepare("
+        SELECT a.* 
+        FROM admission_applications a
+        LEFT JOIN admission_inquiries i ON (i.source_application_id = a.id)
+        WHERE i.id IS NULL AND a.tenant_id = ?
+    ");
+    $unsyncedStmt->execute([$cur_tenant_id]);
+    $unsynced = $unsyncedStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($unsynced as $uapp) {
+        $uDept = $uapp['department'] ?? 'حفظ قرآن';
+        $uIsMasjid = (strpos(strtolower($uDept), 'مکتب') !== false || strpos(strtolower($uDept), 'maktab') !== false);
+        $uSysType = $uIsMasjid ? 'Masjid' : 'Madrasa';
+        $uStatus = ($uapp['status'] === 'Approved' || $uapp['status'] === 'Accepted') ? 'Accepted' : (($uapp['status'] === 'interview' || $uapp['status'] === 'Interviewed') ? 'Interviewed' : ((strtolower((string)$uapp['status']) === 'rejected') ? 'Rejected' : 'Pending'));
+
+        $inqInsert = $pdo->prepare("
+            INSERT INTO admission_inquiries (
+                student_name, father_name, phone, class_applied, address, status,
+                admission_number, serial_no, hijri_year,
+                guardian_name, guardian_cnic, guardian_relation, guardian_address,
+                prev_madaris, qualification, last_studied, leave_reason,
+                dob, email, photo, source_application_id, system_type, tenant_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $inqInsert->execute([
+            $uapp['student_name'] ?? '',
+            $uapp['father_name'] ?? '',
+            $uapp['mobile_no'] ?? ($uapp['phone'] ?? ''),
+            $uDept,
+            $uapp['address'] ?: ($uapp['permanent_address'] ?? ''),
+            $uStatus,
+            $uapp['admission_number'] ?? '',
+            $uapp['serial_no'] ?? null,
+            $uapp['hijri_year'] ?? null,
+            $uapp['guardian_name'] ?? '',
+            $uapp['guardian_cnic'] ?? '',
+            $uapp['guardian_relation'] ?? '',
+            $uapp['guardian_address'] ?? '',
+            $uapp['prev_madaris'] ?? '',
+            $uapp['qualification'] ?? '',
+            $uapp['last_studied'] ?? '',
+            $uapp['leave_reason'] ?? '',
+            !empty($uapp['dob']) ? $uapp['dob'] : (!empty($uapp['date_of_birth']) ? $uapp['date_of_birth'] : null),
+            $uapp['email'] ?? '',
+            $uapp['photo'] ?? '',
+            $uapp['id'],
+            $uSysType,
+            $cur_tenant_id,
+            $uapp['application_date'] ?: date('Y-m-d H:i:s')
+        ]);
+    }
+} catch (Throwable $eSyncUnsynced) {}
+
+// دو طرفہ ہم آہنگی: اگر ایڈمن اسکرین پر اسٹیٹس بدلا ہو تو پائپ لائن میں اپڈیٹ کرنا (H-3)
+try {
+    $pdo->exec("
+        UPDATE admission_inquiries i
+        JOIN admission_applications a ON i.source_application_id = a.id AND a.tenant_id = " . (int)$cur_tenant_id . "
+        SET i.status = CASE 
+            WHEN LOWER(a.status) IN ('interview', 'interviewed', 'test') THEN 'Interviewed'
+            WHEN LOWER(a.status) IN ('approved', 'accepted', 'converted', 'admitted') THEN 'Accepted'
+            WHEN LOWER(a.status) IN ('rejected') THEN 'Rejected'
+            ELSE 'Pending'
+        END,
+        i.rejection_reason = COALESCE(a.rejection_reason, i.rejection_reason),
+        i.interview_date = COALESCE(a.test_date, i.interview_date)
+        WHERE (i.converted_student_id IS NULL OR i.converted_student_id = 0)
+          AND a.status IS NOT NULL
+          AND i.tenant_id = " . (int)$cur_tenant_id . "
+    ");
+} catch (Throwable $eSyncStatus) {}
 
 // تمام انکوائریز حاصل کریں
 $search = trim($_GET['search'] ?? '');
@@ -388,6 +530,7 @@ $stages = [
 
 foreach ($all_inquiries as $inq) {
     $st = $inq['status'] ?? 'Pending';
+    if ($st === 'Converted') $st = 'Accepted';
     if (!isset($stages[$st])) $st = 'Pending';
     $stages[$st]['items'][] = $inq;
 }
@@ -511,6 +654,23 @@ $total_count = count($all_inquiries);
                                         <p class="small text-muted mb-1">
                                             <strong><?php echo __('ولدیت:', 'Father:'); ?></strong> <?php echo htmlspecialchars($item['father_name']); ?>
                                         </p>
+                                        <?php if (!empty($item['guardian_name'])): ?>
+                                            <p class="small text-muted mb-1">
+                                                <strong><?php echo __('سرپرست:', 'Guardian:'); ?></strong> <?php echo htmlspecialchars($item['guardian_name']); ?>
+                                                <?php if (!empty($item['guardian_relation'])): ?>(<?php echo htmlspecialchars($item['guardian_relation']); ?>)<?php endif; ?>
+                                            </p>
+                                        <?php endif; ?>
+                                        <?php if (!empty($item['prev_madaris'])): ?>
+                                            <p class="small text-muted mb-1">
+                                                <strong><?php echo __('سابقہ مدرسہ:', 'Prev. Madrasa:'); ?></strong> <?php echo htmlspecialchars($item['prev_madaris']); ?>
+                                            </p>
+                                        <?php endif; ?>
+                                        <?php if ($stage_key === 'Rejected' && !empty($item['rejection_reason'])): ?>
+                                            <div class="p-2 rounded bg-danger bg-opacity-10 border border-danger border-opacity-25 small mb-2 text-danger">
+                                                <div class="fw-bold"><i class="fas fa-ban me-1"></i> <?php echo __('وجہِ مسترد:', 'Rejection Reason:'); ?></div>
+                                                <div class="small mt-1"><?php echo htmlspecialchars($item['rejection_reason']); ?></div>
+                                            </div>
+                                        <?php endif; ?>
 
                                         <div class="d-flex flex-wrap gap-1 mb-2">
                                             <?php if (!empty($item['admission_number'])): ?>
@@ -565,13 +725,19 @@ $total_count = count($all_inquiries);
                                                 <ul class="dropdown-menu shadow">
                                                     <?php foreach ($stages as $k => $s): if ($k === $stage_key) continue; ?>
                                                         <li>
-                                                            <form method="POST">
-                                                                <input type="hidden" name="inquiry_id" value="<?php echo $item['id']; ?>">
-                                                                <input type="hidden" name="new_status" value="<?php echo $k; ?>">
-                                                                <button type="submit" name="update_status" class="dropdown-item py-1">
-                                                                    <i class="fas <?php echo $s['icon']; ?> me-1" style="color: <?php echo $s['color']; ?>;"></i> <?php echo $s['title']; ?>
+                                                            <?php if ($k === 'Rejected'): ?>
+                                                                <button type="button" class="dropdown-item py-1 text-danger" onclick="openRejectModal(<?php echo $item['id']; ?>, '<?php echo htmlspecialchars(addslashes($item['student_name'])); ?>')">
+                                                                    <i class="fas fa-times-circle me-1 text-danger"></i> <?php echo __('مسترد شدہ (وجہ کے ساتھ)', 'Rejected (with reason)'); ?>
                                                                 </button>
-                                                            </form>
+                                                            <?php else: ?>
+                                                                <form method="POST">
+                                                                    <input type="hidden" name="inquiry_id" value="<?php echo $item['id']; ?>">
+                                                                    <input type="hidden" name="new_status" value="<?php echo $k; ?>">
+                                                                    <button type="submit" name="update_status" class="dropdown-item py-1">
+                                                                        <i class="fas <?php echo $s['icon']; ?> me-1" style="color: <?php echo $s['color']; ?>;"></i> <?php echo $s['title']; ?>
+                                                                    </button>
+                                                                </form>
+                                                            <?php endif; ?>
                                                         </li>
                                                     <?php endforeach; ?>
                                                 </ul>
@@ -804,6 +970,47 @@ $total_count = count($all_inquiries);
                             <label class="form-label fw-bold">تصویر (Photo)</label>
                             <input type="file" name="photo" class="form-control" accept="image/*">
                         </div>
+
+                        <!-- سرپرست و سابقہ تعلیمی کوائف (D-05 Preserve All Submitted Details) -->
+                        <div class="col-12 mt-3 pt-2 border-top">
+                            <h6 class="fw-bold text-success mb-2"><i class="fas fa-user-shield me-1"></i> سرپرست و سابقہ تعلیمی کوائف</h6>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">نام سرپرست</label>
+                            <input type="text" name="guardian_name" id="modal_enroll_guardian_name" class="form-control" placeholder="سرپرست کا نام">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">شناختی کارڈ سرپرست</label>
+                            <input type="text" name="guardian_cnic" id="modal_enroll_guardian_cnic" class="form-control" placeholder="35201-xxxxxxx-x">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">رشتہ سرپرست</label>
+                            <input type="text" name="guardian_relation" id="modal_enroll_guardian_rel" class="form-control" placeholder="والد، چچا، بھائی...">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">سابقہ ادارہ / مدرسہ</label>
+                            <input type="text" name="prev_madaris" id="modal_enroll_prev_madaris" class="form-control" placeholder="سابقہ مدرسہ کا نام">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">سابقہ خواندگی / آخری کتاب</label>
+                            <input type="text" name="last_studied" id="modal_enroll_last_studied" class="form-control" placeholder="مثلاً: 15 پارے یا نورانی قاعدہ">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">تاریخ پیدائش</label>
+                            <input type="date" name="dob" id="modal_enroll_dob" class="form-control">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">پتہ سرپرست</label>
+                            <input type="text" name="guardian_address" id="modal_enroll_guardian_addr" class="form-control" placeholder="سرپرست کا مکمل رہائشی پتہ">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">ای میل</label>
+                            <input type="email" name="email" id="modal_enroll_email" class="form-control" placeholder="student@example.com">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">سابقہ مدرسہ چھوڑنے کی وجہ</label>
+                            <input type="text" name="leave_reason" id="modal_enroll_leave_reason" class="form-control" placeholder="نقل مکانی، تکمیل درجہ وغیرہ...">
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
@@ -892,6 +1099,45 @@ $total_count = count($all_inquiries);
                             <label class="form-label fw-bold">تصویر (Photo)</label>
                             <input type="file" name="photo" class="form-control" accept="image/*">
                         </div>
+                        <div class="col-12 mt-2 pt-2 border-top">
+                            <h6 class="fw-bold text-success mb-2"><i class="fas fa-user-shield me-1"></i> سرپرست و سابقہ تعلیمی کوائف</h6>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">نام سرپرست</label>
+                            <input type="text" name="guardian_name" class="form-control" placeholder="سرپرست کا نام">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">شناختی کارڈ سرپرست</label>
+                            <input type="text" name="guardian_cnic" class="form-control" placeholder="35201-xxxxxxx-x">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">رشتہ سرپرست</label>
+                            <input type="text" name="guardian_relation" class="form-control" placeholder="والد، چچا، بھائی...">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">سابقہ ادارہ / مدرسہ</label>
+                            <input type="text" name="prev_madaris" class="form-control" placeholder="سابقہ مدرسہ کا نام">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">سابقہ خواندگی / آخری کتاب</label>
+                            <input type="text" name="last_studied" class="form-control" placeholder="مثلاً: 15 پارے یا نورانی قاعدہ">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">تاریخ پیدائش</label>
+                            <input type="date" name="dob" class="form-control">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">پتہ سرپرست</label>
+                            <input type="text" name="guardian_address" class="form-control" placeholder="سرپرست کا مکمل رہائشی پتہ">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">ای میل</label>
+                            <input type="email" name="email" class="form-control" placeholder="student@example.com">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">سابقہ مدرسہ چھوڑنے کی وجہ</label>
+                            <input type="text" name="leave_reason" class="form-control" placeholder="نقل مکانی، تکمیل درجہ وغیرہ...">
+                        </div>
                         <div class="col-md-12">
                             <label class="form-label fw-bold">ابتدائی ریمارکس / نوٹس</label>
                             <textarea name="admin_notes" class="form-control" rows="2" placeholder="سابقہ تعلیم یا اضافی معلومات..."></textarea>
@@ -902,6 +1148,35 @@ $total_count = count($all_inquiries);
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">منسوخ</button>
                     <button type="submit" name="direct_enroll_student" class="btn btn-success fw-bold px-4">
                         <i class="fas fa-check-circle me-1"></i> طالب علم شامل کریں
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- موڈل 5: وجہِ مسترد (Mandatory Rejection Reason Modal - D-05) -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-ban me-2"></i> <?php echo __('درخواست مسترد کرنے کی باضابطہ وجہ', 'Official Rejection Reason'); ?></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="inquiry_id" id="modal_reject_inquiry_id">
+                <input type="hidden" name="new_status" value="Rejected">
+                <div class="modal-body p-4">
+                    <p class="small text-muted mb-2"><?php echo __('طالب علم:', 'Student:'); ?> <strong id="modal_reject_student_name" class="text-dark"></strong></p>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark"><?php echo __('درخواست مسترد کرنے کی وجہ (لازمی)', 'Rejection Reason (Required)'); ?> <span class="text-danger">*</span></label>
+                        <textarea name="rejection_reason" id="modal_reject_reason" class="form-control" rows="3" required placeholder="مثلاً: داخلہ ٹیسٹ میں ناکامی / نشستیں مکمل / مطلوبہ معیار حاصل نہیں ہوا..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?php echo __('منسوخ', 'Cancel'); ?></button>
+                    <button type="submit" name="update_status" class="btn btn-danger fw-bold px-4">
+                        <i class="fas fa-times me-1"></i> <?php echo __('مسترد کرنے کی تصدیق کریں', 'Confirm Rejection'); ?>
                     </button>
                 </div>
             </form>
@@ -930,6 +1205,13 @@ function openInterviewModal(item) {
     new bootstrap.Modal(document.getElementById('interviewModal')).show();
 }
 
+function openRejectModal(id, name) {
+    document.getElementById('modal_reject_inquiry_id').value = id;
+    document.getElementById('modal_reject_student_name').textContent = name;
+    document.getElementById('modal_reject_reason').value = '';
+    new bootstrap.Modal(document.getElementById('rejectModal')).show();
+}
+
 function openEnrollModal(item) {
     document.getElementById('modal_enroll_inquiry_id').value = item.id;
     document.getElementById('modal_enroll_name').value = item.student_name || '';
@@ -956,6 +1238,15 @@ function openEnrollModal(item) {
     if (item.duration) {
         document.getElementById('modal_enroll_duration').value = item.duration;
     }
+    if (document.getElementById('modal_enroll_guardian_name')) document.getElementById('modal_enroll_guardian_name').value = item.guardian_name || '';
+    if (document.getElementById('modal_enroll_guardian_cnic')) document.getElementById('modal_enroll_guardian_cnic').value = item.guardian_cnic || '';
+    if (document.getElementById('modal_enroll_guardian_rel')) document.getElementById('modal_enroll_guardian_rel').value = item.guardian_relation || '';
+    if (document.getElementById('modal_enroll_guardian_addr')) document.getElementById('modal_enroll_guardian_addr').value = item.guardian_address || '';
+    if (document.getElementById('modal_enroll_prev_madaris')) document.getElementById('modal_enroll_prev_madaris').value = item.prev_madaris || '';
+    if (document.getElementById('modal_enroll_last_studied')) document.getElementById('modal_enroll_last_studied').value = item.last_studied || '';
+    if (document.getElementById('modal_enroll_dob')) document.getElementById('modal_enroll_dob').value = item.dob || '';
+    if (document.getElementById('modal_enroll_email')) document.getElementById('modal_enroll_email').value = item.email || '';
+    if (document.getElementById('modal_enroll_leave_reason')) document.getElementById('modal_enroll_leave_reason').value = item.leave_reason || '';
     new bootstrap.Modal(document.getElementById('enrollModal')).show();
 }
 </script>

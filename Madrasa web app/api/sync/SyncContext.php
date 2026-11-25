@@ -29,9 +29,10 @@ class SyncContext {
 
         if ($this->since && strtotime($this->since)) {
             $since_ts = strtotime($this->since);
-            $this->since_dt = date('Y-m-d H:i:s', $since_ts);
-            // 1 day buffer to ensure no records missed across midnight/timezone differences
-            $this->since_date = date('Y-m-d', strtotime('-1 day', $since_ts));
+            // 24 hours buffer on since_dt to guarantee cross-timezone and clock drift safety
+            $this->since_dt = date('Y-m-d H:i:s', strtotime('-24 hours', $since_ts));
+            // 2 days buffer for date-only queries
+            $this->since_date = date('Y-m-d', strtotime('-2 days', $since_ts));
         } else {
             $this->since_dt = '';
             $this->since_date = '';

@@ -1,4 +1,4 @@
-﻿<?php 
+<?php 
 require_once __DIR__ . '/session_init.php';
 if (session_status() === PHP_SESSION_NONE) { madrasa_safe_session_start(); }
 try {
@@ -13,6 +13,10 @@ if (empty($_SESSION['user_id']) && function_exists('madrasa_restore_session_from
 }
 
 // Login check, session idle timeout, and redirect
+if (!headers_sent()) {
+    header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+    header("Pragma: no-cache");
+}
 $current_page = basename($_SERVER['PHP_SELF']);
 if (isset($_SESSION['user_id'])) {
     if (isset($_SESSION['last_activity']) && (time() - (int)$_SESSION['last_activity'] > (86400 * 30))) {
@@ -206,10 +210,41 @@ if (isset($_SESSION['role']) && (in_array(strtolower(trim((string)$_SESSION['rol
     }
 }
 
-// Language and session settings
-if (isset($_GET['lang'])) { $_SESSION['lang'] = $_GET['lang']; }
-if (isset($_GET['lang'])) { @setcookie('app_language', $_GET['lang'], time() + (86400 * 365), '/'); }
-$lang = isset($_SESSION['lang']) ? $_SESSION['lang'] : ($_COOKIE['app_language'] ?? 'ur');
+// Language and session settings (S25 4-tier persistence)
+$requestedLang = (isset($_GET['lang']) && in_array($_GET['lang'], ['ur', 'en'], true)) ? $_GET['lang'] : null;
+if ($requestedLang !== null) {
+    $_SESSION['lang'] = $requestedLang;
+    if (!headers_sent()) {
+        @setcookie('app_language', $requestedLang, time() + (86400 * 365), '/');
+        @setcookie('lang', $requestedLang, time() + (86400 * 365), '/');
+    }
+} elseif (!isset($_SESSION['lang'])) {
+    $cookieLang = $_COOKIE['app_language'] ?? ($_COOKIE['lang'] ?? null);
+    if (in_array($cookieLang, ['ur', 'en'], true)) {
+        $_SESSION['lang'] = $cookieLang;
+    }
+}
+$lang = in_array($_SESSION['lang'] ?? '', ['ur', 'en'], true) ? $_SESSION['lang'] : 'ur';
+if (isset($_SESSION['user_id']) && isset($pdo)) {
+    try {
+        if ($requestedLang !== null) {
+            $pdo->prepare("UPDATE admins SET preferred_language = ? WHERE id = ?")->execute([$requestedLang, (int)$_SESSION['user_id']]);
+        } elseif (empty($_SESSION['lang_db_loaded'])) {
+            $stLang = $pdo->prepare("SELECT preferred_language FROM admins WHERE id = ? LIMIT 1");
+            $stLang->execute([(int)$_SESSION['user_id']]);
+            $dbLang = $stLang->fetchColumn();
+            if (!empty($dbLang) && in_array($dbLang, ['ur', 'en'], true)) {
+                $lang = $dbLang;
+                $_SESSION['lang'] = $lang;
+                if (!headers_sent()) {
+                    @setcookie('app_language', $lang, time() + (86400 * 365), '/');
+                    @setcookie('lang', $lang, time() + (86400 * 365), '/');
+                }
+            }
+            $_SESSION['lang_db_loaded'] = 1;
+        }
+    } catch (Throwable $eLangSync) {}
+}
 $role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
 $is_admin = in_array(strtolower(trim((string)$role)), ['admin', 'superadmin', 'super_admin', 'administrator'], true);
 $user_name = isset($_SESSION['name']) ? $_SESSION['name'] : 'Guest';
@@ -470,6 +505,8 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                     <!-- وظائف عملہ (مسجد) -->
                     <?php if(has_perm('manage_masjid_stipends') || has_perm('manage_stipends')): ?>
                     <a href="acc_payroll.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='acc_payroll.php'?'active-link':''; ?>"><i class="fas fa-money-check-alt me-2 text-success"></i> <?php echo ($lang=='ur') ? 'وظائف عملہ' : 'Staff Stipends'; ?></a>
+                    <a href="payroll_report.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='payroll_report.php'?'active-link':''; ?>"><i class="fas fa-file-invoice-dollar me-2 text-primary"></i> <?php echo ($lang=='ur') ? 'پے رول رپورٹ' : 'Payroll Report'; ?></a>
+                    <a href="salary_status.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='salary_status.php'?'active-link':''; ?>"><i class="fas fa-calendar-check me-2 text-info"></i> <?php echo ($lang=='ur') ? 'ماہانہ تنخواہ کیفیت' : 'Salary Status'; ?></a>
                     <?php endif; ?>
 
                     <!-- ایڈوانس و قرضہ جات -->
@@ -508,6 +545,10 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                     <?php if($is_admin): ?>
                     <a href="manage_users.php" class="list-group-item"><i class="fas fa-users-cog me-2"></i> <?php echo t('manage_users'); ?></a>
                     <a href="settings.php" class="list-group-item"><i class="fas fa-cog me-2"></i> <?php echo t('settings'); ?></a>
+                    <a href="data_backup.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='data_backup.php'?'active-link':''; ?>"><i class="fas fa-database me-2 text-info"></i> <?php echo ($lang=='ur') ? 'ڈیٹا بیک اپ و ایکسپورٹ' : 'Data Backup & Export'; ?></a>
+                    <a href="backup.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='backup.php'?'active-link':''; ?>"><i class="fas fa-shield-alt me-2 text-primary"></i> <?php echo ($lang=='ur') ? 'بیک اپ و ری اسٹور' : 'Backup & Restore'; ?></a>
+                    <a href="cleanup_tenant_data.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='cleanup_tenant_data.php'?'active-link':''; ?>"><i class="fas fa-broom me-2 text-danger"></i> <?php echo ($lang=='ur') ? 'ٹیسٹ ڈیٹا صفائی' : 'Cleanup Test Data'; ?></a>
+                    <a href="subscription_status.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='subscription_status.php'?'active-link':''; ?>"><i class="fas fa-gem me-2 text-warning"></i> <?php echo ($lang=='ur') ? 'سبسکرپشن و فیس کیفیت' : 'Subscription & Status'; ?></a>
                     <?php endif; ?>
                 <?php endif; ?>
 
@@ -677,6 +718,8 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                         <?php endif; ?>
                         <?php if(has_perm('manage_stipends') || has_perm('manage_erp')): ?>
                         <a href="acc_payroll.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='acc_payroll.php'?'active-link':''; ?>"><i class="fas fa-money-check-alt me-2 text-success"></i> <?php echo ($lang=='ur') ? 'وظائف عملہ' : 'Staff Stipends'; ?></a>
+                        <a href="payroll_report.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='payroll_report.php'?'active-link':''; ?>"><i class="fas fa-file-invoice-dollar me-2 text-primary"></i> <?php echo ($lang=='ur') ? 'پے رول رپورٹ' : 'Payroll Report'; ?></a>
+                        <a href="salary_status.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='salary_status.php'?'active-link':''; ?>"><i class="fas fa-calendar-check me-2 text-info"></i> <?php echo ($lang=='ur') ? 'ماہانہ تنخواہ کیفیت' : 'Salary Status'; ?></a>
                         <?php endif; ?>
                         <?php if(has_perm('manage_loans') || has_perm('manage_erp')): ?>
                         <a href="loans_management.php" class="list-group-item <?php echo (basename($_SERVER['PHP_SELF'])=='loans_management.php' || basename($_SERVER['PHP_SELF'])=='staff_loans.php')?'active-link':''; ?>"><i class="fas fa-hand-holding-usd me-2 text-info"></i> <?php echo ($lang=='ur') ? 'ایڈوانس و قرض مینیجمنٹ' : 'Loans & Advances'; ?></a>
@@ -704,8 +747,9 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                     <?php if($is_admin): ?>
                     <a href="manage_users.php" class="list-group-item"><i class="fas fa-users-cog me-2"></i> <?php echo t('manage_users'); ?></a>
                     <a href="settings.php" class="list-group-item"><i class="fas fa-cog me-2"></i> <?php echo t('settings'); ?></a>
-                    <a href="data_backup.php" class="list-group-item"><i class="fas fa-database me-2 text-info"></i> <?php echo ($lang=='ur') ? 'ڈیٹا بیک اپ و ایکسپورٹ' : 'Data Backup & Export'; ?></a>
-                    <a href="cleanup_tenant_data.php" class="list-group-item"><i class="fas fa-broom me-2 text-danger"></i> <?php echo ($lang=='ur') ? 'ٹیسٹ ڈیٹا صفائی' : 'Cleanup Test Data'; ?></a>
+                    <a href="data_backup.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='data_backup.php'?'active-link':''; ?>"><i class="fas fa-database me-2 text-info"></i> <?php echo ($lang=='ur') ? 'ڈیٹا بیک اپ و ایکسپورٹ' : 'Data Backup & Export'; ?></a>
+                    <a href="backup.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='backup.php'?'active-link':''; ?>"><i class="fas fa-shield-alt me-2 text-primary"></i> <?php echo ($lang=='ur') ? 'بیک اپ و ری اسٹور' : 'Backup & Restore'; ?></a>
+                    <a href="cleanup_tenant_data.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='cleanup_tenant_data.php'?'active-link':''; ?>"><i class="fas fa-broom me-2 text-danger"></i> <?php echo ($lang=='ur') ? 'ٹیسٹ ڈیٹا صفائی' : 'Cleanup Test Data'; ?></a>
                     <a href="subscription_status.php" class="list-group-item <?php echo basename($_SERVER['PHP_SELF'])=='subscription_status.php'?'active-link':''; ?>"><i class="fas fa-gem me-2 text-warning"></i> <?php echo ($lang=='ur') ? 'سبسکرپشن و فیس کیفیت' : 'Subscription & Status'; ?></a>
                     <?php endif; ?>
                 
@@ -739,14 +783,14 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                 </a>
             </div>
         <?php endif; ?>
-        <nav class="navbar navbar-light bg-white shadow-sm px-3 mb-4 sticky-top">
+        <nav class="navbar navbar-light bg-white shadow-sm px-2 px-md-3 mb-4 sticky-top">
             <button class="btn text-primary border-0 fs-3" id="menu-toggle"><i class="fas fa-bars"></i></button>
-            <div class="ms-3 d-flex align-items-center">
+            <div class="ms-2 ms-md-3 d-flex align-items-center flex-wrap gap-1" style="min-width: 0; max-width: calc(100vw - 175px);">
                 <span class="text-primary fw-bold d-none d-md-block"><img src="<?php echo htmlspecialchars($header_logo_file); ?>" alt="Logo" style="width: 30px; height: 30px; border-radius: 50%; margin-left: 5px; object-fit: contain; vertical-align: middle;"><?php echo (isset($_SESSION['user_id'])) ? htmlspecialchars($header_current_name)." (".e($user_name).")" : htmlspecialchars($header_current_name); ?></span>
                 <span class="text-primary fw-bold d-md-none small text-truncate" style="max-width: 140px; display: inline-block; vertical-align: middle;"><img src="<?php echo htmlspecialchars($header_logo_file); ?>" alt="Logo" style="width: 20px; height: 20px; border-radius: 50%; margin-left: 5px; object-fit: contain; vertical-align: middle;"><?php echo htmlspecialchars($header_current_name); ?></span>
                 <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 small ms-2 d-none d-lg-inline-block"><i class="fas fa-moon me-1"></i> <?php echo get_today_hijri_date(); ?></span>
                 <?php if (isset($_SESSION['tenant_code'])): ?>
-                    <span class="badge px-2 py-1 small ms-2 font-monospace shadow-sm" style="background-color: var(--btn-primary-bg) !important; color: #ffffff !important; border: 1px solid rgba(255,255,255,0.2) !important; font-weight: 700; font-size: 0.82rem;" title="ادارہ کوڈ">
+                    <span class="badge px-2 py-1 small ms-1 font-monospace shadow-sm" style="background-color: var(--btn-primary-bg) !important; color: #ffffff !important; border: 1px solid rgba(255,255,255,0.2) !important; font-weight: 700; font-size: 0.78rem;" title="ادارہ کوڈ">
                         <i class="fas fa-id-badge me-1"></i><?php echo htmlspecialchars($_SESSION['tenant_code']); ?>
                     </span>
                     <?php if (!empty($header_current_name) || !empty($_SESSION['tenant_name'])): ?>
@@ -755,7 +799,7 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                         </span>
                     <?php endif; ?>
                     <?php if ($is_trial): ?>
-                        <button type="button" class="btn btn-sm rounded-pill pulsing-beacon-btn d-flex align-items-center gap-2 px-3 py-1 ms-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#trialWarningModal" title="آزمائشی مدت برائے <?php echo htmlspecialchars($current_plan_name); ?>">
+                        <button type="button" class="btn btn-sm rounded-pill pulsing-beacon-btn d-none d-sm-flex align-items-center gap-2 px-3 py-1 ms-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#trialWarningModal" title="آزمائشی مدت برائے <?php echo htmlspecialchars($current_plan_name); ?>">
                             <span class="blinking-dot"></span>
                             <span class="small fw-bold">ٹرائل: <?php echo $days_left; ?> دن باقی</span>
                         </button>
@@ -834,9 +878,28 @@ $system_type = $_SESSION['system_type'] ?? 'Madrasa';
                     </div>
                 </div>
                 
-                <a href="?lang=<?php echo ($lang=='ur')?'en':'ur'; ?>" class="lang-btn btn btn-outline-success btn-sm rounded-pill px-3 fw-bold">
+                <a href="?lang=<?php echo ($lang=='ur')?'en':'ur'; ?>" class="lang-btn btn btn-outline-success btn-sm rounded-pill px-3 fw-bold" onclick="setAppLanguage('<?php echo ($lang=='ur')?'en':'ur'; ?>');">
                     <?php echo ($lang=='ur') ? 'English' : '&#1575;&#1585;&#1583;&#1608;'; ?>
                 </a>
+                <script>
+                function setAppLanguage(l) {
+                    try { localStorage.setItem('madrasa_lang', l); } catch (e) {}
+                    document.cookie = "app_language=" + l + "; path=/; max-age=31536000; SameSite=Lax";
+                    document.cookie = "lang=" + l + "; path=/; max-age=31536000; SameSite=Lax";
+                }
+                (function() {
+                    try {
+                        var stored = localStorage.getItem('madrasa_lang');
+                        var cur = '<?php echo $lang; ?>';
+                        if (stored && (stored === 'ur' || stored === 'en') && stored !== cur && !window.location.search.includes('lang=')) {
+                            document.cookie = "app_language=" + stored + "; path=/; max-age=31536000; SameSite=Lax";
+                            document.cookie = "lang=" + stored + "; path=/; max-age=31536000; SameSite=Lax";
+                            var sep = window.location.search ? '&' : '?';
+                            window.location.href = window.location.pathname + window.location.search + sep + 'lang=' + stored;
+                        }
+                    } catch (e) {}
+                })();
+                </script>
             </div>
         </nav>
         <div class="container-fluid px-2 px-md-4">

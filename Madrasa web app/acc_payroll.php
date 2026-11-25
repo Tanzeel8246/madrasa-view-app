@@ -82,7 +82,7 @@ try {
         
         $chk = $pdo->prepare("SELECT id FROM finance WHERE type = 'Expense' AND description LIKE ? AND (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ? LIMIT 1");
         $chk->execute(["%ماہ $m_year: $t_name%", $cur_tenant_id]);
-        if (!$chk->fetchColumn()) {
+        if (false && !$chk->fetchColumn()) { // auto-reconcile on GET disabled (read-only mandate)
             $desc = "مد: وظائف عملہ | تفصیل: وظیفہ/تنخواہ ادا کی گئی بذریعہ $pay_method برائے ماہ $m_year: $t_name";
             $pdo->prepare("INSERT INTO finance (user_id, user_name, type, amount, head_id, head_name, date, donor_name, spender_name, description, system_type, account_id, payment_method, is_deleted, tenant_id) VALUES (?, 'Admin', 'Expense', ?, 0, 'وظائف عملہ', ?, ?, ?, ?, ?, ?, ?, 0, ?)")
                 ->execute([$pp['created_by'] ?? 1, $net_amt, $pay_date, $t_name, $t_name, $desc, $sys_item, $pay_account_id, $pay_method, $cur_tenant_id]);
@@ -92,43 +92,107 @@ try {
 
 // Handle Generation
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['generate_payroll'])) {
+    // Phase 2: As-Of Service Window & Pro-Rata Engine
     $month_year = $_POST['month_year'] ?? date('Y-m');
     $uid = $_SESSION['user_id'];
     $sys = $_SESSION['system_type'] ?? 'Madrasa';
-    
-    $status_filter = "status NOT IN ('Inactive', 'Resigned', 'Expelled', 'Terminated', 'مستعفی', 'استعفی', 'علیحدہ', 'خارج', 'اخراج', 'برطرف', 'غیر فعال', 'معطل') 
-        AND status NOT LIKE '%مستعفی%' 
-        AND status NOT LIKE '%استعفی%' 
-        AND status NOT LIKE '%علیحدہ%' 
-        AND status NOT LIKE '%خارج%' 
-        AND status NOT LIKE '%برطرف%' 
-        AND status NOT LIKE '%غیر فعال%' 
-        AND status NOT LIKE '%معطل%' 
-        AND status NOT LIKE '%چھوڑ%'";
 
-    $t_stmt = $pdo->prepare("SELECT id, name, salary, house_rent, medical_allowance, travel_allowance, daily_deduction_rate FROM teachers WHERE (status = 'Active' OR status = 'حاضر' OR status = 'فعال' OR status IS NULL OR status = '') AND $status_filter AND (is_deleted = 0 OR is_deleted IS NULL) AND $sys_cond_teachers AND tenant_id = ?");
-    $t_stmt->execute([$cur_tenant_id]);
+    // F1: Safety filter for suspended and abandoned staff
+    $status_filter = "status NOT LIKE '%معطل%' AND status NOT LIKE '%چھوڑ%'";
+
+    // As-Of Service Window Bounds
+    $p_start = date('Y-m-01', strtotime($month_year . '-01'));
+    $p_end = date('Y-m-t', strtotime($month_year . '-01'));
+
+    // As-Of Eligibility: Joining on or before period end AND resignation on or after period start
+    $t_stmt = $pdo->prepare("SELECT id, name, salary, house_rent, medical_allowance, travel_allowance, daily_deduction_rate, status, joining_date, resignation_date, is_settled, status_change_date FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND (joining_date IS NULL OR joining_date <= ?) AND (resignation_date IS NULL OR resignation_date >= ?) AND $status_filter AND $sys_cond_teachers AND tenant_id = ? ORDER BY id ASC");
+    $t_stmt->execute([$p_end, $p_start, $cur_tenant_id]);
     $teachers = $t_stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (empty($teachers)) {
         $msg = ($sys === 'Masjid') ? "مسجد موڈ کے تحت پے رول جنریشن کے لیے کوئی فعال استاد یا عملہ موجود نہیں ہے۔" : "مدرسہ موڈ کے تحت پے رول جنریشن کے لیے کوئی فعال استاد یا عملہ موجود نہیں ہے۔";
     } else {
         $created_count = 0;
+        $settlement_alerts = [];
+        $skipped_inactive = 0;
+        $skipped_terminal = 0;
+        $skipped_invalid_dates = 0;
         foreach ($teachers as $t) {
+            // F2: Terminal status (Terminated, Resigned, Expelled, etc.) with empty resignation_date must be strictly excluded
+            $terminal_statuses = ['Terminated', 'Resigned', 'Expelled', 'مستعفی', 'استعفی', 'برطرف', 'خارج', 'اخراج', 'علیحدہ'];
+            $is_terminal = in_array($t['status'], $terminal_statuses, true)
+                || (isset($t['status']) && preg_match('/(مستعفی|استعفی|برطرف|خارج|اخراج|علیحدہ|Terminated|Resigned|Expelled)/ui', (string)$t['status']));
+
+            if ($is_terminal && empty($t['resignation_date'])) {
+                $has_valid_scd = !empty($t['status_change_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$t['status_change_date']);
+                if ($has_valid_scd) {
+                    $t['resignation_date'] = $t['status_change_date'];
+                    if ($t['resignation_date'] < $p_start) {
+                        $skipped_terminal++;
+                        continue;
+                    }
+                } else {
+                    $skipped_terminal++;
+                    continue;
+                }
+            }
+            // Inactive Teacher Rule: Skip if inactive without resignation date and no attendance in this month
+            if (($t['status'] ?? '') === 'Inactive' && empty($t['resignation_date'])) {
+                try {
+                    $attChk = $pdo->prepare("SELECT 1 FROM attendance_teachers WHERE teacher_id = ? AND DATE_FORMAT(date, '%Y-%m') = ? AND tenant_id = ? LIMIT 1");
+                    $attChk->execute([$t['id'], $month_year, $cur_tenant_id]);
+                    if (!$attChk->fetch()) {
+                        $skipped_inactive++;
+                        continue;
+                    }
+                } catch (Throwable $eAttChk) {}
+            }
+
             $check = $pdo->prepare("SELECT id FROM acc_payroll WHERE teacher_id = ? AND month_year = ? AND (is_deleted = 0 OR is_deleted IS NULL) AND tenant_id = ?");
             $check->execute([$t['id'], $month_year, $cur_tenant_id]);
             if ($check->rowCount() == 0) {
-                $salary = (float)($t['salary'] ?? 0);
-                $allowances = (float)($t['house_rent'] ?? 0) + (float)($t['medical_allowance'] ?? 0) + (float)($t['travel_allowance'] ?? 0);
-                
+                $full_salary = (float)($t['salary'] ?? 0);
+                $full_house_rent = (float)($t['house_rent'] ?? 0);
+                $full_medical = (float)($t['medical_allowance'] ?? 0);
+                $full_travel = (float)($t['travel_allowance'] ?? 0);
+                $full_allowances = $full_house_rent + $full_medical + $full_travel;
+
+                // Service Window Pro-Rata (Inclusive counting: +1 rule, 30 days standard)
+                $eff_start = (!empty($t['joining_date']) && $t['joining_date'] > $p_start) ? $t['joining_date'] : $p_start;
+                $eff_end = (!empty($t['resignation_date']) && $t['resignation_date'] < $p_end) ? $t['resignation_date'] : $p_end;
+
+                if ($eff_end < $eff_start) {
+                    $skipped_invalid_dates++;
+                    continue;
+                }
+
+                $is_mid_join = (!empty($t['joining_date']) && $t['joining_date'] > $p_start);
+                $is_mid_resign = (!empty($t['resignation_date']) && $t['resignation_date'] < $p_end);
+
+                if ($is_mid_join || $is_mid_resign) {
+                    $dStart = new DateTime($eff_start);
+                    $dEnd = new DateTime($eff_end);
+                    $days_of_service = $dStart->diff($dEnd)->days + 1;
+                    $days_of_service = max(0, min(30, $days_of_service));
+
+                    $salary = round(($full_salary / 30) * $days_of_service, 2);
+                    $house_rent = round(($full_house_rent / 30) * $days_of_service, 2);
+                    $medical = round(($full_medical / 30) * $days_of_service, 2);
+                    $travel = round(($full_travel / 30) * $days_of_service, 2);
+                    $allowances = $house_rent + $medical + $travel;
+                } else {
+                    $salary = $full_salary;
+                    $allowances = $full_allowances;
+                }
+
                 // Calculate Absences Deduction
                 $absences_stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance_teachers WHERE teacher_id = ? AND DATE_FORMAT(date, '%Y-%m') = ? AND status = 'A' AND tenant_id = ?");
                 $absences_stmt->execute([$t['id'], $month_year, $cur_tenant_id]);
                 $absent_days = $absences_stmt->fetchColumn();
-                
+
                 $deduction_rate = (float)($t['daily_deduction_rate'] ?? 0);
-                if ($deduction_rate == 0 && $salary > 0) {
-                    $deduction_rate = round($salary / 30); // fallback deduction
+                if ($deduction_rate == 0 && $full_salary > 0) {
+                    $deduction_rate = round($full_salary / 30, 2); // F3: Always based on full monthly salary
                 }
                 $deductions = $absent_days * $deduction_rate;
                 $net = max(0, $salary + $allowances - $deductions);
@@ -137,9 +201,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['generate_payroll'])) {
                 $stmt->execute([$t['id'], $month_year, $salary, $allowances, $deductions, $net, $sys, $uid, $cur_tenant_id]);
                 payroll_accounting_post($pdo, (int)$pdo->lastInsertId());
                 $created_count++;
+
+                // Resignation & Outstanding Advance/Loan Settlement Alert (tenant-scoped)
+                if ($is_mid_resign || in_array($t['status'], ['Resigned', 'مستعفی', 'Terminated', 'برطرف'], true)) {
+                    try {
+                        $l_stmt = $pdo->prepare("SELECT SUM(amount - paid_amount) FROM staff_loans WHERE teacher_id = ? AND tenant_id = ? AND status = 'Active' AND (is_deleted = 0 OR is_deleted IS NULL)");
+                        $l_stmt->execute([$t['id'], $cur_tenant_id]);
+                        $unpaid_loan = (float)($l_stmt->fetchColumn() ?: 0);
+                        if ($unpaid_loan > 0) {
+                            $settlement_alerts[] = [
+                                'teacher_name' => $t['name'],
+                                'resignation_date' => $t['resignation_date'] ?: $eff_end,
+                                'unpaid_loan' => $unpaid_loan
+                            ];
+                        }
+                    } catch (Throwable $eLoan) {}
+                }
             }
         }
         $msg = "ماہ " . format_urdu_month_year($month_year) . " کے لیے $created_count اساتذہ/عملہ کے وظائف کا پے رول کامیابی سے تیار ہو گیا!";
+        $total_skipped = $skipped_inactive + $skipped_terminal + $skipped_invalid_dates;
+        if ($total_skipped > 0) {
+            $msg .= " (غیر اہل یا غیر فعال اساتذہ اسکیپ: $total_skipped)";
+        }
+        if (!empty($settlement_alerts)) {
+            $_SESSION['settlement_alerts'] = $settlement_alerts;
+        }
     }
 }
 
@@ -604,7 +691,7 @@ include 'header.php';
                         <label class="form-label fw-bold">ادائیگی کا کھاتہ (کہاں سے ادا ہوئی؟)</label>
                         <select name="payment_account_id" class="form-select" required>
                             <?php foreach($payment_accounts as $pa): ?>
-                                <option value="<?php echo $pa['id']; ?>" <?php echo ($pa['code'] == '1001') ? 'selected' : ''; ?>>
+                                <option value="<?php echo $pa['id']; ?>" <?php if ($pa['code'] == '1001' && empty($GLOBALS['__payroll_cash_sel'])) { echo 'selected'; $GLOBALS['__payroll_cash_sel'] = true; } ?>>
                                     <?php echo htmlspecialchars($pa['name'] . ' (' . $pa['code'] . ')'); ?>
                                 </option>
                             <?php endforeach; ?>
