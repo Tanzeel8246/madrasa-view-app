@@ -48,7 +48,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(isUrduGlobal.value
-                ? "Ø§Ù…ØªØ­Ø§Ù† Ú©Ø§ Ù†Ø§Ù… Ø¯Ø±Ø¬ Ú©Ø±ÛŒÚº"
+                ? "امتحان کا نام درج کریں"
                 : "Please enter Exam Name")),
       );
       return;
@@ -64,7 +64,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           content: Text(isUrduGlobal.value
-              ? "Ù†ÛŒØ§ Ø§Ù…ØªØ­Ø§Ù† Ø´Ø§Ù…Ù„ Ú©Ø± Ø¯ÛŒØ§ Ú¯ÛŒØ§!"
+              ? "نیا امتحان شامل کر دیا گیا!"
               : "New Exam Added!")),
     );
 
@@ -113,7 +113,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
             },
           )
         ],
-                title: Text(isUrdu ? "Ø§Ù…ØªØ­Ø§Ù†Ø§Øª Ú©Ø§Ø±ÛŒÚ©Ø§Ø±Úˆ" : "Exams Record",
+                title: Text(isUrdu ? "امتحانات کاریکارڈ" : "Exams Record",
                     style: TextStyle(
                         color: primaryGreen, fontWeight: FontWeight.bold)),
                 backgroundColor: bgColor,
@@ -137,7 +137,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
                               const SizedBox(width: 10),
                               Text(
                                 isUrdu
-                                    ? "Ù†ÛŒØ§ Ø§Ù…ØªØ­Ø§Ù† Ø´Ø§Ù…Ù„ Ú©Ø±ÛŒÚº"
+                                    ? "نیا امتحان شامل کریں"
                                     : "Add New Exam",
                                 style: TextStyle(
                                     fontSize: 18,
@@ -151,7 +151,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
                             controller: _nameController,
                             decoration: InputDecoration(
                               labelText: isUrdu
-                                  ? "Ø§Ù…ØªØ­Ø§Ù† Ú©Ø§ Ù†Ø§Ù… (Ù…Ø«Ù„Ø§Ù‹: Ø³Ø§Ù„Ø§Ù†Û Ø§Ù…ØªØ­Ø§Ù† 2024)"
+                                  ? "امتحان کا نام (مثلاً: سالانہ امتحان 2024)"
                                   : "Exam Name",
                               border: const OutlineInputBorder(),
                             ),
@@ -161,7 +161,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
                             controller: _dateController,
                             readOnly: true,
                             decoration: InputDecoration(
-                              labelText: isUrdu ? "ØªØ§Ø±ÛŒØ®" : "Date",
+                              labelText: isUrdu ? "تاریخ" : "Date",
                               border: const OutlineInputBorder(),
                               suffixIcon: const Icon(Icons.calendar_today),
                             ),
@@ -188,7 +188,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
                                     labelText:
-                                        isUrdu ? "Ú©Ù„ Ù†Ù…Ø¨Ø±" : "Total Marks",
+                                        isUrdu ? "کل نمبر" : "Total Marks",
                                     border: const OutlineInputBorder(),
                                   ),
                                 ),
@@ -200,7 +200,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
                                     labelText: isUrdu
-                                        ? "Ù¾Ø§Ø³Ù†Ú¯ Ù…Ø§Ø±Ú©Ø³"
+                                        ? "پاسنگ مارکس"
                                         : "Passing Marks",
                                     border: const OutlineInputBorder(),
                                   ),
@@ -216,7 +216,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
                             onPressed: _addExam,
                             icon: const Icon(Icons.save, color: Colors.white),
                             label: Text(
-                              isUrdu ? "Ù…Ø­ÙÙˆØ¸ Ú©Ø±ÛŒÚº" : "Save Exam",
+                              isUrdu ? "محفوظ کریں" : "Save Exam",
                               style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold),
@@ -232,7 +232,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
                         child: _exams.isEmpty
                             ? Center(
                                 child: Text(isUrdu
-                                    ? "Ú©ÙˆØ¦ÛŒ Ø§Ù…ØªØ­Ø§Ù† Ù…ÙˆØ¬ÙˆØ¯ Ù†ÛÛŒÚº"
+                                    ? "کوئی امتحان موجود نہیں"
                                     : "No exams found"))
                             : ListView.builder(
                                 itemCount: _exams.length,
@@ -255,7 +255,7 @@ class _ExaminationPageState extends State<ExaminationPage> {
                                             color: primaryGreen),
                                       ),
                                       subtitle: Text(
-                                        "${exam['exam_date']}\n${isUrdu ? 'Ú©Ù„ Ù†Ù…Ø¨Ø±' : 'Total'}: ${exam['total_marks'] ?? 100} | ${isUrdu ? 'Ù¾Ø§Ø³' : 'Pass'}: ${exam['passing_marks'] ?? 33}",
+                                        "${exam['exam_date']}\n${isUrdu ? 'کل نمبر' : 'Total'}: ${exam['total_marks'] ?? 100} | ${isUrdu ? 'پاس' : 'Pass'}: ${exam['passing_marks'] ?? 33}",
                                       ),
                                       trailing: Icon(Icons.arrow_forward_ios,
                                           size: 16, color: primaryGreen),

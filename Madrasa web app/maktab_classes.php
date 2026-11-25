@@ -2,14 +2,22 @@
 require_once 'db.php';
 
 // Migrations to support Phase 4 and Phase 5 (Only runs once to prevent MySQL metadata locks and HTTP 500)
-$maktabClsFlag = __DIR__ . '/.maktab_classes_schema_v2_done';
+$maktabClsFlag = __DIR__ . '/.maktab_classes_schema_v3_done';
 if (!file_exists($maktabClsFlag)) {
     try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN class_type VARCHAR(50) DEFAULT 'Darse Nizami / Other'"); } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN main_teacher_id INT NULL"); } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN main_teacher_ids JSON NULL"); } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN section VARCHAR(50) DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN subjects_list TEXT NULL"); } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE maktab_classes ADD COLUMN is_deleted TINYINT DEFAULT 0"); } catch (Throwable $e) {}
+    try {
+        foreach ($pdo->query("SHOW INDEX FROM maktab_classes")->fetchAll(PDO::FETCH_ASSOC) as $idx) {
+            if ($idx['Non_unique'] == 0 && $idx['Key_name'] !== 'PRIMARY' && $idx['Column_name'] === 'name') {
+                $pdo->exec("ALTER TABLE maktab_classes DROP INDEX `{$idx['Key_name']}`");
+            }
+        }
+    } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN is_deleted TINYINT DEFAULT 0"); } catch (Throwable $e) {}
     try {
@@ -26,14 +34,6 @@ if (!file_exists($maktabClsFlag)) {
     } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE class_periods ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
     @touch($maktabClsFlag);
-}
-
-// کلاس حذف کرنا
-if (isset($_GET['delete'])) {
-    $id = (int)$_GET['delete'];
-    $pdo->prepare("DELETE FROM maktab_classes WHERE id = ?")->execute([$id]);
-    header("Location: maktab_classes.php");
-    exit;
 }
 
 if (!function_exists('get_class_max_periods')) {
@@ -113,7 +113,10 @@ if (isset($_POST['add_class'])) {
 
             echo "<div class='container-fluid mt-3'><div class='alert alert-success'>کلاس کامیابی سے شامل کر دی گئی!</div></div>";
         } catch (Exception $e) {
-            echo "<div class='container-fluid mt-3'><div class='alert alert-danger'>ایرر: یہ کلاس پہلے سے موجود ہو سکتی ہے۔</div></div>";
+            $errMsg = (strpos($e->getMessage(), 'Duplicate') !== false || $e->getCode() == '23000')
+                ? 'ایرر: یہ کلاس پہلے سے موجود ہو سکتی ہے۔'
+                : 'ایرر: ' . htmlspecialchars($e->getMessage());
+            echo "<div class='container-fluid mt-3'><div class='alert alert-danger'>$errMsg</div></div>";
         }
     }
 }
@@ -167,11 +170,7 @@ $maktab_classes = [];
 try {
     $maktab_classes = $pdo->query("SELECT * FROM maktab_classes WHERE tenant_id = $cur_tenant_id ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e1) {
-    try {
-        $maktab_classes = $pdo->query("SELECT * FROM maktab_classes ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e2) {
-        $maktab_classes = [];
-    }
+    $maktab_classes = [];
 }
 
 $periods_by_class = [];
@@ -181,14 +180,7 @@ try {
         $periods_by_class[$pr['class_id']][$pr['period_no']] = $pr;
     }
 } catch (Throwable $ePr) {
-    try {
-        $periods_raw = $pdo->query("SELECT * FROM class_periods ORDER BY class_id, period_no")->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($periods_raw as $pr) {
-            $periods_by_class[$pr['class_id']][$pr['period_no']] = $pr;
-        }
-    } catch (Throwable $ePr2) {
-        $periods_by_class = [];
-    }
+    $periods_by_class = [];
 }
 
 $maktab_teachers = [];
@@ -198,15 +190,7 @@ try {
     try {
         $maktab_teachers = $pdo->query("SELECT id, name FROM maktab_teachers WHERE tenant_id = $cur_tenant_id AND (status = 'Active' OR status = '' OR status IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $eT2) {
-        try {
-            $maktab_teachers = $pdo->query("SELECT id, name FROM maktab_teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Throwable $eT3) {
-            try {
-                $maktab_teachers = $pdo->query("SELECT id, name FROM maktab_teachers ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
-            } catch (Throwable $eT4) {
-                $maktab_teachers = [];
-            }
-        }
+        $maktab_teachers = [];
     }
 }
 

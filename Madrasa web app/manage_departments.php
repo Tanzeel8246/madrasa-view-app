@@ -14,6 +14,13 @@ if (!$is_admin && !app_has_perm('manage_erp')) {
     exit; 
 }
 
+$cur_tenant_id = function_exists('get_current_tenant_id') ? (int)get_current_tenant_id($pdo) : 1;
+$deptTenantCond = ($cur_tenant_id <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $cur_tenant_id";
+try {
+    $dCols = $pdo->query("SHOW COLUMNS FROM departments LIKE 'tenant_id'")->fetch();
+    if (!$dCols) { $pdo->exec("ALTER TABLE departments ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); }
+} catch (Throwable $eDeptCol) {}
+
 $msg = "";
 
 // --- محفوظ کریں (Save Department) ---
@@ -24,12 +31,12 @@ if (isset($_POST['save_dept'])) {
     
     try {
         if (!empty($_POST['edit_id'])) {
-            $stmt = $pdo->prepare("UPDATE departments SET name=?, description=?, status=? WHERE id=?");
+            $stmt = $pdo->prepare("UPDATE departments SET name=?, description=?, status=? WHERE id=? AND $deptTenantCond");
             $stmt->execute([$name, $desc, $status, $_POST['edit_id']]);
             $msg = "<div class='alert alert-success fw-bold'>✅ شعبہ کامیابی سے اپڈیٹ ہو گیا!</div>";
         } else {
-            $stmt = $pdo->prepare("INSERT INTO departments (name, description, status) VALUES (?, ?, ?)");
-            $stmt->execute([$name, $desc, $status]);
+            $stmt = $pdo->prepare("INSERT INTO departments (name, description, status, tenant_id) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$name, $desc, $status, $cur_tenant_id]);
             $msg = "<div class='alert alert-success fw-bold'>✅ نیا شعبہ شامل کر لیا گیا!</div>";
         }
     } catch (PDOException $e) {
@@ -41,7 +48,7 @@ if (isset($_POST['save_dept'])) {
 if (isset($_GET['delete'])) {
     try {
         // Soft delete ya inactive
-        $pdo->prepare("UPDATE departments SET status='Inactive' WHERE id=?")->execute([$_GET['delete']]);
+        $pdo->prepare("UPDATE departments SET status='Inactive' WHERE id=? AND $deptTenantCond")->execute([$_GET['delete']]);
         $msg = "<div class='alert alert-info'>شعبہ کو Inactive کر دیا گیا ہے۔</div>";
     } catch (Exception $e) {
         $msg = "<div class='alert alert-danger'>اس ریکارڈ کو ڈیلیٹ نہیں کیا جا سکتا۔</div>";
@@ -49,11 +56,11 @@ if (isset($_GET['delete'])) {
 }
 
 // --- ڈیٹا لائیں ---
-$departments = $pdo->query("SELECT * FROM departments ORDER BY name ASC")->fetchAll();
+$departments = $pdo->query("SELECT * FROM departments WHERE $deptTenantCond ORDER BY name ASC")->fetchAll();
 
 $edit_data = null;
 if (isset($_GET['edit'])) {
-    $stmt = $pdo->prepare("SELECT * FROM departments WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM departments WHERE id = ? AND $deptTenantCond");
     $stmt->execute([$_GET['edit']]);
     $edit_data = $stmt->fetch();
 }

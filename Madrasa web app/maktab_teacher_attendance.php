@@ -773,7 +773,20 @@ foreach ($all_cp as $row) {
 
 
 
-$all_classes_for_profiles = $pdo->query("SELECT id, name, class_type, section, main_teacher_ids FROM classes WHERE (status = 'Active' OR status IS NULL OR status = '')")->fetchAll(PDO::FETCH_ASSOC);
+$cur_tenant_id = function_exists('get_current_tenant_id') ? (int)get_current_tenant_id($pdo) : 1;
+$tCond = ($cur_tenant_id <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $cur_tenant_id";
+try {
+    $mtCols = $pdo->query("SHOW COLUMNS FROM maktab_teachers")->fetchAll(PDO::FETCH_COLUMN);
+    if ($mtCols) {
+        if (!in_array('tenant_id', $mtCols)) { try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {} }
+        if (!in_array('assigned_classes', $mtCols)) { try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN assigned_classes TEXT NULL"); } catch (Throwable $e) {} }
+        if (!in_array('assigned_maktab_classes', $mtCols)) { try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN assigned_maktab_classes TEXT NULL"); } catch (Throwable $e) {} }
+        if (!in_array('assigned_periods', $mtCols)) { try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN assigned_periods TEXT NULL"); } catch (Throwable $e) {} }
+        if (!in_array('joining_date', $mtCols)) { try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN joining_date DATE NULL"); } catch (Throwable $e) {} }
+    }
+} catch (Throwable $eMt) {}
+
+$all_classes_for_profiles = $pdo->query("SELECT id, name, class_type, section, main_teacher_ids FROM classes WHERE $tCond AND (status = 'Active' OR status IS NULL OR status = '')")->fetchAll(PDO::FETCH_ASSOC);
 
 
 $classes_by_name = [];
@@ -797,7 +810,7 @@ $profile_explicit_periods = [];
 $profile_assignments = [];
 
 
-$t_stmt = $pdo->prepare("SELECT id, assigned_classes, assigned_periods FROM maktab_teachers WHERE (status='Active' OR status='حاضر' OR status='فعال' OR status='' OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND (joining_date IS NULL OR joining_date = '' OR joining_date <= ?)");
+$t_stmt = $pdo->prepare("SELECT id, assigned_classes, assigned_periods FROM maktab_teachers WHERE $tCond AND (status='Active' OR status='حاضر' OR status='فعال' OR status='' OR status IS NULL) AND (is_deleted=0 OR is_deleted IS NULL) AND (joining_date IS NULL OR joining_date = '' OR joining_date <= ?)");
 $t_stmt->execute([$date]);
 $teacher_profiles = $t_stmt->fetchAll(PDO::FETCH_ASSOC);
 

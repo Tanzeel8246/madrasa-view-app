@@ -17,6 +17,40 @@ include 'header.php';
 
 $cur_tenant_id = (int)get_current_tenant_id();
 
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS maktab_exams (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        exam_name VARCHAR(255) NOT NULL,
+        exam_date DATE NULL,
+        total_marks INT DEFAULT 100,
+        passing_marks INT DEFAULT 33,
+        status VARCHAR(50) DEFAULT 'Active',
+        tenant_id INT NOT NULL DEFAULT 1,
+        is_deleted TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS maktab_exam_results (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        exam_id INT NOT NULL,
+        student_id INT NOT NULL,
+        class_name VARCHAR(100) NULL,
+        teacher_id INT NULL,
+        subject VARCHAR(100) NULL,
+        total_marks INT DEFAULT 100,
+        obtained_marks INT DEFAULT 0,
+        remarks TEXT NULL,
+        tenant_id INT NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    $exCols = $pdo->query("SHOW COLUMNS FROM maktab_exams")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('tenant_id', $exCols)) { try { $pdo->exec("ALTER TABLE maktab_exams ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {} }
+    if (!in_array('is_deleted', $exCols)) { try { $pdo->exec("ALTER TABLE maktab_exams ADD COLUMN is_deleted TINYINT(1) DEFAULT 0"); } catch (Throwable $e) {} }
+    if (!in_array('total_marks', $exCols)) { try { $pdo->exec("ALTER TABLE maktab_exams ADD COLUMN total_marks INT DEFAULT 100"); } catch (Throwable $e) {} }
+    if (!in_array('passing_marks', $exCols)) { try { $pdo->exec("ALTER TABLE maktab_exams ADD COLUMN passing_marks INT DEFAULT 33"); } catch (Throwable $e) {} }
+    $erCols = $pdo->query("SHOW COLUMNS FROM maktab_exam_results")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('tenant_id', $erCols)) { try { $pdo->exec("ALTER TABLE maktab_exam_results ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {} }
+} catch (Throwable $eTbl) {}
+
 if (isset($_POST['add_exam'])) {
     try {
         $stmt = $pdo->prepare("INSERT INTO maktab_exams (exam_name, exam_date, total_marks, passing_marks, tenant_id) VALUES (?, ?, ?, ?, ?)");

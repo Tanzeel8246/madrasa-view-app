@@ -3,6 +3,40 @@ require_once 'db.php';
 include 'header.php'; 
 $cur_tenant_id = (int)get_current_tenant_id();
 
+$maktabStdFlag = __DIR__ . '/.maktab_students_schema_v3_done';
+if (!file_exists($maktabStdFlag)) {
+    foreach ([
+        "ALTER TABLE maktab_students ADD COLUMN tenant_id INT NOT NULL DEFAULT 1",
+        "ALTER TABLE maktab_students ADD COLUMN class VARCHAR(100) NULL",
+        "ALTER TABLE maktab_students ADD COLUMN contact_number VARCHAR(50) NULL",
+        "ALTER TABLE maktab_students ADD COLUMN address TEXT NULL",
+        "ALTER TABLE maktab_students ADD COLUMN status VARCHAR(50) DEFAULT 'Active'",
+        "ALTER TABLE maktab_students ADD COLUMN is_deleted TINYINT DEFAULT 0",
+        "ALTER TABLE maktab_students ADD COLUMN serial_no INT DEFAULT 0",
+        "ALTER TABLE maktab_students ADD COLUMN hijri_year INT DEFAULT 0",
+        "ALTER TABLE maktab_students ADD COLUMN residence_status VARCHAR(50) DEFAULT 'غیر رہائشی'",
+        "ALTER TABLE maktab_students ADD COLUMN quran_edition VARCHAR(50) DEFAULT '16 سطری'",
+        "ALTER TABLE maktab_students ADD COLUMN hifz_section VARCHAR(50) DEFAULT 'regular'",
+        "ALTER TABLE maktab_students ADD COLUMN admission_date DATE NULL",
+        "ALTER TABLE maktab_students ADD COLUMN graduation_date DATE NULL",
+        "ALTER TABLE maktab_students ADD COLUMN duration VARCHAR(100) NULL",
+        "ALTER TABLE maktab_students ADD COLUMN photo VARCHAR(255) NULL",
+        "ALTER TABLE maktab_students ADD COLUMN alumni_category VARCHAR(50) NULL",
+        "ALTER TABLE maktab_students ADD COLUMN leaving_reason TEXT NULL",
+        "ALTER TABLE maktab_students ADD COLUMN wifaq_exam TINYINT DEFAULT 0",
+        "ALTER TABLE maktab_students ADD COLUMN wifaq_marks VARCHAR(50) NULL",
+        "ALTER TABLE maktab_students ADD COLUMN mehrab_recitation VARCHAR(50) NULL",
+    ] as $__ms_sql) { try { $pdo->exec($__ms_sql); } catch (Throwable $e) {} }
+    try {
+        foreach ($pdo->query("SHOW INDEX FROM maktab_students")->fetchAll(PDO::FETCH_ASSOC) as $idx) {
+            if ($idx['Non_unique'] == 0 && $idx['Key_name'] !== 'PRIMARY' && $idx['Column_name'] === 'admission_number') {
+                $pdo->exec("ALTER TABLE maktab_students DROP INDEX `{$idx['Key_name']}`");
+            }
+        }
+    } catch (Throwable $e) {}
+    @touch($maktabStdFlag);
+}
+
 $curRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
 $is_admin_maktab = in_array($curRole, ['admin', 'superadmin', 'super_admin', 'administrator', 'nazim'], true);
 $has_explicit_maktab_perm = (function_exists('app_has_perm') && (app_has_perm('manage_masjid_students') || app_has_perm('manage_students')))
@@ -118,19 +152,19 @@ if (isset($_POST['save_maktab_student'])) {
         
         // اپڈیٹ
         if(!empty($_POST['edit_id'])) {
-            $sql = "UPDATE maktab_students SET name=?, father_name=?, admission_number=?, class=?, contact_number=?, address=?, admission_date=?, graduation_date=?, duration=?, photo=?, residence_status=?, quran_edition=?, hifz_section=? WHERE id=?";
+            $sql = "UPDATE maktab_students SET name=?, father_name=?, admission_number=?, class=?, contact_number=?, address=?, admission_date=?, graduation_date=?, duration=?, photo=?, residence_status=?, quran_edition=?, hifz_section=? WHERE id=? AND tenant_id=?";
             $adm_date = !empty($_POST['admission_date']) ? $_POST['admission_date'] : null;
             $grad_date = !empty($_POST['graduation_date']) ? $_POST['graduation_date'] : null;
             $duration = !empty($_POST['duration']) ? $_POST['duration'] : null;
             $quran_edition = !empty($_POST['quran_edition']) ? $_POST['quran_edition'] : '16 سطری';
-            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $cls, $contact, $addr, $adm_date, $grad_date, $duration, $photo_path, $residence_status, $quran_edition, $hifz_section, $_POST['edit_id']]);
+            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $cls, $contact, $addr, $adm_date, $grad_date, $duration, $photo_path, $residence_status, $quran_edition, $hifz_section, $_POST['edit_id'], $cur_tenant_id]);
             $msg = "<div class='alert alert-success fw-bold'>✅ ریکارڈ اپڈیٹ ہو گیا!</div>";
         } 
         // نیا داخلہ
         else {
-            // Check for duplicate admission number
-            $check = $pdo->prepare("SELECT id FROM maktab_students WHERE admission_number = ?");
-            $check->execute([$adm_no]);
+            // Check for duplicate admission number within tenant
+            $check = $pdo->prepare("SELECT id FROM maktab_students WHERE admission_number = ? AND tenant_id = ?");
+            $check->execute([$adm_no, $cur_tenant_id]);
             if($check->fetch()) {
                 throw new Exception("یہ داخلہ نمبر پہلے ہی موجود ہے!");
             }
@@ -142,8 +176,8 @@ if (isset($_POST['save_maktab_student'])) {
 
             $adm_date = !empty($_POST['admission_date']) ? $_POST['admission_date'] : date('Y-m-d');
             $quran_edition = !empty($_POST['quran_edition']) ? $_POST['quran_edition'] : '16 سطری';
-            $sql = "INSERT INTO maktab_students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, photo, residence_status, quran_edition, hifz_section) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?)";
-            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $s_no, $h_year, $cls, $contact, $addr, $adm_date, $photo_path, $residence_status, $quran_edition, $hifz_section]);
+            $sql = "INSERT INTO maktab_students (name, father_name, admission_number, serial_no, hijri_year, class, contact_number, address, status, admission_date, photo, residence_status, quran_edition, hifz_section, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?)";
+            $pdo->prepare($sql)->execute([$name, $fname, $adm_no, $s_no, $h_year, $cls, $contact, $addr, $adm_date, $photo_path, $residence_status, $quran_edition, $hifz_section, $cur_tenant_id]);
             $msg = "<div class='alert alert-success fw-bold'>✅ نیا طالب علم ایڈ ہو گیا!</div>";
         }
         echo "<script>window.location='maktab_students.php';</script>";
@@ -162,9 +196,9 @@ try {
 
 $last_serial = 0;
 try {
-    $last_serial = (int)($pdo->query("SELECT MAX(serial_no) FROM maktab_students")->fetchColumn() ?: 0);
+    $last_serial = (int)($pdo->query("SELECT MAX(serial_no) FROM maktab_students WHERE tenant_id = $cur_tenant_id")->fetchColumn() ?: 0);
     try {
-        $app_serial = (int)($pdo->query("SELECT MAX(serial_no) FROM admission_applications")->fetchColumn() ?: 0);
+        $app_serial = (int)($pdo->query("SELECT MAX(serial_no) FROM admission_applications WHERE tenant_id = $cur_tenant_id")->fetchColumn() ?: 0);
         $last_serial = max($last_serial, $app_serial);
     } catch (Throwable $eApp) {}
 } catch (Throwable $e) {
@@ -221,13 +255,9 @@ try {
     }
 } catch (Throwable $eAct) {
     try {
-        $active_maktab_students = $pdo->query("SELECT * FROM maktab_students WHERE $active_status_cond AND $del_cond $order_by")->fetchAll(PDO::FETCH_ASSOC);
+        $active_maktab_students = $pdo->query("SELECT * FROM maktab_students WHERE $active_status_cond AND $tenant_cond AND $del_cond $order_by")->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $eAct2) {
-        try {
-            $active_maktab_students = $pdo->query("SELECT * FROM maktab_students ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Throwable $eAct3) {
-            $active_maktab_students = [];
-        }
+        $active_maktab_students = [];
     }
 }
 
@@ -256,9 +286,9 @@ foreach (array_keys($grouped_maktab_students) as $c) {
 
 // 2. فارغ التحصیل طلباء (Alumni)
 try {
-    // Auto-heal dropped & expelled students' categories in DB
+    // Auto-heal dropped & expelled students' categories in DB (tenant-scoped)
     $pdo->exec("UPDATE maktab_students SET alumni_category = 'dropped' 
-        WHERE (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
+        WHERE $tenant_cond AND (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
           AND (
             LOWER(TRIM(status)) IN ('left', 'dropped') 
             OR leaving_reason LIKE '%چھوڑ%' 
@@ -268,7 +298,7 @@ try {
             OR leaving_reason LIKE '%drop%'
           )");
     $pdo->exec("UPDATE maktab_students SET alumni_category = 'expelled' 
-        WHERE (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
+        WHERE $tenant_cond AND (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
           AND (
             LOWER(TRIM(status)) IN ('expelled', 'struck off', 'خارج') 
             OR leaving_reason LIKE '%خارج%' 
@@ -286,11 +316,7 @@ $alumni_status_cond = ($has_m_status)
 try {
     $alumni_maktab_students = $pdo->query("SELECT * FROM maktab_students WHERE $alumni_status_cond AND $tenant_cond AND $del_cond AND ($class_condition) ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $eAlm) {
-    try {
-        $alumni_maktab_students = $pdo->query("SELECT * FROM maktab_students WHERE $alumni_status_cond ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $eAlm2) {
-        $alumni_maktab_students = [];
-    }
+    $alumni_maktab_students = [];
 }
 
 // --- ایڈٹ موڈ ---

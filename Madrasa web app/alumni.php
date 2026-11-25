@@ -17,6 +17,9 @@ if (!$can_manage_alumni) {
     exit;
 }
 
+$cur_tenant_id = function_exists('get_current_tenant_id') ? (int)get_current_tenant_id($pdo) : 1;
+$tenant_cond = ($cur_tenant_id <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $cur_tenant_id";
+
 $sys = $_SESSION['system_type'] ?? 'Madrasa';
 $sys_cond = ($sys === 'Masjid') ? "system_type = 'Masjid'" : "(system_type = 'Madrasa' OR system_type IS NULL OR system_type = '')";
 
@@ -28,7 +31,7 @@ if (isset($_POST['update_alumni_category'])) {
     $new_cat = $_POST['new_category'] ?? 'completed';
     $reason = trim($_POST['leaving_reason'] ?? '');
     
-    $stmt = $pdo->prepare("UPDATE students SET alumni_category = ?, leaving_reason = ? WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE students SET alumni_category = ?, leaving_reason = ? WHERE id = ? AND $tenant_cond");
     $stmt->execute([$new_cat, $reason, $std_id]);
     
     header("Location: alumni.php?cat=" . urlencode($selected_cat));
@@ -64,9 +67,9 @@ if (!function_exists('resolve_alumni_category')) {
 }
 
 try {
-    // Auto-heal dropped & expelled students' categories in DB
+    // Auto-heal dropped & expelled students' categories in DB (tenant-scoped)
     $pdo->exec("UPDATE students SET alumni_category = 'dropped' 
-        WHERE (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
+        WHERE $tenant_cond AND (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
           AND (
             LOWER(TRIM(status)) IN ('left', 'dropped') 
             OR leaving_reason LIKE '%چھوڑ%' 
@@ -76,7 +79,7 @@ try {
             OR leaving_reason LIKE '%drop%'
           )");
     $pdo->exec("UPDATE students SET alumni_category = 'expelled' 
-        WHERE (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
+        WHERE $tenant_cond AND (alumni_category IS NULL OR alumni_category = '' OR alumni_category = 'completed') 
           AND (
             LOWER(TRIM(status)) IN ('expelled', 'struck off', 'خارج') 
             OR leaving_reason LIKE '%خارج%' 
@@ -86,8 +89,8 @@ try {
           )");
 } catch (Throwable $eAlmSync) {}
 
-// Fetch all alumni / left / expelled students
-$all_alumni = $pdo->query("SELECT * FROM students WHERE (status = 'Alumni' OR status = 'Left' OR status = 'Struck Off' OR status = 'خارج' OR status = 'فارغ' OR status = 'فارغ التحصیل' OR (graduation_date IS NOT NULL AND graduation_date != '')) AND (is_deleted = 0 OR is_deleted IS NULL) AND $sys_cond ORDER BY graduation_date DESC, id DESC")->fetchAll();
+// Fetch all alumni / left / expelled students (strictly tenant-scoped)
+$all_alumni = $pdo->query("SELECT * FROM students WHERE (status = 'Alumni' OR status = 'Left' OR status = 'Struck Off' OR status = 'خارج' OR status = 'فارغ' OR status = 'فارغ التحصیل' OR (graduation_date IS NOT NULL AND graduation_date != '')) AND (is_deleted = 0 OR is_deleted IS NULL) AND $tenant_cond AND $sys_cond ORDER BY graduation_date DESC, id DESC")->fetchAll();
 
 $count_all = count($all_alumni);
 $count_completed = 0;

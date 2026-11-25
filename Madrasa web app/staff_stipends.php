@@ -32,6 +32,10 @@ if (!function_exists('ensure_column')) {
     }
 }
 
+$cur_tenant_id = function_exists('get_current_tenant_id') ? (int)get_current_tenant_id($pdo) : 1;
+$tCond = ($cur_tenant_id <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $cur_tenant_id";
+$pTenantCond = ($cur_tenant_id <= 1) ? "(p.tenant_id = 1 OR p.tenant_id IS NULL OR p.tenant_id = 0)" : "p.tenant_id = $cur_tenant_id";
+
 // Ensure acc_payroll table exists
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS acc_payroll (
@@ -46,10 +50,12 @@ try {
         payment_date DATE NULL,
         created_by INT DEFAULT 1,
         system_type VARCHAR(50) DEFAULT 'Madrasa',
+        tenant_id INT NOT NULL DEFAULT 1,
         is_deleted TINYINT(1) DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
     ensure_column($pdo, 'acc_payroll', 'system_type', "VARCHAR(50) DEFAULT 'Madrasa'");
     ensure_column($pdo, 'acc_payroll', 'created_by', "INT DEFAULT 1");
+    ensure_column($pdo, 'acc_payroll', 'tenant_id', "INT NOT NULL DEFAULT 1");
     ensure_column($pdo, 'acc_payroll', 'is_deleted', "TINYINT(1) DEFAULT 0");
 } catch (Exception $e) {}
 
@@ -61,17 +67,17 @@ $msg = '';
 $sal_head_id = 0;
 $sal_head_name = $is_en ? 'Staff Salaries' : 'وظائف عملہ';
 try {
-    $h = $pdo->prepare("SELECT id FROM heads WHERE name = ? AND type = 'Expense' AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+    $h = $pdo->prepare("SELECT id FROM heads WHERE name = ? AND type = 'Expense' AND $tCond AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
     $h->execute([$sal_head_name]);
     $headRow = $h->fetchColumn();
     if (!$headRow) {
-        $h2 = $pdo->prepare("SELECT id FROM heads WHERE name LIKE '%وظائف%' AND type = 'Expense' AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+        $h2 = $pdo->prepare("SELECT id FROM heads WHERE name LIKE '%وظائف%' AND type = 'Expense' AND $tCond AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
         $h2->execute();
         $headRow = $h2->fetchColumn();
     }
     if (!$headRow) {
-        $insH = $pdo->prepare("INSERT INTO heads (name, type, is_deleted) VALUES (?, 'Expense', 0)");
-        $insH->execute([$sal_head_name]);
+        $insH = $pdo->prepare("INSERT INTO heads (name, type, is_deleted, tenant_id) VALUES (?, 'Expense', 0, ?)");
+        $insH->execute([$sal_head_name, $cur_tenant_id]);
         $sal_head_id = (int)$pdo->lastInsertId();
     } else {
         $sal_head_id = (int)$headRow;
@@ -80,7 +86,7 @@ try {
 
 $cash_acc_id = 0;
 try {
-    $cash_acc_id = (int)($pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = '1001' AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1")->fetchColumn() ?: 0);
+    $cash_acc_id = (int)($pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = '1001' AND $tCond AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1")->fetchColumn() ?: 0);
     if (!$cash_acc_id && function_exists('finance_accounting_ensure_account')) {
         $cash_acc_id = finance_accounting_ensure_account($pdo, '1001', 'Cash in Hand', 'Asset');
     }
@@ -91,11 +97,11 @@ if (isset($_POST['generate_payroll'])) {
     $month_year = trim($_POST['month_year'] ?? date('Y-m'));
     if (empty($month_year)) $month_year = date('Y-m');
 
-    $teachers = $pdo->query("SELECT * FROM teachers WHERE (status = 'Active' OR status IS NULL OR status = '') AND (is_deleted = 0 OR is_deleted IS NULL) AND $sys_cond_t")->fetchAll(PDO::FETCH_ASSOC);
+    $teachers = $pdo->query("SELECT * FROM teachers WHERE (status = 'Active' OR status IS NULL OR status = '') AND (is_deleted = 0 OR is_deleted IS NULL) AND $tCond AND $sys_cond_t")->fetchAll(PDO::FETCH_ASSOC);
 
     $count = 0;
     foreach ($teachers as $t) {
-        $check = $pdo->prepare("SELECT id FROM acc_payroll WHERE teacher_id = ? AND month_year = ? AND is_deleted = 0");
+        $check = $pdo->prepare("SELECT id FROM acc_payroll WHERE teacher_id = ? AND month_year = ? AND $tCond AND is_deleted = 0");
         $check->execute([$t['id'], $month_year]);
         if (!$check->fetch()) {
             $basic = (float)($t['basic_salary'] ?? $t['salary'] ?? 0);
@@ -105,7 +111,7 @@ if (isset($_POST['generate_payroll'])) {
             $allowances = $house_rent + $med + $travel;
 
             $daily_rate = (float)($t['daily_deduction_rate'] ?? 0);
-            $absences_stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance_teachers WHERE teacher_id = ? AND DATE_FORMAT(date, '%Y-%m') = ? AND status = 'A'");
+            $absences_stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance_teachers WHERE teacher_id = ? AND DATE_FORMAT(date, '%Y-%m') = ? AND status = 'A' AND $tCond");
             $absences_stmt->execute([$t['id'], $month_year]);
             $absences = (int)$absences_stmt->fetchColumn();
             $deductions = $absences * $daily_rate;
@@ -113,8 +119,8 @@ if (isset($_POST['generate_payroll'])) {
             $net = $basic + $allowances - $deductions;
             if ($net < 0) $net = 0;
 
-            $stmt = $pdo->prepare("INSERT INTO acc_payroll (teacher_id, month_year, basic_salary, allowances, deductions, net_salary, status, created_by, system_type, is_deleted) VALUES (?, ?, ?, ?, ?, ?, 'Unpaid', ?, '$system_type', 0)");
-            $stmt->execute([$t['id'], $month_year, $basic, $allowances, $deductions, $net, $uid]);
+            $stmt = $pdo->prepare("INSERT INTO acc_payroll (teacher_id, month_year, basic_salary, allowances, deductions, net_salary, status, created_by, system_type, tenant_id, is_deleted) VALUES (?, ?, ?, ?, ?, ?, 'Unpaid', ?, ?, ?, 0)");
+            $stmt->execute([$t['id'], $month_year, $basic, $allowances, $deductions, $net, $uid, $system_type, $cur_tenant_id]);
             $count++;
         }
     }
@@ -129,7 +135,7 @@ if (isset($_POST['mark_paid'])) {
     $deductions = (float)($_POST['deductions'] ?? 0);
     $loan_deduction = (float)($_POST['loan_deduction'] ?? 0);
     
-    $p_stmt = $pdo->prepare("SELECT p.*, t.name as teacher_name FROM acc_payroll p JOIN teachers t ON p.teacher_id = t.id WHERE p.id = ?");
+    $p_stmt = $pdo->prepare("SELECT p.*, t.name as teacher_name FROM acc_payroll p JOIN teachers t ON p.teacher_id = t.id WHERE p.id = ? AND $pTenantCond");
     $p_stmt->execute([$payroll_id]);
     $p_row = $p_stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -144,7 +150,7 @@ if (isset($_POST['mark_paid'])) {
         $net_sal = $basic + $allowances - $total_deductions;
         if ($net_sal < 0) $net_sal = 0;
 
-        $pdo->prepare("UPDATE acc_payroll SET allowances = ?, deductions = ?, net_salary = ?, status = 'Paid', payment_date = ? WHERE id = ?")
+        $pdo->prepare("UPDATE acc_payroll SET allowances = ?, deductions = ?, net_salary = ?, status = 'Paid', payment_date = ? WHERE id = ? AND $tCond")
             ->execute([$allowances, $total_deductions, $net_sal, $pay_date, $payroll_id]);
 
         // Insert into Finance Expense
@@ -152,18 +158,18 @@ if (isset($_POST['mark_paid'])) {
         $uname = $_SESSION['username'] ?? ($_SESSION['name'] ?? 'Admin');
         
         // Check if existing finance entry already exists for this payroll
-        $chk_fin = $pdo->prepare("SELECT id FROM finance WHERE type = 'Expense' AND description LIKE ? AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+        $chk_fin = $pdo->prepare("SELECT id FROM finance WHERE type = 'Expense' AND description LIKE ? AND $tCond AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
         $chk_fin->execute(["%ماہ $m_year: $t_name%"]);
         $existing_fid = $chk_fin->fetchColumn();
         
         $fin_id = 0;
         if ($existing_fid) {
             $fin_id = (int)$existing_fid;
-            $pdo->prepare("UPDATE finance SET amount = ?, date = ?, user_id = ?, user_name = ?, head_id = ?, head_name = 'وظائف عملہ', spender_name = ?, donor_name = ?, description = ?, account_id = ?, system_type = ?, is_deleted = 0 WHERE id = ?")
+            $pdo->prepare("UPDATE finance SET amount = ?, date = ?, user_id = ?, user_name = ?, head_id = ?, head_name = 'وظائف عملہ', spender_name = ?, donor_name = ?, description = ?, account_id = ?, system_type = ?, is_deleted = 0 WHERE id = ? AND $tCond")
                 ->execute([$net_sal, $pay_date, $uid, $uname, $sal_head_id, $t_name, $t_name, $f_desc, $cash_acc_id, $p_sys, $fin_id]);
         } else {
-            $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, head_name, amount, date, donor_name, spender_name, description, account_id, is_deleted, system_type) VALUES (?, ?, 'Expense', ?, 'وظائف عملہ', ?, ?, ?, ?, ?, ?, 0, ?)")
-                ->execute([$uid, $uname, $sal_head_id, $net_sal, $pay_date, $t_name, $t_name, $f_desc, $cash_acc_id, $p_sys]);
+            $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, head_name, amount, date, donor_name, spender_name, description, account_id, is_deleted, system_type, tenant_id) VALUES (?, ?, 'Expense', ?, 'وظائف عملہ', ?, ?, ?, ?, ?, ?, 0, ?, ?)")
+                ->execute([$uid, $uname, $sal_head_id, $net_sal, $pay_date, $t_name, $t_name, $f_desc, $cash_acc_id, $p_sys, $cur_tenant_id]);
             $fin_id = (int)$pdo->lastInsertId();
         }
 
@@ -176,19 +182,19 @@ if (isset($_POST['mark_paid'])) {
 
         if ($loan_deduction > 0) {
             // Find active loan
-            $active_loan = $pdo->query("SELECT id, remaining_amount FROM staff_loans WHERE teacher_id = $t_id AND status = 'Active' AND is_deleted = 0 AND system_type = '$p_sys' ORDER BY id ASC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+            $active_loan = $pdo->query("SELECT id, remaining_amount FROM staff_loans WHERE teacher_id = $t_id AND status = 'Active' AND is_deleted = 0 AND $tCond AND system_type = '$p_sys' ORDER BY id ASC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
             
             // Record loan recovery in Finance
             $loan_head_id = 0;
             try {
-                $lh = $pdo->prepare("SELECT id FROM heads WHERE name LIKE '%قرض%' AND type = 'Income' AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
+                $lh = $pdo->prepare("SELECT id FROM heads WHERE name LIKE '%قرض%' AND type = 'Income' AND $tCond AND (is_deleted = 0 OR is_deleted IS NULL) LIMIT 1");
                 $lh->execute();
                 $loan_head_id = (int)($lh->fetchColumn() ?: 0);
             } catch (Exception $e) {}
             
             $fin_desc = "مد: قرض حسنہ (اساتذہ) | تفصیل: قرض وصولی از تنخواہ کٹوتی برائے ماہ $m_year: $t_name";
-            $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, head_name, amount, date, donor_name, spender_name, description, account_id, is_deleted, system_type) VALUES (?, ?, 'Income', ?, 'قرض حسنہ (اساتذہ)', ?, ?, ?, ?, ?, ?, 0, ?)")
-                ->execute([$uid, $uname, $loan_head_id, $loan_deduction, $pay_date, $t_name, $t_name, $fin_desc, $cash_acc_id, $p_sys]);
+            $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, head_name, amount, date, donor_name, spender_name, description, account_id, is_deleted, system_type, tenant_id) VALUES (?, ?, 'Income', ?, 'قرض حسنہ (اساتذہ)', ?, ?, ?, ?, ?, ?, 0, ?, ?)")
+                ->execute([$uid, $uname, $loan_head_id, $loan_deduction, $pay_date, $t_name, $t_name, $fin_desc, $cash_acc_id, $p_sys, $cur_tenant_id]);
             $loan_fin_id = (int)$pdo->lastInsertId();
             if (function_exists('finance_accounting_post')) {
                 try { finance_accounting_post($pdo, $loan_fin_id); } catch (Exception $e) {}
@@ -199,7 +205,7 @@ if (isset($_POST['mark_paid'])) {
                 $rem = (float)$active_loan['remaining_amount'] - $loan_deduction;
                 if ($rem < 0) $rem = 0;
                 $new_status = ($rem == 0) ? 'Paid' : 'Active';
-                $pdo->prepare("UPDATE staff_loans SET remaining_amount = ?, repaid_amount = COALESCE(repaid_amount,0) + ?, status = ? WHERE id = ?")->execute([$rem, $loan_deduction, $new_status, $active_loan['id']]);
+                $pdo->prepare("UPDATE staff_loans SET remaining_amount = ?, repaid_amount = COALESCE(repaid_amount,0) + ?, status = ? WHERE id = ? AND $tCond")->execute([$rem, $loan_deduction, $new_status, $active_loan['id']]);
             }
         }
 
@@ -211,24 +217,24 @@ if (isset($_POST['mark_paid'])) {
 if (isset($_POST['mark_unpaid'])) {
     $payroll_id = (int)$_POST['payroll_id'];
     
-    $p_stmt = $pdo->prepare("SELECT p.*, t.name as teacher_name FROM acc_payroll p JOIN teachers t ON p.teacher_id = t.id WHERE p.id = ?");
+    $p_stmt = $pdo->prepare("SELECT p.*, t.name as teacher_name FROM acc_payroll p JOIN teachers t ON p.teacher_id = t.id WHERE p.id = ? AND $pTenantCond");
     $p_stmt->execute([$payroll_id]);
     $p_row = $p_stmt->fetch(PDO::FETCH_ASSOC);
     if ($p_row) {
         $t_name = $p_row['teacher_name'];
         $m_year = $p_row['month_year'];
-        $chk_fin = $pdo->prepare("SELECT id FROM finance WHERE type = 'Expense' AND description LIKE ? AND (is_deleted = 0 OR is_deleted IS NULL)");
+        $chk_fin = $pdo->prepare("SELECT id FROM finance WHERE type = 'Expense' AND description LIKE ? AND $tCond AND (is_deleted = 0 OR is_deleted IS NULL)");
         $chk_fin->execute(["%ماہ $m_year: $t_name%"]);
         $fids = $chk_fin->fetchAll(PDO::FETCH_COLUMN);
         foreach ($fids as $fid) {
-            $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ?")->execute([$fid]);
+            $pdo->prepare("UPDATE finance SET is_deleted = 1 WHERE id = ? AND $tCond")->execute([$fid]);
             if (function_exists('finance_accounting_delete_voucher')) {
                 try { finance_accounting_delete_voucher($pdo, (int)$fid); } catch (Exception $e) {}
             }
         }
     }
     
-    $pdo->prepare("UPDATE acc_payroll SET status = 'Unpaid', payment_date = NULL WHERE id = ?")->execute([$payroll_id]);
+    $pdo->prepare("UPDATE acc_payroll SET status = 'Unpaid', payment_date = NULL WHERE id = ? AND $tCond")->execute([$payroll_id]);
     $msg = "<div class='alert alert-info fw-bold shadow-sm'><i class='fas fa-info-circle me-1'></i> " . ($is_en ? "Stipend marked as UNPAID." : "وظیفہ غیر ادا شدہ (Unpaid) قرار دے دیا گیا اور فنانس اخراجات سے منسوخ کر دیا گیا۔") . "</div>";
 }
 
@@ -238,20 +244,20 @@ if (isset($_POST['update_payroll'])) {
     $allowances = (float)$_POST['allowances'];
     $deductions = (float)$_POST['deductions'];
     
-    $p_stmt = $pdo->prepare("SELECT basic_salary FROM acc_payroll WHERE id = ?");
+    $p_stmt = $pdo->prepare("SELECT basic_salary FROM acc_payroll WHERE id = ? AND $tCond");
     $p_stmt->execute([$payroll_id]);
     $basic = (float)$p_stmt->fetchColumn();
     $net = $basic + $allowances - $deductions;
     if ($net < 0) $net = 0;
 
-    $pdo->prepare("UPDATE acc_payroll SET allowances = ?, deductions = ?, net_salary = ? WHERE id = ?")->execute([$allowances, $deductions, $net, $payroll_id]);
+    $pdo->prepare("UPDATE acc_payroll SET allowances = ?, deductions = ?, net_salary = ? WHERE id = ? AND $tCond")->execute([$allowances, $deductions, $net, $payroll_id]);
     $msg = "<div class='alert alert-success fw-bold shadow-sm'><i class='fas fa-check-circle me-1'></i> " . ($is_en ? "Allowances & Deductions updated." : "الاؤنس اور کٹوتی کی رقم کامیابی سے اپڈیٹ ہو گئی۔") . "</div>";
 }
 
 // 5. Delete Action
 if (isset($_POST['delete_payroll'])) {
     $payroll_id = (int)$_POST['payroll_id'];
-    $pdo->prepare("UPDATE acc_payroll SET is_deleted = 1 WHERE id = ? AND status = 'Unpaid'")->execute([$payroll_id]);
+    $pdo->prepare("UPDATE acc_payroll SET is_deleted = 1 WHERE id = ? AND status = 'Unpaid' AND $tCond")->execute([$payroll_id]);
     $msg = "<div class='alert alert-warning fw-bold shadow-sm'><i class='fas fa-trash me-1'></i> " . ($is_en ? "Payroll entry deleted." : "غیر ادا شدہ پے رول ریکارڈ حذف کر دیا گیا۔") . "</div>";
 }
 
@@ -261,21 +267,21 @@ $filter_month = $_GET['month'] ?? '';
 $filter_status = $_GET['status'] ?? '';
 
 // Distinct months for dropdown
-$months_list = $pdo->query("SELECT DISTINCT month_year FROM acc_payroll WHERE is_deleted = 0 AND $sys_cond_p ORDER BY month_year DESC")->fetchAll(PDO::FETCH_COLUMN);
+$months_list = $pdo->query("SELECT DISTINCT p.month_year FROM acc_payroll p WHERE p.is_deleted = 0 AND $pTenantCond AND $sys_cond_p ORDER BY p.month_year DESC")->fetchAll(PDO::FETCH_COLUMN);
 
 // Teachers for dropdown
-$all_teachers = $pdo->query("SELECT id, name FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND $sys_cond_t ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$all_teachers = $pdo->query("SELECT id, name FROM teachers WHERE (is_deleted = 0 OR is_deleted IS NULL) AND $tCond AND $sys_cond_t ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Base Query
 $active_loans = [];
 try {
-    $loans_q = $pdo->query("SELECT teacher_id, SUM(remaining_amount) as rem, MAX(installment_amount) as inst FROM staff_loans WHERE is_deleted = 0 AND status = 'Active' AND system_type = '$system_type' GROUP BY teacher_id")->fetchAll(PDO::FETCH_ASSOC);
+    $loans_q = $pdo->query("SELECT teacher_id, SUM(remaining_amount) as rem, MAX(installment_amount) as inst FROM staff_loans WHERE is_deleted = 0 AND $tCond AND status = 'Active' AND system_type = '$system_type' GROUP BY teacher_id")->fetchAll(PDO::FETCH_ASSOC);
     foreach($loans_q as $l) {
         $active_loans[$l['teacher_id']] = ['rem' => (float)$l['rem'], 'inst' => (float)$l['inst']];
     }
 } catch(Exception $e) {}
 
-$where = ["p.is_deleted = 0", ($is_masjid ? "p.system_type = 'Masjid' AND t.system_type = 'Masjid'" : "(p.system_type = 'Madrasa' OR p.system_type IS NULL OR p.system_type = '') AND (t.system_type = 'Madrasa' OR t.system_type IS NULL OR t.system_type = '')")];
+$where = ["p.is_deleted = 0", $pTenantCond, ($is_masjid ? "p.system_type = 'Masjid' AND t.system_type = 'Masjid'" : "(p.system_type = 'Madrasa' OR p.system_type IS NULL OR p.system_type = '') AND (t.system_type = 'Madrasa' OR t.system_type IS NULL OR t.system_type = '')")];
 $params = [];
 
 if ($filter_teacher_id > 0) {

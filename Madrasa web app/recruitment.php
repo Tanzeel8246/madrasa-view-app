@@ -43,6 +43,7 @@ try { $pdo->exec("UPDATE job_applicants SET job_id = posting_id WHERE (job_id IS
 
 $active_sys = $_SESSION['active_system'] ?? ($_SESSION['system_type'] ?? 'Madrasa');
 $is_masjid = ($active_sys === 'Masjid');
+$cur_tenant_id = (int)($_SESSION['tenant_id'] ?? 1);
 
 $sys_cond = $is_masjid 
     ? "system_type = 'Masjid'" 
@@ -66,8 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_job'])) {
 
         if (empty($title)) throw new Exception('آسامی کا عنوان لازمی ہے!');
 
-        $stmt = $pdo->prepare("INSERT INTO job_postings (title, department, job_type, requirements, salary_range, deadline, status, system_type, is_deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'Open', ?, 0, NOW(), NOW())");
-        $stmt->execute([$title, $dept, $jType, $reqs, $salary, $deadline, $sys]);
+        $stmt = $pdo->prepare("INSERT INTO job_postings (title, department, job_type, requirements, salary_range, deadline, status, system_type, tenant_id, is_deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'Open', ?, ?, 0, NOW(), NOW())");
+        $stmt->execute([$title, $dept, $jType, $reqs, $salary, $deadline, $sys, $cur_tenant_id]);
         log_activity($pdo, 'recruitment', "نئی آسامی شامل کی گئی: $title ($dept)");
         $success_msg = "آسامی '$title' کامیابی سے شامل کر دی گئی!";
     } catch (Exception $e) {
@@ -91,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_applicant'])) {
             throw new Exception('آسامی، امیدوار کا نام اور فون نمبر لازمی ہیں!');
         }
 
-        $stmt = $pdo->prepare("INSERT INTO job_applicants (job_id, applicant_name, father_name, phone, email, qualification, experience, status, notes, system_type, is_deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, 0, NOW(), NOW())");
-        $stmt->execute([$jobId, $name, $fName, $phone, $email, $qual, $exp, $notes, $active_sys]);
+        $stmt = $pdo->prepare("INSERT INTO job_applicants (job_id, applicant_name, father_name, phone, email, qualification, experience, status, notes, system_type, tenant_id, is_deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, 0, NOW(), NOW())");
+        $stmt->execute([$jobId, $name, $fName, $phone, $email, $qual, $exp, $notes, $active_sys, $cur_tenant_id]);
         log_activity($pdo, 'recruitment', "نئے امیدوار کی درخواست موصول ہوئی: $name برائے جاب ID: $jobId");
         $success_msg = "امیدوار '$name' کی درخواست کامیابی سے درج ہو گئی!";
     } catch (Exception $e) {
@@ -110,8 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 
         if ($appId <= 0) throw new Exception('غلط درخواست!');
 
-        $stmt = $pdo->prepare("UPDATE job_applicants SET status = ?, interview_date = ?, interview_notes = ?, updated_at = NOW() WHERE id = ?");
-        $stmt->execute([$newStatus, $iDate, $iNotes, $appId]);
+        $stmt = $pdo->prepare("UPDATE job_applicants SET status = ?, interview_date = ?, interview_notes = ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$newStatus, $iDate, $iNotes, $appId, $cur_tenant_id]);
         log_activity($pdo, 'recruitment', "امیدوار ID: $appId کا اسٹیٹس تبدیل کیا گیا: $newStatus");
         $success_msg = "امیدوار کا مرحلہ کامیابی سے اپڈیٹ ہو گیا!";
     } catch (Exception $e) {
@@ -123,17 +124,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['hire_teacher'])) {
     try {
         $appId = (int)($_POST['applicant_id'] ?? 0);
-        $stmt = $pdo->prepare("SELECT * FROM job_applicants WHERE id = ?");
-        $stmt->execute([$appId]);
+        $stmt = $pdo->prepare("SELECT * FROM job_applicants WHERE id = ? AND tenant_id = ?");
+        $stmt->execute([$appId, $cur_tenant_id]);
         $app = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$app) throw new Exception('امیدوار نہیں ملا!');
 
         $targetTable = $is_masjid ? 'maktab_teachers' : 'teachers';
-        $tStmt = $pdo->prepare("INSERT INTO $targetTable (name, father_name, phone, qualification, status, is_deleted, created_at) VALUES (?, ?, ?, ?, 'Active', 0, NOW())");
-        $tStmt->execute([$app['applicant_name'], $app['father_name'], $app['phone'], $app['qualification']]);
+        $tStmt = $pdo->prepare("INSERT INTO $targetTable (name, father_name, phone, qualification, status, tenant_id, is_deleted, created_at) VALUES (?, ?, ?, ?, 'Active', ?, 0, NOW())");
+        $tStmt->execute([$app['applicant_name'], $app['father_name'], $app['phone'], $app['qualification'], $cur_tenant_id]);
         $newTId = $pdo->lastInsertId();
 
-        $pdo->prepare("UPDATE job_applicants SET status = 'Selected', converted_teacher_id = ?, updated_at = NOW() WHERE id = ?")->execute([$newTId, $appId]);
+        $pdo->prepare("UPDATE job_applicants SET status = 'Selected', converted_teacher_id = ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?")->execute([$newTId, $appId, $cur_tenant_id]);
         log_activity($pdo, 'recruitment', "امیدوار {$app['applicant_name']} کو استاد میں شامل کیا گیا (ID: $newTId)");
         $success_msg = "مبارک ہو! امیدوار '{$app['applicant_name']}' کو اساتذہ لسٹ میں شامل کر دیا گیا ہے!";
     } catch (Exception $e) {
@@ -142,7 +143,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['hire_teacher'])) {
 }
 
 // Fetch Job Postings
-$jobs = $pdo->query("SELECT * FROM job_postings WHERE $sys_cond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$jobsStmt = $pdo->prepare("SELECT * FROM job_postings WHERE $sys_cond AND tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY id DESC");
+$jobsStmt->execute([$cur_tenant_id]);
+$jobs = $jobsStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch Applicants with Job Title
 // BUGFIX B-05: the unqualified $sys_cond made `system_type` ambiguous in this JOIN
@@ -151,13 +154,15 @@ $jobs = $pdo->query("SELECT * FROM job_postings WHERE $sys_cond AND (is_deleted 
 $sys_cond_a = $is_masjid
     ? "a.system_type = 'Masjid'"
     : "(a.system_type = 'Madrasa' OR a.system_type IS NULL OR a.system_type = '')";
-$applicants = $pdo->query("
+$appStmt = $pdo->prepare("
     SELECT a.*, j.title as job_title, j.department
     FROM job_applicants a
     JOIN job_postings j ON a.job_id = j.id
-    WHERE $sys_cond_a AND (a.is_deleted = 0 OR a.is_deleted IS NULL)
+    WHERE $sys_cond_a AND a.tenant_id = ? AND (a.is_deleted = 0 OR a.is_deleted IS NULL)
     ORDER BY a.id DESC
-")->fetchAll(PDO::FETCH_ASSOC);
+");
+$appStmt->execute([$cur_tenant_id]);
+$applicants = $appStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Stages Pipeline
 $stageDefs = [

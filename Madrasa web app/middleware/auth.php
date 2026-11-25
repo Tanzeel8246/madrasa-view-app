@@ -217,6 +217,35 @@ if (!function_exists('get_allowed_classes')) {
     }
 }
 
+if (!function_exists('get_allowed_maktab_classes')) {
+    function get_allowed_maktab_classes($pdo, $orderBy = 'id ASC', $apiRole = null, $apiUserId = null) {
+        $classes = get_allowed_classes($pdo, $orderBy, $apiRole, $apiUserId, 'Masjid');
+        $tenantId = function_exists('get_current_tenant_id') ? (int)get_current_tenant_id() : 1;
+        $tCond = ($tenantId <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $tenantId";
+        try {
+            $mRows = $pdo->query("SELECT * FROM maktab_classes WHERE $tCond AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY $orderBy")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            try {
+                $mRows = $pdo->query("SELECT * FROM maktab_classes WHERE $tCond ORDER BY $orderBy")->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable $e2) {
+                $mRows = [];
+            }
+        }
+        $seen = [];
+        foreach ($classes as $c) {
+            $seen[strtolower(trim((string)($c['name'] ?? '')))] = true;
+        }
+        foreach ($mRows as $mc) {
+            $nm = strtolower(trim((string)($mc['name'] ?? '')));
+            if ($nm !== '' && !isset($seen[$nm])) {
+                $classes[] = $mc;
+                $seen[$nm] = true;
+            }
+        }
+        return $classes;
+    }
+}
+
 if (!function_exists('get_user_allowed_class_names')) {
     function get_user_allowed_class_names($pdo, $apiRole = null, $apiUserId = null, $apiSystemType = null) {
         $classes = get_allowed_classes($pdo, 'name ASC', $apiRole, $apiUserId, $apiSystemType);

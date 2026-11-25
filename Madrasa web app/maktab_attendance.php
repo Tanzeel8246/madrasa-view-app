@@ -172,7 +172,13 @@ function att_teacher_ids_for_class_period(PDO $pdo, $class_id, $selected_period)
 
     $profileClassMap = [];
     $profilePeriodMap = [];
-    $teachersStmt = $pdo->query("SELECT id, assigned_maktab_classes, assigned_periods FROM teachers WHERE (status = 'Active' OR status = 'حاضر' OR status = 'فعال' OR status = '' OR status IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL)");
+    $attTenantId = function_exists('get_current_tenant_id') ? (int)get_current_tenant_id($pdo) : 1;
+    $attTCond = ($attTenantId <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $attTenantId";
+    try {
+        $tColsCheck = $pdo->query("SHOW COLUMNS FROM teachers LIKE 'assigned_maktab_classes'")->fetch();
+        if (!$tColsCheck) { $pdo->exec("ALTER TABLE teachers ADD COLUMN assigned_maktab_classes TEXT NULL"); }
+    } catch (Throwable $eTc) {}
+    $teachersStmt = $pdo->query("SELECT id, assigned_maktab_classes, assigned_periods FROM teachers WHERE $attTCond AND (status = 'Active' OR status = 'حاضر' OR status = 'فعال' OR status = '' OR status IS NULL) AND (is_deleted = 0 OR is_deleted IS NULL)");
     foreach ($teachersStmt->fetchAll(PDO::FETCH_ASSOC) as $teacher) {
         $tid = (string)$teacher['id'];
         $assignedClasses = att_id_list($teacher['assigned_maktab_classes'] ?? '');
@@ -417,7 +423,9 @@ if ($can_teacher_attendance && $class_id && $selected_period) {
 // Fetch maktab_students
 $maktab_students = [];
 if ($selected_class && $selected_period) {
-    $query = "SELECT * FROM maktab_students WHERE (LOWER(status)='active' OR LOWER(status)='present' OR status='') AND is_deleted=0 AND (admission_date IS NULL OR admission_date = '' OR admission_date <= ?) AND class = ? ORDER BY admission_number ASC";
+    $attTenantId2 = function_exists('get_current_tenant_id') ? (int)get_current_tenant_id($pdo) : 1;
+    $attTCond2 = ($attTenantId2 <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $attTenantId2";
+    $query = "SELECT * FROM maktab_students WHERE $attTCond2 AND (LOWER(status)='active' OR LOWER(status)='present' OR status='') AND is_deleted=0 AND (admission_date IS NULL OR admission_date = '' OR admission_date <= ?) AND class = ? ORDER BY admission_number ASC";
     $stmt = $pdo->prepare($query);
     $stmt->execute([$date, $selected_class]);
     $maktab_students = $stmt->fetchAll();

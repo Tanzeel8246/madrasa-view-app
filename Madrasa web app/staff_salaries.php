@@ -10,72 +10,75 @@ if (!isset($_SESSION['user_id'])) {
 $uid  = $_SESSION['user_id'];
 $role = $_SESSION['role'] ?? 'admin';
 $system_type = $_SESSION['system_type'] ?? 'Madrasa';
+$cur_tenant_id = function_exists('get_current_tenant_id') ? (int)get_current_tenant_id($pdo) : 1;
+$tCond = ($cur_tenant_id <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $cur_tenant_id";
+$pTenantCond = ($cur_tenant_id <= 1) ? "(p.tenant_id = 1 OR p.tenant_id IS NULL OR p.tenant_id = 0)" : "p.tenant_id = $cur_tenant_id";
 
-//  Languages 
-$is_en = ($lang == 'en');
+$is_en = (($lang ?? 'ur') == 'en');
 $txt = [
-    'title' => $is_en ? 'Staff Salaries Management' : ' ',
-    'income_expense' => $is_en ? 'Income & Expense' : '  ',
-    'generate_payroll' => $is_en ? 'Generate Payroll' : '  ',
-    'period' => $is_en ? 'Period' : '',
-    'this_month' => $is_en ? 'This Month' : ' ',
-    'last_month' => $is_en ? 'Last Month' : ' ',
-    'this_quarter' => $is_en ? 'This Quarter' : '  ',
-    'this_year' => $is_en ? 'This Year' : ' ',
-    'all_time' => $is_en ? 'All Time' : ' ',
-    'custom_range' => $is_en ? 'Custom Date Range' : '  ',
-    'start_month' => $is_en ? 'Start Month' : ' ()',
-    'end_month' => $is_en ? 'End Month' : ' ()',
-    'status' => $is_en ? 'Status' : '',
-    'all' => $is_en ? 'All' : '',
-    'pending' => $is_en ? 'Pending' : '',
-    'paid' => $is_en ? 'Paid' : ' ',
-    'advance' => $is_en ? 'Advance' : '',
-    'type' => $is_en ? 'Type' : '',
-    'all_staff' => $is_en ? 'All (Teachers + Staff)' : ' ( + )',
-    'only_teachers' => $is_en ? 'Teachers Only' : ' ',
-    'only_staff' => $is_en ? 'Staff Only' : '  ',
-    'filter' => $is_en ? 'Filter' : '',
-    'total_salaries' => $is_en ? 'Total Salaries' : ' ',
-    'salary_record' => $is_en ? 'Salary Records' : '  ',
-    'records' => $is_en ? 'Records' : '',
-    'not_generated' => $is_en ? 'Payroll not generated for this month.' : '       ',
-    'click_generate' => $is_en ? 'Click "Generate Payroll" above.' : ' "  "  ',
+    'title' => $is_en ? 'Staff Salaries Management' : 'ملازمین و اساتذہ کی تنخواہیں',
+    'income_expense' => $is_en ? 'Income & Expense' : 'آمدن و خرچ',
+    'generate_payroll' => $is_en ? 'Generate Payroll' : 'ماہانہ پے رول بنائیں',
+    'period' => $is_en ? 'Period' : 'دورانیہ',
+    'this_month' => $is_en ? 'This Month' : 'رواں مہینہ',
+    'last_month' => $is_en ? 'Last Month' : 'گزشتہ مہینہ',
+    'this_quarter' => $is_en ? 'This Quarter' : 'رواں سہ ماہی',
+    'this_year' => $is_en ? 'This Year' : 'رواں سال',
+    'all_time' => $is_en ? 'All Time' : 'مکمل ریکارڈ',
+    'custom_range' => $is_en ? 'Custom Date Range' : 'مخصوص مہینے',
+    'start_month' => $is_en ? 'Start Month' : 'شروع مہینہ',
+    'end_month' => $is_en ? 'End Month' : 'اختتامی مہینہ',
+    'status' => $is_en ? 'Status' : 'اسٹیٹس',
+    'all' => $is_en ? 'All' : 'تمام',
+    'pending' => $is_en ? 'Pending' : 'واجب الادا',
+    'paid' => $is_en ? 'Paid' : 'ادا شدہ',
+    'advance' => $is_en ? 'Advance' : 'پیشگی/ایڈوانس',
+    'type' => $is_en ? 'Type' : 'قسم / عملہ',
+    'all_staff' => $is_en ? 'All (Teachers + Staff)' : 'تمام (اساتذہ + عملہ)',
+    'only_teachers' => $is_en ? 'Teachers Only' : 'صرف اساتذہ',
+    'only_staff' => $is_en ? 'Staff Only' : 'صرف عملہ',
+    'staff' => $is_en ? 'Individual Staff' : 'مخصوص استاد / عملہ',
+    'filter' => $is_en ? 'Filter' : 'فلٹر',
+    'total_salaries' => $is_en ? 'Total Salaries' : 'کل تنخواہیں',
+    'salary_record' => $is_en ? 'Salary Records' : 'تنخواہوں کا ریکارڈ',
+    'records' => $is_en ? 'Records' : 'اندراجات',
+    'not_generated' => $is_en ? 'Payroll not generated for this month.' : 'اس مہینے کا پے رول ابھی تیار نہیں کیا گیا۔',
+    'click_generate' => $is_en ? 'Click "Generate Payroll" above.' : 'اوپر "ماہانہ پے رول بنائیں" بٹن پر کلک کریں۔',
     'sr' => $is_en ? 'Sr' : '#',
-    'name_desig' => $is_en ? 'Name / Designation' : ' / ',
-    'basic' => $is_en ? 'Basic' : '',
-    'allowances' => $is_en ? 'Allowances' : '',
-    'deductions' => $is_en ? 'Deductions' : '',
-    'net_salary' => $is_en ? 'Net Salary' : ' ',
-    'pay_date' => $is_en ? 'Payment Date' : ' ',
-    'action' => $is_en ? 'Action' : '',
-    'cancelled' => $is_en ? 'Cancelled' : '',
-    'pay_salary' => $is_en ? 'Pay Salary' : '  ',
-    'give_advance' => $is_en ? 'Give Advance' : ' ',
-    'print_slip' => $is_en ? 'Print Slip' : '  ',
-    'view_expense' => $is_en ? 'View Expense' : '  ',
-    'total_sum' => $is_en ? 'Total Sum' : ' ',
-    'past_months' => $is_en ? 'Past Payroll Months:' : '   :',
-    'cancel' => $is_en ? 'Cancel' : '',
-    'generate_info' => $is_en ? 'Payroll will be auto-generated for all active staff. Already generated records will be skipped.' : '                      ',
-    'select_month' => $is_en ? 'Select Month' : '  ',
-    'note_optional' => $is_en ? 'Note (Optional)' : ' ()',
-    'note_eg_pay' => $is_en ? 'e.g. Cash / Bank Transfer' : ':    /  ',
-    'auto_expense_pay' => $is_en ? 'This payment will auto-add to expense register under "Staff Salaries".' : '      "   "      ',
-    'adv_amount' => $is_en ? 'Advance Amount (Rs.)' : '  (Rs.)',
-    'date' => $is_en ? 'Date' : '',
-    'adv_note' => $is_en ? 'Note' : '',
-    'note_eg_adv' => $is_en ? 'e.g. Eid Advance' : ':   ',
-    'auto_expense_adv' => $is_en ? 'Advance will also be added to the expense register.' : '       ',
-    'quarter' => $is_en ? 'Quarter' : ' ',
-    'year' => $is_en ? 'Year' : '',
-    'from' => $is_en ? 'From' : '',
-    'to' => $is_en ? 'To' : '',
-    'msg_generated' => $is_en ? 'Payroll generated successfully for' : '    ',
-    'msg_new_records' => $is_en ? 'new records added!' : '   !',
-    'msg_paid' => $is_en ? 'Salary paid and recorded in expense register successfully!' : '            !',
-    'msg_adv' => $is_en ? 'Advance paid and recorded in expense register!' : '         !',
-    'sal_head' => $is_en ? 'Staff & Teacher Salary' : '   ',
+    'name_desig' => $is_en ? 'Name / Designation' : 'نام / عہدہ',
+    'basic' => $is_en ? 'Basic' : 'بنیادی تنخواہ',
+    'allowances' => $is_en ? 'Allowances' : 'الاؤنسز',
+    'deductions' => $is_en ? 'Deductions' : 'کٹوتیاں',
+    'net_salary' => $is_en ? 'Net Salary' : 'خالص تنخواہ',
+    'pay_date' => $is_en ? 'Payment Date' : 'تاریخِ ادائیگی',
+    'action' => $is_en ? 'Action' : 'ایکشن',
+    'cancelled' => $is_en ? 'Cancelled' : 'منسوخ',
+    'pay_salary' => $is_en ? 'Pay Salary' : 'تنخواہ ادا کریں',
+    'give_advance' => $is_en ? 'Give Advance' : 'پیشگی رقم دیں',
+    'print_slip' => $is_en ? 'Print Slip' : 'پرنٹ سلپ',
+    'view_expense' => $is_en ? 'View Expense' : 'اخراجات دیکھیں',
+    'total_sum' => $is_en ? 'Total Sum' : 'مجموعی رقم',
+    'past_months' => $is_en ? 'Past Payroll Months:' : 'سابقہ پے رول مہینے:',
+    'cancel' => $is_en ? 'Cancel' : 'منسوخ کریں',
+    'generate_info' => $is_en ? 'Payroll will be auto-generated for all active staff. Already generated records will be skipped.' : 'تمام فعال عملے کے لیے پے رول خودکار تیار ہو جائے گا۔',
+    'select_month' => $is_en ? 'Select Month' : 'مہینہ منتخب کریں',
+    'note_optional' => $is_en ? 'Note (Optional)' : 'نوٹ (اختیاری)',
+    'note_eg_pay' => $is_en ? 'e.g. Cash / Bank Transfer' : 'مثلاً: نقد / بینک ٹرانسفر',
+    'auto_expense_pay' => $is_en ? 'This payment will auto-add to expense register under "Staff Salaries".' : 'یہ ادائیگی خودکار اخراجات رجسٹر میں شامل ہو جائے گی۔',
+    'adv_amount' => $is_en ? 'Advance Amount (Rs.)' : 'پیشگی رقم (روپے)',
+    'date' => $is_en ? 'Date' : 'تاریخ',
+    'adv_note' => $is_en ? 'Note' : 'نوٹ',
+    'note_eg_adv' => $is_en ? 'e.g. Eid Advance' : 'مثلاً: عید ایڈوانس',
+    'auto_expense_adv' => $is_en ? 'Advance will also be added to the expense register.' : 'پیشگی رقم بھی اخراجات رجسٹر میں شامل ہو جائے گی۔',
+    'quarter' => $is_en ? 'Quarter' : 'سہ ماہی',
+    'year' => $is_en ? 'Year' : 'سال',
+    'from' => $is_en ? 'From' : 'از',
+    'to' => $is_en ? 'To' : 'تا',
+    'msg_generated' => $is_en ? 'Payroll generated successfully for' : 'پے رول کامیابی سے تیار ہو گیا برائے',
+    'msg_new_records' => $is_en ? 'new records added!' : 'نئے اندراجات شامل ہوئے!',
+    'msg_paid' => $is_en ? 'Salary paid and recorded in expense register successfully!' : 'تنخواہ ادا کر کے اخراجات میں درج کر دی گئی!',
+    'msg_adv' => $is_en ? 'Advance paid and recorded in expense register!' : 'پیشگی رقم ادا کر کے اخراجات میں درج کر دی گئی!',
+    'sal_head' => $is_en ? 'Staff & Teacher Salary' : 'اساتذہ و عملہ تنخواہیں',
 ];
 
 function format_month_year($my, $lang) {
@@ -83,21 +86,13 @@ function format_month_year($my, $lang) {
     $ts = strtotime($my . '-01');
     if ($lang == 'en') return date('F Y', $ts);
     $months = [
-        '01' => '', '02' => '', '03' => '', '04' => '',
-        '05' => '', '06' => '', '07' => '', '08' => '',
-        '09' => '', '10' => '', '11' => '', '12' => ''
+        '01' => 'جنوری', '02' => 'فروری', '03' => 'مارچ', '04' => 'اپریل',
+        '05' => 'مئی', '06' => 'جون', '07' => 'جولائی', '08' => 'اگست',
+        '09' => 'ستمبر', '10' => 'اکتوبر', '11' => 'نومبر', '12' => 'دسمبر'
     ];
-    $m = date('m', $ts);
-    $y = date('Y', $ts);
-    return $months[$m] . ' ' . $y;
+    return ($months[date('m', $ts)] ?? date('m', $ts)) . ' ' . date('Y', $ts);
 }
 
-//  One-time cleanup for old PAYROLL_ID markers 
-try {
-    $pdo->exec("UPDATE finance SET description = REPLACE(REPLACE(description, SUBSTRING_INDEX(description, ' [PAYROLL_ID:', -1), ''), ' [PAYROLL_ID:', '') WHERE description LIKE '%[PAYROLL_ID:%'");
-} catch (Exception $e) {}
-
-//     
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS acc_payroll (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -117,33 +112,17 @@ try {
         loan_deduction DECIMAL(15,2) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_by INT,
-        system_type VARCHAR(50) DEFAULT 'Madrasa'
+        system_type VARCHAR(50) DEFAULT 'Madrasa',
+        tenant_id INT NOT NULL DEFAULT 1,
+        is_deleted TINYINT(1) DEFAULT 0
     )");
 } catch (Exception $e) {}
 
-//      (    )
-foreach ([
-    "ALTER TABLE acc_payroll ADD COLUMN net_salary DECIMAL(15,2) DEFAULT 0",
-    "ALTER TABLE acc_payroll ADD COLUMN finance_id INT DEFAULT NULL",
-    "ALTER TABLE acc_payroll ADD COLUMN payment_note TEXT DEFAULT ''",
-    "ALTER TABLE acc_payroll ADD COLUMN advance_amount DECIMAL(15,2) DEFAULT 0",
-    "ALTER TABLE acc_payroll ADD COLUMN advance_date DATE DEFAULT NULL",
-    "ALTER TABLE acc_payroll ADD COLUMN loan_id INT DEFAULT NULL",
-    "ALTER TABLE acc_payroll ADD COLUMN loan_deduction DECIMAL(15,2) DEFAULT 0",
-    "ALTER TABLE acc_payroll MODIFY COLUMN status ENUM('Unpaid','Paid','Advance','Cancelled') DEFAULT 'Unpaid'",
-    "ALTER TABLE acc_payroll ADD COLUMN system_type VARCHAR(50) DEFAULT 'Madrasa'",
-] as $sql) {
-    try { $pdo->exec($sql); } catch (Exception $e) {}
-}
-
-try { $pdo->exec("UPDATE acc_payroll SET net_salary = (basic_salary + allowances - deductions) WHERE net_salary = 0 AND (basic_salary + allowances - deductions) > 0"); } catch (Exception $e) {}
-
-// " "  
 $sal_head_id = 0;
 try {
-    $sh = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'SAL-001' LIMIT 1")->fetchColumn();
+    $sh = $pdo->query("SELECT id FROM acc_chart_of_accounts WHERE code = 'SAL-001' AND $tCond LIMIT 1")->fetchColumn();
     if (!$sh) {
-        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted) VALUES ('SAL-001', ?, 'Expense', 0)")->execute([$txt['sal_head']]);
+        $pdo->prepare("INSERT INTO acc_chart_of_accounts (code, name, type, is_deleted, tenant_id) VALUES ('SAL-001', ?, 'Expense', 0, $cur_tenant_id)")->execute([$txt['sal_head']]);
         $sal_head_id = (int)$pdo->lastInsertId();
     } else {
         $sal_head_id = (int)$sh;
@@ -156,10 +135,10 @@ $msg = '';
 if (isset($_POST['generate_payroll'])) {
     try {
         $my = $_POST['month_year'] ?? date('Y-m');
-        $all_staff = $pdo->query("SELECT id, name, salary, house_rent, medical_allowance, travel_allowance, daily_deduction_rate, staff_type FROM teachers WHERE status = 'Active' AND (is_deleted = 0 OR is_deleted IS NULL) AND system_type = '$system_type'")->fetchAll(PDO::FETCH_ASSOC);
+        $all_staff = $pdo->query("SELECT id, name, salary, house_rent, medical_allowance, travel_allowance, daily_deduction_rate, staff_type FROM teachers WHERE status = 'Active' AND $tCond AND (is_deleted = 0 OR is_deleted IS NULL) AND system_type = '$system_type'")->fetchAll(PDO::FETCH_ASSOC);
         $created = 0;
         foreach ($all_staff as $s) {
-            $check = $pdo->prepare("SELECT id FROM acc_payroll WHERE teacher_id = ? AND month_year = ?");
+            $check = $pdo->prepare("SELECT id FROM acc_payroll WHERE teacher_id = ? AND month_year = ? AND $tCond");
             $check->execute([$s['id'], $my]);
             if ($check->rowCount() > 0) continue;
 
@@ -168,7 +147,7 @@ if (isset($_POST['generate_payroll'])) {
             $ded       = 0;
             if (($s['staff_type'] ?? 'Teacher') === 'Teacher') {
                 try {
-                    $abs = $pdo->prepare("SELECT COUNT(*) FROM attendance_teachers WHERE teacher_id = ? AND DATE_FORMAT(date,'%Y-%m') = ? AND status = 'A'");
+                    $abs = $pdo->prepare("SELECT COUNT(*) FROM attendance_teachers WHERE teacher_id = ? AND DATE_FORMAT(date,'%Y-%m') = ? AND status = 'A' AND $tCond");
                     $abs->execute([$s['id'], $my]);
                     $absent = (int)$abs->fetchColumn();
                     $rate   = (float)($s['daily_deduction_rate'] ?? 0);
@@ -182,7 +161,7 @@ if (isset($_POST['generate_payroll'])) {
             $loan_id = null;
             $loan_ded = 0;
             try {
-                $l = $pdo->prepare("SELECT id, installment_amount, remaining_amount FROM staff_loans WHERE teacher_id = ? AND status = 'Active' AND is_deleted = 0 LIMIT 1");
+                $l = $pdo->prepare("SELECT id, installment_amount, remaining_amount FROM staff_loans WHERE teacher_id = ? AND $tCond AND status = 'Active' AND is_deleted = 0 LIMIT 1");
                 $l->execute([$s['id']]);
                 $loan = $l->fetch(PDO::FETCH_ASSOC);
                 if ($loan) {
@@ -199,7 +178,7 @@ if (isset($_POST['generate_payroll'])) {
                 }
             } catch(Exception $e) {}
 
-            $pdo->prepare("INSERT INTO acc_payroll (teacher_id, month_year, basic_salary, allowances, deductions, loan_id, loan_deduction, net_salary, status, created_by, system_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Unpaid', ?, '$system_type')")
+            $pdo->prepare("INSERT INTO acc_payroll (teacher_id, month_year, basic_salary, allowances, deductions, loan_id, loan_deduction, net_salary, status, created_by, system_type, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Unpaid', ?, '$system_type', $cur_tenant_id)")
                 ->execute([$s['id'], $my, $basic, $allow, $ded, $loan_id, $loan_ded, $net, $uid]);
             $pid = (int)$pdo->lastInsertId();
             try { payroll_accounting_post($pdo, $pid); } catch (Exception $e) {}
@@ -223,7 +202,7 @@ if (isset($_POST['pay_salary'])) {
     $pdate = $_POST['pay_date'] ?? date('Y-m-d');
     $note = trim($_POST['pay_note'] ?? '');
 
-    $pr = $pdo->prepare("SELECT p.*, t.name AS staff_name, t.staff_type FROM acc_payroll p JOIN teachers t ON t.id = p.teacher_id WHERE p.id = ?");
+    $pr = $pdo->prepare("SELECT p.*, t.name AS staff_name, t.staff_type FROM acc_payroll p JOIN teachers t ON t.id = p.teacher_id WHERE p.id = ? AND $pTenantCond");
     $pr->execute([$pid]);
     $pr = $pr->fetch(PDO::FETCH_ASSOC);
 
@@ -231,12 +210,12 @@ if (isset($_POST['pay_salary'])) {
         $net = (float)($pr['net_salary'] ?: ($pr['basic_salary'] + $pr['allowances'] - $pr['deductions']));
         $desc = "{$txt['paid']}: " . $pr['staff_name'] . " - " . format_month_year($pr['month_year'], $lang);
         if ($note) $desc .= " | " . $note;
-        $fin_stmt = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted) VALUES (?, ?, 'Expense', ?, ?, ?, ?, ?, 0)");
+        $fin_stmt = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, tenant_id) VALUES (?, ?, 'Expense', ?, ?, ?, ?, ?, 0, $cur_tenant_id)");
         $fin_stmt->execute([$uid, $_SESSION['name'] ?? 'Admin', $sal_head_id, $net, $pdate, $pr['staff_name'], $desc]);
         $fin_id = (int)$pdo->lastInsertId();
         try { finance_accounting_post($pdo, $fin_id); } catch (Exception $e) {}
 
-        $pdo->prepare("UPDATE acc_payroll SET status='Paid', payment_date=?, finance_id=?, payment_note=?, net_salary=? WHERE id=?")
+        $pdo->prepare("UPDATE acc_payroll SET status='Paid', payment_date=?, finance_id=?, payment_note=?, net_salary=? WHERE id=? AND $tCond")
             ->execute([$pdate, $fin_id, $note, $net, $pid]);
 
         //            
@@ -246,8 +225,8 @@ if (isset($_POST['pay_salary'])) {
             // BUGFIX B-10: also increment repaid_amount — decrementing only
             // remaining_amount left repaid/remaining inconsistent, which made
             // the loans summary totals contradict each other.
-            $pdo->prepare("UPDATE staff_loans SET remaining_amount = GREATEST(remaining_amount - ?, 0), repaid_amount = repaid_amount + ? WHERE id = ?")->execute([$lded, $lded, $lid]);
-            $pdo->prepare("UPDATE staff_loans SET status = 'Paid' WHERE id = ? AND remaining_amount <= 0")->execute([$lid]);
+            $pdo->prepare("UPDATE staff_loans SET remaining_amount = GREATEST(remaining_amount - ?, 0), repaid_amount = repaid_amount + ? WHERE id = ? AND $tCond")->execute([$lded, $lded, $lid]);
+            $pdo->prepare("UPDATE staff_loans SET status = 'Paid' WHERE id = ? AND $tCond AND remaining_amount <= 0")->execute([$lid]);
         }
 
         try { payroll_accounting_post($pdo, $pid); } catch (Exception $e) {}
@@ -262,19 +241,19 @@ if (isset($_POST['pay_advance'])) {
     $adv_date = $_POST['adv_date'] ?? date('Y-m-d');
     $note     = trim($_POST['adv_note'] ?? '');
 
-    $pr = $pdo->prepare("SELECT p.*, t.name AS staff_name FROM acc_payroll p JOIN teachers t ON t.id=p.teacher_id WHERE p.id=?");
+    $pr = $pdo->prepare("SELECT p.*, t.name AS staff_name FROM acc_payroll p JOIN teachers t ON t.id=p.teacher_id WHERE p.id=? AND $pTenantCond");
     $pr->execute([$pid]);
     $pr = $pr->fetch(PDO::FETCH_ASSOC);
 
     if ($pr && $adv_amt > 0) {
         $desc = "{$txt['advance']}: " . $pr['staff_name'] . " - " . format_month_year($pr['month_year'], $lang);
         if ($note) $desc .= " | " . $note;
-        $fin_stmt = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted) VALUES (?, ?, 'Expense', ?, ?, ?, ?, ?, 0)");
+        $fin_stmt = $pdo->prepare("INSERT INTO finance (user_id, user_name, type, head_id, amount, date, donor_name, description, is_deleted, tenant_id) VALUES (?, ?, 'Expense', ?, ?, ?, ?, ?, 0, $cur_tenant_id)");
         $fin_stmt->execute([$uid, $_SESSION['name'] ?? 'Admin', $sal_head_id, $adv_amt, $adv_date, $pr['staff_name'], $desc]);
         $fin_id = (int)$pdo->lastInsertId();
         try { finance_accounting_post($pdo, $fin_id); } catch (Exception $e) {}
 
-        $pdo->prepare("UPDATE acc_payroll SET status='Advance', advance_amount=?, advance_date=?, payment_note=? WHERE id=?")
+        $pdo->prepare("UPDATE acc_payroll SET status='Advance', advance_amount=?, advance_date=?, payment_note=? WHERE id=? AND $tCond")
             ->execute([$adv_amt, $adv_date, $note, $pid]);
         $msg = "<div class='alert alert-warning fw-bold'> {$txt['msg_adv']}</div>";
     }
@@ -335,7 +314,7 @@ try {
         SUM(CASE WHEN p.status='Unpaid' THEN 1 ELSE 0 END) AS pending_count
     FROM acc_payroll p
     JOIN teachers t ON t.id = p.teacher_id
-    WHERE p.$date_where AND (t.is_deleted=0 OR t.is_deleted IS NULL) AND p.system_type = '$system_type'");
+    WHERE p.$date_where AND $pTenantCond AND (t.is_deleted=0 OR t.is_deleted IS NULL) AND p.system_type = '$system_type'");
     $sum->execute($date_params);
     $summary = $sum->fetch(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
@@ -366,7 +345,7 @@ try {
         SELECT p.*, t.name AS staff_name, t.staff_type, t.phone
         FROM acc_payroll p
         JOIN teachers t ON t.id = p.teacher_id
-        WHERE 1=1 AND p.system_type = '$system_type' AND $where_sql
+        WHERE 1=1 AND $pTenantCond AND p.system_type = '$system_type' AND $where_sql
         ORDER BY t.staff_type ASC, t.name ASC, p.month_year DESC
     ");
     $payrolls->execute($params);
@@ -377,17 +356,17 @@ try {
 
 $total_unpaid = 0;
 try {
-    $total_unpaid = $pdo->query("SELECT SUM(net_salary) FROM acc_payroll WHERE system_type = '$system_type' AND status = 'Unpaid' AND is_deleted = 0")->fetchColumn() ?: 0;
+    $total_unpaid = $pdo->query("SELECT SUM(net_salary) FROM acc_payroll WHERE $tCond AND system_type = '$system_type' AND status = 'Unpaid' AND is_deleted = 0")->fetchColumn() ?: 0;
 } catch (Exception $e) {}
 
 $all_teachers = [];
 try {
-    $all_teachers = $pdo->query("SELECT id, name, staff_type FROM teachers WHERE system_type = '$system_type' AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY staff_type ASC, name ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $all_teachers = $pdo->query("SELECT id, name, staff_type FROM teachers WHERE $tCond AND system_type = '$system_type' AND (is_deleted = 0 OR is_deleted IS NULL) ORDER BY staff_type ASC, name ASC")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
 $months_available = [];
 try {
-    $months_available = $pdo->query("SELECT DISTINCT month_year FROM acc_payroll WHERE system_type = '$system_type' ORDER BY month_year DESC LIMIT 24")->fetchAll(PDO::FETCH_COLUMN);
+    $months_available = $pdo->query("SELECT DISTINCT month_year FROM acc_payroll WHERE $tCond AND system_type = '$system_type' ORDER BY month_year DESC LIMIT 24")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Exception $e) {}
 
 $staff_icons = [
@@ -411,7 +390,7 @@ function staff_icon($type, $icons) {
                 <i class="fas fa-coins me-1"></i> <?php echo $txt['income_expense']; ?>
             </a>
             <a href="staff_loans.php" class="btn btn-warning btn-sm fw-bold text-dark">
-                <i class="fas fa-hand-holding-usd me-1"></i> <?php echo $is_en ? 'Manage Loans' : ' '; ?>
+                <i class="fas fa-hand-holding-usd me-1"></i> <?php echo $is_en ? 'Manage Loans' : 'قرض مینیجمنٹ'; ?>
             </a>
             <button class="btn btn-success btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#generateModal">
                 <i class="fas fa-magic me-1"></i> <?php echo $txt['generate_payroll']; ?>

@@ -177,7 +177,23 @@ $t_query = [];
 
 $selected_teacher_id = isset($_GET['t_id']) && $_GET['t_id'] !== '' ? (int)$_GET['t_id'] : 0;
 
-$teacherWhere = "(t.is_deleted=0 OR t.is_deleted IS NULL)";
+$cur_tenant_id = function_exists('get_current_tenant_id') ? (int)get_current_tenant_id($pdo) : 1;
+if (!function_exists('fmtNum')) {
+    function fmtNum($n) { $r = round((float)$n, 1); return floor($r) == $r ? (int)$r : $r; }
+}
+$mtTenantCond = ($cur_tenant_id <= 1) ? "(t.tenant_id = 1 OR t.tenant_id IS NULL OR t.tenant_id = 0)" : "t.tenant_id = $cur_tenant_id";
+$cTenantCond = ($cur_tenant_id <= 1) ? "(tenant_id = 1 OR tenant_id IS NULL OR tenant_id = 0)" : "tenant_id = $cur_tenant_id";
+try {
+    $mtCols = $pdo->query("SHOW COLUMNS FROM maktab_teachers")->fetchAll(PDO::FETCH_COLUMN);
+    if ($mtCols) {
+        if (!in_array('tenant_id', $mtCols)) { try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN tenant_id INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {} }
+        if (!in_array('assigned_maktab_classes', $mtCols)) { try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN assigned_maktab_classes TEXT NULL"); } catch (Throwable $e) {} }
+        if (!in_array('assigned_periods', $mtCols)) { try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN assigned_periods TEXT NULL"); } catch (Throwable $e) {} }
+        if (!in_array('joining_date', $mtCols)) { try { $pdo->exec("ALTER TABLE maktab_teachers ADD COLUMN joining_date DATE NULL"); } catch (Throwable $e) {} }
+    }
+} catch (Throwable $eMt) {}
+
+$teacherWhere = "(t.is_deleted=0 OR t.is_deleted IS NULL) AND $mtTenantCond";
 
 // صرف فعال اساتذہ — مستعفی/برطرف حاضری رپورٹ میں نہ آئیں
 $t_query_sql = "
@@ -222,10 +238,10 @@ $all_ts = $all_ts_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 
-$all_maktab_classes = $pdo->query("SELECT id as class_id, name as class_name, class_type, main_teacher_ids FROM maktab_classes")->fetchAll();
+$all_maktab_classes = $pdo->query("SELECT id as class_id, name as class_name, class_type, main_teacher_ids FROM maktab_classes WHERE $cTenantCond")->fetchAll();
 
 
-$all_class_periods = $pdo->query("SELECT class_id, period_no, teacher_id, teacher_ids FROM class_periods")->fetchAll();
+$all_class_periods = $pdo->query("SELECT class_id, period_no, teacher_id, teacher_ids FROM class_periods WHERE $cTenantCond")->fetchAll();
 
 
 
